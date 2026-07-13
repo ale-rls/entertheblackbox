@@ -9,6 +9,7 @@ import { displayReducer, initialDisplayState } from "./state/store.js";
 import { Countdown } from "./components/Countdown.js";
 import { QrBadge } from "./components/QrBadge.js";
 import { QuadrantOverlay } from "./components/QuadrantOverlay.js";
+import { IdleAttract } from "./components/IdleAttract.js";
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -98,6 +99,7 @@ export function App() {
 
   const media = useMedia();
   const phase = state.phase;
+  const isIdle = phase === null || phase.kind === "idle";
   const mediaReady = media.status.state === "ready";
 
   // Keep the Blob URL set aligned with the active phase (plan §9);
@@ -110,6 +112,13 @@ export function App() {
     <main className="display-root">
       {/* Layer 1: video */}
       <section className="layer layer-video">
+        {isIdle && (
+          <IdleAttract
+            grant={state.qrGrant}
+            qrHidden={state.qrHidden}
+            clock={connection.clock}
+          />
+        )}
         {phase?.kind === "video" && media.videoUrl !== null && (
           <video key={phase.id} src={media.videoUrl} autoPlay />
         )}
@@ -127,12 +136,9 @@ export function App() {
               : "preparing media…"}
           </div>
         )}
-        {phase === null || phase.kind === "idle" ? (
-          <div className="idle">
-            <h1>smartphonecracy</h1>
-          </div>
-        ) : null}
-        <QrBadge grant={state.qrGrant} qrHidden={state.qrHidden} clock={connection.clock} />
+        {!isIdle && (
+          <QrBadge grant={state.qrGrant} qrHidden={state.qrHidden} clock={connection.clock} />
+        )}
         {phase?.kind === "position-question" && (
           <div className="question">
             <h2>{phase.text}</h2>

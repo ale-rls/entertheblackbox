@@ -25,6 +25,10 @@ test.describe("full scenario flow", () => {
     // Display must not sit in a media-retry state with intact media, and
     // must render the idle attract layer once ready.
     await expect(display.locator(".idle")).toBeVisible();
+    const attractVideo = display.locator(".idle-attract-video");
+    await expect(attractVideo).toBeVisible();
+    await expect(attractVideo).toHaveAttribute("loop", "");
+    await expect(display.locator(".idle-attract-overlay")).toBeVisible();
     await expect(display.locator(".media-status")).toBeHidden({ timeout: 20_000 });
     const cursorGeometry = await display.locator(".layer-cursors").evaluate((layer) => {
       const layerRect = layer.getBoundingClientRect();
