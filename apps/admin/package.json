@@ -5,13 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:proof": "vite --config vite.proof.config.ts",
     "build": "tsc --noEmit && vite build",
+    "build:proof": "tsc --noEmit && vite build --config vite.proof.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@smartphonecracy/protocol": "workspace:*",
     "@smartphonecracy/shared": "workspace:*",
+    "@smartphonecracy/tool-ui": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

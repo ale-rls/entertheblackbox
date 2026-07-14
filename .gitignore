@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-proof/
 .watchdog/
 .steps.lock/
 .env

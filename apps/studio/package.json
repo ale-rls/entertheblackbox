@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:proof": "vite --config vite.proof.config.ts",
     "build": "tsc --noEmit && vite build",
+    "build:proof": "tsc --noEmit && vite build --config vite.proof.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@smartphonecracy/studio-adapter": "workspace:*",
+    "@smartphonecracy/tool-ui": "workspace:*",
     "@xyflow/react": "^12.3.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

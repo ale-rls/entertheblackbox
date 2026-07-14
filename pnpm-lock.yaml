@@ -29,6 +29,9 @@ importers:
       '@smartphonecracy/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@smartphonecracy/tool-ui':
+        specifier: workspace:*
+        version: link:../../packages/tool-ui
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -183,6 +186,9 @@ importers:
       '@smartphonecracy/studio-adapter':
         specifier: workspace:*
         version: link:../../packages/studio-adapter
+      '@smartphonecracy/tool-ui':
+        specifier: workspace:*
+        version: link:../../packages/tool-ui
       '@xyflow/react':
         specifier: ^12.3.6
         version: 12.11.2(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
