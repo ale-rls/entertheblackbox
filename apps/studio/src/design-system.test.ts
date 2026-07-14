@@ -49,7 +49,10 @@ describe("production Studio design-system contract", () => {
 
   it("uses shared neutral tokens and preserves responsive accessibility states", () => {
     const styles = source("./style.css");
+    const base = source("../../../packages/tool-ui/src/base.css");
+    const primitives = source("../../../packages/tool-ui/src/primitives.css");
     const tokens = source("../../../packages/tool-ui/src/tokens.css");
+    const effectiveStyles = `${base}\n${primitives}\n${styles}`;
 
     for (const token of [
       "--sc-tool-color-canvas",
@@ -59,7 +62,7 @@ describe("production Studio design-system contract", () => {
       "--sc-tool-color-domain-entry",
       "--sc-tool-color-domain-question",
       "--sc-tool-color-domain-branch",
-    ]) expect(styles).toContain(token);
+    ]) expect(effectiveStyles).toContain(token);
 
     expect(styles).toContain("@media (max-width: 700px)");
     expect(styles).toContain("height: 100dvh");
@@ -71,11 +74,13 @@ describe("production Studio design-system contract", () => {
     expect(styles).not.toContain("overflow-x: hidden");
     expect(styles).not.toContain("inset: 3.5rem");
     expect(styles).toContain("@media (pointer: coarse)");
-    expect(styles).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(base).toContain("@media (prefers-reduced-motion: reduce)");
     expect(styles).toContain("@media (forced-colors: active)");
     expect(styles).not.toContain("fonts.googleapis.com");
     expect(styles).not.toContain("--blue:");
     expect(styles).not.toContain("--bg:");
+    expect(styles).not.toContain(".eyebrow");
+    expect(styles).not.toMatch(/#[\da-f]{3,8}\b/i);
 
     const definedTokens = new Set(tokens.match(/--sc-tool-[\w-]+(?=\s*:)/g) ?? []);
     const usedTokens = styles.match(/(?<=var\()--sc-tool-[\w-]+/g) ?? [];

@@ -41,7 +41,7 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
   }, [open]);
   return (
     <div className="menu" ref={ref}>
-      <button ref={triggerRef} className="menu-trigger" aria-haspopup="menu" aria-expanded={open}
+      <button ref={triggerRef} className="sc-tool-button menu-trigger" data-sc-tool-variant="quiet" aria-haspopup="menu" aria-expanded={open}
         onClick={() => open ? close() : openAt("first")}
         onKeyDown={(event) => {
           if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;

@@ -63,6 +63,19 @@ purposeful, calm, and slightly tactile—not futuristic, glossy, playful, or lux
 7. **Motion explains change.** Use short transitions for state and spatial continuity,
    never ambient motion.
 
+### Shared-style ownership
+
+Both tools load `@smartphonecracy/tool-ui/styles.css`. The shared package owns the
+document baseline and visual semantics: color, typography, controls, fields, panels,
+feedback, and interaction states. Application stylesheets own layout, positioning,
+and app-specific graph or operational presentation; they must not create parallel
+visual treatments for the same semantic role.
+
+Use `.sc-tool-eyebrow` for technical overlines and `.sc-tool-copy` for supporting
+copy. Both intentionally use the Studio-derived muted text color. Application markup
+chooses the semantic role; it does not choose between primary, secondary, or muted
+color tokens for equivalent content.
+
 ## 3. CSS token contract
 
 Every shared custom property is prefixed `--sc-tool-`. Application CSS may create

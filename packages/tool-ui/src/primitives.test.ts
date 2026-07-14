@@ -10,6 +10,15 @@ function ruleBody(css: string, selector: string) {
 }
 
 describe("native-element CSS contracts", () => {
+  it("keeps shared text roles on Studio's muted hierarchy", () => {
+    const eyebrow = ruleBody(base, ".sc-tool-eyebrow");
+    const copy = ruleBody(base, ".sc-tool-copy");
+    expect(eyebrow).toContain("color: var(--sc-tool-color-text-muted);");
+    expect(eyebrow).toContain("font-family: var(--sc-tool-font-mono);");
+    expect(copy).toContain("color: var(--sc-tool-color-text-muted);");
+    expect(copy).not.toContain("var(--sc-tool-color-text-secondary)");
+  });
+
   it("centers button-styled file-import labels with a real flex box", () => {
     const button = ruleBody(primitives, ".sc-tool-button");
     expect(button).toContain("display: inline-flex;");

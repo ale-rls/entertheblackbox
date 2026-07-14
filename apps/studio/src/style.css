@@ -1,16 +1,3 @@
-html,
-body,
-#root {
-  width: 100%;
-  min-width: 320px;
-  min-height: 100%;
-  margin: 0;
-}
-
-body {
-  background: #111111;
-}
-
 body:has(.editor),
 #root:has(.editor) {
   height: 100dvh;
@@ -23,76 +10,6 @@ body:has(.editor),
 
 [data-sc-tool-root] :where(h1, h2, h3, p) {
   margin-block-end: 0;
-}
-
-[data-sc-tool-root] :where(button, .button, input, select) {
-  font: inherit;
-}
-
-[data-sc-tool-root] :where(button, .button) {
-  display: inline-flex;
-  min-height: var(--sc-tool-density-control-height);
-  align-items: center;
-  justify-content: center;
-  padding: var(--sc-tool-space-3) var(--sc-tool-density-control-pad-inline);
-  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
-  border-radius: var(--sc-tool-radius-1);
-  background: var(--sc-tool-color-surface-2);
-  color: var(--sc-tool-color-text);
-  font-size: var(--sc-tool-font-size-1);
-  font-weight: var(--sc-tool-font-weight-semibold);
-  line-height: var(--sc-tool-line-height-ui);
-  text-decoration: none;
-  cursor: pointer;
-  transition: background-color var(--sc-tool-duration-fast) var(--sc-tool-ease-standard), border-color var(--sc-tool-duration-fast) var(--sc-tool-ease-standard), color var(--sc-tool-duration-fast) var(--sc-tool-ease-standard);
-}
-
-[data-sc-tool-root] :where(button, .button):hover:not(:disabled) {
-  background: var(--sc-tool-color-surface-3);
-}
-
-[data-sc-tool-root] :where(button, .button):disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-[data-sc-tool-root] :where(button, .button).ghost {
-  border-color: var(--sc-tool-color-rule-strong);
-  background: var(--sc-tool-color-surface-2);
-  color: var(--sc-tool-color-text);
-}
-
-[data-sc-tool-root] :where(button, .button).ghost:hover:not(:disabled) {
-  background: var(--sc-tool-color-surface-3);
-}
-
-[data-sc-tool-root] :where(button, .button).danger {
-  border-color: var(--sc-tool-color-danger);
-  background: transparent;
-  color: var(--sc-tool-color-danger);
-}
-
-[data-sc-tool-root] :where(input:not([type="checkbox"]), select) {
-  min-height: var(--sc-tool-density-control-height);
-  padding: var(--sc-tool-space-3) var(--sc-tool-density-control-pad-inline);
-  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
-  border-radius: var(--sc-tool-radius-1);
-  background: var(--sc-tool-color-surface-1);
-  color: var(--sc-tool-color-text);
-  font-size: var(--sc-tool-font-size-1);
-}
-
-[data-sc-tool-root] input::placeholder {
-  color: var(--sc-tool-color-text-muted);
-  opacity: 1;
-}
-
-.eyebrow {
-  color: var(--sc-tool-color-text-muted);
-  font-family: var(--sc-tool-font-mono);
-  font-size: var(--sc-tool-font-size-00);
-  letter-spacing: var(--sc-tool-letter-spacing-label);
-  text-transform: uppercase;
 }
 
 /* Project home */
@@ -122,7 +39,6 @@ body:has(.editor),
 
 .home .lede {
   margin-block-start: var(--sc-tool-space-2);
-  color: var(--sc-tool-color-text-muted);
 }
 
 .home-actions {
@@ -143,16 +59,6 @@ body:has(.editor),
   line-height: var(--sc-tool-line-height-copy);
 }
 
-.home-actions > button:first-child {
-  border-color: transparent;
-  background: var(--sc-tool-color-action);
-  color: var(--sc-tool-color-text-on-cream);
-}
-
-.home-actions > button:first-child:hover {
-  background: var(--sc-tool-color-action-hover);
-}
-
 .home article {
   display: grid;
   min-width: 0;
@@ -169,8 +75,6 @@ body:has(.editor),
 }
 
 .home article small {
-  color: var(--sc-tool-color-text-muted);
-  font-family: var(--sc-tool-font-mono);
   font-size: var(--sc-tool-font-size-00);
   white-space: nowrap;
 }
@@ -238,16 +142,6 @@ body:has(.editor),
 
 [data-sc-tool-root] .menu-trigger {
   padding-inline: var(--sc-tool-space-4);
-  border: 0;
-  background: transparent;
-  color: var(--sc-tool-color-text-secondary);
-  font-weight: var(--sc-tool-font-weight-medium);
-}
-
-[data-sc-tool-root] .menu-trigger:hover,
-[data-sc-tool-root] .menu-trigger[aria-expanded="true"] {
-  background: var(--sc-tool-color-surface-3);
-  color: var(--sc-tool-color-text);
 }
 
 .menu-list {
@@ -261,14 +155,6 @@ body:has(.editor),
 
 [data-sc-tool-root] .menu-item {
   justify-content: flex-start;
-  border: 0;
-  background: transparent;
-  color: var(--sc-tool-color-text);
-  font-weight: var(--sc-tool-font-weight-medium);
-}
-
-[data-sc-tool-root] .menu-item:hover:not(:disabled) {
-  background: var(--sc-tool-color-selection);
 }
 
 .show-name {
@@ -335,7 +221,7 @@ body:has(.editor),
   font-weight: var(--sc-tool-font-weight-medium);
 }
 
-.studio-confirmation > p:not(.eyebrow) {
+.studio-confirmation > p:not(.sc-tool-eyebrow) {
   color: var(--sc-tool-color-text-secondary);
   line-height: var(--sc-tool-line-height-copy);
 }
@@ -533,16 +419,8 @@ body:has(.editor),
   font-weight: var(--sc-tool-font-weight-medium);
 }
 
-.inspector > p {
-  color: var(--sc-tool-color-text-muted);
-}
-
 .inspector > label {
-  display: grid;
-  gap: var(--sc-tool-space-2);
   margin-block-end: var(--sc-tool-space-5);
-  color: var(--sc-tool-color-text-secondary);
-  font-size: var(--sc-tool-font-size-1);
 }
 
 .inspector label > span {
@@ -566,12 +444,8 @@ body:has(.editor),
 }
 
 .inspector .check {
-  display: flex;
   min-height: 1.75rem;
-  align-items: center;
-  gap: var(--sc-tool-space-3);
   margin-block: var(--sc-tool-space-2);
-  color: var(--sc-tool-color-text-secondary);
 }
 
 .inspector .check > span {
@@ -601,7 +475,6 @@ body:has(.editor),
 
 .field-hint {
   margin-block: calc(-1 * var(--sc-tool-space-3)) var(--sc-tool-space-5);
-  color: var(--sc-tool-color-text-muted);
   font-size: var(--sc-tool-font-size-1);
 }
 
@@ -824,7 +697,7 @@ body:has(.editor),
     grid-column: 1 / -1;
   }
 
-  .home article :where(button, .button):not(.draft-open) {
+  .home article .sc-tool-button:not(.draft-open) {
     width: 100%;
   }
 
@@ -866,22 +739,12 @@ body:has(.editor),
 }
 
 @media (pointer: coarse) {
-  [data-sc-tool-root] :where(button, .button, input, select, .menu-item, .check) {
-    min-height: 44px;
-  }
-
   .port .react-flow__handle::before {
     position: absolute;
     inset: -16px;
     width: 44px;
     height: 44px;
     content: "";
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  [data-sc-tool-root] :where(button, .button) {
-    transition: none;
   }
 }
 

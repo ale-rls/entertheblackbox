@@ -1,24 +1,10 @@
-html,
-body,
-#root {
-  min-width: 320px;
-  min-height: 100%;
-  margin: 0;
-}
-
 .admin-proof {
   min-height: 100vh;
   padding: var(--sc-tool-space-9);
 }
 
-.admin-proof-eyebrow {
+.admin-proof .sc-tool-eyebrow {
   margin-block-end: var(--sc-tool-space-3);
-  color: var(--sc-tool-color-text-muted);
-  font-family: var(--sc-tool-font-mono);
-  font-size: var(--sc-tool-font-size-00);
-  letter-spacing: var(--sc-tool-letter-spacing-label);
-  line-height: var(--sc-tool-line-height-ui);
-  text-transform: uppercase;
 }
 
 .admin-proof-header {
@@ -134,7 +120,6 @@ body,
 
 .admin-proof-copy {
   max-width: 58ch;
-  color: var(--sc-tool-color-text-secondary);
 }
 
 .admin-proof-export-meta {
