@@ -6,6 +6,7 @@ dist/
 .env.*
 *.log
 .DS_Store
+content/media/
 
 # Playwright artifacts
 test-results/
