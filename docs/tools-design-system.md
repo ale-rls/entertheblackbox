@@ -38,10 +38,10 @@ The agreed direction is derived from two references:
 
 1. A light precision dashboard: thin structural rules, compact technical typography,
    disciplined alignment, and dense but legible data.
-2. A warm-black mobile concept: bold cream modular tiles, direct hierarchy, and
+2. A dark mobile concept: bold cream modular tiles, direct hierarchy, and
    tactile editorial composition.
 
-The midpoint is a **warm-black and cream editorial workbench**. It combines exact line
+The midpoint is a **neutral-charcoal and cream editorial workbench**. It combines exact line
 work and compact data presentation with occasional bold cream actions. It should feel
 purposeful, calm, and slightly tactile—not futuristic, glossy, playful, or luxurious.
 
@@ -49,8 +49,9 @@ purposeful, calm, and slightly tactile—not futuristic, glossy, playful, or lux
 
 1. **Structure before decoration.** Alignment, rules, whitespace, and type establish
    hierarchy. Color and shadow do not compensate for weak layout.
-2. **Warm contrast, not pure contrast.** Use warm black and cream instead of `#000`
-   and `#fff`. Large cream fields are deliberate emphasis, not the default surface.
+2. **Neutral surfaces, warm emphasis.** Use neutral charcoal instead of brown-cast
+   black, while retaining cream for text and deliberate emphasis. Large cream fields
+   are not the default surface.
 3. **Compact, never cramped.** Studio can carry more controls per viewport than Admin,
    but neither may sacrifice readable labels, focus visibility, or target size.
 4. **One bold action at a time.** A cream-filled action marks the primary next step in
@@ -73,12 +74,12 @@ CSS matching is case-insensitive.
 :root {
   color-scheme: dark;
 
-  /* Warm-black surface hierarchy */
-  --sc-tool-color-canvas: #12100D;
-  --sc-tool-color-surface-1: #181510;
-  --sc-tool-color-surface-2: #211D16;
-  --sc-tool-color-surface-3: #2B261D;
-  --sc-tool-color-scrim: rgb(18 16 13 / 78%);
+  /* Neutral-charcoal surface hierarchy */
+  --sc-tool-color-canvas: #111111;
+  --sc-tool-color-surface-1: #181818;
+  --sc-tool-color-surface-2: #202020;
+  --sc-tool-color-surface-3: #2A2A2A;
+  --sc-tool-color-scrim: rgb(17 17 17 / 78%);
 
   /* Cream hierarchy */
   --sc-tool-color-cream-strong: #F7EDDA;
@@ -89,14 +90,14 @@ CSS matching is case-insensitive.
   --sc-tool-color-text-muted-on-cream: #665E50;
 
   /* Rules and interaction */
-  --sc-tool-color-rule: #494236;
-  --sc-tool-color-rule-strong: #7A705D;
+  --sc-tool-color-rule: #484848;
+  --sc-tool-color-rule-strong: #767676;
   --sc-tool-color-action: #E8DDC4;
   --sc-tool-color-action-hover: #F4E9D1;
   --sc-tool-color-action-pressed: #D2C6AC;
   --sc-tool-color-focus-on-dark: #FFD166;
   --sc-tool-color-focus-on-cream: #3D4F70;
-  --sc-tool-color-selection: #3A3120;
+  --sc-tool-color-selection: #383838;
 
   /* Semantic status */
   --sc-tool-color-info: #72B7E4;
@@ -152,8 +153,8 @@ CSS matching is case-insensitive.
   --sc-tool-radius-pill: 999px;
   --sc-tool-border-hairline: 1px;
   --sc-tool-border-emphasis: 2px;
-  --sc-tool-shadow-1: 0 1px 0 rgb(247 237 218 / 5%), 0 8px 24px rgb(0 0 0 / 24%);
-  --sc-tool-shadow-2: 0 1px 0 rgb(247 237 218 / 7%), 0 16px 48px rgb(0 0 0 / 36%);
+  --sc-tool-shadow-1: 0 1px 0 rgb(255 255 255 / 5%), 0 8px 24px rgb(0 0 0 / 24%);
+  --sc-tool-shadow-2: 0 1px 0 rgb(255 255 255 / 7%), 0 16px 48px rgb(0 0 0 / 36%);
 
   /* Motion */
   --sc-tool-duration-instant: 80ms;
@@ -447,26 +448,26 @@ decimal places for display; conformance decisions must use unrounded results.
 
 | Foreground on background | Ratio | AA use |
 | --- | ---: | --- |
-| `text` on `canvas` | 15.76:1 | All text |
-| `text-secondary` on `canvas` | 10.10:1 | All text |
-| `text-muted` on `canvas` | 7.01:1 | All text |
-| `text` on `surface-3` | 12.47:1 | All text |
+| `text` on `canvas` | 15.67:1 | All text |
+| `text-secondary` on `canvas` | 10.04:1 | All text |
+| `text-muted` on `canvas` | 6.97:1 | All text |
+| `text` on `surface-3` | 11.91:1 | All text |
 | `text-on-cream` on `action` | 13.71:1 | All text |
 | `text-on-cream` on `cream-strong` | 15.92:1 | All text |
 | `text-muted-on-cream` on `cream-strong` | 5.51:1 | Normal text |
-| `focus-on-dark` on `surface-3` | 10.42:1 | Focus/UI graphics |
+| `focus-on-dark` on `surface-3` | 9.95:1 | Focus/UI graphics |
 | `focus-on-cream` on `cream-strong` | 7.09:1 | Focus/UI graphics |
 | `focus-on-cream` on `action` | 6.10:1 | Focus/UI graphics |
-| `info` on `canvas` | 8.69:1 | Status text/graphics |
-| `success` on `canvas` | 9.22:1 | Status text/graphics |
-| `warning` on `canvas` | 10.23:1 | Status text/graphics |
-| `danger` on `canvas` | 7.27:1 | Status text/graphics |
-| `domain-entry` on `surface-3` | 7.33:1 | Domain text/graphics |
-| `domain-idle` on `surface-3` | 6.20:1 | Domain text/graphics |
-| `domain-video` on `surface-3` | 6.04:1 | Domain text/graphics |
-| `domain-question` on `surface-3` | 6.96:1 | Domain text/graphics |
-| `domain-branch` on `surface-3` | 6.57:1 | Domain text/graphics |
-| `rule-strong` on `surface-3` | 3.08:1 | Meaningful boundaries |
+| `info` on `canvas` | 8.64:1 | Status text/graphics |
+| `success` on `canvas` | 9.16:1 | Status text/graphics |
+| `warning` on `canvas` | 10.17:1 | Status text/graphics |
+| `danger` on `canvas` | 7.23:1 | Status text/graphics |
+| `domain-entry` on `surface-3` | 7.00:1 | Domain text/graphics |
+| `domain-idle` on `surface-3` | 5.92:1 | Domain text/graphics |
+| `domain-video` on `surface-3` | 5.77:1 | Domain text/graphics |
+| `domain-question` on `surface-3` | 6.65:1 | Domain text/graphics |
+| `domain-branch` on `surface-3` | 6.28:1 | Domain text/graphics |
+| `rule-strong` on `surface-3` | 3.16:1 | Meaningful boundaries |
 
 `rule` is intentionally a subtle structural separator and must not be the sole visible
 boundary of a control, state, port, or other meaningful graphical object. Use
@@ -525,7 +526,7 @@ For the later implementation phase:
 
 The design-system implementation is acceptable only when all of the following are true:
 
-- Admin and Studio visibly share this warm-black/cream system while retaining their
+- Admin and Studio visibly share this neutral-charcoal/cream system while retaining their
   standard and compact densities respectively.
 - No token, asset, font, gradient, component motif, or naming from abandoned
   explorations remains in either tool's rendered UI or tools-owned styles.

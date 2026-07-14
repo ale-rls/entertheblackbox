@@ -23,25 +23,25 @@ function declarations(css: string) {
 }
 
 const expectedTokens: Record<string, string> = {
-  "--sc-tool-color-canvas": "#12100D",
-  "--sc-tool-color-surface-1": "#181510",
-  "--sc-tool-color-surface-2": "#211D16",
-  "--sc-tool-color-surface-3": "#2B261D",
-  "--sc-tool-color-scrim": "rgb(18 16 13 / 78%)",
+  "--sc-tool-color-canvas": "#111111",
+  "--sc-tool-color-surface-1": "#181818",
+  "--sc-tool-color-surface-2": "#202020",
+  "--sc-tool-color-surface-3": "#2A2A2A",
+  "--sc-tool-color-scrim": "rgb(17 17 17 / 78%)",
   "--sc-tool-color-cream-strong": "#F7EDDA",
   "--sc-tool-color-text": "#F4E9D1",
   "--sc-tool-color-text-secondary": "#C7BCA5",
   "--sc-tool-color-text-muted": "#A79C87",
   "--sc-tool-color-text-on-cream": "#17130E",
   "--sc-tool-color-text-muted-on-cream": "#665E50",
-  "--sc-tool-color-rule": "#494236",
-  "--sc-tool-color-rule-strong": "#7A705D",
+  "--sc-tool-color-rule": "#484848",
+  "--sc-tool-color-rule-strong": "#767676",
   "--sc-tool-color-action": "#E8DDC4",
   "--sc-tool-color-action-hover": "#F4E9D1",
   "--sc-tool-color-action-pressed": "#D2C6AC",
   "--sc-tool-color-focus-on-dark": "#FFD166",
   "--sc-tool-color-focus-on-cream": "#3D4F70",
-  "--sc-tool-color-selection": "#3A3120",
+  "--sc-tool-color-selection": "#383838",
   "--sc-tool-color-info": "#72B7E4",
   "--sc-tool-color-success": "#77C593",
   "--sc-tool-color-warning": "#E9B65C",
@@ -88,9 +88,9 @@ const expectedTokens: Record<string, string> = {
   "--sc-tool-border-hairline": "1px",
   "--sc-tool-border-emphasis": "2px",
   "--sc-tool-shadow-1":
-    "0 1px 0 rgb(247 237 218 / 5%), 0 8px 24px rgb(0 0 0 / 24%)",
+    "0 1px 0 rgb(255 255 255 / 5%), 0 8px 24px rgb(0 0 0 / 24%)",
   "--sc-tool-shadow-2":
-    "0 1px 0 rgb(247 237 218 / 7%), 0 16px 48px rgb(0 0 0 / 36%)",
+    "0 1px 0 rgb(255 255 255 / 7%), 0 16px 48px rgb(0 0 0 / 36%)",
   "--sc-tool-duration-instant": "80ms",
   "--sc-tool-duration-fast": "140ms",
   "--sc-tool-duration-base": "200ms",
@@ -130,6 +130,17 @@ describe("tool token contract", () => {
         true,
       );
     }
+  });
+
+  it("keeps structural surfaces, rules, and selection chromatically neutral", () => {
+    const tokens = declarations(readCss("tokens.css"));
+    for (const name of ["canvas", "surface-1", "surface-2", "surface-3", "rule", "rule-strong", "selection"]) {
+      const value = tokens[`--sc-tool-color-${name}`];
+      const channels = value?.slice(1).match(/.{2}/g);
+      expect(channels, name).toHaveLength(3);
+      expect(new Set(channels).size, name).toBe(1);
+    }
+    expect(tokens["--sc-tool-color-scrim"]).toMatch(/^rgb\((\d+) \1 \1 \/ 78%\)$/);
   });
 });
 
