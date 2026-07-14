@@ -1,7 +1,9 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+const sourceDirectory = fileURLToPath(new URL(".", import.meta.url));
 
 describe("production Studio design-system contract", () => {
   it("scopes the shared neutral compact theme to each production surface", () => {
@@ -18,6 +20,19 @@ describe("production Studio design-system contract", () => {
     expect(preview).toContain('data-sc-tool-root');
     expect(preview).toContain('data-sc-tool-density="compact"');
     expect(app).not.toContain("Admin");
+    const productionSource = (readdirSync(sourceDirectory, { recursive: true }) as string[])
+      .filter((path) => /\.(?:ts|tsx)$/.test(path) && !/\.test\./.test(path) && !path.startsWith("proof"))
+      .map((path) => readFileSync(`${sourceDirectory}/${path}`, "utf8"))
+      .join("\n");
+    expect(productionSource).not.toMatch(/\b(?:alert|confirm)\s*\(/);
+    expect(productionSource).not.toContain("window.alert");
+    expect(productionSource).not.toContain("window.confirm");
+    for (const actionableFeedback of [
+      "Import failed:",
+      "Connection not made:",
+      "Idle phase not added:",
+      "Deployment export failed:",
+    ]) expect(app).toContain(actionableFeedback);
   });
 
   it("marks the real phase domains and state hooks without flooding node bodies", () => {
@@ -34,6 +49,7 @@ describe("production Studio design-system contract", () => {
 
   it("uses shared neutral tokens and preserves responsive accessibility states", () => {
     const styles = source("./style.css");
+    const tokens = source("../../../packages/tool-ui/src/tokens.css");
 
     for (const token of [
       "--sc-tool-color-canvas",
@@ -60,5 +76,9 @@ describe("production Studio design-system contract", () => {
     expect(styles).not.toContain("fonts.googleapis.com");
     expect(styles).not.toContain("--blue:");
     expect(styles).not.toContain("--bg:");
+
+    const definedTokens = new Set(tokens.match(/--sc-tool-[\w-]+(?=\s*:)/g) ?? []);
+    const usedTokens = styles.match(/(?<=var\()--sc-tool-[\w-]+/g) ?? [];
+    expect([...new Set(usedTokens)].filter((token) => !definedTokens.has(token))).toEqual([]);
   });
 });
