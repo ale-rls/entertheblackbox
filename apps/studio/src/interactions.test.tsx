@@ -198,6 +198,20 @@ describe("Studio feedback and keyboard entry", () => {
     expect(document.activeElement).toBe(trigger);
   });
 
+  it("closes an open menu when a pointer interaction starts outside it", async () => {
+    await render(<><Menu label="View" items={[{ label: "Save layout", onSelect: vi.fn() }]} /><button>Outside</button></>);
+    const trigger = button("View");
+    await act(async () => { trigger.click(); });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => {
+      button("Outside").dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+  });
+
   it("coalesces save announcements until editing has settled", async () => {
     vi.useFakeTimers();
     function Harness() {

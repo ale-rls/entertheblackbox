@@ -81,11 +81,11 @@ CSS matching is case-insensitive.
   --sc-tool-color-surface-3: #2A2A2A;
   --sc-tool-color-scrim: rgb(17 17 17 / 78%);
 
-  /* Cream hierarchy */
+  /* Neutral text hierarchy and cream-surface contrast */
   --sc-tool-color-cream-strong: #F7EDDA;
-  --sc-tool-color-text: #F4E9D1;
-  --sc-tool-color-text-secondary: #C7BCA5;
-  --sc-tool-color-text-muted: #A79C87;
+  --sc-tool-color-text: #F5F5F5;
+  --sc-tool-color-text-secondary: #CCCCCC;
+  --sc-tool-color-text-muted: #A3A3A3;
   --sc-tool-color-text-on-cream: #17130E;
   --sc-tool-color-text-muted-on-cream: #665E50;
 
