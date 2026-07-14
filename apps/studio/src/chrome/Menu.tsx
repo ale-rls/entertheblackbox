@@ -44,7 +44,7 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
           openAt(event.key === "ArrowUp" ? "last" : "first");
         }}>{label}</button>
       {open && (
-        <div className="menu-list" role="menu" onKeyDown={(event) => {
+        <div className="menu-list sc-tool-menu" role="menu" onKeyDown={(event) => {
           const enabled = enabledItems();
           const current = enabled.indexOf(document.activeElement as HTMLButtonElement);
           if (event.key === "Escape") {
@@ -61,8 +61,8 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
           }
         }}>
           {items.map((item, index) => item.separator
-            ? <div key={index} className="menu-sep" role="separator" />
-            : <button key={index} ref={(element) => { itemRefs.current[index] = element; }} role="menuitem" tabIndex={-1} className="menu-item" disabled={item.disabled} onClick={() => { close(); item.onSelect(); }}>{item.label}</button>)}
+            ? <div key={index} className="menu-sep sc-tool-menu-separator" role="separator" />
+            : <button key={index} ref={(element) => { itemRefs.current[index] = element; }} role="menuitem" tabIndex={-1} className="menu-item sc-tool-menu-item" disabled={item.disabled} onClick={() => { close(); item.onSelect(); }}>{item.label}</button>)}
         </div>
       )}
     </div>

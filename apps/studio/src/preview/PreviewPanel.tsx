@@ -13,11 +13,11 @@ export function PreviewPanel({ project, onClose }: { project: StudioProject; onC
       ? [phase.field.type === "two-quadrant" ? "max" : "q4"]
       : forcedOutcomes(phase.field)
     : [];
-  return <section className="preview" aria-label="Show preview"><header><h2>Outcome preview</h2><button onClick={onClose}>Close preview</button></header>
+  return <main className="preview-shell" data-sc-tool-density="compact" data-sc-tool-root><section className="preview" aria-label="Show preview"><header><div><p className="eyebrow">Simulation</p><h2>Outcome preview</h2></div><button className="ghost" onClick={onClose}>Close preview</button></header>
     <p><strong>{phase.id}</strong> · {phase.kind} · manual time {session.elapsedMs} ms</p><p>{session.validation.length} validation diagnostic(s) checked before preview.</p>
     {phase.kind === "video" && <><p>Video placeholder: {phase.src}</p><button onClick={() => setSession((value) => advanceTimer(value, phase.expectedDurationMs))}>Advance expected timer</button><button onClick={() => setSession(advancePreview)}>Next phase</button></>}
     {phase.kind === "idle" && <p>Idle/end phase reached.</p>}
     {phase.kind === "position-question" && <><p>{phase.text}</p><button onClick={() => setSession((value) => advanceTimer(value, phase.durationMs))}>Advance question timer</button><label><input type="checkbox" checked={includeStale} onChange={(event) => setIncludeStale(event.target.checked)} /> Include stale</label><label><input type="checkbox" checked={includeDisconnected} onChange={(event) => setIncludeDisconnected(event.target.checked)} /> Include disconnected</label><div className="preview-outcomes">{outcomes.map((outcome) => <button key={outcome} onClick={() => force(outcome)}>{phase.next.type === "fixed" ? "Resolve fixed" : `Force ${outcome}`}</button>)}</div></>}
     {session.resolution && <article className="preview-result"><h3>Frozen result ({session.resolution.freezeMs} ms)</h3><p>Winner: <strong>{session.resolution.winner}</strong> → {session.resolution.resolvedTarget}</p><p>Counted {session.resolution.includedTotal}; excluded {session.resolution.excludedTotal}</p><pre>{JSON.stringify({ quadrantCounts: session.resolution.quadrantCounts, includedByStatus: session.resolution.includedByStatus, excludedByStatus: session.resolution.excludedByStatus, votes: session.resolution.votes }, null, 2)}</pre><button onClick={() => setSession(continueAfterResolution)}>Continue to resolved target</button></article>}
-  </section>;
+  </section></main>;
 }
