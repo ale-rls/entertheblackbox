@@ -15,6 +15,7 @@ import { PreviewPanel } from "./preview/PreviewPanel.js";
 import { assembleDeploymentPackage } from "./export/deployment.js";
 import { Menu } from "./chrome/Menu.js";
 import { loadLocalMediaManifest, refreshDraftLocalMedia, runtimeMediaManifest, type MediaManifest } from "./media/local.js";
+import "@smartphonecracy/tool-ui/styles.css";
 import "./style.css";
 
 const download = (name: string, value: unknown) => {
@@ -27,16 +28,20 @@ const download = (name: string, value: unknown) => {
 const nodesForDraft = (draft: Draft, current: Node[] = []): Node[] => {
   const layout = new Map(draft.document.nodes.map((node) => [node.id, node]));
   const currentPositions = new Map(current.map((node) => [node.id, node.position]));
-  const phaseNodes: Node[] = graphPhases(draft.project).map((phase, index) => ({
-    id: phase.id,
-    type: "phase",
-    position: currentPositions.get(phase.id) ?? layout.get(phase.id) ?? { x: 360 + (index % 3) * 300, y: 80 + Math.floor(index / 3) * 220 },
-    data: nodeDataForPhase(phase),
-  }));
+  const phaseNodes: Node[] = graphPhases(draft.project).map((phase, index) => {
+    const data = nodeDataForPhase(phase);
+    return {
+      id: phase.id,
+      type: "phase",
+      position: currentPositions.get(phase.id) ?? layout.get(phase.id) ?? { x: 360 + (index % 3) * 300, y: 80 + Math.floor(index / 3) * 220 },
+      data,
+      ariaLabel: `${phase.kind === "position-question" ? "Question" : phase.kind} phase: ${data.label}`,
+    };
+  });
   return [
-    { id: ENTRY_NODE_ID, type: "entry", deletable: false, position: currentPositions.get(ENTRY_NODE_ID) ?? layout.get(ENTRY_NODE_ID) ?? { x: 30, y: 80 }, data: {} },
+    { id: ENTRY_NODE_ID, type: "entry", deletable: false, position: currentPositions.get(ENTRY_NODE_ID) ?? layout.get(ENTRY_NODE_ID) ?? { x: 30, y: 80 }, data: {}, ariaLabel: "Show entry" },
     ...phaseNodes,
-    { id: END_NODE_ID, type: "end", deletable: false, position: currentPositions.get(END_NODE_ID) ?? layout.get(END_NODE_ID) ?? { x: 1250, y: 500 }, data: {} },
+    { id: END_NODE_ID, type: "end", deletable: false, position: currentPositions.get(END_NODE_ID) ?? layout.get(END_NODE_ID) ?? { x: 1250, y: 500 }, data: {}, ariaLabel: "Show end" },
   ];
 };
 
@@ -82,6 +87,9 @@ export function App() {
     setNodes(nodesForDraft(draft));
     setEdges(edgesForDraft(draft));
   }, [draft?.id, setEdges, setNodes]);
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [Boolean(draft)]);
 
   const save = (next: Draft) => {
     setDraft(next);
@@ -264,7 +272,7 @@ export function App() {
     setNodes((current) => current.map((node) => node.id === selectedId ? { ...node, data: nodeDataForPhase(nextPhase) } : node));
   };
 
-  if (!draft) return <main className="home"><h1>Show Studio</h1><p className="lede">Create and safely round-trip Smartphonecracy shows.</p>
+  if (!draft) return <main className="home" data-sc-tool-density="compact" data-sc-tool-root><header className="home-heading"><p className="eyebrow">Authoring workspace</p><h1>Show Studio</h1><p className="lede">Create and safely round-trip Smartphonecracy shows.</p></header>
     <div className="home-actions">
       <button onClick={createShow}>New show</button>
       <label className="button ghost">Import show or backup<input hidden multiple type="file" accept="application/json" onChange={(event) => void importFiles(event.target.files)} /></label>
@@ -274,6 +282,10 @@ export function App() {
     {recent.map((item) => <article key={item.id}><button className="draft-open" onClick={() => void recoverDraft(db, item.id).then((recovered) => setDraft(recovered && localManifest ? refreshDraftLocalMedia(recovered, localManifest) : recovered))}>{item.name}</button><small>{new Date(item.updatedAt).toLocaleString()}</small><button className="ghost" onClick={() => duplicate(item)}>Duplicate</button><button className="ghost" onClick={() => download(`${item.name}.studio-backup.json`, exportBackup(item))}>Export backup</button><button className="ghost danger" onClick={() => void remove(item)}>Delete</button></article>)}</main>;
 
   const currentDiagnostics = diagnostics(draft.project);
+  const invalidNodeIds = new Set(currentDiagnostics.filter((item) => item.severity === "error" && item.phaseId).map((item) => item.phaseId));
+  const visibleNodes = nodes.map((node) => invalidNodeIds.has(node.id)
+    ? { ...node, className: [node.className, "invalid"].filter(Boolean).join(" ") }
+    : node);
   const blocked = exportBlocked(currentDiagnostics, acknowledged);
   const exportDeployment = () => {
     try {
@@ -296,7 +308,7 @@ export function App() {
     }));
   };
   if (previewing) return <PreviewPanel project={draft.project} onClose={() => setPreviewing(false)} />;
-  return <main className={`editor${showInspector ? "" : " no-inspector"}${showDiagnostics ? "" : " no-diagnostics"}`}>
+  return <main className={`editor${showInspector ? "" : " no-inspector"}${showDiagnostics ? "" : " no-diagnostics"}`} data-sc-tool-density="compact" data-sc-tool-root>
     <header className="menubar">
       <Menu label="File" items={[
         { label: "New show", onSelect: createShow },
@@ -324,12 +336,12 @@ export function App() {
         { label: "Save layout", onSelect: saveLayout },
       ]} />
       <input aria-label="Show name" className="show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
-      <span className={`status ${status}`}>{status}</span>
+      <span aria-live="polite" className={`status ${status}`} data-save-status={status}>{status}</span>
       <button className="ghost" onClick={() => setPreviewing(true)}>Preview</button>
       <button className="ghost export" aria-label="Export for deployment" disabled={blocked} title={blocked ? "Resolve errors and acknowledge warnings first" : undefined} onClick={exportDeployment}>Export</button>
       <input ref={importInputRef} hidden multiple type="file" accept="application/json" onChange={(event) => void importFiles(event.target.files)} />
     </header>
-    <section className="canvas"><ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
+    <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas"><ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
     <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onKindChange={changeSelectedKind} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} />
     <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
   </main>;
