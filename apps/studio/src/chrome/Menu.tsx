@@ -28,11 +28,16 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
   }, [open]);
   useEffect(() => {
     if (!open) return;
-    const onDown = (event: MouseEvent) => { if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false); };
+    const onPointerDown = (event: PointerEvent) => {
+      if (ref.current && event.target instanceof Node && !ref.current.contains(event.target)) close();
+    };
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") close(true); };
-    document.addEventListener("mousedown", onDown);
+    document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [open]);
   return (
     <div className="menu" ref={ref}>
