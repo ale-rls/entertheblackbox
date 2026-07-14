@@ -1,22 +1,4 @@
-html,
-body,
-#root {
-  min-width: 320px;
-  min-height: 100%;
-  margin: 0;
-}
-
 .studio-proof { min-height: 100vh; background: var(--sc-tool-color-canvas); }
-
-.studio-proof-eyebrow {
-  margin-block-end: var(--sc-tool-space-3);
-  color: var(--sc-tool-color-text-muted);
-  font-family: var(--sc-tool-font-mono);
-  font-size: var(--sc-tool-font-size-00);
-  letter-spacing: var(--sc-tool-letter-spacing-label);
-  line-height: var(--sc-tool-line-height-ui);
-  text-transform: uppercase;
-}
 
 .studio-proof-toolbar {
   display: grid;
@@ -30,7 +12,7 @@ body,
 }
 
 .studio-proof-brand { display: grid; line-height: var(--sc-tool-line-height-ui); }
-.studio-proof-brand .studio-proof-eyebrow { margin-block-end: 0; }
+.studio-proof-brand .sc-tool-eyebrow { margin-block-end: 0; }
 .studio-proof-menus { display: flex; align-self: stretch; }
 
 .studio-proof-menu-trigger {

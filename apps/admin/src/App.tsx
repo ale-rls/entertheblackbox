@@ -102,7 +102,7 @@ function ConfirmationDialog({ action, onCancel, onConfirm }: { action: ConfirmAc
 
   return <div className="sc-tool-dialog-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
     <div className="sc-tool-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} onKeyDown={handleKeyDown}>
-      <p className="admin-eyebrow">Operator confirmation</p>
+      <p className="sc-tool-eyebrow">Operator confirmation</p>
       <h2 id={titleId}>{isRestart ? "Restart the show?" : "Return the show to idle?"}</h2>
       <p id={descriptionId}>{isRestart
         ? "This creates a new session and returns the running show to its entry phase."
@@ -248,13 +248,13 @@ export function App() {
   return <div data-sc-tool-density="standard" data-sc-tool-root>
     <main className="admin-app">
       <header className="admin-header">
-        <div><p className="admin-eyebrow">Live installation / operator console</p><h1>Operations</h1></div>
+        <div><p className="sc-tool-eyebrow">Live installation / operator console</p><h1>Operations</h1></div>
         <StatusLabel status={globalStatus}>{globalLabel}</StatusLabel>
       </header>
 
       <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
         <div className="admin-section-heading">
-          <div><p className="admin-eyebrow">Secure access</p><h2 id="admin-connection-heading">Admin connection</h2></div>
+          <div><p className="sc-tool-eyebrow">Secure access</p><h2 id="admin-connection-heading">Admin connection</h2></div>
           {status && <StatusLabel status={statusStale ? "warning" : "success"}>{statusStale ? "Last status received" : "Authenticated"}</StatusLabel>}
         </div>
         <form className="admin-connection-form" onSubmit={connect}>
@@ -270,12 +270,12 @@ export function App() {
       {feedback && <div className="sc-tool-feedback admin-page-feedback" data-sc-tool-status={feedback.status} role={feedback.status === "danger" ? "alert" : "status"}><StatusIcon status={feedback.status} /><span>{feedback.message}</span></div>}
 
       {!status ? <section className="sc-tool-panel admin-empty-state" aria-live="polite">
-        <p className="admin-eyebrow">Operational data</p>
+        <p className="sc-tool-eyebrow">Operational data</p>
         <h2>{refreshing ? "Loading live status…" : "Connect to load live status"}</h2>
-        <p>No operational values are shown until the admin API authenticates this browser session.</p>
+        <p className="sc-tool-copy">No operational values are shown until the admin API authenticates this browser session.</p>
       </section> : <div className="admin-grid">
         <section className="sc-tool-panel" aria-labelledby="admin-status-heading">
-          <div className="admin-section-heading"><div><p className="admin-eyebrow">Live topology</p><h2 id="admin-status-heading">Operational status</h2></div><span className="sc-tool-mono admin-section-count">Live</span></div>
+          <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">Live topology</p><h2 id="admin-status-heading">Operational status</h2></div><span className="sc-tool-mono admin-section-count">Live</span></div>
           <div className="admin-operation-list">
             <OperationRow label="Server" status={status.healthy && status.ready ? "success" : status.healthy ? "warning" : "danger"} value={status.healthy && status.ready ? "READY" : "NOT READY"} detail={`uptime ${formatDuration(status.uptimeMs)}`} />
             <OperationRow label="Display" status={status.displayConnected ? "success" : "danger"} value={status.displayConnected ? "CONNECTED" : "DISCONNECTED"} detail={status.displayConnected && status.displayHeartbeatAgeMs !== null ? `heartbeat ${status.displayHeartbeatAgeMs} ms ago` : "no heartbeat available"} />
@@ -285,7 +285,7 @@ export function App() {
         </section>
 
         <section className="sc-tool-panel" aria-labelledby="admin-controls-heading">
-          <div className="admin-section-heading"><div><p className="admin-eyebrow">{status.sessionId ? `Session ${status.sessionId}` : "No active session"}</p><h2 ref={controlsHeadingRef} id="admin-controls-heading" tabIndex={-1}>Session controls</h2></div><StatusLabel status={isActive ? "success" : "info"}>{status.lifecycle ?? "Unavailable"}</StatusLabel></div>
+          <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">{status.sessionId ? `Session ${status.sessionId}` : "No active session"}</p><h2 ref={controlsHeadingRef} id="admin-controls-heading" tabIndex={-1}>Session controls</h2></div><StatusLabel status={isActive ? "success" : "info"}>{status.lifecycle ?? "Unavailable"}</StatusLabel></div>
           <dl className="admin-session-facts">
             <div><dt>Current phase</dt><dd className="sc-tool-mono">{status.phaseId ?? "—"}</dd></div>
             <div><dt>Epoch</dt><dd className="sc-tool-mono">{status.phaseEpoch ?? "—"}</dd></div>
@@ -300,18 +300,18 @@ export function App() {
         </section>
 
         <section className="sc-tool-panel" aria-labelledby="admin-export-heading">
-          <div className="admin-section-heading"><div><p className="admin-eyebrow">Session archive</p><h2 id="admin-export-heading">Session export</h2></div><StatusLabel status={canExport ? "success" : "info"}>{canExport ? "Ready" : "Unavailable"}</StatusLabel></div>
-          <p className="admin-copy">Download the data available for the current session.</p>
+          <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">Session archive</p><h2 id="admin-export-heading">Session export</h2></div><StatusLabel status={canExport ? "success" : "info"}>{canExport ? "Ready" : "Unavailable"}</StatusLabel></div>
+          <p className="sc-tool-copy admin-copy">Download the data available for the current session.</p>
           {status.sessionId && <p className="admin-export-id sc-tool-mono">{status.sessionId}</p>}
           <div className="admin-button-row"><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={!canExport || busy} onClick={() => void download("csv")}>Export CSV</button><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!canExport || busy} onClick={() => void download("json")}>Export JSON</button></div>
           {!canExport && <p className="sc-tool-help">A current session ID is required before an export can be prepared.</p>}
         </section>
 
         <section className="sc-tool-panel admin-errors" aria-labelledby="admin-errors-heading">
-          <div className="admin-section-heading"><div><p className="admin-eyebrow">Server log</p><h2 id="admin-errors-heading">Recent errors</h2></div><StatusLabel status={errors.length ? "warning" : "success"}>{errors.length ? `${errors.length} reported` : "None reported"}</StatusLabel></div>
+          <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">Server log</p><h2 id="admin-errors-heading">Recent errors</h2></div><StatusLabel status={errors.length ? "warning" : "success"}>{errors.length ? `${errors.length} reported` : "None reported"}</StatusLabel></div>
           {errors.length ? <div className="sc-tool-table-region" role="region" aria-label="Recent operational errors" tabIndex={0}>
             <table className="sc-tool-table"><caption className="sc-tool-visually-hidden">Recent errors returned by the admin API</caption><thead><tr><th>Time</th><th>Source</th><th>Message</th><th>Payload</th></tr></thead><tbody>{errors.map((error, index) => { const row = normalizeError(error, index); return <tr key={row.key}><td className="sc-tool-mono">{row.at}</td><td className="sc-tool-mono">{row.source}</td><td>{row.message}</td><td><details><summary>Raw</summary><pre>{row.raw}</pre></details></td></tr>; })}</tbody></table>
-          </div> : <p className="admin-copy">No recent errors were returned by the server.</p>}
+          </div> : <p className="sc-tool-copy admin-copy">No recent errors were returned by the server.</p>}
         </section>
       </div>}
     </main>

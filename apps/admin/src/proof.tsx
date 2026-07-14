@@ -20,13 +20,13 @@ export function AdminProof() {
   return <div data-sc-tool-density="standard" data-sc-tool-root>
     <main className="admin-proof" data-testid="admin-proof">
       <header className="admin-proof-header">
-        <div><p className="admin-proof-eyebrow">Live installation / operator console</p><h1>Operations</h1></div>
+        <div><p className="sc-tool-eyebrow">Live installation / operator console</p><h1>Operations</h1></div>
         <div className="admin-proof-global-state"><Status status="success">System nominal</Status><span className="sc-tool-mono">14:32:08 CET</span></div>
       </header>
 
       <section className="sc-tool-panel admin-proof-connection" aria-labelledby="admin-connection-heading">
         <div className="admin-proof-section-heading">
-          <div><p className="admin-proof-eyebrow">Secure access</p><h2 id="admin-connection-heading">Admin connection</h2></div>
+          <div><p className="sc-tool-eyebrow">Secure access</p><h2 id="admin-connection-heading">Admin connection</h2></div>
           <Status status="success">Authenticated</Status>
         </div>
         <div className="admin-proof-connection-form">
@@ -39,7 +39,7 @@ export function AdminProof() {
       <div className="admin-proof-grid">
         <section className="sc-tool-panel" aria-labelledby="admin-status-heading">
           <div className="admin-proof-section-heading">
-            <div><p className="admin-proof-eyebrow">Live topology</p><h2 id="admin-status-heading">Operational status</h2></div>
+            <div><p className="sc-tool-eyebrow">Live topology</p><h2 id="admin-status-heading">Operational status</h2></div>
             <span className="sc-tool-mono admin-proof-section-count">4 services</span>
           </div>
           <div className="admin-proof-operation-list">
@@ -52,7 +52,7 @@ export function AdminProof() {
 
         <section className="sc-tool-panel" aria-labelledby="admin-controls-heading">
           <div className="admin-proof-section-heading">
-            <div><p className="admin-proof-eyebrow">Session 5H7D-A2</p><h2 id="admin-controls-heading">Session controls</h2></div>
+            <div><p className="sc-tool-eyebrow">Session 5H7D-A2</p><h2 id="admin-controls-heading">Session controls</h2></div>
             <Status status="success">Active</Status>
           </div>
           <dl className="admin-proof-session-facts">
@@ -71,17 +71,17 @@ export function AdminProof() {
 
         <section className="sc-tool-panel" aria-labelledby="admin-export-heading">
           <div className="admin-proof-section-heading">
-            <div><p className="admin-proof-eyebrow">Session archive</p><h2 id="admin-export-heading">Session export</h2></div>
+            <div><p className="sc-tool-eyebrow">Session archive</p><h2 id="admin-export-heading">Session export</h2></div>
             <Status status="success">Ready</Status>
           </div>
-          <p className="admin-proof-copy">Download participant events and resolved outcomes for the current session.</p>
+          <p className="sc-tool-copy admin-proof-copy">Download participant events and resolved outcomes for the current session.</p>
           <div className="admin-proof-export-meta sc-tool-mono"><span>5H7D-A2</span><span>1,842 events</span><span>2.4 MB</span></div>
           <div className="admin-proof-button-row"><Button variant="primary">Export CSV</Button><Button>Export JSON</Button></div>
         </section>
 
         <section className="sc-tool-panel admin-proof-errors" aria-labelledby="admin-errors-heading">
           <div className="admin-proof-section-heading">
-            <div><p className="admin-proof-eyebrow">Last 30 minutes</p><h2 id="admin-errors-heading">Recent errors</h2></div>
+            <div><p className="sc-tool-eyebrow">Last 30 minutes</p><h2 id="admin-errors-heading">Recent errors</h2></div>
             <Status status="warning">2 unresolved</Status>
           </div>
           <div className="sc-tool-table-region">

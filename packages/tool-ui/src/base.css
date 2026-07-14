@@ -53,6 +53,18 @@
   letter-spacing: var(--sc-tool-letter-spacing-data);
 }
 
+:where([data-sc-tool-root]) .sc-tool-eyebrow {
+  color: var(--sc-tool-color-text-muted);
+  font-family: var(--sc-tool-font-mono);
+  font-size: var(--sc-tool-font-size-00);
+  letter-spacing: var(--sc-tool-letter-spacing-label);
+  text-transform: uppercase;
+}
+
+:where([data-sc-tool-root]) .sc-tool-copy {
+  color: var(--sc-tool-color-text-muted);
+}
+
 :where([data-sc-tool-root]) .sc-tool-visually-hidden {
   position: absolute;
   width: 1px;

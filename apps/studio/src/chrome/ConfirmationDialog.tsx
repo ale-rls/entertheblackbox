@@ -54,7 +54,7 @@ export function ConfirmationDialog({ details, onClose }: { details: Confirmation
     if (!working && event.target === event.currentTarget) onClose();
   }}>
     <div className="sc-tool-dialog studio-confirmation" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} onKeyDown={handleKeyDown}>
-      <p className="eyebrow">Confirm change</p>
+      <p className="sc-tool-eyebrow">Confirm change</p>
       <h2 id={titleId}>{details.title}</h2>
       <p id={descriptionId}>{details.description}</p>
       <div className="sc-tool-dialog-actions">

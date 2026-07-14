@@ -356,19 +356,19 @@ export function App() {
   };
 
   if (!draft) return <main className="home" data-sc-tool-density="compact" data-sc-tool-root>
-    <header className="home-heading"><p className="eyebrow">Authoring workspace</p><h1 ref={homeHeadingRef} tabIndex={-1}>Show Studio</h1><p className="lede">Create and safely round-trip Smartphonecracy shows.</p></header>
+    <header className="home-heading"><p className="sc-tool-eyebrow">Authoring workspace</p><h1 ref={homeHeadingRef} tabIndex={-1}>Show Studio</h1><p className="sc-tool-copy lede">Create and safely round-trip Smartphonecracy shows.</p></header>
     <div className="home-actions">
-      <button onClick={createShow}>New show</button>
-      <button className="ghost" type="button" aria-describedby={importFeedback ? "studio-home-feedback" : undefined} onClick={() => importInputRef.current?.click()}>Import show or backup</button>
+      <button className="sc-tool-button" data-sc-tool-variant="primary" onClick={createShow}>New show</button>
+      <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" aria-describedby={importFeedback ? "studio-home-feedback" : undefined} onClick={() => importInputRef.current?.click()}>Import show or backup</button>
       <input ref={importInputRef} hidden multiple type="file" accept="application/json" onChange={(event) => {
         void importFiles(event.currentTarget.files);
         event.currentTarget.value = "";
       }} />
     </div>
     {importFeedback && <Feedback id="studio-home-feedback" feedback={importFeedback} />}
-    <h2>Recent drafts</h2>{recent.length === 0 && <p className="lede">No local drafts yet. Import scenario.json and media-manifest.json together.</p>}
-    {localManifest && <p className="lede">Local media: {localManifest.files.length} file{localManifest.files.length === 1 ? "" : "s"} found in content/media.</p>}
-    {recent.map((item) => <article key={item.id}><button className="draft-open" onClick={() => void recoverDraft(db, item.id).then((recovered) => setDraft(recovered && localManifest ? refreshDraftLocalMedia(recovered, localManifest) : recovered))}>{item.name}</button><small>{new Date(item.updatedAt).toLocaleString()}</small><button className="ghost" onClick={() => duplicate(item)}>Duplicate</button><button className="ghost" onClick={() => download(`${item.name}.studio-backup.json`, exportBackup(item))}>Export backup</button><button className="ghost danger" onClick={(event) => remove(item, event.currentTarget)}>Delete</button></article>)}
+    <h2>Recent drafts</h2>{recent.length === 0 && <p className="sc-tool-copy lede">No local drafts yet. Import scenario.json and media-manifest.json together.</p>}
+    {localManifest && <p className="sc-tool-copy lede">Local media: {localManifest.files.length} file{localManifest.files.length === 1 ? "" : "s"} found in content/media.</p>}
+    {recent.map((item) => <article key={item.id}><button className="sc-tool-button draft-open" data-sc-tool-variant="quiet" onClick={() => void recoverDraft(db, item.id).then((recovered) => setDraft(recovered && localManifest ? refreshDraftLocalMedia(recovered, localManifest) : recovered))}>{item.name}</button><small className="sc-tool-copy sc-tool-mono">{new Date(item.updatedAt).toLocaleString()}</small><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => duplicate(item)}>Duplicate</button><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => download(`${item.name}.studio-backup.json`, exportBackup(item))}>Export backup</button><button className="sc-tool-button" data-sc-tool-variant="danger" onClick={(event) => remove(item, event.currentTarget)}>Delete</button></article>)}
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}
   </main>;
 
@@ -431,10 +431,10 @@ export function App() {
         { separator: true },
         { label: "Save layout", onSelect: saveLayout },
       ]} />
-      <input aria-label="Show name" className="show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
+      <input aria-label="Show name" className="sc-tool-field show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
       <SaveStatus status={status} />
-      <button className="ghost" onClick={() => setPreviewing(true)}>Preview</button>
-      <button className="ghost export" aria-label="Export for deployment" aria-describedby={exportFeedback ? "studio-export-feedback" : undefined} disabled={blocked} title={blocked ? "Resolve errors and acknowledge warnings first" : undefined} onClick={exportDeployment}>Export</button>
+      <button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => setPreviewing(true)}>Preview</button>
+      <button className="sc-tool-button export" data-sc-tool-variant="secondary" aria-label="Export for deployment" aria-describedby={exportFeedback ? "studio-export-feedback" : undefined} disabled={blocked} title={blocked ? "Resolve errors and acknowledge warnings first" : undefined} onClick={exportDeployment}>Export</button>
       <input ref={importInputRef} hidden multiple type="file" accept="application/json" onChange={(event) => {
         void importFiles(event.currentTarget.files);
         event.currentTarget.value = "";

@@ -41,7 +41,8 @@
 }
 
 :where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="secondary"]:hover:not(:disabled, [aria-disabled="true"]),
-:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="quiet"]:hover:not(:disabled, [aria-disabled="true"]) {
+:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="quiet"]:hover:not(:disabled, [aria-disabled="true"]),
+:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="quiet"][aria-expanded="true"] {
   background: var(--sc-tool-color-surface-3);
   color: var(--sc-tool-color-text);
 }
@@ -243,6 +244,9 @@
   border-radius: var(--sc-tool-radius-1);
   background: transparent;
   color: var(--sc-tool-color-text);
+  font-size: var(--sc-tool-font-size-1);
+  font-weight: var(--sc-tool-font-weight-medium);
+  line-height: var(--sc-tool-line-height-ui);
   text-align: start;
   cursor: pointer;
 }

@@ -3,3 +3,16 @@
 @import "./base.css";
 @import "./primitives.css";
 @import "./graph.css";
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--sc-tool-color-canvas);
+}

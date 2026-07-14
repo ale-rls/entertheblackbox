@@ -28,9 +28,9 @@ export function StudioProof() {
   return <div data-sc-tool-density="compact" data-sc-tool-root>
     <main className="studio-proof" data-testid="studio-proof">
       <header className="studio-proof-toolbar">
-        <div className="studio-proof-brand"><span className="studio-proof-eyebrow">Show Studio</span><strong>Assembly / Opening night</strong></div>
+        <div className="studio-proof-brand"><span className="sc-tool-eyebrow">Show Studio</span><strong>Assembly / Opening night</strong></div>
         <nav className="studio-proof-menus" aria-label="Application menu">
-          {(["File", "Edit", "View", "Add"] as const).map((menu) => <button aria-haspopup="menu" className="studio-proof-menu-trigger" key={menu} type="button">{menu}</button>)}
+          {(["File", "Edit", "View", "Add"] as const).map((menu) => <button aria-haspopup="menu" className="sc-tool-button studio-proof-menu-trigger" data-sc-tool-variant="quiet" key={menu} type="button">{menu}</button>)}
         </nav>
         <div className="studio-proof-document-state" aria-live="polite">
           <Status status="success">Saved</Status><span className="sc-tool-mono">14:31:52</span><Status status="warning">Export blocked</Status><Button variant="primary">Preview show</Button>
@@ -40,7 +40,7 @@ export function StudioProof() {
       <div className="studio-proof-workbench">
         <section className="studio-proof-canvas sc-tool-graph-canvas" aria-labelledby="studio-canvas-title" tabIndex={0}>
           <header className="studio-proof-canvas-heading">
-            <div><p className="studio-proof-eyebrow">Scenario graph</p><h1 id="studio-canvas-title">Opening night</h1></div>
+            <div><p className="sc-tool-eyebrow">Scenario graph</p><h1 id="studio-canvas-title">Opening night</h1></div>
             <div className="studio-proof-canvas-tools" aria-label="Canvas controls"><Button aria-label="Zoom out" variant="quiet">−</Button><span className="sc-tool-mono">82%</span><Button aria-label="Zoom in" variant="quiet">+</Button><Button variant="quiet">Fit graph</Button></div>
           </header>
 
@@ -62,7 +62,7 @@ export function StudioProof() {
 
         <aside className="studio-proof-inspector" aria-labelledby="studio-inspector-title">
           <header className="studio-proof-inspector-heading">
-            <div><p className="studio-proof-eyebrow">Selected node</p><h2 id="studio-inspector-title">Properties</h2></div>
+            <div><p className="sc-tool-eyebrow">Selected node</p><h2 id="studio-inspector-title">Properties</h2></div>
             <span className="studio-proof-node-type">Question</span>
           </header>
           <div className="studio-proof-inspector-content">
@@ -86,12 +86,12 @@ export function StudioProof() {
 
         <section className="studio-proof-diagnostics" aria-labelledby="studio-diagnostics-title">
           <header>
-            <div><p className="studio-proof-eyebrow">Validation and media</p><h2 id="studio-diagnostics-title">Diagnostics <span className="sc-tool-mono">3</span></h2></div>
+            <div><p className="sc-tool-eyebrow">Validation and media</p><h2 id="studio-diagnostics-title">Diagnostics <span className="sc-tool-mono">3</span></h2></div>
             <Button variant="quiet">Collapse</Button>
           </header>
           <div className="studio-proof-diagnostic-rows">
-            <article className="studio-proof-diagnostic-row"><StatusIcon status="danger" /><strong className="sc-tool-mono">missing-transition</strong><span>The empty outcome has no target.</span><button type="button">Focus question-02</button></article>
-            <article className="studio-proof-diagnostic-row"><StatusIcon status="warning" /><strong className="sc-tool-mono">unused-media</strong><span>intro-alt.mp4 is not referenced.</span><button type="button">Open media</button></article>
+            <article className="studio-proof-diagnostic-row"><StatusIcon status="danger" /><strong className="sc-tool-mono">missing-transition</strong><span>The empty outcome has no target.</span><button className="sc-tool-button" data-sc-tool-variant="quiet" type="button">Focus question-02</button></article>
+            <article className="studio-proof-diagnostic-row"><StatusIcon status="warning" /><strong className="sc-tool-mono">unused-media</strong><span>intro-alt.mp4 is not referenced.</span><button className="sc-tool-button" data-sc-tool-variant="quiet" type="button">Open media</button></article>
             <article className="studio-proof-diagnostic-row"><StatusIcon status="info" /><strong className="sc-tool-mono">media-budget</strong><span>620 MB of 2 GB deployment budget used.</span><span className="sc-tool-mono">31%</span></article>
           </div>
         </section>
