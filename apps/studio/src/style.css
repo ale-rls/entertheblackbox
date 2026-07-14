@@ -132,6 +132,17 @@ body:has(.editor),
   margin-block-start: var(--sc-tool-space-7);
 }
 
+.studio-feedback {
+  width: fit-content;
+  max-width: 48rem;
+  margin: var(--sc-tool-space-4) 0 0;
+  padding: var(--sc-tool-space-3) var(--sc-tool-space-4);
+  border: var(--sc-tool-border-hairline) solid currentColor;
+  border-radius: var(--sc-tool-radius-1);
+  background: var(--sc-tool-color-surface-2);
+  line-height: var(--sc-tool-line-height-copy);
+}
+
 .home-actions > button:first-child {
   border-color: transparent;
   background: var(--sc-tool-color-action);
@@ -214,6 +225,12 @@ body:has(.editor),
   background: var(--sc-tool-color-surface-1);
 }
 
+.menubar-feedback {
+  max-width: min(28rem, 100%);
+  flex: 1 1 18rem;
+  margin: 0;
+}
+
 .menu {
   position: relative;
   flex: 0 0 auto;
@@ -294,10 +311,33 @@ body:has(.editor),
 
 /* Canvas and React Flow chrome */
 .canvas {
+  position: relative;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   border-inline-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
+}
+
+.canvas-feedback {
+  position: absolute;
+  z-index: 10;
+  top: var(--sc-tool-space-4);
+  left: 50%;
+  width: max-content;
+  max-width: min(38rem, calc(100% - (2 * var(--sc-tool-space-5))));
+  margin: 0;
+  transform: translateX(-50%);
+}
+
+.studio-confirmation h2 {
+  margin-block: var(--sc-tool-space-3) var(--sc-tool-space-4);
+  font-size: var(--sc-tool-font-size-4);
+  font-weight: var(--sc-tool-font-weight-medium);
+}
+
+.studio-confirmation > p:not(.eyebrow) {
+  color: var(--sc-tool-color-text-secondary);
+  line-height: var(--sc-tool-line-height-copy);
 }
 
 .canvas .react-flow {

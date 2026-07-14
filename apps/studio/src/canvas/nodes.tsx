@@ -12,7 +12,7 @@ type Phase = StudioProject["scenario"]["phases"][number];
 const KIND_TITLE: Record<string, string> = { idle: "Idle", video: "Video", "position-question": "Question" };
 
 const InPort = () => (
-  <div className="port port-in"><Handle className="sc-tool-graph-port" id="input" type="target" position={Position.Left} /><span className="port-name">in</span></div>
+  <div className="port port-in"><Handle aria-label="Input" className="sc-tool-graph-port" id="input" type="target" position={Position.Left} /><span className="port-name">in</span></div>
 );
 const OutPort = ({ id, label, tone }: { id: string; label: string; tone?: "quad" | "special" }) => (
   <div className={`port port-out ${tone ?? ""}`} data-port-tone={tone ?? "default"}><span className="port-name">{label}</span><Handle aria-label={`${label} output`} className="sc-tool-graph-port" id={id} type="source" position={Position.Right} /></div>

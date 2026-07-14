@@ -8,9 +8,9 @@ type Props = {
   localMedia: Array<{ src: string; durationMs?: number }>;
   onRename: (nextId: string) => void;
   onChange: (phase: Phase) => void;
-  onKindChange: (kind: AuthorablePhaseKind) => void;
-  onTransitionChange: (kind: "fixed" | "quadrant-plurality") => void;
-  onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y") => void;
+  onKindChange: (kind: AuthorablePhaseKind, trigger: HTMLSelectElement) => void;
+  onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
+  onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", trigger: HTMLSelectElement) => void;
 };
 
 const numberValue = (value: string, fallback: number) => {
@@ -35,7 +35,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2>
     <label>{label("Runtime ID", "id")}<input aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
-    {phase.kind !== "idle" && <label>{label("Phase type", "kind")}<select value={phase.kind} onChange={(event) => onKindChange(event.target.value as AuthorablePhaseKind)}><option value="video">Video</option><option value="position-question">Position question</option></select></label>}
+    {phase.kind !== "idle" && <label>{label("Phase type", "kind")}<select value={phase.kind} onChange={(event) => onKindChange(event.target.value as AuthorablePhaseKind, event.currentTarget)}><option value="video">Video</option><option value="position-question">Position question</option></select></label>}
     {phase.kind === "video" && <>
       <label>{label("Media source", "src")}<input list="studio-media-sources" value={phase.src} onChange={(event) => {
         const src = event.target.value;
@@ -47,7 +47,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     </>}
     {phase.kind === "position-question" && <>
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
-      <label>{label("Quadrant layout", "field.type")}<select value={phase.field.type === "four-quadrant" ? "four-quadrant" : `two-quadrant-${phase.field.axis}`} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y")}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option></select></label>
+      <label>{label("Quadrant layout", "field.type")}<select value={phase.field.type === "four-quadrant" ? "four-quadrant" : `two-quadrant-${phase.field.axis}`} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option></select></label>
       {phase.field.type === "four-quadrant" ? (() => {
         const field = phase.field;
         return <>
@@ -67,7 +67,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       {number("Outcome freeze (ms)", "freezeMs", phase.freezeMs, (freezeMs) => onChange({ ...phase, freezeMs }))}
       {number("Connection stale after (ms)", "connectionStaleAfterMs", phase.connectionStaleAfterMs, (connectionStaleAfterMs) => onChange({ ...phase, connectionStaleAfterMs }))}
       <label className="check"><input type="checkbox" checked={phase.showLiveCounts} onChange={(event) => onChange({ ...phase, showLiveCounts: event.target.checked })} />{label("Show live quadrant counts", "showLiveCounts")}</label>
-      <label>{label("Transition rule", "next.type")}<select value={phase.next.type} onChange={(event) => onTransitionChange(event.target.value as "fixed" | "quadrant-plurality")}><option value="fixed">Fixed target</option><option value="quadrant-plurality">Quadrant plurality</option></select></label>
+      <label>{label("Transition rule", "next.type")}<select value={phase.next.type} onChange={(event) => onTransitionChange(event.target.value as "fixed" | "quadrant-plurality", event.currentTarget)}><option value="fixed">Fixed target</option><option value="quadrant-plurality">Quadrant plurality</option></select></label>
       {phase.next.type === "quadrant-plurality" && <CountedStatuses phase={phase} onChange={onChange} />}
     </>}
     <Compiled project={project} />

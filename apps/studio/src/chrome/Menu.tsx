@@ -62,7 +62,7 @@ export function Menu({ label, items }: { label: string; items: MenuItem[] }) {
         }}>
           {items.map((item, index) => item.separator
             ? <div key={index} className="menu-sep sc-tool-menu-separator" role="separator" />
-            : <button key={index} ref={(element) => { itemRefs.current[index] = element; }} role="menuitem" tabIndex={-1} className="menu-item sc-tool-menu-item" disabled={item.disabled} onClick={() => { close(); item.onSelect(); }}>{item.label}</button>)}
+            : <button key={index} ref={(element) => { itemRefs.current[index] = element; }} role="menuitem" tabIndex={-1} className="menu-item sc-tool-menu-item" disabled={item.disabled} onClick={() => { close(true); item.onSelect(); }}>{item.label}</button>)}
         </div>
       )}
     </div>
