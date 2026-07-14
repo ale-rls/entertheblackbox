@@ -1,0 +1,90 @@
+:where([data-sc-tool-root]) {
+  min-width: 0;
+  background: var(--sc-tool-color-canvas);
+  color: var(--sc-tool-color-text);
+  font-family: var(--sc-tool-font-sans);
+  font-size: var(--sc-tool-font-size-2);
+  font-weight: var(--sc-tool-font-weight-regular);
+  line-height: var(--sc-tool-line-height-copy);
+  text-rendering: optimizeLegibility;
+}
+
+:where([data-sc-tool-root]),
+:where([data-sc-tool-root]) *,
+:where([data-sc-tool-root]) *::before,
+:where([data-sc-tool-root]) *::after {
+  box-sizing: border-box;
+}
+
+:where([data-sc-tool-root]) :where(button, input, select, textarea) {
+  font: inherit;
+}
+
+:where([data-sc-tool-root]) :where(button, input, select, a, [tabindex]):focus-visible {
+  outline: var(--sc-tool-border-emphasis) solid var(--sc-tool-color-focus-on-dark);
+  outline-offset: 2px;
+}
+
+:where([data-sc-tool-root]) :where(.sc-tool-button[data-sc-tool-variant="primary"], .sc-tool-cream-module) :where(button, input, select, a, [tabindex]):focus-visible,
+:where([data-sc-tool-root]) :where(.sc-tool-button[data-sc-tool-variant="primary"]):focus-visible {
+  outline-color: var(--sc-tool-color-focus-on-cream);
+}
+
+:where([data-sc-tool-root]) :where(h1, h2, h3, p) {
+  margin-block-start: 0;
+}
+
+:where([data-sc-tool-root]) :where(h1, h2, h3) {
+  line-height: var(--sc-tool-line-height-tight);
+}
+
+:where([data-sc-tool-root]) a {
+  color: var(--sc-tool-color-info);
+}
+
+:where([data-sc-tool-root]) ::selection {
+  background: var(--sc-tool-color-selection);
+  color: var(--sc-tool-color-text);
+}
+
+:where([data-sc-tool-root]) .sc-tool-mono {
+  font-family: var(--sc-tool-font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--sc-tool-letter-spacing-data);
+}
+
+:where([data-sc-tool-root]) .sc-tool-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where([data-sc-tool-root]) *,
+  :where([data-sc-tool-root]) *::before,
+  :where([data-sc-tool-root]) *::after {
+    scroll-behavior: auto !important;
+    transition-duration: var(--sc-tool-duration-instant) !important;
+  }
+
+  :where([data-sc-tool-root]) .sc-tool-button:active {
+    transform: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :where([data-sc-tool-root]) :where(button, input, select, .sc-tool-panel, .sc-tool-menu, .sc-tool-dialog, .sc-tool-graph-node, .sc-tool-graph-port) {
+    border-color: CanvasText;
+  }
+
+  :where([data-sc-tool-root]) :where(button, input, select, a, [tabindex]):focus-visible,
+  :where([data-sc-tool-root]) .sc-tool-graph-node[aria-selected="true"] {
+    outline-color: Highlight;
+  }
+}

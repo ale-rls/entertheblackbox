@@ -1,0 +1,299 @@
+:where([data-sc-tool-root]) .sc-tool-button {
+  display: inline-flex;
+  min-height: var(--sc-tool-density-control-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--sc-tool-space-2);
+  padding: var(--sc-tool-space-3) var(--sc-tool-density-control-pad-inline);
+  border: var(--sc-tool-border-hairline) solid transparent;
+  border-radius: var(--sc-tool-radius-1);
+  color: var(--sc-tool-color-text);
+  font-size: var(--sc-tool-font-size-1);
+  font-weight: var(--sc-tool-font-weight-semibold);
+  line-height: var(--sc-tool-line-height-ui);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--sc-tool-duration-fast) var(--sc-tool-ease-standard), border-color var(--sc-tool-duration-fast) var(--sc-tool-ease-standard), color var(--sc-tool-duration-fast) var(--sc-tool-ease-standard), transform var(--sc-tool-duration-instant) var(--sc-tool-ease-standard);
+}
+
+:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="primary"] {
+  background: var(--sc-tool-color-action);
+  color: var(--sc-tool-color-text-on-cream);
+}
+
+:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="primary"]:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--sc-tool-color-action-hover);
+}
+
+:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="primary"]:active:not(:disabled, [aria-disabled="true"]) {
+  background: var(--sc-tool-color-action-pressed);
+  transform: translateY(1px);
+}
+
+:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="secondary"] {
+  background: var(--sc-tool-color-surface-2);
+  border-color: var(--sc-tool-color-rule-strong);
+}
+
+:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="quiet"] {
+  background: transparent;
+  color: var(--sc-tool-color-text-secondary);
+}
+
+:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="secondary"]:hover:not(:disabled, [aria-disabled="true"]),
+:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="quiet"]:hover:not(:disabled, [aria-disabled="true"]) {
+  background: var(--sc-tool-color-surface-3);
+  color: var(--sc-tool-color-text);
+}
+
+:where([data-sc-tool-root]) .sc-tool-button[data-sc-tool-variant="danger"] {
+  background: transparent;
+  border-color: var(--sc-tool-color-danger);
+  color: var(--sc-tool-color-danger);
+}
+
+:where([data-sc-tool-root]) .sc-tool-button:disabled,
+:where([data-sc-tool-root]) .sc-tool-button[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+:where([data-sc-tool-root]) .sc-tool-field-group {
+  display: grid;
+  gap: var(--sc-tool-space-4);
+  padding-block-end: var(--sc-tool-space-6);
+  border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
+}
+
+:where([data-sc-tool-root]) .sc-tool-label {
+  display: grid;
+  gap: var(--sc-tool-space-2);
+  color: var(--sc-tool-color-text-secondary);
+  font-size: var(--sc-tool-font-size-1);
+  font-weight: var(--sc-tool-font-weight-medium);
+}
+
+:where([data-sc-tool-root]) :where(.sc-tool-field, .sc-tool-select) {
+  width: 100%;
+  min-height: var(--sc-tool-density-control-height);
+  padding: var(--sc-tool-space-3) var(--sc-tool-density-control-pad-inline);
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
+  border-radius: var(--sc-tool-radius-1);
+  background: var(--sc-tool-color-surface-1);
+  color: var(--sc-tool-color-text);
+  font-size: var(--sc-tool-font-size-1);
+  line-height: var(--sc-tool-line-height-ui);
+}
+
+:where([data-sc-tool-root]) .sc-tool-field::placeholder {
+  color: var(--sc-tool-color-text-muted);
+  opacity: 1;
+}
+
+:where([data-sc-tool-root]) :where(.sc-tool-field, .sc-tool-select)[aria-invalid="true"] {
+  border-width: var(--sc-tool-border-emphasis);
+  border-color: var(--sc-tool-color-danger);
+}
+
+:where([data-sc-tool-root]) .sc-tool-checkbox {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: var(--sc-tool-space-3);
+  color: var(--sc-tool-color-text-secondary);
+  font-size: var(--sc-tool-font-size-1);
+  cursor: pointer;
+}
+
+:where([data-sc-tool-root]) .sc-tool-checkbox > input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--sc-tool-color-action);
+}
+
+:where([data-sc-tool-root]) :where(.sc-tool-help, .sc-tool-validation) {
+  margin: 0;
+  font-size: var(--sc-tool-font-size-1);
+}
+
+:where([data-sc-tool-root]) .sc-tool-help {
+  color: var(--sc-tool-color-text-muted);
+}
+
+:where([data-sc-tool-root]) .sc-tool-validation {
+  color: var(--sc-tool-color-danger);
+}
+
+:where([data-sc-tool-root]) .sc-tool-panel {
+  padding: var(--sc-tool-density-panel-pad);
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
+  border-radius: var(--sc-tool-radius-2);
+  background: var(--sc-tool-color-surface-2);
+}
+
+:where([data-sc-tool-root]) .sc-tool-panel-stack {
+  display: grid;
+  gap: var(--sc-tool-density-panel-gap);
+}
+
+:where([data-sc-tool-root]) .sc-tool-cream-module {
+  padding: var(--sc-tool-space-8);
+  border-radius: var(--sc-tool-radius-3);
+  background: var(--sc-tool-color-cream-strong);
+  color: var(--sc-tool-color-text-on-cream);
+}
+
+:where([data-sc-tool-root]) .sc-tool-cream-module .sc-tool-muted {
+  color: var(--sc-tool-color-text-muted-on-cream);
+}
+
+:where([data-sc-tool-root]) .sc-tool-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+:where([data-sc-tool-root]) .sc-tool-list-row {
+  min-height: var(--sc-tool-density-row-height);
+  padding: var(--sc-tool-space-3) var(--sc-tool-space-4);
+  border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
+}
+
+:where([data-sc-tool-root]) .sc-tool-list-row[data-sc-tool-actionable="true"]:hover {
+  background: var(--sc-tool-color-surface-3);
+}
+
+:where([data-sc-tool-root]) .sc-tool-table-region {
+  max-width: 100%;
+  overflow: auto;
+}
+
+:where([data-sc-tool-root]) .sc-tool-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--sc-tool-color-text);
+}
+
+:where([data-sc-tool-root]) .sc-tool-table :where(th, td) {
+  min-height: var(--sc-tool-density-row-height);
+  padding: var(--sc-tool-space-3) var(--sc-tool-space-4);
+  border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
+  text-align: start;
+}
+
+:where([data-sc-tool-root]) .sc-tool-table th {
+  background: var(--sc-tool-color-surface-2);
+  font-size: var(--sc-tool-font-size-0);
+  font-weight: var(--sc-tool-font-weight-medium);
+  letter-spacing: var(--sc-tool-letter-spacing-label);
+}
+
+:where([data-sc-tool-root]) .sc-tool-table :where(th, td)[data-sc-tool-align="numeric"] {
+  font-family: var(--sc-tool-font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+:where([data-sc-tool-root]) :where(.sc-tool-status, .sc-tool-feedback) {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--sc-tool-space-2);
+  color: var(--sc-tool-color-text-secondary);
+  font-size: var(--sc-tool-font-size-1);
+}
+
+:where([data-sc-tool-root]) :where(.sc-tool-status, .sc-tool-feedback, .sc-tool-status-icon)[data-sc-tool-status="info"] {
+  color: var(--sc-tool-color-info);
+}
+
+:where([data-sc-tool-root]) :where(.sc-tool-status, .sc-tool-feedback, .sc-tool-status-icon)[data-sc-tool-status="success"] {
+  color: var(--sc-tool-color-success);
+}
+
+:where([data-sc-tool-root]) :where(.sc-tool-status, .sc-tool-feedback, .sc-tool-status-icon)[data-sc-tool-status="warning"] {
+  color: var(--sc-tool-color-warning);
+}
+
+:where([data-sc-tool-root]) :where(.sc-tool-status, .sc-tool-feedback, .sc-tool-status-icon)[data-sc-tool-status="danger"] {
+  color: var(--sc-tool-color-danger);
+}
+
+:where([data-sc-tool-root]) .sc-tool-status-icon {
+  flex: 0 0 auto;
+  margin-block-start: 0.1em;
+}
+
+:where([data-sc-tool-root]) .sc-tool-menu {
+  min-width: 12rem;
+  padding: var(--sc-tool-space-2);
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
+  border-radius: var(--sc-tool-radius-2);
+  background: var(--sc-tool-color-surface-3);
+  box-shadow: var(--sc-tool-shadow-1);
+}
+
+:where([data-sc-tool-root]) .sc-tool-menu-item {
+  display: flex;
+  width: 100%;
+  min-height: var(--sc-tool-density-row-height);
+  align-items: center;
+  padding-inline: var(--sc-tool-density-control-pad-inline);
+  border: 0;
+  border-radius: var(--sc-tool-radius-1);
+  background: transparent;
+  color: var(--sc-tool-color-text);
+  text-align: start;
+  cursor: pointer;
+}
+
+:where([data-sc-tool-root]) .sc-tool-menu-item:hover:not(:disabled) {
+  background: var(--sc-tool-color-selection);
+}
+
+:where([data-sc-tool-root]) .sc-tool-menu-item:disabled {
+  color: var(--sc-tool-color-text-muted);
+  cursor: not-allowed;
+}
+
+:where([data-sc-tool-root]) .sc-tool-menu-separator {
+  height: var(--sc-tool-border-hairline);
+  margin: var(--sc-tool-space-2);
+  background: var(--sc-tool-color-rule);
+}
+
+:where([data-sc-tool-root]) .sc-tool-dialog-scrim {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  overflow: auto;
+  place-items: center;
+  padding: var(--sc-tool-space-6);
+  background: var(--sc-tool-color-scrim);
+}
+
+:where([data-sc-tool-root]) .sc-tool-dialog {
+  width: min(100%, 32rem);
+  max-height: calc(100dvh - (2 * var(--sc-tool-space-6)));
+  overflow: auto;
+  padding: var(--sc-tool-space-7);
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
+  border-radius: var(--sc-tool-radius-3);
+  background: var(--sc-tool-color-surface-2);
+  box-shadow: var(--sc-tool-shadow-2);
+}
+
+:where([data-sc-tool-root]) .sc-tool-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sc-tool-space-4);
+  margin-block-start: var(--sc-tool-space-6);
+}
+
+@media (pointer: coarse) {
+  :where([data-sc-tool-root]) :where(.sc-tool-button, .sc-tool-menu-item, .sc-tool-checkbox, .sc-tool-field, .sc-tool-select) {
+    min-height: 44px;
+  }
+}

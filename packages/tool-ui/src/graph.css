@@ -1,0 +1,98 @@
+:where([data-sc-tool-root]) .sc-tool-graph-canvas {
+  position: relative;
+  overflow: auto;
+  background-color: var(--sc-tool-color-canvas);
+  background-image: radial-gradient(var(--sc-tool-color-rule) 1px, transparent 1px);
+  background-size: var(--sc-tool-space-8) var(--sc-tool-space-8);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-node {
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
+  border-block-start-width: 4px;
+  border-radius: var(--sc-tool-radius-1);
+  background: var(--sc-tool-color-surface-2);
+  color: var(--sc-tool-color-text);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-node[data-sc-tool-domain="entry"] {
+  border-block-start-color: var(--sc-tool-color-domain-entry);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-node[data-sc-tool-domain="idle"] {
+  border-block-start-color: var(--sc-tool-color-domain-idle);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-node[data-sc-tool-domain="video"] {
+  border-block-start-color: var(--sc-tool-color-domain-video);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-node[data-sc-tool-domain="question"] {
+  border-block-start-color: var(--sc-tool-color-domain-question);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-node[data-sc-tool-domain="branch"] {
+  border-block-start-color: var(--sc-tool-color-domain-branch);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-node[aria-selected="true"] {
+  border-width: var(--sc-tool-border-emphasis);
+  border-color: var(--sc-tool-color-action);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-node[data-sc-tool-dragging="true"] {
+  box-shadow: var(--sc-tool-shadow-1);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-port {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border: var(--sc-tool-border-emphasis) solid var(--sc-tool-color-rule-strong);
+  border-radius: 50%;
+  background: var(--sc-tool-color-surface-2);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-port::before {
+  position: absolute;
+  inset: -6px;
+  min-width: 24px;
+  min-height: 24px;
+  content: "";
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-edge {
+  fill: none;
+  stroke: var(--sc-tool-color-rule-strong);
+  stroke-width: var(--sc-tool-border-emphasis);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-edge[data-sc-tool-edge="active"] {
+  stroke: var(--sc-tool-color-domain-entry);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-edge[data-sc-tool-edge="branch"] {
+  stroke: var(--sc-tool-color-domain-branch);
+}
+
+:where([data-sc-tool-root]) .sc-tool-graph-edge[data-sc-tool-edge="invalid"] {
+  stroke: var(--sc-tool-color-danger);
+  stroke-dasharray: 6 4;
+}
+
+@media (pointer: coarse) {
+  :where([data-sc-tool-root]) .sc-tool-graph-port::before {
+    inset: -16px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (forced-colors: active) {
+  :where([data-sc-tool-root]) .sc-tool-graph-edge {
+    stroke: CanvasText;
+  }
+
+  :where([data-sc-tool-root]) .sc-tool-graph-edge[data-sc-tool-edge="invalid"] {
+    stroke: Mark;
+  }
+}
