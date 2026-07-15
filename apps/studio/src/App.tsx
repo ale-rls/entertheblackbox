@@ -256,8 +256,10 @@ export function App() {
     }
     setGraphFeedback(undefined);
     const id = kind === "idle" ? "idle" : `${kind}-${crypto.randomUUID().slice(0, 6)}`;
+    const firstMedia = draft.project.manifest.files[0];
+    const firstMediaDuration = localManifest?.files.find((file) => file.src === firstMedia?.src)?.durationMs;
     const phase = kind === "idle" ? { kind, id: "idle" as const } : kind === "video"
-      ? { kind, id, src: "media/new-video.mp4", expectedDurationMs: 1000, next: "idle" }
+      ? { kind, id, src: firstMedia?.src ?? "media/new-video.mp4", expectedDurationMs: firstMediaDuration ?? 1000, next: "idle" }
       : { kind, id, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, durationMs: 60000, freezeMs: 5000, connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } };
     const phases = [...draft.project.scenario.phases, phase] as Draft["project"]["scenario"]["phases"];
     const nextNodes = [...nodes, { id, type: "phase", position: { x: 400, y: 200 }, data: nodeDataForPhase(phase as Phase) }];
@@ -295,7 +297,12 @@ export function App() {
       tone: "primary",
       trigger,
       onConfirm: () => {
-        const nextPhase = changePhaseKind(phase, kind);
+        const changedPhase = changePhaseKind(phase, kind);
+        const firstMedia = draft.project.manifest.files[0];
+        const firstMediaDuration = localManifest?.files.find((file) => file.src === firstMedia?.src)?.durationMs;
+        const nextPhase = changedPhase.kind === "video" && firstMedia
+          ? { ...changedPhase, src: firstMedia.src, expectedDurationMs: firstMediaDuration ?? changedPhase.expectedDurationMs }
+          : changedPhase;
         const retained = edges.filter((edge) => edge.source !== selectedId);
         const nextEdges = [
           ...retained,
