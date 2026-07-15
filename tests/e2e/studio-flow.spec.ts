@@ -19,7 +19,10 @@ test.describe("Show Studio v1", () => {
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await page.getByRole("menuitem", { name: "Video phase" }).click();
     await page.locator('.react-flow__node[data-id^="video-"]').click();
-    await page.getByLabel("Media source").fill("video-1.mp4");
+    await expect(page.getByLabel("Media source").locator("option")).toHaveText([
+      "intro.mp4", "ltx2.3_flf2v_00010_.mp4", "video-1.mp4", "video-2.mp4", "video-3.mp4", "video-4.mp4",
+    ]);
+    await page.getByLabel("Media source").selectOption("video-1.mp4");
     await expect(page.getByLabel("Expected duration (ms)")).toHaveCount(0);
     await expect(page.getByText("Video duration: 15.042 seconds")).toBeVisible();
     await page.getByText("Compiled scenario JSON (read only)").click();

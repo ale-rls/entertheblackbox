@@ -26,6 +26,8 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   const detectedDuration = phase?.kind === "video"
     ? localMedia.find((file) => file.src === phase.src)?.durationMs
     : undefined;
+  const selectedMediaIsListed = phase?.kind === "video"
+    && project.manifest.files.some((file) => file.src === phase.src);
 
   if (!phase) return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2><p className="sc-tool-copy">Select a runtime phase to edit it.</p><Compiled project={project} /></aside>;
   const label = (plain: string, runtime: string) => <span>{plain}<small>{runtime}</small></span>;
@@ -37,11 +39,14 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
     {phase.kind !== "idle" && <label className="sc-tool-label">{label("Phase type", "kind")}<select className="sc-tool-select" value={phase.kind} onChange={(event) => onKindChange(event.target.value as AuthorablePhaseKind, event.currentTarget)}><option value="video">Video</option><option value="position-question">Position question</option></select></label>}
     {phase.kind === "video" && <>
-      <label className="sc-tool-label">{label("Media source", "src")}<input className="sc-tool-field" list="studio-media-sources" value={phase.src} onChange={(event) => {
+      <label className="sc-tool-label">{label("Media source", "src")}<select className="sc-tool-select" value={phase.src} onChange={(event) => {
         const src = event.target.value;
         const expectedDurationMs = localMedia.find((file) => file.src === src)?.durationMs;
         onChange({ ...phase, src, ...(expectedDurationMs === undefined ? {} : { expectedDurationMs }) });
-      }} /><datalist id="studio-media-sources">{project.manifest.files.map((file) => <option key={file.src} value={file.src} />)}</datalist></label>
+      }}>
+        {!selectedMediaIsListed && <option value={phase.src}>Missing from manifest — {phase.src}</option>}
+        {project.manifest.files.map((file) => <option key={file.src} value={file.src}>{file.src}</option>)}
+      </select></label>
       <p className="sc-tool-copy field-hint">{detectedDuration === undefined
         ? "Video duration is detected automatically when the selected media is available."
         : `Video duration: ${(detectedDuration / 1000).toFixed(3)} seconds`}</p>
