@@ -2,6 +2,7 @@ import { SCENARIO_SCHEMA_VERSION } from "../../../../packages/scenario/src/index
 import { compileStudioGraph } from "@smartphonecracy/studio-adapter";
 import type { Draft } from "../model.js";
 import { diagnosticKey, diagnostics, exportBlocked, type Diagnostic } from "../diagnostics/diagnostics.js";
+import { distinctReferencedBytes } from "../media/library.js";
 import { forcedOutcomes, resolvePreview, startPreview, type ForcedOutcome } from "../preview/preview.js";
 
 export type BranchSmokeResult = {
@@ -82,8 +83,7 @@ export function assembleDeploymentPackage(
   // assembled until it succeeds, so invalid runtime output cannot escape.
   const runtime = compileStudioGraph(draft.project);
   const branchSmoke = smokeAllBranches(draft);
-  const mediaTotalBytes = [...new Map(runtime.manifest.files.map((file) => [file.hash, file.bytes])).values()]
-    .reduce((sum, bytes) => sum + bytes, 0);
+  const mediaTotalBytes = distinctReferencedBytes(draft.project);
   const warningKeys = items.filter((item) => item.severity === "warning").map(diagnosticKey).sort();
   const report: ValidationReport = {
     valid: true,
