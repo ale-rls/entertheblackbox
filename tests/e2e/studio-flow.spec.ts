@@ -20,8 +20,10 @@ test.describe("Show Studio v1", () => {
     await page.getByRole("menuitem", { name: "Video phase" }).click();
     await page.locator('.react-flow__node[data-id^="video-"]').click();
     await page.getByLabel("Media source").fill("video-1.mp4");
-    await expect(page.getByLabel("Expected duration (ms)")).toHaveValue("15042");
-    await expect(page.getByText("Detected from video: 15.042 seconds")).toBeVisible();
+    await expect(page.getByLabel("Expected duration (ms)")).toHaveCount(0);
+    await expect(page.getByText("Video duration: 15.042 seconds")).toBeVisible();
+    await page.getByText("Compiled scenario JSON (read only)").click();
+    await expect(page.getByText(/"expectedDurationMs": 15042/)).toBeVisible();
   });
 
   test("imports, edits, validates, previews, and exports a gated package", async ({ page }) => {
