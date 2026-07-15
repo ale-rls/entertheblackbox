@@ -42,8 +42,9 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         const expectedDurationMs = localMedia.find((file) => file.src === src)?.durationMs;
         onChange({ ...phase, src, ...(expectedDurationMs === undefined ? {} : { expectedDurationMs }) });
       }} /><datalist id="studio-media-sources">{project.manifest.files.map((file) => <option key={file.src} value={file.src} />)}</datalist></label>
-      {number("Expected duration (ms)", "expectedDurationMs", phase.expectedDurationMs, (expectedDurationMs) => onChange({ ...phase, expectedDurationMs }))}
-      {detectedDuration !== undefined && <p className="sc-tool-copy field-hint">Detected from video: {(detectedDuration / 1000).toFixed(3)} seconds</p>}
+      <p className="sc-tool-copy field-hint">{detectedDuration === undefined
+        ? "Video duration is detected automatically when the selected media is available."
+        : `Video duration: ${(detectedDuration / 1000).toFixed(3)} seconds`}</p>
     </>}
     {phase.kind === "position-question" && <>
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
