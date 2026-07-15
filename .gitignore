@@ -7,7 +7,11 @@ dist-proof/
 .env.*
 *.log
 .DS_Store
-content/media/
+# Real show media stays out of git (production media is externally hosted);
+# the tiny fake dev fixture is tracked so validation, tests, and fresh
+# clones work (CI runs validate-scenario against dev.json).
+content/media/*
+!content/media/intro.mp4
 
 # Playwright artifacts
 test-results/

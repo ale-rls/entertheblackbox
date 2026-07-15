@@ -10,6 +10,7 @@
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @smartphonecracy/display build && pnpm --filter @smartphonecracy/phone build && pnpm --filter @smartphonecracy/admin build && playwright test --config tests/e2e/playwright.config.ts",
     "validate-scenario": "tsx scripts/validate-scenario.ts",
+    "build-media-manifest": "tsx scripts/build-media-manifest.ts",
     "simulate-clients": "tsx scripts/simulate-clients.ts"
   },
   "devDependencies": {
