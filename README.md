@@ -134,7 +134,7 @@ Scenarios and manifests are validated at startup and before Studio deployment ex
 
 ## Deployment and operations
 
-Production is designed for a single authoritative Fly.io server, Supabase Postgres for durable events and checkpoints, and externally hosted media. Deployment is manually gated and must happen while the venue is closed.
+The current production design targets a single authoritative Fly.io server, Supabase Postgres for durable events and checkpoints, and externally hosted media — but whether production runs in the cloud or on-premises at the venue is an open decision ([#35](https://github.com/ale-rls/smartphonecracy-runner/issues/35)). Deployment is manually gated and must happen while the venue is closed.
 
 - [Deployment and rollback](docs/deployment.md)
 - [Operations runbook](docs/operations.md)

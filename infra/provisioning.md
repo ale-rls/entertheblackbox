@@ -1,5 +1,10 @@
 # Production provisioning record
 
+> **Pending decision:** this checklist assumes the cloud (Fly.io/Supabase/CDN)
+> design. The cloud-vs-on-premises architecture decision is open in issue
+> [#35](https://github.com/ale-rls/smartphonecracy-runner/issues/35) — do not
+> provision any of these resources until it is resolved.
+
 No production resource is created from this repository without an approved
 operator session. Record resource identifiers and secret-manager references
 here, never secret values.

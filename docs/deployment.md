@@ -1,10 +1,15 @@
 # Production deployment and rollback
 
+> **Pending decision:** this document describes the cloud (Fly.io) design.
+> Whether production runs on Fly or on-premises at the venue is undecided —
+> see issue [#35](https://github.com/ale-rls/smartphonecracy-runner/issues/35).
+> Do not provision or deploy production resources until that issue is resolved.
+
 Production deploys are manual and must happen while the venue is closed and no
 visitors are present. The GitHub `production` environment must have required
 reviewers configured, and `FLY_API_TOKEN` must be stored as an environment
-secret. Provisioning the Fly application and its runtime secrets belongs to
-STEP-024.
+secret. Provisioning the Fly application and its runtime secrets is tracked in
+issue [#29](https://github.com/ale-rls/smartphonecracy-runner/issues/29).
 
 To deploy, run the **Deploy production** workflow, enter the existing Fly app
 name, and confirm the deploy-window check. Approval of the protected
