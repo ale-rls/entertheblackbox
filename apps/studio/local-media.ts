@@ -1,11 +1,16 @@
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { readdir, stat } from "node:fs/promises";
-import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { createReadStream, createWriteStream } from "node:fs";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import type { Plugin } from "vite";
 
 export const LOCAL_MEDIA_MANIFEST_ENDPOINT = "/__studio/local-media-manifest";
 export const LOCAL_MEDIA_FILE_ENDPOINT = "/__studio/local-media/";
+export const MAX_LOCAL_MEDIA_BYTES = 2 * 1024 * 1024 * 1024;
+
+const VIDEO_EXTENSIONS = new Set([".mp4", ".webm"]);
 
 export type LocalMediaManifest = {
   files: Array<{ src: string; bytes: number; hash: string }>;
@@ -62,7 +67,7 @@ export function localMediaManifestPlugin(mediaDirectory: string): Plugin {
       server.middlewares.use(async (request, response, next) => {
         const url = new URL(request.url ?? "/", "http://studio.local");
         if (!url.pathname.startsWith(LOCAL_MEDIA_FILE_ENDPOINT)) return next();
-        if (request.method !== "GET" && request.method !== "HEAD") return next();
+        if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "PUT") return next();
         try {
           const source = decodeURIComponent(url.pathname.slice(LOCAL_MEDIA_FILE_ENDPOINT.length));
           const path = resolve(mediaDirectory, source);
@@ -71,6 +76,52 @@ export function localMediaManifestPlugin(mediaDirectory: string): Plugin {
             response.statusCode = 400;
             return response.end("Invalid media path");
           }
+
+          if (request.method === "PUT") {
+            if (basename(source) !== source || !VIDEO_EXTENSIONS.has(extname(source).toLowerCase())) {
+              response.statusCode = 400;
+              response.setHeader("Content-Type", "application/json");
+              return response.end(JSON.stringify({ error: "Choose an MP4 or WebM video. MOV is not supported by the venue display." }));
+            }
+            const declaredBytes = Number(request.headers["content-length"]);
+            if (Number.isFinite(declaredBytes) && (declaredBytes <= 0 || declaredBytes > MAX_LOCAL_MEDIA_BYTES)) {
+              response.statusCode = 413;
+              response.setHeader("Content-Type", "application/json");
+              return response.end(JSON.stringify({ error: "The video must be non-empty and no larger than 2 GiB." }));
+            }
+
+            await mkdir(mediaDirectory, { recursive: true });
+            let written = 0;
+            let created = false;
+            const limit = new Transform({
+              transform(chunk, _encoding, callback) {
+                written += chunk.length;
+                callback(written > MAX_LOCAL_MEDIA_BYTES ? new Error("media-too-large") : undefined, chunk);
+              },
+            });
+            const output = createWriteStream(path, { flags: "wx" });
+            output.once("open", () => { created = true; });
+            try {
+              await pipeline(request, limit, output);
+              if (written === 0) throw new Error("media-empty");
+            } catch (error) {
+              if (created) await rm(path, { force: true });
+              const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+              response.statusCode = code === "EEXIST" ? 409 : error instanceof Error && error.message === "media-too-large" ? 413 : 400;
+              response.setHeader("Content-Type", "application/json");
+              const message = code === "EEXIST"
+                ? `A media file named “${source}” already exists.`
+                : error instanceof Error && error.message === "media-too-large"
+                  ? "The video must be no larger than 2 GiB."
+                  : "The video could not be saved.";
+              return response.end(JSON.stringify({ error: message }));
+            }
+            cache.delete(path);
+            response.statusCode = 201;
+            response.setHeader("Content-Type", "application/json");
+            return response.end(JSON.stringify({ src: source }));
+          }
+
           const metadata = await stat(path);
           if (!metadata.isFile()) {
             response.statusCode = 404;

@@ -22,6 +22,23 @@ const isManifest = (value: unknown): value is MediaManifest => {
 const localMediaUrl = (source: string) => LOCAL_MEDIA_FILE_ENDPOINT
   + source.split("/").map(encodeURIComponent).join("/");
 
+export async function uploadLocalMedia(file: File, fetcher: typeof fetch = fetch): Promise<void> {
+  const response = await fetcher(localMediaUrl(file.name), {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "application/octet-stream" },
+    body: file,
+  });
+  // A static SPA host may answer an unknown PUT with its HTML fallback and a
+  // misleading 200. Only the dev-only upload middleware returns 201.
+  if (response.status === 201) return;
+  let message = `Could not add ${file.name}. Adding media requires the local Studio development server.`;
+  try {
+    const body = await response.json() as { error?: unknown };
+    if (typeof body.error === "string") message = body.error;
+  } catch { /* Use the fallback message for non-Studio/static responses. */ }
+  throw new Error(message);
+}
+
 export function browserVideoDuration(source: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");

@@ -5,6 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { Draft } from "./model.js";
 
 const database = vi.hoisted(() => ({ drafts: [] as Draft[], deleted: [] as string[] }));
+const media = vi.hoisted(() => ({ load: vi.fn(), upload: vi.fn() }));
 
 vi.mock("./drafts.js", () => ({
   Autosave: class {
@@ -21,9 +22,10 @@ vi.mock("./drafts.js", () => ({
 }));
 
 vi.mock("./media/local.js", () => ({
-  loadLocalMediaManifest: async () => undefined,
+  loadLocalMediaManifest: media.load,
   refreshDraftLocalMedia: (draft: Draft) => draft,
   runtimeMediaManifest: () => ({ files: [] }),
+  uploadLocalMedia: media.upload,
 }));
 
 import { App } from "./App.js";
@@ -40,8 +42,11 @@ beforeAll(() => {
 beforeEach(() => {
   database.drafts = [];
   database.deleted = [];
+  media.load.mockReset().mockResolvedValue(undefined);
+  media.upload.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
   vi.stubGlobal("scrollTo", vi.fn());
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 });
 
 afterEach(async () => {
@@ -185,6 +190,44 @@ describe("Studio feedback and keyboard entry", () => {
     expect(feedback.textContent).toContain("Import failed");
     expect(feedback.textContent).toContain("scenario.json and media-manifest.json together");
     expect(importButton.getAttribute("aria-describedby")).toBe(feedback.id);
+  });
+
+  it("reports upload progress and refreshes media after partial multi-file failure", async () => {
+    media.load
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({ files: [
+        { src: "first.mp4", bytes: 10, hash: "first", durationMs: 1_000 },
+        { src: "third.webm", bytes: 20, hash: "third", durationMs: 2_000 },
+      ] });
+    let releaseFirst!: () => void;
+    media.upload
+      .mockImplementationOnce(() => new Promise<void>((resolve) => { releaseFirst = resolve; }))
+      .mockRejectedValueOnce(new Error("A media file named “duplicate.mp4” already exists."))
+      .mockResolvedValueOnce(undefined);
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Add video media"]')!;
+    expect(input.accept).toBe("video/mp4,video/webm,.mp4,.webm");
+    const files = [
+      new File(["first"], "first.mp4", { type: "video/mp4" }),
+      new File(["duplicate"], "duplicate.mp4", { type: "video/mp4" }),
+      new File(["third"], "third.webm", { type: "video/webm" }),
+    ];
+    Object.defineProperty(input, "files", { configurable: true, value: files });
+    act(() => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    await flush();
+    expect(document.body.textContent).toContain("Adding first.mp4 (1 of 3)…");
+
+    await act(async () => {
+      releaseFirst();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await flush();
+    expect(media.upload.mock.calls.map(([file]) => (file as File).name)).toEqual(["first.mp4", "duplicate.mp4", "third.webm"]);
+    expect(media.load).toHaveBeenCalledTimes(2);
+    expect(document.body.textContent).toContain("Added 2: first.mp4, third.webm.");
+    expect(document.body.textContent).toContain("Failed 1: duplicate.mp4");
   });
 
   it("returns focus to a menu trigger after a normal selection", async () => {
