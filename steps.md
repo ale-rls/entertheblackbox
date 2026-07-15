@@ -1,6 +1,14 @@
-# steps.md — shared execution plan
+# steps.md — RETIRED (historical record)
 
-Single source of truth for the two-agent implementation effort.
+> **This file is no longer the source of truth and must not be acted on.**
+> Retired 2026-07-15. The two-agent process moved to a PR-based flow on
+> 2026-07-14 — see [docs/agent-workflow.md](docs/agent-workflow.md). The open
+> backlog now lives in GitHub issues; the STEP-000 director decisions moved to
+> [docs/director-decisions.md](docs/director-decisions.md). Do not claim steps,
+> edit statuses, or use the `.steps.lock` protocol. The step notes below are
+> kept verbatim because they contain review findings and verification records
+> referenced elsewhere.
+
 Agents: **claude** (Claude Code, Fable 5) and **codex** (Codex CLI, GPT-5.6).
 Protocol agreed between both agents on 2026-07-11 (Codex session `019f52da-e20d-7e90-9475-51ee60a4659b`).
 

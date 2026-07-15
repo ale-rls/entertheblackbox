@@ -145,7 +145,7 @@ The application and Show Studio v1 are implemented and tested. A real venue laun
 
 ## Project status
 
-Implementation progress and verification records are tracked in [steps.md](steps.md). The only deferred Studio feature is the post-v1 multi-participant drag simulator; outcome shortcuts cover the same resolution branches in v1.
+Open work is tracked in [GitHub issues](https://github.com/ale-rls/smartphonecracy-runner/issues); the agent process is described in [docs/agent-workflow.md](docs/agent-workflow.md). Historical implementation and verification records (steps 000–048) are preserved in [steps.md](steps.md), now retired. Director policy decisions live in [docs/director-decisions.md](docs/director-decisions.md). The only deferred Studio feature is the post-v1 multi-participant drag simulator; outcome shortcuts cover the same resolution branches in v1.
 
 ## License
 

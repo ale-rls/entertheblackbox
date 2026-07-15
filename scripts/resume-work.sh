@@ -14,6 +14,12 @@
 
 set -u
 
+# RETIRED 2026-07-15: the steps.md workflow this watchdog drives was replaced
+# by the PR-based flow in docs/agent-workflow.md. Exit immediately so a stale
+# cron/launchd entry cannot spawn agents against the retired steps.md backlog.
+echo "resume-work.sh is retired — the two-agent process moved to a PR-based flow (see docs/agent-workflow.md)." >&2
+exit 0
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LANE="${1:-}"
 [[ "$LANE" == "claude" || "$LANE" == "codex" ]] || { echo "usage: $0 claude|codex" >&2; exit 2; }
