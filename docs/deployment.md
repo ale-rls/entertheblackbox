@@ -2,7 +2,7 @@
 
 > **Pending decision:** this document describes the cloud (Fly.io) design.
 > Whether production runs on Fly or on-premises at the venue is undecided —
-> see issue [#35](https://github.com/ale-rls/smartphonecracy-runner/issues/35).
+> see issue [#37](https://github.com/ale-rls/smartphonecracy-runner/issues/37).
 > Do not provision or deploy production resources until that issue is resolved.
 
 Production deploys are manual and must happen while the venue is closed and no
