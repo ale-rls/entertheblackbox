@@ -2,7 +2,7 @@
 
 > Hosting-specific references in this runbook (Fly status, Fly metrics/logs)
 > assume the cloud design, which is pending the architecture decision in issue
-> [#35](https://github.com/ale-rls/smartphonecracy-runner/issues/35). The staff
+> [#37](https://github.com/ale-rls/smartphonecracy-runner/issues/37). The staff
 > procedures themselves are architecture-neutral.
 
 This runbook is for venue staff and the remote technical operator. Keep a
