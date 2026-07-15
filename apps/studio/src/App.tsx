@@ -16,7 +16,7 @@ import { assembleDeploymentPackage } from "./export/deployment.js";
 import { Menu } from "./chrome/Menu.js";
 import { ConfirmationDialog, type ConfirmationDetails } from "./chrome/ConfirmationDialog.js";
 import { SaveStatus } from "./chrome/SaveStatus.js";
-import { loadLocalMediaManifest, refreshDraftLocalMedia, runtimeMediaManifest, type MediaManifest } from "./media/local.js";
+import { loadLocalMediaManifest, refreshDraftLocalMedia, runtimeMediaManifest, uploadLocalMedia, type MediaManifest } from "./media/local.js";
 import "@smartphonecracy/tool-ui/styles.css";
 import "./style.css";
 
@@ -27,7 +27,7 @@ const download = (name: string, value: unknown) => {
   URL.revokeObjectURL(url);
 };
 
-type InlineFeedback = { status: "success" | "danger"; message: string };
+type InlineFeedback = { status: "info" | "success" | "danger"; message: string };
 
 function Feedback({ feedback, id, className = "" }: { feedback: InlineFeedback; id: string; className?: string }) {
   return <p id={id} className={`sc-tool-feedback studio-feedback ${className}`.trim()} data-sc-tool-status={feedback.status} role={feedback.status === "danger" ? "alert" : "status"} aria-atomic="true">{feedback.message}</p>;
@@ -81,6 +81,7 @@ export function App() {
   const [exportFeedback, setExportFeedback] = useState<InlineFeedback>();
   const [confirmation, setConfirmation] = useState<ConfirmationDetails>();
   const importInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
   const homeHeadingRef = useRef<HTMLHeadingElement>(null);
   const editorRef = useRef<HTMLElement>(null);
   type HistoryState = { draft: Draft; edges: Edge[] };
@@ -150,6 +151,35 @@ export function App() {
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The selected files could not be read.";
       setImportFeedback({ status: "danger", message: `Import failed: ${detail} Choose a Studio backup, or select scenario.json and media-manifest.json together.` });
+    }
+  };
+  const addMedia = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const selected = [...files];
+    const added: string[] = [];
+    const failed: Array<{ name: string; reason: string }> = [];
+    for (const [index, file] of selected.entries()) {
+      setImportFeedback({ status: "info", message: `Adding ${file.name} (${index + 1} of ${selected.length})…` });
+      try {
+        await uploadLocalMedia(file);
+        added.push(file.name);
+      } catch (error) {
+        failed.push({ name: file.name, reason: error instanceof Error ? error.message : "The video could not be added." });
+      }
+    }
+
+    const manifest = await loadLocalMediaManifest();
+    if (manifest) setLocalManifest(manifest);
+    const addedSummary = added.length ? `Added ${added.length}: ${added.join(", ")}.` : "No videos were added.";
+    const failedSummary = failed.length
+      ? ` Failed ${failed.length}: ${failed.map(({ name, reason }) => `${name} — ${reason}`).join("; ")}`
+      : "";
+    if (!manifest) {
+      setImportFeedback({ status: "danger", message: `Add Media finished, but the library could not be refreshed. ${addedSummary}${failedSummary} Reload Studio to rescan content/media.` });
+    } else if (failed.length) {
+      setImportFeedback({ status: "danger", message: `${addedSummary}${failedSummary}` });
+    } else {
+      setImportFeedback({ status: "success", message: `${addedSummary} The media library is up to date.` });
     }
   };
   const duplicate = (source: Draft) => save({ ...structuredClone(source), id: crypto.randomUUID(), name: `${source.name} copy`, updatedAt: Date.now() });
@@ -409,6 +439,7 @@ export function App() {
       <Menu label="File" items={[
         { label: "New show", onSelect: createShow },
         { label: "Import…", onSelect: () => importInputRef.current?.click() },
+        { label: "Add Media…", onSelect: () => mediaInputRef.current?.click() },
         { label: "Duplicate", onSelect: () => duplicate(draft) },
         { separator: true },
         { label: "Export files", onSelect: () => Object.entries(exportArtifacts(draft)).forEach(([name, value]) => download(name, value)), disabled: blocked },
@@ -437,6 +468,10 @@ export function App() {
       <button className="sc-tool-button export" data-sc-tool-variant="secondary" aria-label="Export for deployment" aria-describedby={exportFeedback ? "studio-export-feedback" : undefined} disabled={blocked} title={blocked ? "Resolve errors and acknowledge warnings first" : undefined} onClick={exportDeployment}>Export</button>
       <input ref={importInputRef} hidden multiple type="file" accept="application/json" onChange={(event) => {
         void importFiles(event.currentTarget.files);
+        event.currentTarget.value = "";
+      }} />
+      <input ref={mediaInputRef} aria-label="Add video media" hidden multiple type="file" accept="video/mp4,video/webm,.mp4,.webm" onChange={(event) => {
+        void addMedia(event.currentTarget.files);
         event.currentTarget.value = "";
       }} />
       {importFeedback && <Feedback id="studio-import-feedback" className="menubar-feedback" feedback={importFeedback} />}

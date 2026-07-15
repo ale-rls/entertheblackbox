@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import manifest from "../../../../content/media-manifest.json";
 import scenario from "../../../../content/scenarios/dev.json";
 import { importRuntime } from "../io.js";
-import { loadLocalMediaManifest, refreshDraftLocalMedia } from "./local.js";
+import { loadLocalMediaManifest, refreshDraftLocalMedia, uploadLocalMedia } from "./local.js";
 
 describe("local Studio media", () => {
   it("loads a valid generated manifest without browser caching", async () => {
@@ -20,6 +20,15 @@ describe("local Studio media", () => {
     const invalid = vi.fn(async () => new Response(JSON.stringify({ files: [{ src: "empty.mp4", bytes: 0, hash: "x" }] })));
     await expect(loadLocalMediaManifest(unavailable as typeof fetch)).resolves.toBeUndefined();
     await expect(loadLocalMediaManifest(invalid as typeof fetch)).resolves.toBeUndefined();
+  });
+
+  it("explains that uploads require the local Studio server when the endpoint is unavailable", async () => {
+    const fetcher = vi.fn(async () => new Response("Not found", { status: 404 }));
+    const file = new File(["video"], "new.mp4", { type: "video/mp4" });
+    await expect(uploadLocalMedia(file, fetcher as typeof fetch)).rejects.toThrow(
+      "Could not add new.mp4. Adding media requires the local Studio development server.",
+    );
+    expect(fetcher).toHaveBeenCalledWith("/__studio/local-media/new.mp4", expect.objectContaining({ method: "PUT", body: file }));
   });
 
   it("overlays local files while preserving imported-only entries", () => {
