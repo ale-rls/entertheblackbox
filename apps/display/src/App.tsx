@@ -10,6 +10,7 @@ import { Countdown } from "./components/Countdown.js";
 import { QrBadge } from "./components/QrBadge.js";
 import { QuadrantOverlay } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
+import { LobbyCountdown } from "./components/LobbyCountdown.js";
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -139,6 +140,11 @@ export function App() {
         {!isIdle && (
           <QrBadge grant={state.qrGrant} qrHidden={state.qrHidden} clock={connection.clock} />
         )}
+        <LobbyCountdown
+          sessionId={state.sessionId}
+          phase={phase}
+          clock={connection.clock}
+        />
         {phase?.kind === "position-question" && (
           <div className="question">
             <h2>{phase.text}</h2>
