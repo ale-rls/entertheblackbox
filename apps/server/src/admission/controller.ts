@@ -56,7 +56,14 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
 }
 
-function joinMetadata(raw: unknown): { clientVersion: string | null; protocolVersion: number } | undefined {
+type JoinMetadata = { clientVersion: string | null; protocolVersion: number };
+
+function joinMetadata(message: ClientToServerMessage): JoinMetadata | undefined {
+  if (message.t !== "join" && message.t !== "display_join") return undefined;
+  return { clientVersion: message.clientVersion, protocolVersion: message.v };
+}
+
+function legacyJoinMetadata(raw: unknown): JoinMetadata | undefined {
   try {
     const value = typeof raw === "string"
       ? JSON.parse(raw)
@@ -125,20 +132,25 @@ export class AdmissionController {
   }
 
   private async handleRaw(socket: WebSocket, request: IncomingMessage, raw: unknown): Promise<void> {
-    const metadata = joinMetadata(raw);
+    const parsed = parseClientMessage(raw);
+    const buildVersion = this.options.buildVersion;
+    const metadata = buildVersion === undefined
+      ? undefined
+      : parsed.ok
+        ? joinMetadata(parsed.message)
+        : legacyJoinMetadata(raw);
     if (
-      this.options.buildVersion !== undefined &&
+      buildVersion !== undefined &&
       metadata !== undefined &&
-      metadata.clientVersion !== this.options.buildVersion
+      metadata.clientVersion !== buildVersion
     ) {
       this.send(socket, {
         t: "reload",
         v: metadata.protocolVersion === 1 ? 1 : PROTOCOL_VERSION,
-        minVersion: this.options.buildVersion,
+        minVersion: buildVersion,
         reason: "assets",
       });
     }
-    const parsed = parseClientMessage(raw);
     if (!parsed.ok) {
       this.close(socket, 1008, "invalid client message");
       return;
