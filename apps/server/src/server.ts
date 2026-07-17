@@ -11,6 +11,7 @@ import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
 export type BuildServerOptions = {
   config?: ServerConfig;
+  readiness?: ScenarioReadiness;
   onWebSocketConnection?: (socket: WebSocket) => void;
   admission?: AdmissionController;
   persistence?: InstallationPersistence;
@@ -29,7 +30,7 @@ export type ServerRuntime = {
 
 export async function buildServer(options: BuildServerOptions = {}): Promise<ServerRuntime> {
   const config = options.config ?? loadConfig();
-  const readiness = await loadScenarioReadiness(config);
+  const readiness = options.readiness ?? (await loadScenarioReadiness(config));
   const startedAt = Date.now();
   const app = Fastify({ logger: config.nodeEnv !== "test" });
   const webSockets = new WebSocketServer({ noServer: true });

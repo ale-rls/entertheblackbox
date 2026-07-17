@@ -49,7 +49,11 @@ export async function startServer(): Promise<void> {
         log: (event: PersistenceQueueHealthEvent) => console.error(JSON.stringify({ component: "persistence", ...event })),
       })
     : null;
-  const { app, engine } = await buildServer({ config, ...(persistenceRuntime === null ? {} : { persistence: persistenceRuntime.persistence }) });
+  const { app, engine } = await buildServer({
+    config,
+    readiness,
+    ...(persistenceRuntime === null ? {} : { persistence: persistenceRuntime.persistence }),
+  });
   engine?.recoverAfterCrash();
   let shutdownPromise: Promise<void> | null = null;
   const shutdown = async (signal: NodeJS.Signals) => {

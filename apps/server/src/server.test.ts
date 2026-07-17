@@ -1,9 +1,16 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { ConfigError, buildServer, listenWithCleanup, loadConfig, type ServerRuntime } from "./index.js";
+import {
+  ConfigError,
+  buildServer,
+  listenWithCleanup,
+  loadConfig,
+  loadScenarioReadiness,
+  type ServerRuntime,
+} from "./index.js";
 
 const runtimes: ServerRuntime[] = [];
 
@@ -112,6 +119,21 @@ describe("configuration", () => {
 });
 
 describe("HTTP readiness and bundles", () => {
+  it("uses supplied scenario readiness without loading it again", async () => {
+    const config = await fixture();
+    const readiness = await loadScenarioReadiness(config);
+    await unlink(config.scenarioPath);
+
+    const runtime = await buildServer({ config, readiness });
+    runtimes.push(runtime);
+
+    expect(runtime.readiness).toBe(readiness);
+    expect((await runtime.app.inject({ url: "/readyz" })).json()).toEqual({
+      ok: true,
+      scenarioVersion: "test-1",
+    });
+  });
+
   it("reports health, readiness, sanitized status, and serves all client bundles", async () => {
     const runtime = await buildServer({ config: await fixture() });
     runtimes.push(runtime);
