@@ -27,18 +27,31 @@ export function applyDelta(
 }
 
 /**
- * Input throttle (plan §7: client sends at ~20–30 Hz). Returns true when
- * a new sample may be sent. Latest-wins: callers always send the current
- * position, so dropped ticks lose nothing.
+ * Input throttle (plan §7: client sends at ~20–30 Hz). Move samples are
+ * latest-wins, but a throttled sample remains pending so gesture end can
+ * explicitly flush the final position.
  */
 export class InputThrottle {
   private lastSentAt = -Infinity;
+  private pending = false;
 
   constructor(private readonly minIntervalMs = 40) {} // 25 Hz
 
   shouldSend(now: number): boolean {
-    if (now - this.lastSentAt < this.minIntervalMs) return false;
+    if (now - this.lastSentAt < this.minIntervalMs) {
+      this.pending = true;
+      return false;
+    }
     this.lastSentAt = now;
+    this.pending = false;
+    return true;
+  }
+
+  /** Flush a move sample suppressed during the current gesture, if any. */
+  shouldFlushFinal(now: number): boolean {
+    if (!this.pending) return false;
+    this.lastSentAt = now;
+    this.pending = false;
     return true;
   }
 }
