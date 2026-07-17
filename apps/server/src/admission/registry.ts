@@ -39,6 +39,7 @@ function colorStart(clientId: string): number {
 
 export class ParticipantRegistry {
   private readonly participants = new Map<string, ParticipantRecord>();
+  private readonly connectedLeases = new Set<string>();
 
   constructor(
     private readonly maxParticipants: number,
@@ -53,11 +54,7 @@ export class ParticipantRegistry {
   }
 
   get connectedCount(): number {
-    let count = 0;
-    for (const participant of this.participants.values()) {
-      if (socketIsConnected(participant.socket)) count += 1;
-    }
-    return count;
+    return this.connectedLeases.size;
   }
 
   hasLease(participantLease: string): boolean {
@@ -107,16 +104,19 @@ export class ParticipantRegistry {
     participant.lastSeenAt = now;
     participant.leaseExpiresAt = options.leaseExpiresAt;
     this.participants.set(options.participantLease, participant);
+    if (socketIsConnected(options.socket)) this.connectedLeases.add(options.participantLease);
+    else this.connectedLeases.delete(options.participantLease);
     return replacedSocket === undefined
       ? { ok: true, participant }
       : { ok: true, participant, replacedSocket };
   }
 
   releaseSocket(socket: WebSocket, now = Date.now()): void {
-    for (const participant of this.participants.values()) {
+    for (const [lease, participant] of this.participants) {
       if (participant.socket === socket) {
         participant.socket = undefined;
         participant.disconnectedAt = now;
+        this.connectedLeases.delete(lease);
       }
     }
   }
@@ -126,11 +126,13 @@ export class ParticipantRegistry {
       if (participant.leaseExpiresAt <= now) {
         participant.socket?.terminate();
         this.participants.delete(lease);
+        this.connectedLeases.delete(lease);
       } else if (
         participant.disconnectedAt !== undefined &&
         participant.disconnectedAt + this.disconnectGraceMs <= now
       ) {
         this.participants.delete(lease);
+        this.connectedLeases.delete(lease);
       }
     }
   }

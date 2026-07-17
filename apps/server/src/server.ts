@@ -34,6 +34,13 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   const startedAt = Date.now();
   const app = Fastify({ logger: config.nodeEnv !== "test" });
   const webSockets = new WebSocketServer({ noServer: true });
+  const publicVideoPhases = readiness.ready
+    ? Object.fromEntries(
+        readiness.scenario.phases
+          .filter((phase) => phase.kind === "video")
+          .map((phase) => [phase.id, phase.src]),
+      )
+    : null;
   const adminData = options.adminData ?? options.persistence;
   let engine: PhaseEngine | null = null;
   const admission = options.admission ?? new AdmissionController({
@@ -95,11 +102,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       return reply.code(503).send({ error: "scenario_unavailable" });
     }
 
-    return Object.fromEntries(
-      readiness.scenario.phases
-        .filter((phase) => phase.kind === "video")
-        .map((phase) => [phase.id, phase.src]),
-    );
+    return publicVideoPhases;
   });
   app.addHook("onError", async (request, _reply, error) => {
     adminData?.recordError?.({ message: error.message, at: new Date().toISOString(), path: request.url });
