@@ -59,6 +59,22 @@ The server also exposes:
 - `/admin/` — operations interface
 - `/healthz` and `/readyz` — health and readiness checks
 
+### Public video phase map
+
+`GET /api/phases` is deliberately unauthenticated. It is the stable lookup
+intended for display-side video preloading and returns exactly one JSON object
+property per video phase: the phase ID as the key and its media `src` as the
+string value. The active video's `src` is also delivered to the authenticated
+display in phase snapshots; the public lookup exists so the display can resolve
+other video phase IDs without receiving the scenario graph.
+
+The response never includes non-video phases, durations, transitions, question
+text or axes, scenario metadata, server configuration, or credentials. If the
+scenario is not ready, it fails closed with HTTP 503 and
+`{"error":"scenario_unavailable"}`. Phase IDs and media paths are public content
+metadata (the public media manifest already lists media paths), so authors must
+not put secrets or private visitor information in either field.
+
 Development credentials in the server configuration are intentionally local-only defaults. Set strong `ADMIN_TOKEN`, `JOIN_GRANT_SECRET`, display credentials, and production URLs before deployment.
 
 ### Run the checked-in `showtest1` show
