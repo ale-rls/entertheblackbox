@@ -89,6 +89,7 @@ export class AdmissionController {
   private readonly socketStates = new WeakMap<WebSocket, SocketState>();
   private readonly issuedJoinGrants = new Map<string, number>();
   private readonly revokedJoinGrants = new Map<string, number>();
+  private lastVisitEndedAt: number | null = null;
 
   constructor(options: AdmissionControllerOptions) {
     this.options = {
@@ -123,6 +124,7 @@ export class AdmissionController {
   /** End the current visit: revoke its QR grants, drop leases, and kick phones. */
   endParticipantSession(now = this.now()): number {
     this.pruneGrantTracking(now);
+    this.lastVisitEndedAt = now;
     for (const [nonce, expiresAt] of this.issuedJoinGrants) {
       this.revokedJoinGrants.set(nonce, expiresAt);
     }
@@ -207,18 +209,6 @@ export class AdmissionController {
     }
 
     const now = this.now();
-    const grant = verifyJoinGrant(parsed.message.joinGrant, {
-      secret: this.options.secret,
-      installationId: this.options.installationId,
-      roomId: this.options.roomId,
-      now,
-    });
-    this.pruneGrantTracking(now);
-    if (!grant || this.revokedJoinGrants.has(grant.nonce)) {
-      this.send(socket, { t: "join_rejected", v: PROTOCOL_VERSION, reason: "expired_grant" });
-      return;
-    }
-
     this.registry.pruneExpired(now);
     const lease = parsed.message.participantLease
       ? verifyParticipantLease(parsed.message.participantLease, {
@@ -230,9 +220,29 @@ export class AdmissionController {
     const knownLease = parsed.message.participantLease && lease
       ? this.registry.get(parsed.message.participantLease)
       : undefined;
-    if (!knownLease && this.options.isNewParticipantAllowed?.() === false) {
-      this.send(socket, { t: "join_rejected", v: PROTOCOL_VERSION, reason: "show_in_progress" });
-      return;
+    // A valid lease issued during the current visit marks a returning
+    // participant: the registry may have dropped their record after the
+    // disconnect grace (phone asleep) and their QR grant is likely expired,
+    // so neither is required. endParticipantSession() moves the visit
+    // watermark, invalidating every earlier lease the moment a show ends.
+    const returningParticipant = knownLease !== undefined ||
+      (lease !== null && (this.lastVisitEndedAt === null || lease.issuedAt > this.lastVisitEndedAt));
+    if (!returningParticipant) {
+      const grant = verifyJoinGrant(parsed.message.joinGrant, {
+        secret: this.options.secret,
+        installationId: this.options.installationId,
+        roomId: this.options.roomId,
+        now,
+      });
+      this.pruneGrantTracking(now);
+      if (!grant || this.revokedJoinGrants.has(grant.nonce)) {
+        this.send(socket, { t: "join_rejected", v: PROTOCOL_VERSION, reason: "expired_grant" });
+        return;
+      }
+      if (this.options.isNewParticipantAllowed?.() === false) {
+        this.send(socket, { t: "join_rejected", v: PROTOCOL_VERSION, reason: "show_in_progress" });
+        return;
+      }
     }
     if (!knownLease && !this.registry.canAdmitNew(now)) {
       this.send(socket, { t: "join_rejected", v: PROTOCOL_VERSION, reason: "room_full" });

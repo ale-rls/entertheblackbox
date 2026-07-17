@@ -187,6 +187,83 @@ describe("participant admission", () => {
     expect(lastMessage(nextRound)).toMatchObject({ t: "identity" });
   });
 
+  it("permits a known lease to rejoin with an expired grant and preserves identity", () => {
+    let now = 1_000;
+    const admission = controller({ now: () => now });
+    const grant = admission.issueJoinGrant(now).token;
+    const first = socket();
+    join(admission, first, grant);
+    const firstIdentity = lastMessage(first) as { clientId: string; color: string; participantLease: string };
+
+    now = 121_000;
+    const reconnect = socket();
+    join(admission, reconnect, grant, firstIdentity.participantLease, "198.51.100.5");
+
+    expect(lastMessage(reconnect)).toMatchObject({
+      t: "identity",
+      clientId: firstIdentity.clientId,
+      color: firstIdentity.color,
+    });
+  });
+
+  it("readmits a current-visit lease after the disconnect grace pruned its record, even mid-show", () => {
+    let now = 1_000;
+    let newParticipantsAllowed = true;
+    const admission = controller({ now: () => now, isNewParticipantAllowed: () => newParticipantsAllowed });
+    const grant = admission.issueJoinGrant(now).token;
+    const first = socket();
+    join(admission, first, grant);
+    const firstIdentity = lastMessage(first) as { clientId: string; participantLease: string };
+
+    (first as unknown as MockSocket).close();
+    now = 200_000;
+    newParticipantsAllowed = false;
+    admission.registry.pruneExpired(now);
+    expect(admission.registry.leaseCount).toBe(0);
+
+    const reconnect = socket();
+    join(admission, reconnect, grant, firstIdentity.participantLease, "198.51.100.9");
+    expect(lastMessage(reconnect)).toMatchObject({
+      t: "identity",
+      clientId: firstIdentity.clientId,
+    });
+  });
+
+  it("rejects an unknown valid lease when its grant has expired", () => {
+    let now = 1_000;
+    const admission = controller({ now: () => now });
+    const grant = admission.issueJoinGrant(now).token;
+    const first = socket();
+    join(admission, first, grant);
+    const lease = (lastMessage(first) as { participantLease: string }).participantLease;
+
+    now = 121_000;
+    admission.endParticipantSession(now);
+    const retry = socket();
+    join(admission, retry, grant, lease, "198.51.100.6");
+
+    expect(lastMessage(retry)).toMatchObject({ t: "join_rejected", reason: "expired_grant" });
+  });
+
+  it("rejects an expired lease when its grant has expired", () => {
+    let now = 1_000;
+    const admission = controller({ now: () => now });
+    const grant = admission.issueJoinGrant(now).token;
+    const expiredLease = issueParticipantLease({
+      secret: "this-is-a-test-secret",
+      installationId: "inst-1",
+      clientId: "client-expired",
+      ttlMs: 100,
+      now,
+    }).token;
+
+    now = 121_000;
+    const retry = socket();
+    join(admission, retry, grant, expiredLease, "198.51.100.7");
+
+    expect(lastMessage(retry)).toMatchObject({ t: "join_rejected", reason: "expired_grant" });
+  });
+
   it("soft-upgrades stale phone and display bundles without blocking admission or valid messages", () => {
     const messages: string[] = [];
     const admission = controller({
