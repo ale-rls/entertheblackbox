@@ -52,6 +52,19 @@ describe("CursorField", () => {
     const [a] = field.renderAt(5000);
     expect(a!.x).toBe(0.3);
   });
+
+  it("clears positions and accepts fresh ticks for a new session", () => {
+    const field = new CursorField();
+    field.ingest(batch(8, [["a", 0.3, 0.3]]), 1000);
+    field.setFrozen(true);
+
+    field.clear();
+
+    expect(field.size).toBe(0);
+    expect(field.isFrozen).toBe(false);
+    field.ingest(batch(1, [["b", 0.8, 0.8]]), 1100);
+    expect(field.renderAt(5000).map(({ clientId }) => clientId)).toEqual(["b"]);
+  });
 });
 
 const apply = (state: DisplayState, message: ServerToClientMessage) =>

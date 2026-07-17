@@ -35,6 +35,8 @@ const config = {
 
 export function App() {
   const [state, dispatch] = useReducer(displayReducer, initialDisplayState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const cursorField = useMemo(() => new CursorField(), []);
 
@@ -46,8 +48,17 @@ export function App() {
           // Cursor batches bypass React state (20–30 Hz), everything
           // else flows through the reducer.
           if (message.t === "cursors") {
+            const phase = stateRef.current.phase;
+            if (phase === null || phase.kind === "idle") return;
             cursorField.ingest(message, Date.now());
             return;
+          }
+          if (
+            (message.t === "snapshot" || message.t === "phase") &&
+            (message.phase.kind === "idle" ||
+              message.sessionId !== stateRef.current.sessionId)
+          ) {
+            cursorField.clear();
           }
           dispatch({ type: "server-message", message });
         },
@@ -74,9 +85,6 @@ export function App() {
   // state. "idle" matches the server's idle-session convention
   // (apps/server/src/engine/phase-engine.ts) and satisfies the schema's
   // nonEmpty sessionId/phaseId before the first snapshot arrives.
-  const stateRef = useRef(state);
-  stateRef.current = state;
-
   useEffect(() => {
     const dispose = startHeartbeat({
       isOpen: () => connection.currentStatus === "open",
