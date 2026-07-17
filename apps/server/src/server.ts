@@ -33,6 +33,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   const startedAt = Date.now();
   const app = Fastify({ logger: config.nodeEnv !== "test" });
   const webSockets = new WebSocketServer({ noServer: true });
+  const adminData = options.adminData ?? options.persistence;
   let engine: PhaseEngine | null = null;
   const admission = options.admission ?? new AdmissionController({
     installationId: config.installationId,
@@ -44,6 +45,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     onClientMessage: (message, socket, request) => engine?.handleClientMessage(message, socket, request),
     onParticipantJoin: (participant, socket) => engine?.participantJoined(socket, participant),
     onSocketClosed: (socket) => engine?.socketClosed(socket),
+    onMessageError: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      app.log.error({ error }, "websocket client message handling failed");
+      adminData?.recordError?.({ message, at: new Date().toISOString(), path: "/ws" });
+    },
   });
   if (readiness.ready) {
     engine = new PhaseEngine({
@@ -94,7 +100,6 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         .map((phase) => [phase.id, phase.src]),
     );
   });
-  const adminData = options.adminData ?? options.persistence;
   app.addHook("onError", async (request, _reply, error) => {
     adminData?.recordError?.({ message: error.message, at: new Date().toISOString(), path: request.url });
   });

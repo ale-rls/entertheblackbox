@@ -93,6 +93,46 @@ describe("HMAC admission tokens", () => {
 });
 
 describe("participant admission", () => {
+  it("catches client message handler failures and closes only the offending socket", async () => {
+    const failure = new Error("bad phase target");
+    const reported: unknown[] = [];
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+
+    try {
+      const admission = controller({
+        onClientMessage: async () => {
+          await Promise.resolve();
+          throw failure;
+        },
+        onMessageError: (error) => reported.push(error),
+      });
+      const offendingSocket = socket();
+      const unaffectedSocket = socket();
+      admission.handleConnection(offendingSocket, request());
+      admission.handleConnection(unaffectedSocket, request("198.51.100.2"));
+      offendingSocket.emit("message", Buffer.from(JSON.stringify({
+        t: "ping",
+        v: 2,
+        clientTime: 123,
+      })));
+
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(reported).toEqual([failure]);
+      expect((offendingSocket as unknown as MockSocket).closeCalls).toEqual([
+        { code: 1011, reason: "client message handling failed" },
+      ]);
+      expect((unaffectedSocket as unknown as MockSocket).readyState).toBe(1);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
   it("rejects new joins during an active show but permits a known lease to reconnect", () => {
     let newParticipantsAllowed = true;
     const admission = controller({ isNewParticipantAllowed: () => newParticipantsAllowed });
