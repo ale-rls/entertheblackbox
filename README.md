@@ -61,6 +61,8 @@ The server also exposes:
 
 Development credentials in the server configuration are intentionally local-only defaults. Set strong `ADMIN_TOKEN`, `JOIN_GRANT_SECRET`, display credentials, and production URLs before deployment.
 
+The admin API applies process-local per-IP limits in separate buckets for authenticated traffic and failed authentication, so bad-token traffic cannot exhaust an operator's allowance on a shared network. Defaults are 600 authenticated requests and 30 authentication failures per 60 seconds. Override them with `ADMIN_RATE_LIMIT_MAX_REQUESTS`, `ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES`, and `ADMIN_RATE_LIMIT_WINDOW_MS`. `X-Forwarded-For` is used only when `TRUST_PROXY=true`.
+
 ### Run the checked-in `showtest1` show
 
 The normal command loads the default development show. To run `showtest1`, stop the installation server with `Ctrl+C` and restart it with its checked-in scenario and media manifest:

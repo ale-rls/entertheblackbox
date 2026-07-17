@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { InMemoryIpRateLimiter, requestIp } from "../admission/rate-limit.js";
 import type { PhaseEngine, TransitionResult } from "../engine/phase-engine.js";
 
 export type AdminExport = { json: unknown; csv: string };
@@ -16,6 +17,28 @@ export type RegisterAdminOptions = {
   ready: boolean;
   startedAt: number;
   data?: AdminDataSource;
+  trustProxy?: boolean;
+  rateLimitPolicy?: AdminRateLimitPolicy;
+  rateLimiters?: AdminRateLimiters;
+  now?: () => number;
+};
+
+export type AdminRateLimitPolicy = {
+  maxAuthenticatedRequests: number;
+  maxAuthenticationFailures: number;
+  windowMs: number;
+};
+
+export type AdminRateLimiters = {
+  authenticated: InMemoryIpRateLimiter;
+  authenticationFailures: InMemoryIpRateLimiter;
+};
+
+export const DEFAULT_ADMIN_RATE_LIMIT_POLICY: AdminRateLimitPolicy = {
+  // One dashboard makes about 60 requests/minute while polling every two seconds.
+  maxAuthenticatedRequests: 600,
+  maxAuthenticationFailures: 30,
+  windowMs: 60_000,
 };
 
 function authorized(request: FastifyRequest, token: string): boolean {
@@ -27,9 +50,34 @@ function authorized(request: FastifyRequest, token: string): boolean {
 }
 
 export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdminOptions): void {
+  const policy = options.rateLimitPolicy ?? DEFAULT_ADMIN_RATE_LIMIT_POLICY;
+  const rateLimiters = options.rateLimiters ?? {
+    authenticated: new InMemoryIpRateLimiter({
+      maxAttempts: policy.maxAuthenticatedRequests,
+      windowMs: policy.windowMs,
+    }),
+    authenticationFailures: new InMemoryIpRateLimiter({
+      maxAttempts: policy.maxAuthenticationFailures,
+      windowMs: policy.windowMs,
+    }),
+  };
+  const now = options.now ?? (() => Date.now());
+
   app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
-      if (!authorized(request, options.token)) return reply.code(401).send({ error: "unauthorized" });
+      const isAuthorized = authorized(request, options.token);
+      const rate = (isAuthorized ? rateLimiters.authenticated : rateLimiters.authenticationFailures)
+        .consume(requestIp(request.raw, options.trustProxy ?? false), now());
+      if (!rate.allowed) {
+        if (rate.retryAfterMs !== undefined) {
+          reply.header("retry-after", Math.ceil(rate.retryAfterMs / 1_000));
+        }
+        return reply.code(429).send({
+          error: "rate_limited",
+          ...(rate.retryAfterMs === undefined ? {} : { retryAfterMs: rate.retryAfterMs }),
+        });
+      }
+      if (!isAuthorized) return reply.code(401).send({ error: "unauthorized" });
     });
 
     admin.get("/status", async () => {
