@@ -187,7 +187,7 @@ describe("participant admission", () => {
     expect(lastMessage(nextRound)).toMatchObject({ t: "identity" });
   });
 
-  it("instructs stale phone and display bundles to reload without blocking valid messages", () => {
+  it("soft-upgrades stale phone and display bundles without blocking admission or valid messages", () => {
     const messages: string[] = [];
     const admission = controller({
       buildVersion: "test",

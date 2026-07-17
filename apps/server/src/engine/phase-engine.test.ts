@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { scenarioSchema } from "@smartphonecracy/scenario";
 import type { WebSocket } from "ws";
 import { ParticipantRegistry } from "../admission/index.js";
@@ -159,6 +159,29 @@ function connectDisplay(engine: PhaseEngine, socket: WebSocket): void {
 }
 
 describe("PhaseEngine lifecycle", () => {
+  it("encodes a broadcast once and reuses it for every open socket", () => {
+    const { engine } = setup({ now: () => 1_000 });
+    const first = new MockSocket();
+    const second = new MockSocket();
+    engine.participantJoined(first as unknown as WebSocket);
+    engine.participantJoined(second as unknown as WebSocket);
+    first.sent.length = 0;
+    second.sent.length = 0;
+    const stringify = vi.spyOn(JSON, "stringify");
+
+    try {
+      (engine as unknown as {
+        broadcast(message: { t: "presence"; v: 2; count: number }): void;
+      }).broadcast({ t: "presence", v: 2, count: 2 });
+
+      expect(stringify).toHaveBeenCalledTimes(1);
+      expect(first.sent).toEqual([{ t: "presence", v: 2, count: 2 }]);
+      expect(second.sent).toEqual(first.sent);
+    } finally {
+      stringify.mockRestore();
+    }
+  });
+
   it("pushes a QR grant on display join and authenticated refresh requests", () => {
     const { engine } = setup({ now: () => 1_000, qr: true });
     const display = new MockSocket();

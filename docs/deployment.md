@@ -17,6 +17,16 @@ name, and confirm the deploy-window check. Approval of the protected
 commit SHA into the OCI image label and `BUILD_VERSION`, then Fly retains the
 release history needed for rollback.
 
+## Client build compatibility
+
+A WebSocket join whose `clientVersion` differs from `BUILD_VERSION` is a
+deliberate soft upgrade. The server sends `reload` but continues admission and
+handles the otherwise valid message. This lets a client participate while its
+reload takes effect; protocol/schema validation, credentials, room policy, and
+the normal join checks still apply. A future incompatible protocol change must
+introduce an explicit compatibility boundary rather than turning the build
+identifier check into an implicit rejection.
+
 ## Rollback
 
 1. Stop new sessions and confirm the venue remains closed.

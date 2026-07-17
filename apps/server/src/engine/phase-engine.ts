@@ -773,7 +773,10 @@ export class PhaseEngine {
   }
 
   private broadcast(message: ServerToClientMessage): void {
-    for (const socket of this.clients) this.send(socket, message);
+    const openSockets = [...this.clients].filter(isOpen);
+    if (openSockets.length === 0) return;
+    const encoded = encodeMessage(message);
+    for (const socket of openSockets) socket.send(encoded);
   }
 
   private sendToDisplay(message: ServerToClientMessage): void {
