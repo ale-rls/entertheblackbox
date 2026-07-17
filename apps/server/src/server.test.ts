@@ -1,4 +1,5 @@
 import { mkdtemp, mkdir, unlink, writeFile } from "node:fs/promises";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -9,6 +10,7 @@ import {
   listenWithCleanup,
   loadConfig,
   loadScenarioReadiness,
+  WEBSOCKET_MAX_PAYLOAD_BYTES,
   type ServerRuntime,
 } from "./index.js";
 
@@ -87,6 +89,22 @@ async function fixture(invalidScenario = false) {
     ADMIN_DIST_DIR: "admin/dist",
   }, root);
   return config;
+}
+
+async function listen(runtime: ServerRuntime): Promise<number> {
+  await runtime.app.listen({ host: "127.0.0.1", port: 0 });
+  const address = runtime.app.server.address();
+  if (!address || typeof address === "string") throw new Error("expected TCP address");
+  return address.port;
+}
+
+async function openWebSocket(port: number): Promise<WebSocket> {
+  const client = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+  await new Promise<void>((resolve, reject) => {
+    client.once("open", resolve);
+    client.once("error", reject);
+  });
+  return client;
 }
 
 describe("configuration", () => {
@@ -284,14 +302,8 @@ describe("WebSocket lifecycle", () => {
       onWebSocketConnection: () => { connected = true; },
     });
     runtimes.push(runtime);
-    await runtime.app.listen({ host: "127.0.0.1", port: 0 });
-    const address = runtime.app.server.address();
-    if (!address || typeof address === "string") throw new Error("expected TCP address");
-    const client = new WebSocket(`ws://127.0.0.1:${address.port}/ws`);
-    await new Promise<void>((resolve, reject) => {
-      client.once("open", resolve);
-      client.once("error", reject);
-    });
+    const port = await listen(runtime);
+    const client = await openWebSocket(port);
     expect(connected).toBe(true);
     const closed = new Promise<void>((resolve) => client.once("close", () => resolve()));
     await runtime.app.close();
@@ -302,14 +314,7 @@ describe("WebSocket lifecycle", () => {
   it("terminates a display WebSocket that stops sending heartbeats", async () => {
     const runtime = await buildServer({ config: await fixture() });
     runtimes.push(runtime);
-    await runtime.app.listen({ host: "127.0.0.1", port: 0 });
-    const address = runtime.app.server.address();
-    if (!address || typeof address === "string") throw new Error("expected TCP address");
-    const client = new WebSocket(`ws://127.0.0.1:${address.port}/ws`);
-    await new Promise<void>((resolve, reject) => {
-      client.once("open", resolve);
-      client.once("error", reject);
-    });
+    const client = await openWebSocket(await listen(runtime));
     const snapshot = new Promise<void>((resolve, reject) => {
       client.once("message", (raw) => {
         try {
@@ -336,5 +341,66 @@ describe("WebSocket lifecycle", () => {
 
     await expect(closed).resolves.toBe(1006);
     expect(runtime.engine?.isDisplayConnected).toBe(false);
+  });
+
+  it("rejects malformed absolute-form upgrade targets without taking down the server", async () => {
+    const runtime = await buildServer({ config: await fixture() });
+    runtimes.push(runtime);
+    const port = await listen(runtime);
+
+    await new Promise<void>((resolve, reject) => {
+      const socket = connect({ host: "127.0.0.1", port });
+      socket.setTimeout(2_000, () => socket.destroy(new Error("malformed upgrade was not closed")));
+      socket.once("connect", () => {
+        socket.write([
+          "GET http://% HTTP/1.1",
+          "Host: localhost",
+          "Connection: Upgrade",
+          "Upgrade: websocket",
+          "Sec-WebSocket-Version: 13",
+          "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+          "",
+          "",
+        ].join("\r\n"));
+      });
+      socket.once("close", (hadError) => hadError ? reject(new Error("malformed upgrade socket errored")) : resolve());
+      socket.once("error", reject);
+    });
+
+    const client = await openWebSocket(port);
+    expect(runtime.app.server.listening).toBe(true);
+    client.close();
+  });
+
+  it("closes clients that exceed the WebSocket message payload limit", async () => {
+    const runtime = await buildServer({ config: await fixture() });
+    runtimes.push(runtime);
+    const client = await openWebSocket(await listen(runtime));
+    const closed = new Promise<number>((resolve) => {
+      client.once("close", (code) => resolve(code));
+    });
+
+    client.send("x".repeat(WEBSOCKET_MAX_PAYLOAD_BYTES + 1));
+
+    await expect(closed).resolves.toBe(1009);
+    expect(runtime.app.server.listening).toBe(true);
+  });
+
+  it("rejects upgrades above the configured connection cap", async () => {
+    const runtime = await buildServer({
+      config: await fixture(),
+      maxWebSocketConnections: 2,
+    });
+    runtimes.push(runtime);
+    const port = await listen(runtime);
+    const first = await openWebSocket(port);
+    const second = await openWebSocket(port);
+    const rejected = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+
+    await new Promise<void>((resolve) => rejected.once("error", () => resolve()));
+
+    expect(runtime.webSockets.clients.size).toBe(2);
+    first.close();
+    second.close();
   });
 });

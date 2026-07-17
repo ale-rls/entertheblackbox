@@ -9,6 +9,9 @@ import type { InstallationPersistence } from "./persistence/index.js";
 import { loadScenarioReadiness, type ScenarioReadiness } from "./readiness.js";
 import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
+export const WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024;
+export const DEFAULT_MAX_WEBSOCKET_CONNECTIONS = 64;
+
 export type BuildServerOptions = {
   config?: ServerConfig;
   readiness?: ScenarioReadiness;
@@ -16,6 +19,7 @@ export type BuildServerOptions = {
   admission?: AdmissionController;
   persistence?: InstallationPersistence;
   adminData?: AdminDataSource;
+  maxWebSocketConnections?: number;
 };
 
 export type ServerRuntime = {
@@ -33,7 +37,15 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   const readiness = options.readiness ?? (await loadScenarioReadiness(config));
   const startedAt = Date.now();
   const app = Fastify({ logger: config.nodeEnv !== "test" });
-  const webSockets = new WebSocketServer({ noServer: true });
+  const webSockets = new WebSocketServer({
+    noServer: true,
+    maxPayload: WEBSOCKET_MAX_PAYLOAD_BYTES,
+  });
+  const maxWebSocketConnections = options.maxWebSocketConnections
+    ?? DEFAULT_MAX_WEBSOCKET_CONNECTIONS;
+  if (!Number.isSafeInteger(maxWebSocketConnections) || maxWebSocketConnections < 1) {
+    throw new Error("maxWebSocketConnections must be a positive integer");
+  }
   const publicVideoPhases = readiness.ready
     ? Object.fromEntries(
         readiness.scenario.phases
@@ -122,8 +134,18 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   registerBundleRoutes(app, config.bundleDirs);
 
   app.server.on("upgrade", (request, socket, head) => {
-    const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+    let pathname: string;
+    try {
+      pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+    } catch {
+      socket.destroy();
+      return;
+    }
     if (pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+    if (webSockets.clients.size >= maxWebSocketConnections) {
       socket.destroy();
       return;
     }
