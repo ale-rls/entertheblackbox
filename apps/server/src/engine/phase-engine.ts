@@ -202,6 +202,9 @@ export class PhaseEngine {
     const phase = this.currentPhase();
     if (phase.kind === "video") return this.advanceTo(phase.next, now, "admin-skip");
     if (phase.kind === "position-question") {
+      if (this.questionResolutionTarget !== null) {
+        return this.advanceTo(this.questionResolutionTarget, now, "admin-skip");
+      }
       this.resolveQuestionAtDeadline(now, phase);
       return { ok: true };
     }
