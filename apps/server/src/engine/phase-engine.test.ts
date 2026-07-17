@@ -469,16 +469,18 @@ describe("PhaseEngine lifecycle", () => {
     addParticipant(registry, phone as unknown as WebSocket, now, "p1");
     engine.participantJoined(phone as unknown as WebSocket);
     connectDisplay(engine, display as unknown as WebSocket);
-    const invalid = new MockSocket();
-    engine.handleClientMessage({
-      t: "display_join",
-      v: 2,
-      clientVersion: "test",
-      installationId: "inst-1",
-      roomId: "room-1",
-      displayToken: "wrong",
-    }, invalid as unknown as WebSocket);
-    expect(invalid.closes[0]?.code).toBe(1008);
+    for (const invalidToken of ["display-secrex", "wrong"]) {
+      const invalid = new MockSocket();
+      engine.handleClientMessage({
+        t: "display_join",
+        v: 2,
+        clientVersion: "test",
+        installationId: "inst-1",
+        roomId: "room-1",
+        displayToken: invalidToken,
+      }, invalid as unknown as WebSocket);
+      expect(invalid.closes[0]?.code).toBe(1008);
+    }
     const replacement = new MockSocket();
     connectDisplay(engine, replacement as unknown as WebSocket);
     expect(display.closes[0]?.code).toBe(4002);
