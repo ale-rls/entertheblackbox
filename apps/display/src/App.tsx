@@ -12,6 +12,7 @@ import { QuadrantOverlay } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhoneCount } from "./components/PhoneCount.js";
+import { PhaseVideo } from "./components/PhaseVideo.js";
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -130,7 +131,14 @@ export function App() {
           />
         )}
         {phase?.kind === "video" && media.videoUrl !== null && (
-          <video key={phase.id} src={media.videoUrl} autoPlay />
+          <PhaseVideo
+            key={phase.id}
+            sessionId={state.sessionId}
+            phase={phase}
+            phaseEpoch={state.phaseEpoch}
+            src={media.videoUrl}
+            send={(message) => connection.send(message)}
+          />
         )}
       </section>
 
