@@ -10,6 +10,7 @@ import { Countdown } from "./components/Countdown.js";
 import { QrBadge } from "./components/QrBadge.js";
 import { QuadrantOverlay } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
+import { PhoneCount } from "./components/PhoneCount.js";
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -169,6 +170,7 @@ export function App() {
             {state.notice.message}
           </div>
         )}
+        <PhoneCount count={state.presenceCount} />
       </section>
 
       {/* Layer 3: cursor canvas */}
