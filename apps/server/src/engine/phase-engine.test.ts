@@ -639,6 +639,62 @@ describe("PhaseEngine lifecycle", () => {
     expect(sessionEnds).toHaveLength(1);
   });
 
+  it("resets the cursor sequence when a replacement socket rejoins before the old socket closes", () => {
+    let now = 1_000;
+    let snapshot: FinalVoteSnapshot | undefined;
+    const { engine, registry } = setup({
+      now: () => now,
+      interactiveIdleTimeoutMs: 1_000,
+      onVoteSnapshotEnqueued: (value) => { snapshot = value; },
+    });
+    const first = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, first as unknown as WebSocket, now, "p1");
+    const participant = registry.get("lease-p1");
+    if (participant === undefined) throw new Error("expected participant record");
+    engine.participantJoined(first as unknown as WebSocket, participant);
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    const highSeq = engine.currentPhaseEpoch;
+    engine.handleClientMessage({
+      t: "input", v: 2, sessionId: "session-1", phaseEpoch: highSeq, seq: 50, x: 0.8, y: 0.2,
+    }, first as unknown as WebSocket);
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+    expect(display.sent.filter((message) => message.t === "cursors").at(-1)).toMatchObject({
+      cursors: [{ clientId: "p1", color: participant.color, x: 0.8, y: 0.2 }],
+    });
+
+    const replacement = new MockSocket();
+    const admission = registry.admit({
+      participantLease: "lease-p1",
+      clientId: "p1",
+      leaseExpiresAt: now + 10_000,
+      socket: replacement as unknown as WebSocket,
+      now,
+    });
+    expect(admission.ok).toBe(true);
+    engine.participantJoined(replacement as unknown as WebSocket, participant);
+    registry.releaseSocket(first as unknown as WebSocket, now);
+    engine.socketClosed(first as unknown as WebSocket);
+
+    now = 1_100;
+    expect(engine.completeVideo("session-1", "intro", highSeq, now)).toEqual({ ok: true });
+    const questionEpoch = engine.currentPhaseEpoch;
+    engine.handleClientMessage({
+      t: "input", v: 2, sessionId: "session-1", phaseEpoch: questionEpoch, seq: 0, x: 0.1, y: 0.9,
+    }, replacement as unknown as WebSocket);
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+
+    expect(display.sent.filter((message) => message.t === "cursors").at(-1)).toMatchObject({
+      cursors: [{ clientId: "p1", color: participant.color, x: 0.1, y: 0.9 }],
+    });
+    expect(engine.adminSkip(1_120)).toEqual({ ok: true });
+    expect(snapshot?.votes).toEqual([
+      expect.objectContaining({ participantId: "p1", x: 0.1, y: 0.9 }),
+    ]);
+  });
+
   it("skips video and question phases and safely restarts mid-video and mid-freeze", () => {
     let now = 1_000;
     const checkpoints: PhaseCheckpoint[] = [];
