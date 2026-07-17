@@ -90,6 +90,34 @@ describe("VoteEngine", () => {
     });
   });
 
+  it("forgets heartbeat IDs past the participant lease TTL while retaining active IDs", () => {
+    const votes = new VoteEngine({ heartbeatRetentionMs: 100 });
+    begin(votes, ["expired", "active"]);
+    votes.recordHeartbeat("expired", 1);
+    votes.recordHeartbeat("active", 90);
+    votes.clearQuestion();
+
+    votes.beginQuestion({
+      sessionId: "session-2",
+      question,
+      phaseEpoch: 5,
+      phaseStartedAt: 102,
+      phaseDeadline: 1_102,
+      participants: [
+        { participantId: "expired", connected: true, lastHeartbeatAt: 80 },
+        { participantId: "active", connected: true, lastHeartbeatAt: 80 },
+      ],
+    });
+
+    expect(votes.finalize(102)!.snapshot.votes.map(({ participantId, lastHeartbeatAt }) => ({
+      participantId,
+      lastHeartbeatAt,
+    }))).toEqual([
+      { participantId: "expired", lastHeartbeatAt: 80 },
+      { participantId: "active", lastHeartbeatAt: 90 },
+    ]);
+  });
+
   it("filters excluded statuses before counting, including a parked cursor", () => {
     const votes = new VoteEngine();
     begin(votes, ["included", "excluded-stale", "excluded-disconnected"], {

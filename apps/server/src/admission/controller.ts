@@ -88,6 +88,10 @@ export class AdmissionController {
     this.rateLimiter = options.rateLimiter ?? new InMemoryIpRateLimiter();
   }
 
+  get participantLeaseTtlMs(): number {
+    return this.options.policy.participantLeaseTtlMs;
+  }
+
   issueJoinGrant(now = this.now()): { token: string; claims: JoinGrantClaims } {
     return issueJoinGrant({
       secret: this.options.secret,

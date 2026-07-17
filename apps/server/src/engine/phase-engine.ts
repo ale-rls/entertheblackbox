@@ -7,6 +7,7 @@ import {
   type ServerToClientMessage,
 } from "@smartphonecracy/protocol";
 import type { Scenario, Phase } from "@smartphonecracy/scenario";
+import { DEFAULT_INSTALLATION_POLICY } from "@smartphonecracy/shared";
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { WebSocket } from "ws";
@@ -71,6 +72,7 @@ export type PhaseEngineOptions = {
   installationId: string;
   roomId: string;
   displayToken: string;
+  participantLeaseTtlMs?: number;
   policy?: Partial<PhaseEnginePolicy>;
   now?: () => number;
   sessionIdFactory?: () => string;
@@ -143,9 +145,13 @@ export class PhaseEngine {
     this.sessionIdFactory = options.sessionIdFactory ?? (() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     this.onCheckpoint = options.onCheckpoint;
     this.onPhaseDeadline = options.onPhaseDeadline;
-    this.votes = options.onVoteSnapshotEnqueued === undefined
-      ? new VoteEngine()
-      : new VoteEngine({ onSnapshotEnqueued: options.onVoteSnapshotEnqueued });
+    this.votes = new VoteEngine({
+      heartbeatRetentionMs: options.participantLeaseTtlMs
+        ?? DEFAULT_INSTALLATION_POLICY.participantLeaseTtlMs,
+      ...(options.onVoteSnapshotEnqueued === undefined
+        ? {}
+        : { onSnapshotEnqueued: options.onVoteSnapshotEnqueued }),
+    });
     this.cursors = new CursorPipeline({
       sendCursors: (message) => this.sendToDisplay(message),
       sendPresence: (message) => this.broadcast(message),
