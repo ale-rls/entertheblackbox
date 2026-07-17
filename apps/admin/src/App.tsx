@@ -7,6 +7,12 @@ export type Status = {
   uptimeMs: number;
   displayConnected: boolean;
   displayHeartbeatAgeMs: number | null;
+  displayPlaybackIssue: {
+    status: "stalled" | "error" | "autoplay-blocked";
+    mediaId: string;
+    detail: string | null;
+    reportedAt: number;
+  } | null;
   connectedParticipants: number;
   sessionId: string | null;
   lifecycle: string | null;
@@ -242,8 +248,9 @@ export function App() {
   const canReturnToIdle = Boolean(status?.lifecycle && status.lifecycle !== "idle");
   const canExport = Boolean(status?.sessionId && status.sessionId !== "idle");
   const busy = workingAction !== null;
-  const globalStatus: ToolStatus = status ? (statusStale || !status.healthy || !status.ready ? "warning" : "success") : connectionError ? "danger" : "info";
-  const globalLabel = status ? (statusStale ? "Status stale" : status.healthy && status.ready ? "System ready" : "System not ready") : refreshing ? "Connecting" : connectionError ? "Connection failed" : "Not connected";
+  const playbackStatus: ToolStatus = status?.displayPlaybackIssue?.status === "stalled" ? "warning" : status?.displayPlaybackIssue ? "danger" : "success";
+  const globalStatus: ToolStatus = status ? (statusStale || !status.healthy || !status.ready ? "warning" : status.displayPlaybackIssue ? playbackStatus : "success") : connectionError ? "danger" : "info";
+  const globalLabel = status ? (statusStale ? "Status stale" : !status.healthy || !status.ready ? "System not ready" : status.displayPlaybackIssue ? "Playback issue" : "System ready") : refreshing ? "Connecting" : connectionError ? "Connection failed" : "Not connected";
 
   return <div data-sc-tool-density="standard" data-sc-tool-root>
     <main className="admin-app">
@@ -279,6 +286,7 @@ export function App() {
           <div className="admin-operation-list">
             <OperationRow label="Server" status={status.healthy && status.ready ? "success" : status.healthy ? "warning" : "danger"} value={status.healthy && status.ready ? "READY" : "NOT READY"} detail={`uptime ${formatDuration(status.uptimeMs)}`} />
             <OperationRow label="Display" status={status.displayConnected ? "success" : "danger"} value={status.displayConnected ? "CONNECTED" : "DISCONNECTED"} detail={status.displayConnected && status.displayHeartbeatAgeMs !== null ? `heartbeat ${status.displayHeartbeatAgeMs} ms ago` : "no heartbeat available"} />
+            <OperationRow label="Video playback" status={playbackStatus} value={status.displayPlaybackIssue ? status.displayPlaybackIssue.status.toUpperCase() : "CLEAR"} detail={status.displayPlaybackIssue ? `${status.displayPlaybackIssue.mediaId}: ${status.displayPlaybackIssue.detail ?? "no browser detail"}` : "no active playback issue"} />
             <OperationRow label="Participants" status={status.connectedParticipants > 0 ? "info" : "warning"} value={String(status.connectedParticipants)} detail="currently connected" />
             <OperationRow label="Session" status={isActive ? "success" : "info"} value={(status.lifecycle ?? "unavailable").toUpperCase()} detail={status.sessionId ? `session ${status.sessionId}` : "no session ID"} />
           </div>

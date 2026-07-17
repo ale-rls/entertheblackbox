@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import type { DisplayToServerMessage } from "@smartphonecracy/protocol";
 import { CursorField } from "./cursors/cursorField.js";
 import { CursorCanvas } from "./cursors/CursorCanvas.js";
 import { DisplayConnection } from "./lib/connection.js";
@@ -12,6 +13,7 @@ import { QuadrantOverlay } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhoneCount } from "./components/PhoneCount.js";
+import { PhaseVideo } from "./components/PhaseVideo.js";
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -111,6 +113,10 @@ export function App() {
   const phase = state.phase;
   const isIdle = phase === null || phase.kind === "idle";
   const mediaReady = media.status.state === "ready";
+  const sendDisplayMessage = useCallback(
+    (message: DisplayToServerMessage) => connection.send(message),
+    [connection],
+  );
 
   // Keep the Blob URL set aligned with the active phase (plan §9);
   // preloading plausible next videos needs the id→src map from STEP-026.
@@ -130,7 +136,14 @@ export function App() {
           />
         )}
         {phase?.kind === "video" && media.videoUrl !== null && (
-          <video key={phase.id} src={media.videoUrl} autoPlay />
+          <PhaseVideo
+            key={phase.id}
+            sessionId={state.sessionId}
+            phase={phase}
+            phaseEpoch={state.phaseEpoch}
+            src={media.videoUrl}
+            send={sendDisplayMessage}
+          />
         )}
       </section>
 

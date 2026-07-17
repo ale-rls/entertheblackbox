@@ -13,6 +13,7 @@ function setup(options: {
   const engine = {
     lifecycleState: "active", currentSessionId: "s1", currentPhaseId: "q1", currentPhaseEpoch: 2,
     isDisplayConnected: true, displayHeartbeatAgeMs: 12, connectedParticipantCount: 3,
+    currentDisplayPlaybackIssue: { status: "stalled", mediaId: "intro.mp4", detail: "buffering stopped", reportedAt: 1_000 },
     adminStart: vi.fn(() => ({ ok: false, reason: "wrong-phase" })),
     adminIdle: vi.fn(() => ({ ok: true })), adminSkip: vi.fn(() => ({ ok: true })), adminRestart: vi.fn(() => ({ ok: true })),
   } as unknown as PhaseEngine;
@@ -44,7 +45,16 @@ describe("admin API", () => {
     const { app } = setup();
     expect((await app.inject({ url: "/api/admin/status" })).statusCode).toBe(401);
     const response = await app.inject({ url: "/api/admin/status", headers: { authorization: "Bearer strong-admin-token" } });
-    expect(response.json()).toMatchObject({ healthy: true, ready: true, displayConnected: true, displayHeartbeatAgeMs: 12, connectedParticipants: 3, sessionId: "s1", phaseId: "q1" });
+    expect(response.json()).toMatchObject({
+      healthy: true,
+      ready: true,
+      displayConnected: true,
+      displayHeartbeatAgeMs: 12,
+      displayPlaybackIssue: { status: "stalled", mediaId: "intro.mp4", detail: "buffering stopped", reportedAt: 1_000 },
+      connectedParticipants: 3,
+      sessionId: "s1",
+      phaseId: "q1",
+    });
   });
 
   it("authenticates and rate-limits admin routes even when their path is percent-encoded", async () => {

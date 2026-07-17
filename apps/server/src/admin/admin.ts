@@ -88,6 +88,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         uptimeMs: Date.now() - options.startedAt,
         displayConnected: engine?.isDisplayConnected ?? false,
         displayHeartbeatAgeMs: engine?.displayHeartbeatAgeMs ?? null,
+        displayPlaybackIssue: engine?.currentDisplayPlaybackIssue ?? null,
         connectedParticipants: engine?.connectedParticipantCount ?? 0,
         sessionId: engine?.currentSessionId ?? null,
         lifecycle: engine?.lifecycleState ?? null,

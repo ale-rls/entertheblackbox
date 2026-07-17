@@ -122,6 +122,17 @@ export const displayHeartbeatSchema = z.object({
   clientTime: timestamp,
 });
 
+export const displayPlaybackStatusSchema = z.object({
+  t: z.literal("display_playback_status"),
+  v,
+  sessionId: nonEmpty,
+  phaseId: nonEmpty,
+  phaseEpoch: z.number().int().nonnegative(),
+  mediaId: nonEmpty,
+  status: z.enum(["playing", "stalled", "error", "autoplay-blocked"]),
+  detail: z.string().max(500).optional(),
+});
+
 export const qrGrantRequestSchema = z.object({
   t: z.literal("qr_grant_request"),
   v,
@@ -131,6 +142,7 @@ export const displayToServerSchema = z.discriminatedUnion("t", [
   displayJoinSchema,
   videoEndedSchema,
   displayHeartbeatSchema,
+  displayPlaybackStatusSchema,
   qrGrantRequestSchema,
 ]);
 
@@ -142,6 +154,7 @@ export const clientToServerSchema = z.discriminatedUnion("t", [
   displayJoinSchema,
   videoEndedSchema,
   displayHeartbeatSchema,
+  displayPlaybackStatusSchema,
   qrGrantRequestSchema,
 ]);
 
@@ -336,6 +349,7 @@ export type PhoneToServerMessage = z.infer<typeof phoneToServerSchema>;
 export type DisplayJoinMessage = z.infer<typeof displayJoinSchema>;
 export type VideoEndedMessage = z.infer<typeof videoEndedSchema>;
 export type DisplayHeartbeatMessage = z.infer<typeof displayHeartbeatSchema>;
+export type DisplayPlaybackStatusMessage = z.infer<typeof displayPlaybackStatusSchema>;
 export type QrGrantRequestMessage = z.infer<typeof qrGrantRequestSchema>;
 export type DisplayToServerMessage = z.infer<typeof displayToServerSchema>;
 
