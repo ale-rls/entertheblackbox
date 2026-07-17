@@ -149,6 +149,7 @@ export class PhaseEngine {
     this.cursors = new CursorPipeline({
       sendCursors: (message) => this.sendToDisplay(message),
       sendPresence: (message) => this.broadcast(message),
+      canSendCursors: () => this.displaySocket !== undefined,
     });
     this.qr = options.qr === undefined ? null : new QrGrantPushLoop({
       ...options.qr,
@@ -523,6 +524,7 @@ export class PhaseEngine {
       this.close(this.displaySocket, 4002, "display replaced");
     }
     this.displaySocket = socket;
+    this.cursors.requestSnapshot();
     this.displayHeartbeatAt = this.now();
     this.displayPlaybackIssue = null;
     this.clients.add(socket);
