@@ -7,6 +7,7 @@ import {
   type ServerToClientMessage,
 } from "@smartphonecracy/protocol";
 import type { Scenario, Phase } from "@smartphonecracy/scenario";
+import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { WebSocket } from "ws";
 import type { ParticipantRecord, ParticipantRegistry } from "../admission/index.js";
@@ -39,6 +40,12 @@ export const DEFAULT_PHASE_ENGINE_POLICY: PhaseEnginePolicy = {
 };
 
 const QUESTION_STATUS_INTERVAL_MS = 250;
+
+function tokensMatch(supplied: string, expected: string): boolean {
+  const suppliedBuffer = Buffer.from(supplied);
+  const expectedBuffer = Buffer.from(expected);
+  return suppliedBuffer.length === expectedBuffer.length && timingSafeEqual(suppliedBuffer, expectedBuffer);
+}
 
 export type PhaseCheckpoint = {
   kind: "transition" | "recovery";
@@ -394,7 +401,7 @@ export class PhaseEngine {
         if (
           message.installationId !== this.installationId ||
           message.roomId !== this.roomId ||
-          message.displayToken !== this.displayToken
+          !tokensMatch(message.displayToken, this.displayToken)
         ) {
           this.close(socket, 1008, "invalid display credentials");
           return;
