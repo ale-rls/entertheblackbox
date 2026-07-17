@@ -23,6 +23,19 @@ deploy, rollback, or recovery drill.
 5. Check the venue computer, display, Ethernet, and UPS for loose cables or
    warning lights.
 
+## Join rate-limit network decision
+
+The current join-abuse limit of 30 attempts per source IP per 60 seconds is
+accepted for the expected venue Wi-Fi setup. During venue acceptance, test a
+doors-open burst at the full 30-phone capacity, including realistic reconnects
+or retries.
+
+Before directing visitors to cellular data, or using any network topology that
+presents many phones behind one shared NAT address, the technical operator must
+reassess the limit and repeat the burst test. Carrier-grade NAT can make many
+legitimate phones consume the same per-IP bucket; do not discover that during
+a live opening.
+
 At closing, leave the computer powered if overnight monitoring or a soak test
 is scheduled. Otherwise follow the venue's approved shutdown policy; do not
 unplug a running UPS.

@@ -160,6 +160,9 @@ export class AdmissionController {
       metadata !== undefined &&
       metadata.clientVersion !== buildVersion
     ) {
+      // Build mismatches are deliberately a soft upgrade: ask the client to
+      // reload, then continue processing any otherwise valid join message.
+      // Protocol/schema validation below remains the compatibility boundary.
       this.send(socket, {
         t: "reload",
         v: metadata.protocolVersion === 1 ? 1 : PROTOCOL_VERSION,
