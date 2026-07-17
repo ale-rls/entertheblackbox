@@ -184,7 +184,7 @@ export function App() {
             {state.notice.message}
           </div>
         )}
-        <PhoneCount count={state.presenceCount} />
+        {isIdle && <PhoneCount count={state.presenceCount} />}
       </section>
 
       {/* Layer 3: cursor canvas */}
