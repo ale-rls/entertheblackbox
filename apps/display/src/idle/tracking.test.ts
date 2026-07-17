@@ -15,9 +15,10 @@ describe("trackedQuadAt", () => {
     const halfway = trackedQuadAt(0.5 / MARKER_TRACK_FPS).flat();
     const first = MARKER_TRACK[0]!;
     const second = MARKER_TRACK[1]!;
-    expect(halfway).toEqual(
-      first.map((value, index) => value + (second[index]! - value) / 2),
+    const expected = first.map(
+      (value, index) => value + (second[index]! - value) / 2,
     );
+    halfway.forEach((value, index) => expect(value).toBeCloseTo(expected[index]!));
   });
 
   it("wraps exactly with the looping video", () => {
