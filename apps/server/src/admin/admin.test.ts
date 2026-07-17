@@ -28,6 +28,21 @@ describe("admin API", () => {
     expect(response.json()).toMatchObject({ healthy: true, ready: true, displayConnected: true, displayHeartbeatAgeMs: 12, connectedParticipants: 3, sessionId: "s1", phaseId: "q1" });
   });
 
+  it("authenticates admin routes even when their path is percent-encoded", async () => {
+    const { app, engine } = setup();
+    const encodedStatus = "/api/%61dmin/status";
+    const encodedAction = "/api/%61dmin/%69dle";
+
+    expect((await app.inject({ url: encodedStatus })).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: encodedAction })).statusCode).toBe(401);
+    expect(engine.adminIdle).not.toHaveBeenCalled();
+
+    const headers = { authorization: "Bearer strong-admin-token" };
+    expect((await app.inject({ url: encodedStatus, headers })).statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: encodedAction, headers })).statusCode).toBe(200);
+    expect(engine.adminIdle).toHaveBeenCalledOnce();
+  });
+
   it("executes safe controls and audit-logs success and refusal", async () => {
     const { app, engine, audit } = setup(); const headers = { authorization: "Bearer strong-admin-token" };
     expect((await app.inject({ method: "POST", url: "/api/admin/idle", headers })).statusCode).toBe(200);
