@@ -49,6 +49,12 @@ export function App() {
         onMessage: (message) => dispatch({ type: "server-message", message }),
         onSocketOpen: () => dispatch({ type: "socket-open" }),
         onSocketLost: () => dispatch({ type: "socket-lost" }),
+        onSessionEnded: () => {
+          const url = new URL(location.href);
+          url.searchParams.delete("g");
+          history.replaceState(null, "", url);
+          dispatch({ type: "session-ended" });
+        },
       }),
     [],
   );
@@ -119,7 +125,11 @@ export function App() {
       style={{ touchAction: "none", userSelect: "none" }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {state.join.kind === "rejected" ? (
+      {state.join.kind === "ended" ? (
+        <div className="rejected">
+          <p>The show has ended — scan the QR on the screen to join again.</p>
+        </div>
+      ) : state.join.kind === "rejected" ? (
         <div className="rejected">
           <p>{REJECTION_TEXT[state.join.reason] ?? "Could not join."}</p>
         </div>
@@ -146,7 +156,7 @@ export function App() {
           />
         )}
         <span
-          className={`connection-dot ${state.join.kind === "connecting" ? "offline" : "online"}`}
+          className={`connection-dot ${state.join.kind === "accepted" ? "online" : "offline"}`}
         />
       </footer>
     </main>

@@ -79,6 +79,7 @@ export type PhaseEngineOptions = {
   onCheckpoint?: (checkpoint: PhaseCheckpoint) => void;
   onPhaseDeadline?: (event: PhaseDeadlineEvent) => void;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
+  onSessionEnded?: (event: { reason: string; endedAt: number }) => void;
   qr?: Omit<QrGrantPushLoopOptions, "send" | "lifecycle" | "hasDisplay" | "now">;
 };
 
@@ -106,6 +107,7 @@ export class PhaseEngine {
   private readonly sessionIdFactory: () => string;
   private readonly onCheckpoint: ((checkpoint: PhaseCheckpoint) => void) | undefined;
   private readonly onPhaseDeadline: ((event: PhaseDeadlineEvent) => void) | undefined;
+  private readonly onSessionEnded: ((event: { reason: string; endedAt: number }) => void) | undefined;
   private readonly votes: VoteEngine;
   private readonly cursors: CursorPipeline;
   private readonly video = new VideoPhaseHandler();
@@ -145,6 +147,7 @@ export class PhaseEngine {
     this.sessionIdFactory = options.sessionIdFactory ?? (() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     this.onCheckpoint = options.onCheckpoint;
     this.onPhaseDeadline = options.onPhaseDeadline;
+    this.onSessionEnded = options.onSessionEnded;
     this.votes = new VoteEngine({
       heartbeatRetentionMs: options.participantLeaseTtlMs
         ?? DEFAULT_INSTALLATION_POLICY.participantLeaseTtlMs,
@@ -576,6 +579,7 @@ export class PhaseEngine {
 
   private enterPhase(target: string, now: number, reason: string): void {
     const phase = this.requirePhase(target);
+    const sessionEnded = this.lifecycle !== "idle" && phase.kind === "idle";
     this.votes.clearQuestion();
     this.questionStatusDirty = false;
     this.lastQuestionStatusAt = null;
@@ -601,7 +605,7 @@ export class PhaseEngine {
       this.lifecycle = "active";
       this.lastInputAt = phase.kind === "position-question" ? now : null;
     }
-    this.transition(reason);
+    this.transition(reason, sessionEnded ? { reason, endedAt: now } : undefined);
     if (phase.kind === "position-question") {
       const participants: VoteParticipantSeed[] = this.registry.values().map((participant) => ({
         participantId: participant.clientId,
@@ -644,7 +648,7 @@ export class PhaseEngine {
         };
   }
 
-  private transition(reason: string): void {
+  private transition(reason: string, sessionEnded?: { reason: string; endedAt: number }): void {
     this.emitCheckpoint("transition", reason);
     this.broadcast({
       t: "phase",
@@ -654,6 +658,7 @@ export class PhaseEngine {
       phase: this.getSnapshot(),
       serverTime: this.now(),
     });
+    if (sessionEnded !== undefined) this.onSessionEnded?.(sessionEnded);
     this.qr?.push();
   }
 

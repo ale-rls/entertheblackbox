@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { PROTOCOL_VERSION, type ServerToClientMessage } from "@smartphonecracy/protocol";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { PROTOCOL_VERSION, SHOW_ENDED_CLOSE_CODE, type ServerToClientMessage } from "@smartphonecracy/protocol";
+import { PhoneConnection } from "./lib/connection.js";
 import { clearLease, loadLease, storeLease } from "./lib/lease.js";
 import { applyDelta, InputThrottle, TRACKPAD_CENTER } from "./lib/trackpad.js";
 import {
@@ -16,6 +17,11 @@ const memoryStorage = () => {
     removeItem: (k: string) => void map.delete(k),
   };
 };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("lease storage", () => {
   it("is installation-scoped", () => {
@@ -43,6 +49,66 @@ describe("lease storage", () => {
     };
     expect(loadLease("inst-a", throwing)).toBeNull();
     expect(() => storeLease("inst-a", "x", throwing)).not.toThrow();
+  });
+});
+
+describe("PhoneConnection", () => {
+  it("clears the visit lease and does not reconnect after the server ends the show", () => {
+    class FakeWebSocket {
+      static readonly OPEN = 1;
+      readyState = FakeWebSocket.OPEN;
+      onopen: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onclose: ((event: CloseEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      readonly sent: string[] = [];
+
+      send(value: string): void {
+        this.sent.push(value);
+      }
+
+      close(): void {
+        this.readyState = 3;
+      }
+
+      serverClose(code: number): void {
+        this.readyState = 3;
+        this.onclose?.({ code } as CloseEvent);
+      }
+    }
+
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const storage = memoryStorage();
+    storeLease("inst-a", "lease-a", storage);
+    const sockets: FakeWebSocket[] = [];
+    const onSessionEnded = vi.fn();
+    const onSocketLost = vi.fn();
+    const connection = new PhoneConnection({
+      url: "ws://example.test/ws",
+      clientVersion: "test",
+      installationId: "inst-a",
+      roomId: "room-a",
+      joinGrant: "grant-a",
+      storage,
+      onMessage: vi.fn(),
+      onSessionEnded,
+      onSocketLost,
+      webSocketFactory: () => {
+        const socket = new FakeWebSocket();
+        sockets.push(socket);
+        return socket as unknown as WebSocket;
+      },
+    });
+
+    connection.start();
+    sockets[0]!.onopen?.(new Event("open"));
+    sockets[0]!.serverClose(SHOW_ENDED_CLOSE_CODE);
+
+    expect(loadLease("inst-a", storage)).toBeNull();
+    expect(onSessionEnded).toHaveBeenCalledOnce();
+    expect(onSocketLost).not.toHaveBeenCalled();
+    expect(sockets).toHaveLength(1);
+    connection.stop();
   });
 });
 
@@ -158,5 +224,17 @@ describe("phoneReducer", () => {
     s = phoneReducer(s, { type: "socket-lost" });
     expect(s.inputOpen).toBe(false);
     expect(s.join.kind).toBe("connecting");
+  });
+
+  it("enters a terminal scan-again state when the show ends", () => {
+    let s = apply(initialPhoneState, phase("position-question", 1));
+    s = phoneReducer(s, { type: "session-ended" });
+    expect(s).toMatchObject({
+      join: { kind: "ended" },
+      sessionId: null,
+      phaseEpoch: -1,
+      inputOpen: false,
+      currentPhaseId: null,
+    });
   });
 });

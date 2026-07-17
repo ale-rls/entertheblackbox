@@ -74,6 +74,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       },
       onCheckpoint: (checkpoint) => options.persistence?.checkpoint(checkpoint),
       onVoteSnapshotEnqueued: (snapshot) => options.persistence?.voteSnapshot(snapshot),
+      onSessionEnded: ({ endedAt }) => admission.endParticipantSession(endedAt),
     });
     engine.start();
   }

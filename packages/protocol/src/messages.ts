@@ -14,6 +14,9 @@ import {
 
 export const PROTOCOL_VERSION = 2;
 
+/** Private WebSocket close code: the visit ended and the phone must scan a fresh QR. */
+export const SHOW_ENDED_CLOSE_CODE = 4003;
+
 const v = z.literal(PROTOCOL_VERSION);
 const nonEmpty = z.string().min(1);
 /** Epoch-milliseconds timestamp as exchanged on the wire. */

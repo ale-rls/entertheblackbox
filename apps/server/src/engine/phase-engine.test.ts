@@ -56,6 +56,7 @@ function setup(options: {
   maxSessionDurationMs?: number;
   testScenario?: typeof scenario;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
+  sessionEnds?: Array<{ reason: string; endedAt: number }>;
   qr?: boolean;
 } ) {
   const registry = new ParticipantRegistry(2, 50);
@@ -76,6 +77,9 @@ function setup(options: {
       noParticipantGraceMs: 100,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
+    ...(options.sessionEnds === undefined
+      ? {}
+      : { onSessionEnded: (event: { reason: string; endedAt: number }) => options.sessionEnds!.push(event) }),
     ...(options.onVoteSnapshotEnqueued === undefined
       ? {}
       : { onVoteSnapshotEnqueued: options.onVoteSnapshotEnqueued }),
@@ -518,6 +522,26 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.lifecycleState).toBe("idle");
     expect(engine.currentPhaseId).toBe("idle");
     expect(checkpoints.at(-1)?.reason).toBe("admin-idle");
+  });
+
+  it("signals session end once when active play returns to idle", () => {
+    let now = 1_000;
+    const sessionEnds: Array<{ reason: string; endedAt: number }> = [];
+    const { engine, registry } = setup({ now: () => now, sessionEnds });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    now = 1_100;
+    engine.tick(now);
+
+    now = 1_125;
+    expect(engine.adminIdle(now)).toEqual({ ok: true });
+    expect(sessionEnds).toEqual([{ reason: "admin-idle", endedAt: 1_125 }]);
+
+    engine.adminIdle(1_150);
+    expect(sessionEnds).toHaveLength(1);
   });
 
   it("skips video and question phases and safely restarts mid-video and mid-freeze", () => {

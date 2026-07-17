@@ -2,10 +2,11 @@ import {
   encodeMessage,
   parseServerMessage,
   PROTOCOL_VERSION,
+  SHOW_ENDED_CLOSE_CODE,
   type PhoneToServerMessage,
   type ServerToClientMessage,
 } from "@smartphonecracy/protocol";
-import { loadLease, storeLease } from "./lease.js";
+import { clearLease, loadLease, storeLease } from "./lease.js";
 
 /**
  * Phone WebSocket connection: joins with the QR grant + any stored
@@ -23,6 +24,7 @@ export type PhoneConnectionOptions = {
   onMessage: (message: ServerToClientMessage) => void;
   onSocketOpen?: () => void;
   onSocketLost?: () => void;
+  onSessionEnded?: () => void;
   webSocketFactory?: (url: string) => WebSocket;
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">;
   pingIntervalMs?: number;
@@ -106,10 +108,16 @@ export class PhoneConnection {
       this.options.onMessage(parsed.message);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       this.clearTimers();
       this.ws = null;
       if (this.stopped) return;
+      if (event.code === SHOW_ENDED_CLOSE_CODE) {
+        this.stopped = true;
+        clearLease(this.options.installationId, this.options.storage);
+        this.options.onSessionEnded?.();
+        return;
+      }
       this.options.onSocketLost?.();
       const raw = Math.min(15_000, 500 * 2 ** this.attempt);
       this.attempt += 1;
