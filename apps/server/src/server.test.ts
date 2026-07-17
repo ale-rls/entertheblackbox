@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, unlink, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import {
   ConfigError,
@@ -98,13 +98,35 @@ async function listen(runtime: ServerRuntime): Promise<number> {
   return address.port;
 }
 
-async function openWebSocket(port: number): Promise<WebSocket> {
-  const client = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+async function openWebSocket(port: number, options?: WebSocket.ClientOptions): Promise<WebSocket> {
+  const client = new WebSocket(`ws://127.0.0.1:${port}/ws`, options);
   await new Promise<void>((resolve, reject) => {
     client.once("open", resolve);
     client.once("error", reject);
   });
   return client;
+}
+
+async function joinParticipant(client: WebSocket, runtime: ServerRuntime): Promise<void> {
+  const identity = new Promise<void>((resolve, reject) => {
+    client.once("message", (raw) => {
+      try {
+        expect(JSON.parse(raw.toString())).toMatchObject({ t: "identity" });
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+  client.send(JSON.stringify({
+    t: "join",
+    v: 2,
+    clientVersion: "dev",
+    installationId: runtime.config.installationId,
+    roomId: runtime.config.roomId,
+    joinGrant: runtime.admission.issueJoinGrant().token,
+  }));
+  await identity;
 }
 
 describe("configuration", () => {
@@ -133,6 +155,14 @@ describe("configuration", () => {
       INSTALLATION_CLOSES_AT: "2026-12-31T23:00:00+00:00",
     });
     expect(persistent.participantDataExpiresAt).toBe(Date.parse("2027-03-31T23:00:00Z"));
+  });
+
+  it("rejects an invalid WebSocket keepalive interval", async () => {
+    const config = await fixture();
+    await expect(buildServer({ config, webSocketKeepAliveIntervalMs: 0 }))
+      .rejects.toThrow("webSocketKeepAliveIntervalMs must be a positive integer");
+    await expect(buildServer({ config, webSocketKeepAliveIntervalMs: 1.5 }))
+      .rejects.toThrow("webSocketKeepAliveIntervalMs must be a positive integer");
   });
 });
 
@@ -309,6 +339,44 @@ describe("WebSocket lifecycle", () => {
     await runtime.app.close();
     await closed;
     expect(runtime.webSockets.clients.size).toBe(0);
+  });
+
+  it("keeps an unjoined WebSocket alive when it responds to protocol pings", async () => {
+    const runtime = await buildServer({
+      config: await fixture(),
+      webSocketKeepAliveIntervalMs: 10,
+    });
+    runtimes.push(runtime);
+    const client = await openWebSocket(await listen(runtime));
+    let pingCount = 0;
+    const pinged = new Promise<void>((resolve) => {
+      client.on("ping", () => {
+        pingCount += 1;
+        if (pingCount === 2) resolve();
+      });
+    });
+
+    await pinged;
+
+    expect(client.readyState).toBe(WebSocket.OPEN);
+    expect(runtime.webSockets.clients.size).toBe(1);
+    expect(runtime.admission.registry.connectedCount).toBe(0);
+    client.close();
+  });
+
+  it("terminates an unresponsive participant and frees its registry connection slot", async () => {
+    const runtime = await buildServer({
+      config: await fixture(),
+      webSocketKeepAliveIntervalMs: 10,
+    });
+    runtimes.push(runtime);
+    const client = await openWebSocket(await listen(runtime), { autoPong: false });
+    await joinParticipant(client, runtime);
+    expect(runtime.admission.registry.connectedCount).toBe(1);
+
+    const closed = new Promise<number>((resolve) => client.once("close", resolve));
+    await expect(closed).resolves.toBe(1006);
+    await vi.waitFor(() => expect(runtime.admission.registry.connectedCount).toBe(0));
   });
 
   it("terminates a display WebSocket that stops sending heartbeats", async () => {

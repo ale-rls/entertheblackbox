@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
-import { WebSocketServer, type WebSocket } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import { AdmissionController } from "./admission/index.js";
 import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
 import { loadConfig, type ServerConfig } from "./config.js";
@@ -11,6 +11,9 @@ import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
 export const WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024;
 export const DEFAULT_MAX_WEBSOCKET_CONNECTIONS = 64;
+export const DEFAULT_WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
+
+type HeartbeatWebSocket = WebSocket & { isAlive: boolean };
 
 export type BuildServerOptions = {
   config?: ServerConfig;
@@ -20,6 +23,7 @@ export type BuildServerOptions = {
   persistence?: InstallationPersistence;
   adminData?: AdminDataSource;
   maxWebSocketConnections?: number;
+  webSocketKeepAliveIntervalMs?: number;
 };
 
 export type ServerRuntime = {
@@ -45,6 +49,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     ?? DEFAULT_MAX_WEBSOCKET_CONNECTIONS;
   if (!Number.isSafeInteger(maxWebSocketConnections) || maxWebSocketConnections < 1) {
     throw new Error("maxWebSocketConnections must be a positive integer");
+  }
+  const webSocketKeepAliveIntervalMs = options.webSocketKeepAliveIntervalMs
+    ?? DEFAULT_WEBSOCKET_KEEPALIVE_INTERVAL_MS;
+  if (!Number.isSafeInteger(webSocketKeepAliveIntervalMs) || webSocketKeepAliveIntervalMs < 1) {
+    throw new Error("webSocketKeepAliveIntervalMs must be a positive integer");
   }
   const publicVideoPhases = readiness.ready
     ? Object.fromEntries(
@@ -154,13 +163,32 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     });
   });
   webSockets.on("connection", (socket, request) => {
+    const heartbeatSocket = socket as HeartbeatWebSocket;
+    heartbeatSocket.isAlive = true;
+    heartbeatSocket.on("pong", () => {
+      heartbeatSocket.isAlive = true;
+    });
     admission.handleConnection(socket, request as IncomingMessage);
     options.onWebSocketConnection?.(socket);
   });
 
+  const webSocketKeepAliveInterval = setInterval(() => {
+    for (const socket of webSockets.clients) {
+      const heartbeatSocket = socket as HeartbeatWebSocket;
+      if (heartbeatSocket.isAlive === false) {
+        heartbeatSocket.terminate();
+        continue;
+      }
+      heartbeatSocket.isAlive = false;
+      if (heartbeatSocket.readyState === WebSocket.OPEN) heartbeatSocket.ping();
+    }
+  }, webSocketKeepAliveIntervalMs);
+  webSocketKeepAliveInterval.unref();
+
   // Upgraded sockets are not managed by Fastify's HTTP connection tracker.
   // Close them before Fastify waits for the underlying server to drain.
   app.addHook("preClose", async () => {
+    clearInterval(webSocketKeepAliveInterval);
     engine?.stop();
     for (const socket of webSockets.clients) socket.terminate();
     await new Promise<void>((resolve) => webSockets.close(() => resolve()));
