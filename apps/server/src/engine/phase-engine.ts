@@ -14,7 +14,6 @@ import { CursorPipeline } from "../cursors/index.js";
 import {
   VoteEngine,
   type FinalVoteSnapshot,
-  type LiveQuestionStatus,
   type VoteParticipantSeed,
   type VoteResolution,
 } from "../votes/index.js";
@@ -77,17 +76,6 @@ export type TransitionResult = { ok: true } | { ok: false; reason: "stale" | "in
 
 function isOpen(socket: WebSocket): boolean {
   return socket.readyState === undefined || socket.readyState === 0 || socket.readyState === 1;
-}
-
-type FourVoteResolution = Extract<VoteResolution, { field: { type: "four-quadrant" } }>;
-type FourLiveQuestionStatus = Extract<LiveQuestionStatus, { field: { type: "four-quadrant" } }>;
-
-function isFourVoteResolution(resolution: VoteResolution): resolution is FourVoteResolution {
-  return resolution.field.type === "four-quadrant";
-}
-
-function isFourLiveQuestionStatus(status: LiveQuestionStatus): status is FourLiveQuestionStatus {
-  return status.field.type === "four-quadrant";
 }
 
 export class PhaseEngine {
@@ -656,36 +644,17 @@ export class PhaseEngine {
     phase: Extract<Phase, { kind: "position-question" }>,
     now: number,
   ): void {
-    const base: {
-      t: "question_resolved";
-      v: typeof PROTOCOL_VERSION;
-      sessionId: string;
-      phaseEpoch: number;
-      resolvedTarget: string;
-      freezeUntil: number;
-    } = {
+    this.sendToDisplay({
       t: "question_resolved",
       v: PROTOCOL_VERSION,
       sessionId: this.sessionId,
       phaseEpoch: this.phaseEpoch,
       resolvedTarget: resolution.resolvedTarget,
       freezeUntil: now + phase.freezeMs,
-    };
-    if (isFourVoteResolution(resolution)) {
-      this.sendToDisplay({
-        ...base,
-        field: resolution.field,
-        quadrantCounts: resolution.quadrantCounts,
-        winner: resolution.winner,
-      });
-      return;
-    }
-    this.sendToDisplay({
-      ...base,
       field: resolution.field,
       quadrantCounts: resolution.quadrantCounts,
       winner: resolution.winner,
-    });
+    } as Extract<ServerToClientMessage, { t: "question_resolved" }>);
   }
 
   private queueQuestionStatus(now = this.now()): void {
@@ -704,34 +673,16 @@ export class PhaseEngine {
     ) return;
     const status = this.votes.liveStatus(now);
     if (!status) return;
-    const base: {
-      t: "question_status";
-      v: typeof PROTOCOL_VERSION;
-      sessionId: string;
-      phaseEpoch: number;
-      connectedCount: number;
-      positionedCount: number;
-    } = {
+    this.sendToDisplay({
       t: "question_status",
       v: PROTOCOL_VERSION,
       sessionId: this.sessionId,
       phaseEpoch: this.phaseEpoch,
       connectedCount: status.connectedCount,
       positionedCount: status.positionedCount,
-    };
-    if (isFourLiveQuestionStatus(status)) {
-      this.sendToDisplay({
-        ...base,
-        field: status.field,
-        ...(phase.showLiveCounts ? { quadrantCounts: status.quadrantCounts } : {}),
-      });
-    } else {
-      this.sendToDisplay({
-        ...base,
-        field: status.field,
-        ...(phase.showLiveCounts ? { quadrantCounts: status.quadrantCounts } : {}),
-      });
-    }
+      field: status.field,
+      ...(phase.showLiveCounts ? { quadrantCounts: status.quadrantCounts } : {}),
+    } as Extract<ServerToClientMessage, { t: "question_status" }>);
     this.questionStatusDirty = false;
     this.lastQuestionStatusAt = now;
   }
