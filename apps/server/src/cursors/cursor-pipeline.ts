@@ -7,6 +7,7 @@ type CursorState = Cursor & { lastSeq: number };
 export type CursorPipelineOptions = {
   sendCursors: (message: CursorsMessage) => void;
   sendPresence: (message: PresenceMessage) => void;
+  canSendCursors?: () => boolean;
   intervalMs?: number;
 };
 
@@ -15,6 +16,8 @@ const clamp = (value: number): number => Math.min(1, Math.max(0, value));
 export class CursorPipeline {
   private readonly cursors = new Map<string, CursorState>();
   private readonly intervalMs: number;
+  private lastEmittedCursors: Cursor[] = [];
+  private dirty = false;
   private tickNumber = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
 
@@ -26,15 +29,20 @@ export class CursorPipeline {
   join(clientId: string, color: string): void {
     const existing = this.cursors.get(clientId);
     if (existing) {
+      if (existing.color !== color) this.dirty = true;
       existing.color = color;
       return;
     }
     this.cursors.set(clientId, { clientId, color, x: 0.5, y: 0.5, lastSeq: -1 });
+    this.dirty = true;
     this.emitPresence();
   }
 
   leave(clientId: string): void {
-    if (this.cursors.delete(clientId)) this.emitPresence();
+    if (this.cursors.delete(clientId)) {
+      this.dirty = true;
+      this.emitPresence();
+    }
   }
 
   recordInput(clientId: string, seq: number, x: number, y: number): boolean {
@@ -42,19 +50,36 @@ export class CursorPipeline {
     if (!cursor || !Number.isSafeInteger(seq) || seq < 0 || seq <= cursor.lastSeq) return false;
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     cursor.lastSeq = seq;
-    cursor.x = clamp(x);
-    cursor.y = clamp(y);
+    const nextX = clamp(x);
+    const nextY = clamp(y);
+    if (cursor.x !== nextX || cursor.y !== nextY) this.dirty = true;
+    cursor.x = nextX;
+    cursor.y = nextY;
     return true;
   }
 
   tick(): void {
+    if (!this.dirty || this.options.canSendCursors?.() === false) return;
+    const cursors = [...this.cursors.values()].map(({ lastSeq: _lastSeq, ...cursor }) => cursor);
+    if (this.matchesLastEmission(cursors)) {
+      this.dirty = false;
+      return;
+    }
     this.options.sendCursors({
       t: "cursors",
       v: PROTOCOL_VERSION,
       tick: this.tickNumber,
-      cursors: [...this.cursors.values()].map(({ lastSeq: _lastSeq, ...cursor }) => cursor),
+      cursors,
     });
+    this.lastEmittedCursors = cursors;
+    this.dirty = false;
     this.tickNumber += 1;
+  }
+
+  requestSnapshot(): void {
+    if (this.cursors.size === 0) return;
+    this.lastEmittedCursors = [];
+    this.dirty = true;
   }
 
   start(): void {
@@ -69,5 +94,16 @@ export class CursorPipeline {
 
   private emitPresence(): void {
     this.options.sendPresence({ t: "presence", v: PROTOCOL_VERSION, count: this.cursors.size });
+  }
+
+  private matchesLastEmission(cursors: Cursor[]): boolean {
+    return cursors.length === this.lastEmittedCursors.length && cursors.every((cursor, index) => {
+      const previous = this.lastEmittedCursors[index];
+      return previous !== undefined &&
+        cursor.clientId === previous.clientId &&
+        cursor.color === previous.color &&
+        cursor.x === previous.x &&
+        cursor.y === previous.y;
+    });
   }
 }
