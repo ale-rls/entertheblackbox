@@ -164,6 +164,8 @@ describe("HTTP readiness and bundles", () => {
     expect(media.body).toBe("video");
     expect(media.headers["content-type"]).toBe("video/mp4");
     expect(media.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+    expect(media.headers["accept-ranges"]).toBe("bytes");
+    expect(media.headers["content-length"]).toBe("5");
 
     expect((await runtime.app.inject({ url: "/media/unknown.mp4" })).statusCode).toBe(404);
     expect((await runtime.app.inject({ url: "/media/%2e%2e/scenario.json" })).statusCode).toBe(404);
@@ -171,6 +173,44 @@ describe("HTTP readiness and bundles", () => {
       ok: true,
       scenarioVersion: "test-1",
     });
+  });
+
+  it("serves single byte ranges and rejects unsatisfiable ranges", async () => {
+    const runtime = await buildServer({ config: await fixture() });
+    runtimes.push(runtime);
+
+    const partial = await runtime.app.inject({
+      url: "/media/intro.mp4",
+      headers: { range: "bytes=1-3" },
+    });
+    expect(partial.statusCode).toBe(206);
+    expect(partial.body).toBe("ide");
+    expect(partial.headers["content-range"]).toBe("bytes 1-3/5");
+    expect(partial.headers["accept-ranges"]).toBe("bytes");
+    expect(partial.headers["content-length"]).toBe("3");
+    expect(partial.headers["content-type"]).toBe("video/mp4");
+
+    const suffix = await runtime.app.inject({
+      url: "/media/intro.mp4",
+      headers: { range: "bytes=-2" },
+    });
+    expect(suffix.statusCode).toBe(206);
+    expect(suffix.body).toBe("eo");
+    expect(suffix.headers["content-range"]).toBe("bytes 3-4/5");
+
+    const unsatisfiable = await runtime.app.inject({
+      url: "/media/intro.mp4",
+      headers: { range: "bytes=5-" },
+    });
+    expect(unsatisfiable.statusCode).toBe(416);
+    expect(unsatisfiable.headers["content-range"]).toBe("bytes */5");
+
+    const multiple = await runtime.app.inject({
+      url: "/media/intro.mp4",
+      headers: { range: "bytes=0-1,3-4" },
+    });
+    expect(multiple.statusCode).toBe(416);
+    expect(multiple.headers["content-range"]).toBe("bytes */5");
   });
 
   it("stays live but fails readiness for an invalid scenario", async () => {
