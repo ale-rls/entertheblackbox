@@ -78,9 +78,14 @@ export function App() {
     }
   }, [state.reloadRequired]);
 
-  const sendPosition = () => {
+  const sendPosition = (delivery: "move" | "final" = "move") => {
     if (!state.inputOpen || state.sessionId === null) return;
-    if (!throttle.shouldSend(Date.now())) return;
+    const now = Date.now();
+    const shouldSend =
+      delivery === "final"
+        ? throttle.shouldFlushFinal(now)
+        : throttle.shouldSend(now);
+    if (!shouldSend) return;
     connection.send({
       t: "input",
       v: PROTOCOL_VERSION,
@@ -111,10 +116,9 @@ export function App() {
     sendPosition();
   };
 
-  const onPointerUp = () => {
+  const onPointerEnd = () => {
     lastPointer.current = null;
-    // Final position flush so the last movement always lands.
-    sendPosition();
+    sendPosition("final");
   };
 
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
@@ -138,8 +142,8 @@ export function App() {
           className="trackpad"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          onPointerUp={onPointerEnd}
+          onPointerCancel={onPointerEnd}
         >
           {!state.inputOpen && (
             <p className="watch-screen">Watch the screen</p>

@@ -135,6 +135,24 @@ describe("trackpad", () => {
     expect(throttle.shouldSend(20)).toBe(false);
     expect(throttle.shouldSend(39)).toBe(false);
     expect(throttle.shouldSend(40)).toBe(true);
+    expect(throttle.shouldFlushFinal(41)).toBe(false);
+  });
+
+  it("sends a pointer-end flush inside the 40 ms move throttle window", () => {
+    const throttle = new InputThrottle(40);
+    expect(throttle.shouldSend(0)).toBe(true);
+    expect(throttle.shouldSend(20)).toBe(false);
+    expect(throttle.shouldFlushFinal(21)).toBe(true);
+  });
+
+  it("does not duplicate a final sample when no move is pending", () => {
+    const throttle = new InputThrottle(40);
+    expect(throttle.shouldSend(0)).toBe(true);
+    expect(throttle.shouldFlushFinal(20)).toBe(false);
+
+    expect(throttle.shouldSend(20)).toBe(false);
+    expect(throttle.shouldFlushFinal(21)).toBe(true);
+    expect(throttle.shouldFlushFinal(22)).toBe(false);
   });
 });
 
