@@ -51,6 +51,7 @@ function createHarness(
   let now = 1_000;
   let sessionCounter = 0;
   const checkpoints: PhaseCheckpoint[] = [];
+  let activeDisplay: TestSocket | undefined;
   let engine: PhaseEngine;
   const admission = new AdmissionController({
     installationId: "inst-1",
@@ -88,6 +89,7 @@ function createHarness(
   };
   const display = () => {
     const socket = new TestSocket();
+    activeDisplay = socket;
     connect(socket, "192.0.2.1");
     socket.message({
       t: "display_join", v: 2, clientVersion: "test", installationId: "inst-1",
@@ -108,6 +110,16 @@ function createHarness(
   };
   const advance = (milliseconds: number) => {
     now += milliseconds;
+    if (activeDisplay?.readyState === 1) {
+      activeDisplay.message({
+        t: "display_heartbeat",
+        v: 2,
+        sessionId: engine.currentSessionId,
+        phaseId: engine.currentPhaseId,
+        phaseEpoch: engine.currentPhaseEpoch,
+        clientTime: now,
+      });
+    }
     engine.tick(now);
   };
   const input = (socket: TestSocket, seq: number, x: number, y: number) => {

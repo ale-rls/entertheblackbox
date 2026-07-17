@@ -276,6 +276,7 @@ export class PhaseEngine {
   }
 
   tick(now = this.now()): void {
+    this.expireStaleDisplay(now);
     if (this.lifecycle === "idle") return;
 
     if (this.displaySocket === undefined) {
@@ -545,6 +546,22 @@ export class PhaseEngine {
     } else {
       this.qr?.push();
     }
+  }
+
+  private expireStaleDisplay(now: number): void {
+    if (
+      this.displaySocket === undefined ||
+      this.displayHeartbeatAt === null ||
+      now - this.displayHeartbeatAt < this.policy.displayDisconnectTimeoutMs
+    ) return;
+
+    const socket = this.displaySocket;
+    const lastHeartbeatAt = this.displayHeartbeatAt;
+    this.displaySocket = undefined;
+    this.displayHeartbeatAt = null;
+    this.displayDisconnectedAt = lastHeartbeatAt;
+    this.clients.delete(socket);
+    socket.terminate();
   }
 
   private startLobby(now: number): void {

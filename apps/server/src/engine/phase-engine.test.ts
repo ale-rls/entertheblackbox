@@ -54,6 +54,7 @@ function setup(options: {
   lobbyCountdownMs?: number;
   interactiveIdleTimeoutMs?: number;
   maxSessionDurationMs?: number;
+  displayDisconnectTimeoutMs?: number;
   testScenario?: typeof scenario;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
   sessionEnds?: Array<{ reason: string; endedAt: number }>;
@@ -73,7 +74,7 @@ function setup(options: {
       lobbyCountdownMs: options.lobbyCountdownMs ?? 100,
       interactiveIdleTimeoutMs: options.interactiveIdleTimeoutMs ?? 100,
       maxSessionDurationMs: options.maxSessionDurationMs ?? 10_000,
-      displayDisconnectTimeoutMs: 100,
+      displayDisconnectTimeoutMs: options.displayDisconnectTimeoutMs ?? 1_000_000,
       noParticipantGraceMs: 100,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
@@ -192,6 +193,76 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.lifecycleState).toBe("active");
     expect(engine.currentSessionId).toBe("session-1");
     expect(engine.currentPhaseId).toBe("intro");
+  });
+
+  it("terminates a display whose socket stays open after its heartbeat expires", () => {
+    let now = 1_000;
+    const checkpoints: PhaseCheckpoint[] = [];
+    const { engine, registry } = setup({
+      now: () => now,
+      checkpoints,
+      lobbyCountdownMs: 10,
+      displayDisconnectTimeoutMs: 100,
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket);
+    connectDisplay(engine, display as unknown as WebSocket);
+
+    now = 1_010;
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe("active");
+    expect(engine.isDisplayConnected).toBe(true);
+
+    now = 1_099;
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe("active");
+    expect(display.readyState).toBe(1);
+
+    now = 1_100;
+    engine.tick(now);
+    expect(display.readyState).toBe(3);
+    expect(engine.isDisplayConnected).toBe(false);
+    expect(engine.displayHeartbeatAgeMs).toBeNull();
+    expect(engine.lifecycleState).toBe("idle");
+    expect(checkpoints.at(-1)?.reason).toBe("display-timeout");
+  });
+
+  it("keeps a live display connected while current-phase heartbeats arrive", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({
+      now: () => now,
+      lobbyCountdownMs: 10,
+      displayDisconnectTimeoutMs: 100,
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket);
+    connectDisplay(engine, display as unknown as WebSocket);
+
+    now = 1_010;
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe("active");
+
+    for (const heartbeatAt of [1_090, 1_180, 1_270]) {
+      now = heartbeatAt;
+      engine.handleClientMessage({
+        t: "display_heartbeat",
+        v: 2,
+        sessionId: engine.currentSessionId,
+        phaseId: engine.currentPhaseId,
+        phaseEpoch: engine.currentPhaseEpoch,
+        clientTime: heartbeatAt,
+      }, display as unknown as WebSocket);
+      now += 99;
+      engine.tick(now);
+      expect(engine.lifecycleState).toBe("active");
+      expect(engine.isDisplayConnected).toBe(true);
+      expect(engine.displayHeartbeatAgeMs).toBe(99);
+      expect(display.readyState).toBe(1);
+    }
   });
 
   it("rejects stale video events and transitions only on the current epoch", () => {
@@ -439,6 +510,7 @@ describe("PhaseEngine lifecycle", () => {
         now: () => now,
         checkpoints,
         maxSessionDurationMs: testCase.label === "max-session-duration" ? 50 : 10_000,
+        displayDisconnectTimeoutMs: testCase.label === "display-timeout" ? 100 : 1_000_000,
       });
       const phone = new MockSocket();
       const display = new MockSocket();

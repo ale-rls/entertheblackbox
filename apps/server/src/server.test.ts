@@ -311,6 +311,38 @@ describe("WebSocket lifecycle", () => {
     expect(runtime.webSockets.clients.size).toBe(0);
   });
 
+  it("terminates a display WebSocket that stops sending heartbeats", async () => {
+    const runtime = await buildServer({ config: await fixture() });
+    runtimes.push(runtime);
+    const client = await openWebSocket(await listen(runtime));
+    const snapshot = new Promise<void>((resolve, reject) => {
+      client.once("message", (raw) => {
+        try {
+          expect(JSON.parse(raw.toString())).toMatchObject({ t: "snapshot", sessionId: "idle" });
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    client.send(JSON.stringify({
+      t: "display_join",
+      v: 2,
+      clientVersion: "dev",
+      installationId: runtime.config.installationId,
+      roomId: runtime.config.roomId,
+      displayToken: runtime.config.displayToken,
+    }));
+    await snapshot;
+    expect(runtime.engine?.isDisplayConnected).toBe(true);
+
+    const closed = new Promise<number>((resolve) => client.once("close", resolve));
+    runtime.engine?.tick(Date.now() + 30_001);
+
+    await expect(closed).resolves.toBe(1006);
+    expect(runtime.engine?.isDisplayConnected).toBe(false);
+  });
+
   it("rejects malformed absolute-form upgrade targets without taking down the server", async () => {
     const runtime = await buildServer({ config: await fixture() });
     runtimes.push(runtime);

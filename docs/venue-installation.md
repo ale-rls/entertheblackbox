@@ -82,6 +82,9 @@ restart limits, and operator commands in `infra/provisioning.md`.
       developer intervention.
 - [ ] Disconnecting/reconnecting Ethernet shows a clear reconnecting state and
       recovers automatically.
+- [ ] During a test session, disconnecting the venue computer's network without
+      closing the browser makes the server end the headless session after about 30
+      seconds; restoring the network returns the display to idle.
 - [ ] A test phone joins by QR and the admin status reports a fresh display
       heartbeat.
 - [ ] Venue staff complete the printed power-cycle procedure without SSH.
