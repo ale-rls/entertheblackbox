@@ -29,8 +29,7 @@ export class CursorPipeline {
   join(clientId: string, color: string): void {
     const existing = this.cursors.get(clientId);
     if (existing) {
-      if (existing.color !== color) this.dirty = true;
-      existing.color = color;
+      existing.lastSeq = -1;
       return;
     }
     this.cursors.set(clientId, { clientId, color, x: 0.5, y: 0.5, lastSeq: -1 });
