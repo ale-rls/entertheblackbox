@@ -234,6 +234,74 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.currentPhaseId).toBe("question");
   });
 
+  it("tracks playback issues only for the authenticated display and current video", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    const stranger = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket);
+    connectDisplay(engine, display as unknown as WebSocket);
+    now = 1_100;
+    engine.tick(now);
+    const event = {
+      t: "display_playback_status" as const,
+      v: 2 as const,
+      sessionId: "session-1",
+      phaseId: "intro",
+      phaseEpoch: engine.currentPhaseEpoch,
+      mediaId: "intro.mp4",
+      status: "stalled" as const,
+      detail: "buffering stopped",
+    };
+
+    engine.handleClientMessage(event, stranger as unknown as WebSocket);
+    expect(engine.currentDisplayPlaybackIssue).toBeNull();
+    engine.handleClientMessage({ ...event, phaseEpoch: event.phaseEpoch - 1 }, display as unknown as WebSocket);
+    engine.handleClientMessage({ ...event, mediaId: "other.mp4" }, display as unknown as WebSocket);
+    expect(engine.currentDisplayPlaybackIssue).toBeNull();
+
+    now = 1_125;
+    engine.handleClientMessage(event, display as unknown as WebSocket);
+    expect(engine.currentDisplayPlaybackIssue).toEqual({
+      status: "stalled",
+      mediaId: "intro.mp4",
+      detail: "buffering stopped",
+      reportedAt: 1_125,
+    });
+
+    engine.handleClientMessage({ ...event, status: "playing", detail: undefined }, display as unknown as WebSocket);
+    expect(engine.currentDisplayPlaybackIssue).toBeNull();
+  });
+
+  it("clears a playback issue when the server leaves its video phase", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket);
+    connectDisplay(engine, display as unknown as WebSocket);
+    now = 1_100;
+    engine.tick(now);
+    engine.handleClientMessage({
+      t: "display_playback_status",
+      v: 2,
+      sessionId: "session-1",
+      phaseId: "intro",
+      phaseEpoch: engine.currentPhaseEpoch,
+      mediaId: "intro.mp4",
+      status: "error",
+    }, display as unknown as WebSocket);
+    expect(engine.currentDisplayPlaybackIssue?.status).toBe("error");
+
+    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+
+    expect(engine.currentPhaseId).toBe("question");
+    expect(engine.currentDisplayPlaybackIssue).toBeNull();
+  });
+
   it("advances video at expected duration plus five seconds when no event arrives", () => {
     let now = 1_000;
     const checkpoints: PhaseCheckpoint[] = [];

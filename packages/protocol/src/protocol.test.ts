@@ -29,6 +29,16 @@ const clientMessages: ClientToServerMessage[] = [
   },
   { t: "video_ended", v: 2, sessionId: "s1", phaseId: "intro", phaseEpoch: 1, mediaId: "intro.mp4" },
   { t: "display_heartbeat", v: 2, sessionId: "s1", phaseId: "intro", phaseEpoch: 1, clientTime: 5 },
+  {
+    t: "display_playback_status",
+    v: 2,
+    sessionId: "s1",
+    phaseId: "intro",
+    phaseEpoch: 1,
+    mediaId: "intro.mp4",
+    status: "autoplay-blocked",
+    detail: "play() requires a user gesture",
+  },
   { t: "qr_grant_request", v: 2 },
 ];
 

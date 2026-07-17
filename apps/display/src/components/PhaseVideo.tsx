@@ -3,6 +3,7 @@ import {
   type DisplayToServerMessage,
   type PhaseSnapshotMessage,
 } from "@smartphonecracy/protocol";
+import { useVideoPlaybackDiagnostics } from "../media/useVideoPlaybackDiagnostics.js";
 
 type VideoPhase = Extract<PhaseSnapshotMessage, { kind: "video" }>;
 
@@ -21,6 +22,15 @@ export function PhaseVideo({
   src,
   send,
 }: PhaseVideoProps) {
+  const diagnostics = useVideoPlaybackDiagnostics({
+    sessionId,
+    phaseId: phase.id,
+    phaseEpoch,
+    mediaId: phase.src,
+    videoUrl: src,
+    send,
+  });
+
   const handleEnded = () => {
     if (sessionId === null) return;
     send({
@@ -33,5 +43,15 @@ export function PhaseVideo({
     });
   };
 
-  return <video src={src} autoPlay onEnded={handleEnded} />;
+  return (
+    <video
+      ref={diagnostics.ref}
+      src={src}
+      autoPlay
+      onEnded={handleEnded}
+      onPlaying={diagnostics.onPlaying}
+      onStalled={diagnostics.onStalled}
+      onError={diagnostics.onError}
+    />
+  );
 }

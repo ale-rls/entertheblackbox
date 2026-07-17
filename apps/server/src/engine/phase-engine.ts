@@ -2,6 +2,7 @@ import {
   encodeMessage,
   PROTOCOL_VERSION,
   type ClientToServerMessage,
+  type DisplayPlaybackStatusMessage,
   type PhaseSnapshotMessage,
   type ServerToClientMessage,
 } from "@smartphonecracy/protocol";
@@ -74,6 +75,13 @@ export type PhaseEngineOptions = {
 
 export type TransitionResult = { ok: true } | { ok: false; reason: "stale" | "invalid-target" | "wrong-phase" };
 
+export type DisplayPlaybackIssue = {
+  status: Exclude<DisplayPlaybackStatusMessage["status"], "playing">;
+  mediaId: string;
+  detail: string | null;
+  reportedAt: number;
+};
+
 function isOpen(socket: WebSocket): boolean {
   return socket.readyState === undefined || socket.readyState === 0 || socket.readyState === 1;
 }
@@ -107,6 +115,7 @@ export class PhaseEngine {
   private noParticipantSince: number | null = null;
   private displayDisconnectedAt: number | null = null;
   private displayHeartbeatAt: number | null = null;
+  private displayPlaybackIssue: DisplayPlaybackIssue | null = null;
   private deadlineNotified = false;
   private displaySocket: WebSocket | undefined;
   private readonly participantIds = new Map<WebSocket, string>();
@@ -169,6 +178,10 @@ export class PhaseEngine {
     return this.displaySocket === undefined || this.displayHeartbeatAt === null
       ? null
       : Math.max(0, this.now() - this.displayHeartbeatAt);
+  }
+
+  get currentDisplayPlaybackIssue(): DisplayPlaybackIssue | null {
+    return this.displayPlaybackIssue;
   }
 
   adminStart(now = this.now()): TransitionResult {
@@ -391,6 +404,9 @@ export class PhaseEngine {
           this.displayHeartbeatAt = this.now();
         }
         return;
+      case "display_playback_status":
+        if (socket === this.displaySocket) this.recordDisplayPlaybackStatus(message);
+        return;
       case "qr_grant_request":
         if (socket === this.displaySocket) this.qr?.push();
         return;
@@ -498,6 +514,7 @@ export class PhaseEngine {
     }
     this.displaySocket = socket;
     this.displayHeartbeatAt = this.now();
+    this.displayPlaybackIssue = null;
     this.clients.add(socket);
     this.displayDisconnectedAt = null;
     this.send(socket, this.getSnapshotMessage());
@@ -546,6 +563,7 @@ export class PhaseEngine {
     this.lastQuestionStatusAt = null;
     this.questionFreezeUntil = null;
     this.questionResolutionTarget = null;
+    this.displayPlaybackIssue = null;
     this.phaseId = target;
     this.phaseStartedAt = now;
     this.video.cancel();
@@ -589,6 +607,23 @@ export class PhaseEngine {
     this.enterPhase("idle", now, reason);
     this.noParticipantSince = null;
     this.displayDisconnectedAt = this.displaySocket === undefined ? now : null;
+  }
+
+  private recordDisplayPlaybackStatus(message: DisplayPlaybackStatusMessage): void {
+    const phase = this.currentPhase();
+    if (
+      phase.kind !== "video" ||
+      phase.src !== message.mediaId ||
+      !this.matches(message.sessionId, message.phaseId, message.phaseEpoch)
+    ) return;
+    this.displayPlaybackIssue = message.status === "playing"
+      ? null
+      : {
+          status: message.status,
+          mediaId: message.mediaId,
+          detail: message.detail ?? null,
+          reportedAt: this.now(),
+        };
   }
 
   private transition(reason: string): void {

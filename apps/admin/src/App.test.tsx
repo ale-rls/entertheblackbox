@@ -10,6 +10,7 @@ const activeStatus: Status = {
   uptimeMs: 3_723_000,
   displayConnected: true,
   displayHeartbeatAgeMs: 42,
+  displayPlaybackIssue: null,
   connectedParticipants: 118,
   sessionId: "5H7D-A2",
   lifecycle: "active",
@@ -151,6 +152,27 @@ describe("Admin operations UI", () => {
     await act(async () => { button("Skip current phase").click(); });
     await flush();
     expect(document.querySelector('[role="alert"]')?.textContent).toContain("server refused this action");
+  });
+
+  it("surfaces a blocked phase video as a live operational failure", async () => {
+    sessionStorage.setItem("admin-token", "operator-secret");
+    createAdminFetch({
+      status: {
+        ...activeStatus,
+        displayPlaybackIssue: {
+          status: "autoplay-blocked",
+          mediaId: "media/intro.mp4",
+          detail: "NotAllowedError: User gesture required",
+          reportedAt: 1_000,
+        },
+      },
+    });
+
+    await renderApp();
+
+    expect(document.body.textContent).toContain("Playback issue");
+    expect(document.body.textContent).toContain("AUTOPLAY-BLOCKED");
+    expect(document.body.textContent).toContain("media/intro.mp4: NotAllowedError: User gesture required");
   });
 
   it("reports authentication failures without exposing operational placeholders", async () => {
