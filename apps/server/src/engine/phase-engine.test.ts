@@ -308,6 +308,26 @@ describe("PhaseEngine lifecycle", () => {
     expect(checkpoints.at(-1)?.reason).toBe("interactive-idle-timeout");
   });
 
+  it("cancels the lobby when the last participant disconnects", () => {
+    let now = 1_000;
+    const checkpoints: PhaseCheckpoint[] = [];
+    const { engine, registry } = setup({ now: () => now, checkpoints });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket);
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.lifecycleState).toBe("lobby");
+
+    now = 1_050;
+    registry.releaseSocket(phone as unknown as WebSocket, now);
+    engine.socketClosed(phone as unknown as WebSocket);
+
+    expect(engine.lifecycleState).toBe("idle");
+    expect(engine.currentSessionId).toBe("idle");
+    expect(checkpoints.at(-1)?.reason).toBe("lobby-empty");
+  });
+
   it("emits one deadline event and checkpoints transitions", () => {
     let now = 1_000;
     const checkpoints: PhaseCheckpoint[] = [];

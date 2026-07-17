@@ -9,9 +9,13 @@ import type { ServerClock } from "../lib/serverClock.js";
 export function Countdown({
   clock,
   deadlineAt,
+  className,
+  minimumSeconds = 0,
 }: {
   clock: ServerClock;
   deadlineAt: number;
+  className?: string;
+  minimumSeconds?: number;
 }) {
   const [remainingMs, setRemainingMs] = useState(() =>
     clock.remainingUntil(deadlineAt),
@@ -25,5 +29,9 @@ export function Countdown({
     return () => clearInterval(timer);
   }, [clock, deadlineAt]);
 
-  return <div className="countdown">{Math.ceil(remainingMs / 1000)}</div>;
+  return (
+    <div className={["countdown", className].filter(Boolean).join(" ")}>
+      {Math.max(minimumSeconds, Math.ceil(remainingMs / 1000))}
+    </div>
+  );
 }

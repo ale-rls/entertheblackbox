@@ -379,6 +379,9 @@ export class PhaseEngine {
       this.displayDisconnectedAt = this.now();
       this.displayHeartbeatAt = null;
     }
+    if (this.lifecycle === "lobby" && this.registry.connectedCount === 0) {
+      this.abortToIdle("lobby-empty", this.now());
+    }
   }
 
   handleClientMessage(message: ClientToServerMessage, socket: WebSocket, _request?: IncomingMessage): void {
