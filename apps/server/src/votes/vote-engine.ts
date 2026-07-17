@@ -5,6 +5,7 @@ import type {
 } from "@smartphonecracy/scenario";
 import {
   countPositionQuadrants,
+  DEFAULT_INSTALLATION_POLICY,
   materializePositionStatus,
   resolvePositionPlurality,
   resolvePositionFixedTransition,
@@ -124,7 +125,9 @@ export function resolveSnapshot(
 
 export class VoteEngine {
   private readonly onSnapshotEnqueued: ((snapshot: FinalVoteSnapshot) => void) | undefined;
+  private readonly heartbeatRetentionMs: number;
   private readonly heartbeatTimes = new Map<string, number>();
+  private nextHeartbeatPruneAt: number | null = null;
   private question: {
     sessionId: string;
     question: PositionQuestionPhase;
@@ -137,7 +140,13 @@ export class VoteEngine {
   } | null = null;
   private _lastSnapshot: FinalVoteSnapshot | null = null;
 
-  constructor(options: { onSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void } = {}) {
+  constructor(options: {
+    heartbeatRetentionMs?: number;
+    onSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
+  } = {}) {
+    this.heartbeatRetentionMs = options.heartbeatRetentionMs
+      ?? DEFAULT_INSTALLATION_POLICY.participantLeaseTtlMs;
+    if (this.heartbeatRetentionMs <= 0) throw new Error("heartbeatRetentionMs must be positive");
     this.onSnapshotEnqueued = options.onSnapshotEnqueued;
   }
 
@@ -153,10 +162,11 @@ export class VoteEngine {
     phaseDeadline: number;
     participants: readonly VoteParticipantSeed[];
   }): void {
+    this.pruneHeartbeatTimes(options.phaseStartedAt);
     const votes = new Map<string, MutableVote>();
     for (const participant of options.participants) {
       const heartbeat = this.heartbeatTimes.get(participant.participantId) ?? participant.lastHeartbeatAt;
-      if (heartbeat !== null) this.heartbeatTimes.set(participant.participantId, heartbeat);
+      if (heartbeat !== null) this.rememberHeartbeat(participant.participantId, heartbeat);
       votes.set(participant.participantId, {
         participantId: participant.participantId,
         connected: participant.connected,
@@ -179,12 +189,13 @@ export class VoteEngine {
   }
 
   addParticipant(participant: VoteParticipantSeed, now: number): void {
+    this.pruneHeartbeatTimes(now);
     const question = this.question;
     if (!question || question.finalized !== null || now >= question.phaseDeadline) return;
     const heartbeat = this.heartbeatTimes.get(participant.participantId)
       ?? participant.lastHeartbeatAt
       ?? now;
-    this.heartbeatTimes.set(participant.participantId, heartbeat);
+    this.rememberHeartbeat(participant.participantId, heartbeat);
     const existing = question.votes.get(participant.participantId);
     if (existing) {
       existing.connected = participant.connected;
@@ -202,7 +213,8 @@ export class VoteEngine {
   }
 
   recordHeartbeat(participantId: string, now: number): boolean {
-    this.heartbeatTimes.set(participantId, now);
+    this.pruneHeartbeatTimes(now);
+    this.rememberHeartbeat(participantId, now);
     const question = this.question;
     if (!question || question.finalized !== null || now >= question.phaseDeadline) return false;
     const vote = question.votes.get(participantId);
@@ -222,7 +234,8 @@ export class VoteEngine {
     vote.y = clampCoordinate(y);
     vote.lastInputAt = now;
     vote.lastHeartbeatAt = now;
-    this.heartbeatTimes.set(participantId, now);
+    this.pruneHeartbeatTimes(now);
+    this.rememberHeartbeat(participantId, now);
     return true;
   }
 
@@ -290,6 +303,29 @@ export class VoteEngine {
 
   clearQuestion(): void {
     this.question = null;
+  }
+
+  private rememberHeartbeat(participantId: string, heartbeatAt: number): void {
+    this.heartbeatTimes.set(participantId, heartbeatAt);
+    const expiresAt = heartbeatAt + this.heartbeatRetentionMs;
+    if (this.nextHeartbeatPruneAt === null || expiresAt < this.nextHeartbeatPruneAt) {
+      this.nextHeartbeatPruneAt = expiresAt;
+    }
+  }
+
+  private pruneHeartbeatTimes(now: number): void {
+    if (this.nextHeartbeatPruneAt === null || now < this.nextHeartbeatPruneAt) return;
+    const cutoff = now - this.heartbeatRetentionMs;
+    let nextPruneAt: number | null = null;
+    for (const [participantId, heartbeatAt] of this.heartbeatTimes) {
+      if (heartbeatAt <= cutoff) {
+        this.heartbeatTimes.delete(participantId);
+        continue;
+      }
+      const expiresAt = heartbeatAt + this.heartbeatRetentionMs;
+      if (nextPruneAt === null || expiresAt < nextPruneAt) nextPruneAt = expiresAt;
+    }
+    this.nextHeartbeatPruneAt = nextPruneAt;
   }
 
   private statusForVotes(
