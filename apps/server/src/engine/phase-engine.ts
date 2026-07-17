@@ -7,6 +7,8 @@ import {
   type ServerToClientMessage,
 } from "@smartphonecracy/protocol";
 import type { Scenario, Phase } from "@smartphonecracy/scenario";
+import { DEFAULT_INSTALLATION_POLICY } from "@smartphonecracy/shared";
+import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { WebSocket } from "ws";
 import type { ParticipantRecord, ParticipantRegistry } from "../admission/index.js";
@@ -40,6 +42,12 @@ export const DEFAULT_PHASE_ENGINE_POLICY: PhaseEnginePolicy = {
 
 const QUESTION_STATUS_INTERVAL_MS = 250;
 
+function tokensMatch(supplied: string, expected: string): boolean {
+  const suppliedBuffer = Buffer.from(supplied);
+  const expectedBuffer = Buffer.from(expected);
+  return suppliedBuffer.length === expectedBuffer.length && timingSafeEqual(suppliedBuffer, expectedBuffer);
+}
+
 export type PhaseCheckpoint = {
   kind: "transition" | "recovery";
   reason: string;
@@ -64,6 +72,7 @@ export type PhaseEngineOptions = {
   installationId: string;
   roomId: string;
   displayToken: string;
+  participantLeaseTtlMs?: number;
   policy?: Partial<PhaseEnginePolicy>;
   now?: () => number;
   sessionIdFactory?: () => string;
@@ -136,12 +145,17 @@ export class PhaseEngine {
     this.sessionIdFactory = options.sessionIdFactory ?? (() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     this.onCheckpoint = options.onCheckpoint;
     this.onPhaseDeadline = options.onPhaseDeadline;
-    this.votes = options.onVoteSnapshotEnqueued === undefined
-      ? new VoteEngine()
-      : new VoteEngine({ onSnapshotEnqueued: options.onVoteSnapshotEnqueued });
+    this.votes = new VoteEngine({
+      heartbeatRetentionMs: options.participantLeaseTtlMs
+        ?? DEFAULT_INSTALLATION_POLICY.participantLeaseTtlMs,
+      ...(options.onVoteSnapshotEnqueued === undefined
+        ? {}
+        : { onSnapshotEnqueued: options.onVoteSnapshotEnqueued }),
+    });
     this.cursors = new CursorPipeline({
       sendCursors: (message) => this.sendToDisplay(message),
       sendPresence: (message) => this.broadcast(message),
+      canSendCursors: () => this.displaySocket !== undefined,
     });
     this.qr = options.qr === undefined ? null : new QrGrantPushLoop({
       ...options.qr,
@@ -202,6 +216,9 @@ export class PhaseEngine {
     const phase = this.currentPhase();
     if (phase.kind === "video") return this.advanceTo(phase.next, now, "admin-skip");
     if (phase.kind === "position-question") {
+      if (this.questionResolutionTarget !== null) {
+        return this.advanceTo(this.questionResolutionTarget, now, "admin-skip");
+      }
       this.resolveQuestionAtDeadline(now, phase);
       return { ok: true };
     }
@@ -391,7 +408,7 @@ export class PhaseEngine {
         if (
           message.installationId !== this.installationId ||
           message.roomId !== this.roomId ||
-          message.displayToken !== this.displayToken
+          !tokensMatch(message.displayToken, this.displayToken)
         ) {
           this.close(socket, 1008, "invalid display credentials");
           return;
@@ -513,6 +530,7 @@ export class PhaseEngine {
       this.close(this.displaySocket, 4002, "display replaced");
     }
     this.displaySocket = socket;
+    this.cursors.requestSnapshot();
     this.displayHeartbeatAt = this.now();
     this.displayPlaybackIssue = null;
     this.clients.add(socket);

@@ -4,13 +4,12 @@ import { Pool } from "pg";
 import type { Scenario } from "@smartphonecracy/scenario";
 import type { ServerConfig } from "../config.js";
 import { InstallationPersistence } from "./persistence.js";
-import { PostgresPersistenceExecutor, type PostgresQueryClient } from "./postgres-executor.js";
+import { PostgresPersistenceExecutor, type PostgresConnectionPool } from "./postgres-executor.js";
 import { PersistenceWriteQueue, type PersistenceQueueHealthEvent } from "./write-queue.js";
 
 const migrationPath = fileURLToPath(new URL("../../../../infra/migrations/001_persistence.sql", import.meta.url));
 
-type PoolLike = {
-  connect(): Promise<PostgresQueryClient & { release(destroy?: boolean): void }>;
+type PoolLike = PostgresConnectionPool & {
   end(): Promise<void>;
 };
 
@@ -37,11 +36,10 @@ export async function createPersistenceRuntime(
   }
 
   const pool = dependencies.createPool?.(config.databaseUrl) ?? new Pool({ connectionString: config.databaseUrl });
-  const client = await pool.connect();
   try {
     const migration = await (dependencies.readMigration?.() ?? readFile(migrationPath, "utf8"));
-    await client.query(migration);
-    const executor = new PostgresPersistenceExecutor(client);
+    await pool.query(migration);
+    const executor = new PostgresPersistenceExecutor(pool);
     let persistence: InstallationPersistence | undefined;
     const queue = new PersistenceWriteQueue(executor, {
       onHealthEvent: (event) => {
@@ -68,14 +66,12 @@ export async function createPersistenceRuntime(
       persistence,
       close: () => {
         closePromise ??= (async () => {
-          client.release(true);
           await pool.end();
         })();
         return closePromise;
       },
     };
   } catch (error) {
-    client.release();
     await pool.end();
     throw error;
   }

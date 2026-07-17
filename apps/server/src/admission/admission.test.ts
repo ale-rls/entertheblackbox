@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseServerMessage } from "@smartphonecracy/protocol";
 import { z } from "zod";
 import { AdmissionController, InMemoryIpRateLimiter, issueJoinGrant, issueParticipantLease, verifyJoinGrant, verifyParticipantLease } from "./index.js";
@@ -93,6 +93,46 @@ describe("HMAC admission tokens", () => {
 });
 
 describe("participant admission", () => {
+  it("catches client message handler failures and closes only the offending socket", async () => {
+    const failure = new Error("bad phase target");
+    const reported: unknown[] = [];
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+
+    try {
+      const admission = controller({
+        onClientMessage: async () => {
+          await Promise.resolve();
+          throw failure;
+        },
+        onMessageError: (error) => reported.push(error),
+      });
+      const offendingSocket = socket();
+      const unaffectedSocket = socket();
+      admission.handleConnection(offendingSocket, request());
+      admission.handleConnection(unaffectedSocket, request("198.51.100.2"));
+      offendingSocket.emit("message", Buffer.from(JSON.stringify({
+        t: "ping",
+        v: 2,
+        clientTime: 123,
+      })));
+
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      expect(reported).toEqual([failure]);
+      expect((offendingSocket as unknown as MockSocket).closeCalls).toEqual([
+        { code: 1011, reason: "client message handling failed" },
+      ]);
+      expect((unaffectedSocket as unknown as MockSocket).readyState).toBe(1);
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
   it("rejects new joins during an active show but permits a known lease to reconnect", () => {
     let newParticipantsAllowed = true;
     const admission = controller({ isNewParticipantAllowed: () => newParticipantsAllowed });
@@ -169,6 +209,34 @@ describe("participant admission", () => {
       t: "reload", v: 2, minVersion: "test", reason: "assets",
     });
     expect(messages).toContain("display_join");
+  });
+
+  it("JSON-parses a valid non-join socket frame only once", () => {
+    const messages: string[] = [];
+    const admission = controller({
+      buildVersion: "test",
+      onClientMessage: (message) => messages.push(message.t),
+    });
+    const s = socket();
+    admission.handleConnection(s, request());
+    const parseSpy = vi.spyOn(JSON, "parse");
+
+    try {
+      s.emit("message", Buffer.from(JSON.stringify({
+        t: "input",
+        v: 2,
+        sessionId: "session-1",
+        phaseEpoch: 1,
+        seq: 1,
+        x: 0.25,
+        y: 0.75,
+      })));
+
+      expect(messages).toEqual(["input"]);
+      expect(parseSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      parseSpy.mockRestore();
+    }
   });
 
   it("sends reload to an old join message that lacks clientVersion before rejecting it", () => {

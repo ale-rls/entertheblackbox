@@ -41,6 +41,7 @@ export type AdmissionControllerOptions = {
   onClientMessage?: (message: ClientToServerMessage, socket: WebSocket, request: IncomingMessage) => void;
   onParticipantJoin?: (participant: ParticipantRecord, socket: WebSocket) => void;
   onSocketClosed?: (socket: WebSocket) => void;
+  onMessageError?: (error: unknown, socket: WebSocket, request: IncomingMessage) => void;
 };
 
 type SocketState = { joined: boolean };
@@ -51,7 +52,18 @@ function asBytes(raw: RawData): unknown {
   return raw;
 }
 
-function joinMetadata(raw: unknown): { clientVersion: string | null; protocolVersion: number } | undefined {
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return typeof value === "object" && value !== null && "then" in value && typeof value.then === "function";
+}
+
+type JoinMetadata = { clientVersion: string | null; protocolVersion: number };
+
+function joinMetadata(message: ClientToServerMessage): JoinMetadata | undefined {
+  if (message.t !== "join" && message.t !== "display_join") return undefined;
+  return { clientVersion: message.clientVersion, protocolVersion: message.v };
+}
+
+function legacyJoinMetadata(raw: unknown): JoinMetadata | undefined {
   try {
     const value = typeof raw === "string"
       ? JSON.parse(raw)
@@ -88,6 +100,10 @@ export class AdmissionController {
     this.rateLimiter = options.rateLimiter ?? new InMemoryIpRateLimiter();
   }
 
+  get participantLeaseTtlMs(): number {
+    return this.options.policy.participantLeaseTtlMs;
+  }
+
   issueJoinGrant(now = this.now()): { token: string; claims: JoinGrantClaims } {
     return issueJoinGrant({
       secret: this.options.secret,
@@ -101,7 +117,9 @@ export class AdmissionController {
   handleConnection(socket: WebSocket, request: IncomingMessage): void {
     this.socketStates.set(socket, { joined: false });
     socket.on("message", (raw: RawData) => {
-      void this.handleRaw(socket, request, asBytes(raw));
+      void this.handleRaw(socket, request, asBytes(raw)).catch((error: unknown) => {
+        this.handleMessageError(error, socket, request);
+      });
     });
     socket.on("close", () => {
       this.registry.releaseSocket(socket, this.now());
@@ -114,25 +132,31 @@ export class AdmissionController {
   }
 
   private async handleRaw(socket: WebSocket, request: IncomingMessage, raw: unknown): Promise<void> {
-    const metadata = joinMetadata(raw);
+    const parsed = parseClientMessage(raw);
+    const buildVersion = this.options.buildVersion;
+    const metadata = buildVersion === undefined
+      ? undefined
+      : parsed.ok
+        ? joinMetadata(parsed.message)
+        : legacyJoinMetadata(raw);
     if (
-      this.options.buildVersion !== undefined &&
+      buildVersion !== undefined &&
       metadata !== undefined &&
-      metadata.clientVersion !== this.options.buildVersion
+      metadata.clientVersion !== buildVersion
     ) {
       this.send(socket, {
         t: "reload",
         v: metadata.protocolVersion === 1 ? 1 : PROTOCOL_VERSION,
-        minVersion: this.options.buildVersion,
+        minVersion: buildVersion,
         reason: "assets",
       });
     }
-    const parsed = parseClientMessage(raw);
     if (!parsed.ok) {
       this.close(socket, 1008, "invalid client message");
       return;
     }
-    this.options.onClientMessage?.(parsed.message, socket, request);
+    const clientMessageResult = this.options.onClientMessage?.(parsed.message, socket, request) as unknown;
+    if (isPromiseLike(clientMessageResult)) await clientMessageResult;
     if (parsed.message.t === "ping") {
       this.send(socket, {
         t: "pong",
@@ -227,8 +251,39 @@ export class AdmissionController {
       participantLease: issuedLease.token,
       leaseExpiresAt: issuedLease.claims.expiresAt,
     });
-    this.options.onParticipantJoin?.(admitted.participant, socket);
-    await Promise.resolve();
+    const participantJoinResult = this.options.onParticipantJoin?.(admitted.participant, socket) as unknown;
+    if (isPromiseLike(participantJoinResult)) await participantJoinResult;
+  }
+
+  private handleMessageError(error: unknown, socket: WebSocket, request: IncomingMessage): void {
+    try {
+      if (this.options.onMessageError) {
+        this.options.onMessageError(error, socket, request);
+      } else {
+        console.error("websocket client message handling failed", error);
+      }
+    } catch (reportingError) {
+      try {
+        console.error("websocket client message error reporting failed", reportingError, error);
+      } catch {
+        // The message boundary must remain non-throwing even if stderr is unavailable.
+      }
+    }
+
+    try {
+      this.close(socket, 1011, "client message handling failed");
+    } catch (closeError) {
+      try {
+        console.error("failed to close websocket after client message error", closeError);
+      } catch {
+        // Closing this socket is best-effort after an application error.
+      }
+      try {
+        socket.terminate();
+      } catch {
+        // Nothing else can safely be done for this socket.
+      }
+    }
   }
 
   private send(socket: WebSocket, message: IdentityMessage | JoinRejectedMessage | ReloadMessage | { t: "pong"; v: typeof PROTOCOL_VERSION; echoClientTime: number; serverTime: number }): void {

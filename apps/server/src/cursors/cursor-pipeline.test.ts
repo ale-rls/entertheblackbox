@@ -30,15 +30,71 @@ describe("CursorPipeline", () => {
     expect(counts).toEqual([1, 2, 1]);
   });
 
-  it("batches the complete latest store at 25 Hz", () => {
+  it("suppresses empty and unchanged ticks, then emits changed state", () => {
     vi.useFakeTimers();
-    const ticks: number[] = [];
-    const pipeline = new CursorPipeline({ sendCursors: (message) => ticks.push(message.tick), sendPresence: () => {} });
+    const batches: Array<{ tick: number; cursors: Array<{ x: number; y: number }> }> = [];
+    const pipeline = new CursorPipeline({
+      sendCursors: (message) => batches.push({ tick: message.tick, cursors: message.cursors }),
+      sendPresence: () => {},
+    });
     pipeline.start();
     pipeline.start();
     vi.advanceTimersByTime(CURSOR_TICK_INTERVAL_MS * 3);
+    expect(batches).toEqual([]);
+
+    pipeline.join("p1", "red");
+    vi.advanceTimersByTime(CURSOR_TICK_INTERVAL_MS);
+    vi.advanceTimersByTime(CURSOR_TICK_INTERVAL_MS * 2);
+    expect(batches).toEqual([{ tick: 0, cursors: [{ clientId: "p1", color: "red", x: 0.5, y: 0.5 }] }]);
+
+    expect(pipeline.recordInput("p1", 1, 0.5, 0.5)).toBe(true);
+    vi.advanceTimersByTime(CURSOR_TICK_INTERVAL_MS);
+    expect(batches).toHaveLength(1);
+
+    expect(pipeline.recordInput("p1", 2, 0.75, 0.25)).toBe(true);
+    vi.advanceTimersByTime(CURSOR_TICK_INTERVAL_MS);
     pipeline.stop();
     vi.advanceTimersByTime(CURSOR_TICK_INTERVAL_MS);
-    expect(ticks).toEqual([0, 1, 2]);
+    expect(batches).toEqual([
+      { tick: 0, cursors: [{ clientId: "p1", color: "red", x: 0.5, y: 0.5 }] },
+      { tick: 1, cursors: [{ clientId: "p1", color: "red", x: 0.75, y: 0.25 }] },
+    ]);
+  });
+
+  it("emits one empty snapshot when the final cursor leaves", () => {
+    const batches: unknown[] = [];
+    const pipeline = new CursorPipeline({ sendCursors: (message) => batches.push(message), sendPresence: () => {} });
+    pipeline.join("p1", "red");
+    pipeline.tick();
+    pipeline.leave("p1");
+    pipeline.tick();
+    pipeline.tick();
+    expect(batches).toEqual([
+      { t: "cursors", v: 2, tick: 0, cursors: [{ clientId: "p1", color: "red", x: 0.5, y: 0.5 }] },
+      { t: "cursors", v: 2, tick: 1, cursors: [] },
+    ]);
+  });
+
+  it("defers dirty state until a cursor recipient is available", () => {
+    const ticks: number[] = [];
+    let canSend = false;
+    const pipeline = new CursorPipeline({
+      sendCursors: (message) => ticks.push(message.tick),
+      sendPresence: () => {},
+      canSendCursors: () => canSend,
+    });
+    pipeline.join("p1", "red");
+    pipeline.tick();
+    expect(ticks).toEqual([]);
+    canSend = true;
+    pipeline.tick();
+    expect(ticks).toEqual([0]);
+
+    canSend = false;
+    pipeline.requestSnapshot();
+    pipeline.tick();
+    canSend = true;
+    pipeline.tick();
+    expect(ticks).toEqual([0, 1]);
   });
 });

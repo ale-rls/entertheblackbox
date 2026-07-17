@@ -4,6 +4,10 @@ import { z } from "zod";
 
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
+const DEVELOPMENT_DISPLAY_TOKEN = "dev-display-token";
+const DEVELOPMENT_ADMIN_TOKEN = "dev-admin-token-please-change";
+const DEVELOPMENT_JOIN_GRANT_SECRET = "dev-join-grant-secret-please-change";
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   HOST: z.string().min(1).default("0.0.0.0"),
@@ -14,12 +18,12 @@ const envSchema = z.object({
   PERSISTENCE_FLUSH_TIMEOUT_MS: z.coerce.number().int().positive().default(5_000),
   INSTALLATION_ID: z.string().min(1).default("dev-installation"),
   ROOM_ID: z.string().min(1).default("main"),
-  DISPLAY_TOKEN: z.string().min(1).default("dev-display-token"),
-  ADMIN_TOKEN: z.string().min(16).default("dev-admin-token-please-change"),
+  DISPLAY_TOKEN: z.string().min(1).default(DEVELOPMENT_DISPLAY_TOKEN),
+  ADMIN_TOKEN: z.string().min(16).default(DEVELOPMENT_ADMIN_TOKEN),
   ADMIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(600),
   ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES: z.coerce.number().int().positive().default(30),
   ADMIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
-  JOIN_GRANT_SECRET: z.string().min(16).default("dev-join-grant-secret-please-change"),
+  JOIN_GRANT_SECRET: z.string().min(16).default(DEVELOPMENT_JOIN_GRANT_SECRET),
   TRUST_PROXY: z.enum(["true", "false"]).default("false"),
   ALLOW_LATE_JOIN: z.enum(["true", "false"]).default("false"),
   PHONE_JOIN_BASE_URL: z.string().url().default("http://localhost:5174/"),
@@ -79,8 +83,15 @@ export function loadConfig(
   }
 
   const value = parsed.data;
-  if (value.NODE_ENV === "production" && value.ADMIN_TOKEN === "dev-admin-token-please-change") {
-    throw new ConfigError("invalid server configuration: ADMIN_TOKEN must be set in production");
+  if (value.NODE_ENV === "production") {
+    const defaultSecret = [
+      ["ADMIN_TOKEN", value.ADMIN_TOKEN, DEVELOPMENT_ADMIN_TOKEN],
+      ["JOIN_GRANT_SECRET", value.JOIN_GRANT_SECRET, DEVELOPMENT_JOIN_GRANT_SECRET],
+      ["DISPLAY_TOKEN", value.DISPLAY_TOKEN, DEVELOPMENT_DISPLAY_TOKEN],
+    ].find(([, configured, developmentDefault]) => configured === developmentDefault);
+    if (defaultSecret !== undefined) {
+      throw new ConfigError(`invalid server configuration: ${defaultSecret[0]} must be set in production`);
+    }
   }
   if (value.DATABASE_URL !== undefined && value.INSTALLATION_CLOSES_AT === undefined) {
     throw new ConfigError("invalid server configuration: INSTALLATION_CLOSES_AT is required when DATABASE_URL is set");
