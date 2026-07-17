@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { parseServerMessage } from "@smartphonecracy/protocol";
 import { z } from "zod";
 import { AdmissionController, InMemoryIpRateLimiter, issueJoinGrant, issueParticipantLease, verifyJoinGrant, verifyParticipantLease } from "./index.js";
@@ -209,6 +209,34 @@ describe("participant admission", () => {
       t: "reload", v: 2, minVersion: "test", reason: "assets",
     });
     expect(messages).toContain("display_join");
+  });
+
+  it("JSON-parses a valid non-join socket frame only once", () => {
+    const messages: string[] = [];
+    const admission = controller({
+      buildVersion: "test",
+      onClientMessage: (message) => messages.push(message.t),
+    });
+    const s = socket();
+    admission.handleConnection(s, request());
+    const parseSpy = vi.spyOn(JSON, "parse");
+
+    try {
+      s.emit("message", Buffer.from(JSON.stringify({
+        t: "input",
+        v: 2,
+        sessionId: "session-1",
+        phaseEpoch: 1,
+        seq: 1,
+        x: 0.25,
+        y: 0.75,
+      })));
+
+      expect(messages).toEqual(["input"]);
+      expect(parseSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      parseSpy.mockRestore();
+    }
   });
 
   it("sends reload to an old join message that lacks clientVersion before rejecting it", () => {
