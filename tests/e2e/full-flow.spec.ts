@@ -141,6 +141,22 @@ test.describe("full scenario flow", () => {
       .poll(async () => (await adminStatus(server.baseUrl)).lifecycle, { timeout: 30_000 })
       .toBe("idle");
     await expect(display.locator(".idle")).toBeVisible();
+    const returnedAttractVideo = display.locator(".idle-attract-video");
+    await expect(returnedAttractVideo).toBeVisible();
+    await expect.poll(async () => returnedAttractVideo.evaluate((video: HTMLVideoElement) => ({
+      hasError: video.error !== null,
+      hasDecodedFrame: video.videoWidth > 0 && video.videoHeight > 0,
+      isPlaying: !video.paused && !video.ended,
+    }))).toEqual({ hasError: false, hasDecodedFrame: true, isPlaying: true });
+    const returnedAttractStartTime = await returnedAttractVideo.evaluate(
+      (video: HTMLVideoElement) => video.currentTime,
+    );
+    await expect.poll(
+      async () => returnedAttractVideo.evaluate(
+        (video: HTMLVideoElement, startTime) => Math.abs(video.currentTime - startTime),
+        returnedAttractStartTime,
+      ),
+    ).toBeGreaterThan(0.1);
 
     await phone.close();
     await display.close();

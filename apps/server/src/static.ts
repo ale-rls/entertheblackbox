@@ -42,6 +42,7 @@ async function sendBundleFile(
   reply: FastifyReply,
   root: string,
   requestedPath: string,
+  rangeHeader: string | undefined,
 ): Promise<void> {
   const relative = requestedPath === "" ? "index.html" : requestedPath;
   const rootPath = resolve(root);
@@ -51,10 +52,16 @@ async function sendBundleFile(
     return;
   }
 
+  const extension = extname(filePath).toLowerCase();
+  if (contentTypes[extension]?.startsWith("video/")) {
+    await sendRangedFile(reply, filePath, rangeHeader, "asset_not_found");
+    return;
+  }
+
   await sendFile(
     reply,
     filePath,
-    extname(filePath) === ".html" ? "no-cache" : "public, max-age=31536000, immutable",
+    extension === ".html" ? "no-cache" : "public, max-age=31536000, immutable",
     "asset_not_found",
   );
 }
@@ -87,23 +94,24 @@ function parseByteRange(header: string, fileSize: number): ByteRange | null {
   return { start, end: Math.min(requestedEnd, fileSize - 1) };
 }
 
-async function sendMediaFile(
+async function sendRangedFile(
   reply: FastifyReply,
   filePath: string,
   rangeHeader: string | undefined,
+  notFoundError: string,
 ): Promise<void> {
   let fileSize: number;
   try {
     const fileStat = await stat(filePath);
     if (!fileStat.isFile()) {
-      await reply.code(404).send({ error: "media_not_found" });
+      await reply.code(404).send({ error: notFoundError });
       return;
     }
     fileSize = fileStat.size;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT" || code === "EISDIR") {
-      await reply.code(404).send({ error: "media_not_found" });
+      await reply.code(404).send({ error: notFoundError });
       return;
     }
     throw error;
@@ -156,7 +164,7 @@ export function registerMediaRoutes(
       return;
     }
 
-    await sendMediaFile(reply, filePath, request.headers.range);
+    await sendRangedFile(reply, filePath, request.headers.range, "media_not_found");
   });
 }
 
@@ -169,7 +177,7 @@ export function registerBundleRoutes(
   for (const role of ["display", "phone", "admin"] as const) {
     app.get(`/${role}`, async (_request, reply) => reply.redirect(`/${role}/`));
     app.get<{ Params: { "*": string } }>(`/${role}/*`, async (request, reply) => {
-      await sendBundleFile(reply, bundles[role], request.params["*"]);
+      await sendBundleFile(reply, bundles[role], request.params["*"], request.headers.range);
     });
   }
 }

@@ -36,6 +36,13 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
 
+  // Video responses, including bundled attract-loop MP4s under /assets/,
+  // must stay out of the shell cache. Browsers may issue range requests for
+  // media, which Cache Storage's whole-response handling cannot satisfy.
+  if (event.request.destination === "video" || url.pathname.toLowerCase().endsWith(".mp4")) {
+    return;
+  }
+
   // App shell ONLY: hashed assets and page navigations. Everything else
   // (media, media-manifest, /api/*, /ws, health endpoints) passes
   // through untouched — the SW must never sit between the app and the
