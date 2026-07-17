@@ -21,9 +21,26 @@ export type PersistenceRuntime = {
 export type PersistenceRuntimeDependencies = {
   createPool?: (connectionString: string) => PoolLike;
   readMigration?: () => Promise<string>;
-  log?: (event: PersistenceQueueHealthEvent) => void;
+  log?: (event: PersistenceRuntimeEvent) => void;
   now?: () => number;
+  retentionCleanupIntervalMs?: number;
+  setTimeout?: typeof setTimeout;
+  clearTimeout?: typeof clearTimeout;
 };
+
+export type RetentionCleanupEvent =
+  | { status: "retention-cleanup-succeeded"; cutoff: string; deletedRows: number }
+  | { status: "retention-cleanup-failed"; cutoff: string; error: { name: string; message: string } };
+
+export type PersistenceRuntimeEvent = PersistenceQueueHealthEvent | RetentionCleanupEvent;
+
+const DAY_MS = 86_400_000;
+
+function errorDetails(error: unknown): { name: string; message: string } {
+  return error instanceof Error
+    ? { name: error.name, message: error.message }
+    : { name: "Error", message: String(error) };
+}
 
 export async function createPersistenceRuntime(
   config: ServerConfig,
@@ -61,11 +78,55 @@ export async function createPersistenceRuntime(
     await persistence.flush();
     await persistence.recoverAfterCrash(dependencies.now?.() ?? Date.now());
     await persistence.flush();
+    const now = dependencies.now ?? Date.now;
+    const schedule = dependencies.setTimeout ?? setTimeout;
+    const cancel = dependencies.clearTimeout ?? clearTimeout;
+    const cleanupIntervalMs = dependencies.retentionCleanupIntervalMs ?? DAY_MS;
+    let cleanupTimer: ReturnType<typeof setTimeout> | null = null;
+    let cleanupPromise: Promise<void> | null = null;
+    let closed = false;
+    const emit = (event: PersistenceRuntimeEvent): void => {
+      try { dependencies.log?.(event); } catch { /* observability must not stop cleanup or startup */ }
+    };
+
+    const runRetentionCleanup = async (): Promise<void> => {
+      const cutoff = now();
+      const cutoffIso = new Date(cutoff).toISOString();
+      try {
+        const deletedRows = await persistence.deleteExpiredParticipantData(cutoff);
+        emit({ status: "retention-cleanup-succeeded", cutoff: cutoffIso, deletedRows });
+      } catch (error) {
+        emit({ status: "retention-cleanup-failed", cutoff: cutoffIso, error: errorDetails(error) });
+      }
+    };
+
+    const scheduleNextCleanup = (): void => {
+      if (closed) return;
+      cleanupTimer = schedule(() => {
+        cleanupTimer = null;
+        cleanupPromise = runRetentionCleanup().finally(() => {
+          cleanupPromise = null;
+          scheduleNextCleanup();
+        });
+      }, cleanupIntervalMs);
+      cleanupTimer.unref?.();
+    };
+
+    // Run once on every successful persistence boot, then schedule from the
+    // completion of each run so a slow database can never overlap cleanups.
+    await runRetentionCleanup();
+    scheduleNextCleanup();
     let closePromise: Promise<void> | null = null;
     return {
       persistence,
       close: () => {
         closePromise ??= (async () => {
+          closed = true;
+          if (cleanupTimer !== null) {
+            cancel(cleanupTimer);
+            cleanupTimer = null;
+          }
+          await cleanupPromise;
           await pool.end();
         })();
         return closePromise;
