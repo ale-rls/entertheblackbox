@@ -30,6 +30,19 @@ export function IdleAttract({
   );
 
   useEffect(() => {
+    const video = videoRef.current;
+    if (video === null) return;
+    video.currentTime = 0;
+    try {
+      void video.play()?.catch((error: unknown) => {
+        console.warn("display: failed to restart idle attract video:", error);
+      });
+    } catch (error) {
+      console.warn("display: failed to restart idle attract video:", error);
+    }
+  }, []);
+
+  useEffect(() => {
     const evaluate = () => setVisible(shouldShowGrant(grant, clock.now(), qrHidden));
     evaluate();
     const timer = setInterval(evaluate, CHECK_INTERVAL_MS);

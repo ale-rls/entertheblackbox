@@ -121,6 +121,29 @@ export class ParticipantRegistry {
     }
   }
 
+  /** Remove every visit lease and close its live socket. */
+  evictAll(code: number, reason: string): number {
+    const sockets = [...this.participants.values()]
+      .map((participant) => participant.socket)
+      .filter((socket): socket is WebSocket => socket !== undefined);
+    const evicted = this.participants.size;
+    this.participants.clear();
+    this.connectedLeases.clear();
+    for (const socket of sockets) {
+      if (!socketIsConnected(socket)) continue;
+      try {
+        socket.close(code, reason);
+      } catch {
+        try {
+          socket.terminate();
+        } catch {
+          // The registry is already cleared; another phone can still be closed.
+        }
+      }
+    }
+    return evicted;
+  }
+
   pruneExpired(now = Date.now()): void {
     for (const [lease, participant] of this.participants) {
       if (participant.leaseExpiresAt <= now) {

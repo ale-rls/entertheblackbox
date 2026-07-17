@@ -48,6 +48,7 @@ export function PhaseVideo({
       ref={diagnostics.ref}
       src={src}
       autoPlay
+      muted
       onEnded={handleEnded}
       onPlaying={diagnostics.onPlaying}
       onStalled={diagnostics.onStalled}

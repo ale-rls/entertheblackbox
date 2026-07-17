@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
 import { describe, expect, it, vi } from "vitest";
-import { parseServerMessage } from "@smartphonecracy/protocol";
+import { parseServerMessage, SHOW_ENDED_CLOSE_CODE } from "@smartphonecracy/protocol";
 import { z } from "zod";
 import { AdmissionController, InMemoryIpRateLimiter, issueJoinGrant, issueParticipantLease, verifyJoinGrant, verifyParticipantLease } from "./index.js";
 import type { WebSocket } from "ws";
@@ -93,6 +93,37 @@ describe("HMAC admission tokens", () => {
 });
 
 describe("participant admission", () => {
+  it("evicts every phone at show end and requires a freshly issued QR grant", () => {
+    let now = 1_000;
+    const admission = controller({ now: () => now });
+    const oldGrant = admission.issueJoinGrant(now).token;
+    const first = socket();
+    const second = socket();
+    join(admission, first, oldGrant, undefined, "198.51.100.1");
+    join(admission, second, oldGrant, undefined, "198.51.100.2");
+
+    now = 2_000;
+    expect(admission.endParticipantSession(now)).toBe(2);
+    expect(admission.registry.leaseCount).toBe(0);
+    expect(admission.registry.connectedCount).toBe(0);
+    expect((first as unknown as MockSocket).closeCalls).toContainEqual({
+      code: SHOW_ENDED_CLOSE_CODE,
+      reason: "show ended",
+    });
+    expect((second as unknown as MockSocket).closeCalls).toContainEqual({
+      code: SHOW_ENDED_CLOSE_CODE,
+      reason: "show ended",
+    });
+
+    const staleQrRetry = socket();
+    join(admission, staleQrRetry, oldGrant, undefined, "198.51.100.3");
+    expect(lastMessage(staleQrRetry)).toMatchObject({ t: "join_rejected", reason: "expired_grant" });
+
+    const freshQrJoin = socket();
+    join(admission, freshQrJoin, admission.issueJoinGrant(now).token, undefined, "198.51.100.4");
+    expect(lastMessage(freshQrJoin)).toMatchObject({ t: "identity" });
+  });
+
   it("catches client message handler failures and closes only the offending socket", async () => {
     const failure = new Error("bad phase target");
     const reported: unknown[] = [];

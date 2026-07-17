@@ -3,6 +3,7 @@ import {
   encodeMessage,
   parseClientMessage,
   PROTOCOL_VERSION,
+  SHOW_ENDED_CLOSE_CODE,
   type ClientToServerMessage,
   type IdentityMessage,
   type JoinRejectedMessage,
@@ -86,6 +87,8 @@ export class AdmissionController {
   private readonly now: () => number;
   private readonly options: AdmissionControllerOptions & { policy: AdmissionPolicy };
   private readonly socketStates = new WeakMap<WebSocket, SocketState>();
+  private readonly issuedJoinGrants = new Map<string, number>();
+  private readonly revokedJoinGrants = new Map<string, number>();
 
   constructor(options: AdmissionControllerOptions) {
     this.options = {
@@ -105,13 +108,26 @@ export class AdmissionController {
   }
 
   issueJoinGrant(now = this.now()): { token: string; claims: JoinGrantClaims } {
-    return issueJoinGrant({
+    this.pruneGrantTracking(now);
+    const grant = issueJoinGrant({
       secret: this.options.secret,
       installationId: this.options.installationId,
       roomId: this.options.roomId,
       ttlMs: this.options.policy.joinGrantTtlMs,
       now,
     });
+    this.issuedJoinGrants.set(grant.claims.nonce, grant.claims.expiresAt);
+    return grant;
+  }
+
+  /** End the current visit: revoke its QR grants, drop leases, and kick phones. */
+  endParticipantSession(now = this.now()): number {
+    this.pruneGrantTracking(now);
+    for (const [nonce, expiresAt] of this.issuedJoinGrants) {
+      this.revokedJoinGrants.set(nonce, expiresAt);
+    }
+    this.issuedJoinGrants.clear();
+    return this.registry.evictAll(SHOW_ENDED_CLOSE_CODE, "show ended");
   }
 
   handleConnection(socket: WebSocket, request: IncomingMessage): void {
@@ -194,7 +210,8 @@ export class AdmissionController {
       roomId: this.options.roomId,
       now,
     });
-    if (!grant) {
+    this.pruneGrantTracking(now);
+    if (!grant || this.revokedJoinGrants.has(grant.nonce)) {
       this.send(socket, { t: "join_rejected", v: PROTOCOL_VERSION, reason: "expired_grant" });
       return;
     }
@@ -283,6 +300,15 @@ export class AdmissionController {
       } catch {
         // Nothing else can safely be done for this socket.
       }
+    }
+  }
+
+  private pruneGrantTracking(now: number): void {
+    for (const [nonce, expiresAt] of this.issuedJoinGrants) {
+      if (expiresAt <= now) this.issuedJoinGrants.delete(nonce);
+    }
+    for (const [nonce, expiresAt] of this.revokedJoinGrants) {
+      if (expiresAt <= now) this.revokedJoinGrants.delete(nonce);
     }
   }
 

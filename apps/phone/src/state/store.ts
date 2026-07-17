@@ -15,6 +15,7 @@ export type JoinState =
   | { kind: "connecting" }
   | { kind: "joining" }
   | { kind: "accepted"; identity: IdentityMessage }
+  | { kind: "ended" }
   | { kind: "rejected"; reason: JoinRejectedMessage["reason"]; retryAfterMs?: number };
 
 export type PhoneState = {
@@ -41,7 +42,8 @@ export const initialPhoneState: PhoneState = {
 export type PhoneAction =
   | { type: "server-message"; message: ServerToClientMessage }
   | { type: "socket-open" }
-  | { type: "socket-lost" };
+  | { type: "socket-lost" }
+  | { type: "session-ended" };
 
 export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState {
   if (action.type === "socket-open") {
@@ -50,6 +52,12 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
   if (action.type === "socket-lost") {
     // Keep identity display; input closes until the new snapshot arrives.
     return { ...state, join: { kind: "connecting" }, inputOpen: false };
+  }
+  if (action.type === "session-ended") {
+    return {
+      ...initialPhoneState,
+      join: { kind: "ended" },
+    };
   }
 
   const m = action.message;

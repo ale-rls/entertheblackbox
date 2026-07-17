@@ -56,6 +56,8 @@ describe("PhaseVideo", () => {
     const send = vi.fn();
     const video = await renderVideo(send);
 
+    expect(video.muted).toBe(true);
+
     video.dispatchEvent(new Event("stalled"));
     video.dispatchEvent(new Event("ended"));
 
