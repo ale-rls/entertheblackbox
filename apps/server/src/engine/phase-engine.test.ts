@@ -567,6 +567,29 @@ describe("PhaseEngine lifecycle", () => {
     expect(checkpoints.map((checkpoint) => checkpoint.reason)).toContain("admin-restart");
   });
 
+  it("advances immediately when skipping an already-resolved question", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now, interactiveIdleTimeoutMs: 1_000 });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+
+    now = 1_100;
+    engine.tick(now);
+    expect(engine.adminSkip(1_110)).toEqual({ ok: true });
+    expect(engine.currentPhaseId).toBe("question");
+
+    expect(engine.adminSkip(1_120)).toEqual({ ok: true });
+    expect(engine.currentPhaseId).toBe("question");
+    expect(display.sent.filter((message) => message.t === "question_resolved")).toHaveLength(1);
+
+    expect(engine.adminSkip(1_130)).toEqual({ ok: true });
+    expect(engine.currentPhaseId).toBe("idle");
+    expect(display.sent.filter((message) => message.t === "question_resolved")).toHaveLength(1);
+  });
+
   it("finalizes once, enqueues before resolution, hides live counts, and holds through freeze", () => {
     let now = 1_000;
     const checkpoints: PhaseCheckpoint[] = [];
