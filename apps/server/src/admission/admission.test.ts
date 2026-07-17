@@ -286,8 +286,10 @@ describe("participant admission", () => {
     const second = socket();
     join(admission, first, grant, undefined, "198.51.100.1");
     join(admission, second, grant, undefined, "198.51.100.2");
+    expect(admission.registry.connectedCount).toBe(2);
     const lease = (lastMessage(first) as { participantLease: string }).participantLease;
     first.close();
+    expect(admission.registry.connectedCount).toBe(1);
 
     now = 1_001;
     const blocked = socket();
@@ -297,12 +299,15 @@ describe("participant admission", () => {
     const reconnect = socket();
     join(admission, reconnect, grant, lease, "198.51.100.4");
     expect(lastMessage(reconnect)).toMatchObject({ t: "identity" });
+    expect(admission.registry.connectedCount).toBe(2);
     second.close();
+    expect(admission.registry.connectedCount).toBe(1);
 
     now = 1_101;
     const admittedAfterGrace = socket();
     join(admission, admittedAfterGrace, grant, undefined, "198.51.100.5");
     expect(lastMessage(admittedAfterGrace)).toMatchObject({ t: "identity" });
+    expect(admission.registry.connectedCount).toBe(2);
   });
 
   it("prunes expired rate-limit buckets during later traffic", () => {

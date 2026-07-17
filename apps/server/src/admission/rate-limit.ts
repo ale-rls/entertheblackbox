@@ -20,6 +20,7 @@ export function requestIp(request: IncomingMessage, trustProxy: boolean): string
 /** Process-local abuse control. IPs are never used as participant identity or persisted. */
 export class InMemoryIpRateLimiter {
   private readonly buckets = new Map<string, Bucket>();
+  private nextPruneAt = Number.POSITIVE_INFINITY;
 
   constructor(
     private readonly options: { maxAttempts: number; windowMs: number } = {
@@ -33,10 +34,11 @@ export class InMemoryIpRateLimiter {
   }
 
   consume(ip: string, now = Date.now()): RateLimitResult {
-    this.pruneExpired(now);
+    if (now >= this.nextPruneAt) this.pruneExpired(now);
     const current = this.buckets.get(ip);
     if (!current || now - current.windowStartedAt >= this.options.windowMs) {
       this.buckets.set(ip, { windowStartedAt: now, attempts: 1 });
+      this.nextPruneAt = Math.min(this.nextPruneAt, now + this.options.windowMs);
       return { allowed: true };
     }
     if (current.attempts >= this.options.maxAttempts) {
@@ -54,12 +56,16 @@ export class InMemoryIpRateLimiter {
   }
 
   pruneExpired(now = Date.now()): void {
+    let nextPruneAt = Number.POSITIVE_INFINITY;
     for (const [ip, bucket] of this.buckets) {
       if (now - bucket.windowStartedAt >= this.options.windowMs) this.buckets.delete(ip);
+      else nextPruneAt = Math.min(nextPruneAt, bucket.windowStartedAt + this.options.windowMs);
     }
+    this.nextPruneAt = nextPruneAt;
   }
 
   clear(): void {
     this.buckets.clear();
+    this.nextPruneAt = Number.POSITIVE_INFINITY;
   }
 }
