@@ -25,13 +25,18 @@ afterEach(() => vi.useRealTimers());
 describe("persistence", () => {
   it("commits batches atomically and rolls back partial failures", async () => {
     const queries: string[] = [];
+    let releaseCalls = 0;
     const client = { query: async (text: string) => {
       queries.push(text);
       if (text === "bad") throw new Error("constraint");
-    } };
-    const executor = new PostgresPersistenceExecutor(client);
+    }, release: () => { releaseCalls += 1; } };
+    const executor = new PostgresPersistenceExecutor({
+      connect: async () => client,
+      query: async () => ({ rows: [] }),
+    });
     await expect(executor.execute([{ text: "ok" }, { text: "bad" }])).rejects.toThrow("constraint");
     expect(queries).toEqual(["begin", "ok", "bad", "rollback"]);
+    expect(releaseCalls).toBe(1);
   });
 
   it("buffers without blocking gameplay, retries in order, and flushes", async () => {
