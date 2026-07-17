@@ -20,36 +20,52 @@ describe("production persistence runtime", () => {
     expect(createPool).not.toHaveBeenCalled();
   });
 
-  it("migrates, records crash recovery, and closes its held database client", async () => {
+  it("migrates, uses a fresh pooled client for later batches, and closes the pool", async () => {
     const queries: Array<{ text: string; values?: readonly unknown[] }> = [];
+    const batchQueries: string[][] = [];
+    let connectCalls = 0;
     let releaseCalls = 0;
     let endCalls = 0;
-    const client = {
+    const pool = {
       async query(text: string, values?: readonly unknown[]) {
         queries.push({ text, ...(values === undefined ? {} : { values }) });
         if (text.startsWith("select id from sessions")) return { rows: [{ id: "active-session" }] };
         return { rows: [] };
       },
-      release(destroy?: boolean) { if (destroy === true) releaseCalls += 1; },
+      async connect() {
+        connectCalls += 1;
+        const clientQueries: string[] = [];
+        batchQueries.push(clientQueries);
+        return {
+          async query(text: string) { clientQueries.push(text); return { rows: [] }; },
+          release() { releaseCalls += 1; },
+        };
+      },
+      async end() { endCalls += 1; },
     };
     const runtime = await createPersistenceRuntime(loadConfig({
       NODE_ENV: "test",
       DATABASE_URL: "postgres://example.invalid/db",
       INSTALLATION_CLOSES_AT: "2026-12-31T23:00:00+00:00",
     }), scenario, {
-      createPool: () => ({ connect: async () => client, end: async () => { endCalls += 1; } }),
+      createPool: () => pool,
       readMigration: async () => "-- migration marker",
       now: () => Date.parse("2026-07-12T15:00:00Z"),
     });
 
     expect(runtime).not.toBeNull();
     expect(queries[0]?.text).toBe("-- migration marker");
-    expect(queries.some(({ text }) => text.includes("insert into scenarios"))).toBe(true);
-    expect(queries.some(({ text }) => text.startsWith("update sessions set status='ended'"))).toBe(true);
-    expect(queries.some(({ text }) => text.includes("'recovery'"))).toBe(true);
+    expect(queries.some(({ text }) => text.startsWith("select id from sessions"))).toBe(true);
+    expect(batchQueries[0]?.some((text) => text.includes("insert into scenarios"))).toBe(true);
+    expect(batchQueries[1]?.some((text) => text.startsWith("update sessions set status='ended'"))).toBe(true);
+    expect(batchQueries[1]?.some((text) => text.includes("'recovery'"))).toBe(true);
+    runtime?.persistence.audit({ action: "later-operation", at: "2026-07-12T15:01:00Z", detail: null });
+    await runtime?.persistence.flush();
+    expect(batchQueries[2]?.some((text) => text.includes("'admin_action'"))).toBe(true);
+    expect(connectCalls).toBe(3);
+    expect(releaseCalls).toBe(3);
     await runtime?.close();
     await runtime?.close();
-    expect(releaseCalls).toBe(1);
     expect(endCalls).toBe(1);
   });
 });
