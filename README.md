@@ -59,7 +59,25 @@ The server also exposes:
 - `/admin/` — operations interface
 - `/healthz` and `/readyz` — health and readiness checks
 
+### Public video phase map
+
+`GET /api/phases` is deliberately unauthenticated. It is the stable lookup
+intended for display-side video preloading and returns exactly one JSON object
+property per video phase: the phase ID as the key and its media `src` as the
+string value. The active video's `src` is also delivered to the authenticated
+display in phase snapshots; the public lookup exists so the display can resolve
+other video phase IDs without receiving the scenario graph.
+
+The response never includes non-video phases, durations, transitions, question
+text or axes, scenario metadata, server configuration, or credentials. If the
+scenario is not ready, it fails closed with HTTP 503 and
+`{"error":"scenario_unavailable"}`. Phase IDs and media paths are public content
+metadata (the public media manifest already lists media paths), so authors must
+not put secrets or private visitor information in either field.
+
 Development credentials in the server configuration are intentionally local-only defaults. Set strong `ADMIN_TOKEN`, `JOIN_GRANT_SECRET`, display credentials, and production URLs before deployment.
+
+The admin API applies process-local per-IP limits in separate buckets for authenticated traffic and failed authentication, so bad-token traffic cannot exhaust an operator's allowance on a shared network. Defaults are 600 authenticated requests and 30 authentication failures per 60 seconds. Override them with `ADMIN_RATE_LIMIT_MAX_REQUESTS`, `ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES`, and `ADMIN_RATE_LIMIT_WINDOW_MS`. `X-Forwarded-For` is used only when `TRUST_PROXY=true`.
 
 ### Run the checked-in `showtest1` show
 

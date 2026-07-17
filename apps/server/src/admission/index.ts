@@ -1,6 +1,6 @@
 export { AdmissionController } from "./controller.js";
 export type { AdmissionControllerOptions, AdmissionPolicy } from "./controller.js";
-export { InMemoryIpRateLimiter } from "./rate-limit.js";
+export { InMemoryIpRateLimiter, requestIp } from "./rate-limit.js";
 export type { RateLimitResult } from "./rate-limit.js";
 export { IDENTITY_COLORS, ParticipantRegistry, createClientId } from "./registry.js";
 export type { ParticipantRecord, RegistryAdmission } from "./registry.js";

@@ -17,7 +17,7 @@ import {
   verifyParticipantLease,
   type JoinGrantClaims,
 } from "./tokens.js";
-import { InMemoryIpRateLimiter } from "./rate-limit.js";
+import { InMemoryIpRateLimiter, requestIp } from "./rate-limit.js";
 import { createClientId, ParticipantRegistry, type ParticipantRecord } from "./registry.js";
 
 export type AdmissionPolicy = {
@@ -44,15 +44,6 @@ export type AdmissionControllerOptions = {
 };
 
 type SocketState = { joined: boolean };
-
-function requestIp(request: IncomingMessage, trustProxy: boolean): string {
-  const forwarded = request.headers["x-forwarded-for"];
-  if (trustProxy) {
-    if (typeof forwarded === "string" && forwarded.length > 0) return forwarded.split(",")[0]!.trim();
-    if (Array.isArray(forwarded) && forwarded[0]) return forwarded[0];
-  }
-  return request.socket.remoteAddress ?? "unknown";
-}
 
 function asBytes(raw: RawData): unknown {
   if (Array.isArray(raw)) return Buffer.concat(raw);

@@ -102,6 +102,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     engine: () => engine,
     ready: readiness.ready,
     startedAt,
+    trustProxy: config.trustProxy,
+    rateLimitPolicy: config.adminRateLimit,
     ...(adminData === undefined ? {} : { data: adminData }),
   });
 

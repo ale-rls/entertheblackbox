@@ -16,6 +16,9 @@ const envSchema = z.object({
   ROOM_ID: z.string().min(1).default("main"),
   DISPLAY_TOKEN: z.string().min(1).default("dev-display-token"),
   ADMIN_TOKEN: z.string().min(16).default("dev-admin-token-please-change"),
+  ADMIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(600),
+  ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES: z.coerce.number().int().positive().default(30),
+  ADMIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   JOIN_GRANT_SECRET: z.string().min(16).default("dev-join-grant-secret-please-change"),
   TRUST_PROXY: z.enum(["true", "false"]).default("false"),
   ALLOW_LATE_JOIN: z.enum(["true", "false"]).default("false"),
@@ -40,6 +43,11 @@ export type ServerConfig = {
   roomId: string;
   displayToken: string;
   adminToken: string;
+  adminRateLimit: {
+    maxAuthenticatedRequests: number;
+    maxAuthenticationFailures: number;
+    windowMs: number;
+  };
   joinGrantSecret: string;
   trustProxy: boolean;
   allowLateJoin: boolean;
@@ -94,6 +102,11 @@ export function loadConfig(
     roomId: value.ROOM_ID,
     displayToken: value.DISPLAY_TOKEN,
     adminToken: value.ADMIN_TOKEN,
+    adminRateLimit: {
+      maxAuthenticatedRequests: value.ADMIN_RATE_LIMIT_MAX_REQUESTS,
+      maxAuthenticationFailures: value.ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES,
+      windowMs: value.ADMIN_RATE_LIMIT_WINDOW_MS,
+    },
     joinGrantSecret: value.JOIN_GRANT_SECRET,
     trustProxy: value.TRUST_PROXY === "true",
     allowLateJoin: value.ALLOW_LATE_JOIN === "true",

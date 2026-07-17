@@ -1,9 +1,21 @@
+import type { IncomingMessage } from "node:http";
+
 export type RateLimitResult = {
   allowed: boolean;
   retryAfterMs?: number;
 };
 
 type Bucket = { windowStartedAt: number; attempts: number };
+
+/** Resolve the peer IP using the same explicit proxy trust policy across HTTP and WebSocket traffic. */
+export function requestIp(request: IncomingMessage, trustProxy: boolean): string {
+  const forwarded = request.headers["x-forwarded-for"];
+  if (trustProxy) {
+    if (typeof forwarded === "string" && forwarded.length > 0) return forwarded.split(",")[0]!.trim();
+    if (Array.isArray(forwarded) && forwarded[0]) return forwarded[0];
+  }
+  return request.socket.remoteAddress ?? "unknown";
+}
 
 /** Process-local abuse control. IPs are never used as participant identity or persisted. */
 export class InMemoryIpRateLimiter {

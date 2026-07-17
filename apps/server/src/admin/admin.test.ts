@@ -1,9 +1,14 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
+import { InMemoryIpRateLimiter } from "../admission/rate-limit.js";
 import type { PhaseEngine } from "../engine/phase-engine.js";
-import { registerAdminRoutes, type AdminDataSource } from "./admin.js";
+import { registerAdminRoutes, type AdminDataSource, type AdminRateLimiters } from "./admin.js";
 
-function setup() {
+function setup(options: {
+  rateLimiters?: AdminRateLimiters;
+  trustProxy?: boolean;
+  now?: () => number;
+} = {}) {
   const audit = vi.fn();
   const engine = {
     lifecycleState: "active", currentSessionId: "s1", currentPhaseId: "q1", currentPhaseEpoch: 2,
@@ -17,8 +22,22 @@ function setup() {
     exportSession: async (id) => id === "s1" ? { json: { id }, csv: "id\n\"s1\"" } : null,
   };
   const app = Fastify();
-  registerAdminRoutes(app, { token: "strong-admin-token", engine: () => engine, ready: true, startedAt: Date.now(), data });
+  registerAdminRoutes(app, {
+    token: "strong-admin-token",
+    engine: () => engine,
+    ready: true,
+    startedAt: Date.now(),
+    data,
+    ...options,
+  });
   return { app, engine, audit };
+}
+
+function rateLimiters(maxAuthenticatedRequests: number, maxAuthenticationFailures: number, windowMs = 1_000): AdminRateLimiters {
+  return {
+    authenticated: new InMemoryIpRateLimiter({ maxAttempts: maxAuthenticatedRequests, windowMs }),
+    authenticationFailures: new InMemoryIpRateLimiter({ maxAttempts: maxAuthenticationFailures, windowMs }),
+  };
 }
 
 describe("admin API", () => {
@@ -38,19 +57,29 @@ describe("admin API", () => {
     });
   });
 
-  it("authenticates admin routes even when their path is percent-encoded", async () => {
-    const { app, engine } = setup();
+  it("authenticates and rate-limits admin routes even when their path is percent-encoded", async () => {
+    const { app, engine } = setup({ rateLimiters: rateLimiters(2, 1), now: () => 10_000 });
     const encodedStatus = "/api/%61dmin/status";
     const encodedAction = "/api/%61dmin/%69dle";
 
     expect((await app.inject({ url: encodedStatus })).statusCode).toBe(401);
-    expect((await app.inject({ method: "POST", url: encodedAction })).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: encodedAction })).statusCode).toBe(429);
     expect(engine.adminIdle).not.toHaveBeenCalled();
 
     const headers = { authorization: "Bearer strong-admin-token" };
     expect((await app.inject({ url: encodedStatus, headers })).statusCode).toBe(200);
     expect((await app.inject({ method: "POST", url: encodedAction, headers })).statusCode).toBe(200);
+    expect((await app.inject({ url: encodedStatus, headers })).statusCode).toBe(429);
     expect(engine.adminIdle).toHaveBeenCalledOnce();
+  });
+
+  it("leaves headroom for the dashboard's normal two-request polling cycle", async () => {
+    const { app } = setup({ now: () => 10_000 });
+    const headers = { authorization: "Bearer strong-admin-token" };
+    for (let request = 0; request < 62; request += 1) {
+      const path = request % 2 === 0 ? "status" : "errors";
+      expect((await app.inject({ url: `/api/admin/${path}`, headers })).statusCode).toBe(200);
+    }
   });
 
   it("executes safe controls and audit-logs success and refusal", async () => {
@@ -68,5 +97,40 @@ describe("admin API", () => {
     const csv = await app.inject({ url: "/api/admin/sessions/s1/export?format=csv", headers });
     expect(csv.headers["content-type"]).toContain("text/csv"); expect(csv.body).toContain("s1");
     expect((await app.inject({ url: "/api/admin/sessions/missing/export", headers })).statusCode).toBe(404);
+  });
+
+  it("rate-limits authenticated requests and authentication failures in isolated buckets", async () => {
+    const now = () => 10_000;
+    const limiters = rateLimiters(2, 1);
+    const { app } = setup({ rateLimiters: limiters, now });
+    const headers = { authorization: "Bearer strong-admin-token" };
+
+    expect((await app.inject({ url: "/api/admin/status" })).statusCode).toBe(401);
+    const failedAuthLimit = await app.inject({ url: "/api/admin/status" });
+    expect(failedAuthLimit.statusCode).toBe(429);
+    expect(failedAuthLimit.headers["retry-after"]).toBe("1");
+    expect(failedAuthLimit.json()).toEqual({ error: "rate_limited", retryAfterMs: 1_000 });
+
+    // Bad-token traffic from the same IP cannot consume the authenticated allowance.
+    expect((await app.inject({ url: "/api/admin/status", headers })).statusCode).toBe(200);
+    expect((await app.inject({ url: "/api/admin/errors", headers })).statusCode).toBe(200);
+    const authenticatedLimit = await app.inject({ url: "/api/admin/status", headers });
+    expect(authenticatedLimit.statusCode).toBe(429);
+    expect(authenticatedLimit.json()).toEqual({ error: "rate_limited", retryAfterMs: 1_000 });
+
+    limiters.authenticated.clear();
+    expect((await app.inject({ url: "/api/admin/status", headers })).statusCode).toBe(200);
+  });
+
+  it("uses the direct peer unless proxy trust is explicitly enabled", async () => {
+    const headers = { authorization: "Bearer strong-admin-token" };
+    const direct = setup({ rateLimiters: rateLimiters(1, 1), now: () => 10_000 });
+    expect((await direct.app.inject({ url: "/api/admin/status", headers: { ...headers, "x-forwarded-for": "203.0.113.1" } })).statusCode).toBe(200);
+    expect((await direct.app.inject({ url: "/api/admin/status", headers: { ...headers, "x-forwarded-for": "203.0.113.2" } })).statusCode).toBe(429);
+
+    const proxied = setup({ rateLimiters: rateLimiters(1, 1), trustProxy: true, now: () => 10_000 });
+    expect((await proxied.app.inject({ url: "/api/admin/status", headers: { ...headers, "x-forwarded-for": "203.0.113.1, 10.0.0.1" } })).statusCode).toBe(200);
+    expect((await proxied.app.inject({ url: "/api/admin/status", headers: { ...headers, "x-forwarded-for": "203.0.113.2, 10.0.0.1" } })).statusCode).toBe(200);
+    expect((await proxied.app.inject({ url: "/api/admin/status", headers: { ...headers, "x-forwarded-for": "203.0.113.1, 10.0.0.2" } })).statusCode).toBe(429);
   });
 });

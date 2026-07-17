@@ -19,19 +19,50 @@ async function fixture(invalidScenario = false) {
   const media = join(content, "media");
   await mkdir(media, { recursive: true });
   await writeFile(join(media, "intro.mp4"), "video");
+  await writeFile(join(media, "outro.mp4"), "outro");
   const scenario = {
     version: "test-1",
     entryPhaseId: "intro",
     cyclesAllowed: false,
+    operatorNotes: "scenario-internal-marker",
     phases: [
       { kind: "idle", id: "idle" },
-      { kind: "video", id: "intro", src: "intro.mp4", expectedDurationMs: 1000, next: invalidScenario ? "missing" : "idle" },
+      {
+        kind: "video",
+        id: "intro",
+        src: "intro.mp4",
+        expectedDurationMs: 1000,
+        next: invalidScenario ? "missing" : "question",
+        allowSkip: true,
+        sourceCredential: "video-internal-marker",
+      },
+      {
+        kind: "position-question",
+        id: "question",
+        text: "Private question marker",
+        durationMs: 10_000,
+        freezeMs: 500,
+        connectionStaleAfterMs: 30_000,
+        showLiveCounts: true,
+        field: {
+          type: "two-quadrant",
+          axis: "x",
+          labels: { minLabel: "No", maxLabel: "Yes" },
+        },
+        next: { type: "fixed", target: "outro" },
+      },
+      { kind: "video", id: "outro", src: "outro.mp4", expectedDurationMs: 2000, next: "idle" },
     ],
   };
   await writeFile(join(content, "scenario.json"), JSON.stringify(scenario));
   await writeFile(
     join(content, "media-manifest.json"),
-    JSON.stringify({ files: [{ src: "intro.mp4", bytes: 5, hash: "test" }] }),
+    JSON.stringify({
+      files: [
+        { src: "intro.mp4", bytes: 5, hash: "test" },
+        { src: "outro.mp4", bytes: 5, hash: "test-outro" },
+      ],
+    }),
   );
   for (const role of ["display", "phone", "admin"]) {
     const dist = join(root, role, "dist");
@@ -55,8 +86,23 @@ describe("configuration", () => {
   it("resolves paths from the supplied root and rejects invalid values", async () => {
     const config = await fixture();
     expect(config.scenarioPath).toMatch(/content\/scenario\.json$/);
+    expect(config.adminRateLimit).toEqual({
+      maxAuthenticatedRequests: 600,
+      maxAuthenticationFailures: 30,
+      windowMs: 60_000,
+    });
     expect(() => loadConfig({ PORT: "70000" })).toThrow(ConfigError);
+    expect(() => loadConfig({ ADMIN_RATE_LIMIT_MAX_REQUESTS: "0" })).toThrow(ConfigError);
     expect(() => loadConfig({ DATABASE_URL: "postgres://db" })).toThrow(/INSTALLATION_CLOSES_AT/);
+    expect(loadConfig({
+      ADMIN_RATE_LIMIT_MAX_REQUESTS: "900",
+      ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES: "12",
+      ADMIN_RATE_LIMIT_WINDOW_MS: "30000",
+    }).adminRateLimit).toEqual({
+      maxAuthenticatedRequests: 900,
+      maxAuthenticationFailures: 12,
+      windowMs: 30_000,
+    });
     const persistent = loadConfig({
       DATABASE_URL: "postgres://db",
       INSTALLATION_CLOSES_AT: "2026-12-31T23:00:00+00:00",
@@ -89,10 +135,13 @@ describe("HTTP readiness and bundles", () => {
 
     const response = await runtime.app.inject({ url: "/api/phases" });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ intro: "intro.mp4" });
+    expect(response.json()).toEqual({ intro: "intro.mp4", outro: "outro.mp4" });
     expect(response.body).not.toContain("expectedDurationMs");
     expect(response.body).not.toContain("entryPhaseId");
     expect(response.body).not.toContain("idle");
+    expect(response.body).not.toContain("question");
+    expect(response.body).not.toContain("scenario-internal-marker");
+    expect(response.body).not.toContain("video-internal-marker");
   });
 
   it("serves the media manifest and immutable media without changing readiness", async () => {
@@ -103,7 +152,12 @@ describe("HTTP readiness and bundles", () => {
     expect(manifest.statusCode).toBe(200);
     expect(manifest.headers["content-type"]).toContain("application/json");
     expect(manifest.headers["cache-control"]).toBe("no-cache");
-    expect(manifest.json()).toEqual({ files: [{ src: "intro.mp4", bytes: 5, hash: "test" }] });
+    expect(manifest.json()).toEqual({
+      files: [
+        { src: "intro.mp4", bytes: 5, hash: "test" },
+        { src: "outro.mp4", bytes: 5, hash: "test-outro" },
+      ],
+    });
 
     const media = await runtime.app.inject({ url: "/media/intro.mp4" });
     expect(media.statusCode).toBe(200);
