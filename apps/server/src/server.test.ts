@@ -86,8 +86,23 @@ describe("configuration", () => {
   it("resolves paths from the supplied root and rejects invalid values", async () => {
     const config = await fixture();
     expect(config.scenarioPath).toMatch(/content\/scenario\.json$/);
+    expect(config.adminRateLimit).toEqual({
+      maxAuthenticatedRequests: 600,
+      maxAuthenticationFailures: 30,
+      windowMs: 60_000,
+    });
     expect(() => loadConfig({ PORT: "70000" })).toThrow(ConfigError);
+    expect(() => loadConfig({ ADMIN_RATE_LIMIT_MAX_REQUESTS: "0" })).toThrow(ConfigError);
     expect(() => loadConfig({ DATABASE_URL: "postgres://db" })).toThrow(/INSTALLATION_CLOSES_AT/);
+    expect(loadConfig({
+      ADMIN_RATE_LIMIT_MAX_REQUESTS: "900",
+      ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES: "12",
+      ADMIN_RATE_LIMIT_WINDOW_MS: "30000",
+    }).adminRateLimit).toEqual({
+      maxAuthenticatedRequests: 900,
+      maxAuthenticationFailures: 12,
+      windowMs: 30_000,
+    });
     const persistent = loadConfig({
       DATABASE_URL: "postgres://db",
       INSTALLATION_CLOSES_AT: "2026-12-31T23:00:00+00:00",
