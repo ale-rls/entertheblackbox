@@ -88,6 +88,7 @@ technical on-call contact and the venue duty contact.
 | Session aborts | above the director-approved threshold, or any failure to recover to idle | Inspect structured events and recent admin errors. |
 | Memory or process restarts | spike above the agreed baseline | Inspect Fly metrics; compare with deploy and soak-test results. |
 | Database write queue | sustained degradation or growth | Check Supabase connectivity/capacity and buffered-write health events. |
+| Participant retention cleanup | any `retention-cleanup-failed` event, or expired vote rows remain after a successful run | Check database connectivity/function permissions, verify manually, and escalate until deletion succeeds. |
 | Deployment validation | scenario validation or image build fails | Block production deployment. |
 
 Thresholds not fixed in the implementation plan must be agreed and recorded in
@@ -96,6 +97,36 @@ failure drills and record its owner, notification route, and escalation timer.
 Use the credential/input checklist and alert drill record in
 `infra/provisioning.md`; it intentionally records secret-manager references,
 not secret values.
+
+## Participant-data retention check
+
+The production privacy commitment is that participant identifiers and final
+positions in `votes` are retained only until the configured installation closing
+date plus 90 days. The server enforces this by calling
+`delete_expired_participant_data(now())` once at every persistence-enabled boot
+and again 24 hours after each completed cleanup. Runs cannot overlap. A database
+error is logged as `retention-cleanup-failed` without crashing the running show;
+the next boot or daily run retries it.
+
+The technical operator must alert on every `retention-cleanup-failed` event and
+confirm that a later `retention-cleanup-succeeded` event appears. That success
+event includes `cutoff` and `deletedRows`. After the retention deadline, and
+after any cleanup failure, verify with read-only database access:
+
+```sql
+select count(*) as expired_votes
+from votes
+where retained_until <= now();
+```
+
+The result must be zero after a successful cleanup. If it is not, keep the
+incident open, check application/database logs and the migration/function
+permissions, then have an authorized database operator run
+`select delete_expired_participant_data(now());`. Repeat the read-only query and
+record the timestamp and deleted-row count in the privacy operations log. Do not
+export participant rows while diagnosing retention, and do not extend
+`INSTALLATION_CLOSES_AT` or edit `retained_until` without an approved policy
+change.
 
 ## Handoff package check
 

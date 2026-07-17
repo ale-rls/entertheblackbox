@@ -117,8 +117,16 @@ export class InstallationPersistence implements AdminDataSource {
     this.options.queue.enqueue(statements);
   }
 
-  deleteExpiredParticipantData(cutoff = Date.now()): void {
-    this.options.queue.enqueue([{ text: "select delete_expired_participant_data($1)", values: [iso(cutoff)] }]);
+  async deleteExpiredParticipantData(cutoff = Date.now()): Promise<number> {
+    const rows = await this.options.queue.query<{ deletedCount: string | number }>({
+      text: `select delete_expired_participant_data($1) as "deletedCount"`,
+      values: [iso(cutoff)],
+    });
+    const deletedCount = Number(rows[0]?.deletedCount);
+    if (!Number.isSafeInteger(deletedCount) || deletedCount < 0) {
+      throw new Error("participant retention cleanup returned an invalid deletion count");
+    }
+    return deletedCount;
   }
 
   audit(entry: { action: string; at: string; detail: unknown }): void {

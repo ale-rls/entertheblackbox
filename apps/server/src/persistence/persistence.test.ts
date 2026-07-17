@@ -6,13 +6,15 @@ import { InstallationPersistence, PersistenceWriteQueue, PostgresPersistenceExec
 
 class RecordingExecutor implements PersistenceExecutor {
   calls: SqlStatement[][] = [];
+  queries: SqlStatement[] = [];
   failures = 0;
   rows: Record<string, unknown>[] = [];
   async execute(statements: readonly SqlStatement[]): Promise<void> {
     if (this.failures-- > 0) throw new Error("database unavailable");
     this.calls.push([...statements]);
   }
-  async query<T extends object>(_statement: SqlStatement): Promise<readonly T[]> {
+  async query<T extends object>(statement: SqlStatement): Promise<readonly T[]> {
+    this.queries.push(statement);
     return this.rows as T[];
   }
 }
@@ -237,8 +239,9 @@ describe("persistence", () => {
   it("exposes testable participant deletion without leases, grants, IPs, or traces", async () => {
     const executor = new RecordingExecutor();
     const persistence = new InstallationPersistence({ queue: new PersistenceWriteQueue(executor), installationId: "i", scenario, participantDataExpiresAt: expires });
-    persistence.deleteExpiredParticipantData(expires); await persistence.flush();
-    expect(executor.calls.flat().at(-1)).toEqual({ text: "select delete_expired_participant_data($1)", values: [new Date(expires).toISOString()] });
+    executor.rows = [{ deletedCount: "3" }];
+    await expect(persistence.deleteExpiredParticipantData(expires)).resolves.toBe(3);
+    expect(executor.queries.at(-1)).toEqual({ text: `select delete_expired_participant_data($1) as "deletedCount"`, values: [new Date(expires).toISOString()] });
   });
 
   it("reconstructs session exports through the executor query after restart", async () => {

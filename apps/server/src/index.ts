@@ -2,7 +2,7 @@ import { pathToFileURL } from "node:url";
 import { loadConfig } from "./config.js";
 import { buildServer } from "./server.js";
 import { loadScenarioReadiness } from "./readiness.js";
-import { createPersistenceRuntime, type PersistenceQueueHealthEvent } from "./persistence/index.js";
+import { createPersistenceRuntime, type PersistenceRuntimeEvent } from "./persistence/index.js";
 
 export * from "./config.js";
 export * from "./readiness.js";
@@ -46,7 +46,7 @@ export async function startServer(): Promise<void> {
   const readiness = await loadScenarioReadiness(config);
   const persistenceRuntime = readiness.ready
     ? await createPersistenceRuntime(config, readiness.scenario, {
-        log: (event: PersistenceQueueHealthEvent) => console.error(JSON.stringify({ component: "persistence", ...event })),
+        log: (event: PersistenceRuntimeEvent) => console.error(JSON.stringify({ component: "persistence", ...event })),
       })
     : null;
   const { app, engine } = await buildServer({
