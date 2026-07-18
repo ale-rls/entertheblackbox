@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Download } from "@playwright/test";
 import { REPO_ROOT } from "./helpers/server.js";
 import { startStudio, type StudioServer } from "./helpers/studio.js";
 
@@ -58,6 +58,46 @@ test.describe("Show Studio v1", () => {
     expect(downloads.some((name) => name.includes("validation-report.json"))).toBe(true);
     expect(downloads.some((name) => name.endsWith("README.txt"))).toBe(true);
     expect(new Set(downloads.map((name) => name.match(/^(.*)-(?:scenario|media-manifest|\.studio|validation-report|README)/)?.[1])).size).toBe(1);
+  });
+
+  test("re-imports exported files in any order and restores the Studio layout", async ({ page }) => {
+    await page.goto(studio.baseUrl);
+    await expect(page.getByText(/Local media: \d+ files? found in content\/media\./)).toBeVisible();
+    await page.getByLabel("Import show or backup").setInputFiles([
+      { name: "scenario.json", mimeType: "application/json", buffer: await fixture("content/scenarios/dev.json") },
+      { name: "media-manifest.json", mimeType: "application/json", buffer: await fixture("content/media-manifest.json") },
+    ]);
+
+    const node = page.locator('.react-flow__node[data-id="intro-video"]');
+    const transform = () => node.evaluate((element) => (element as HTMLElement).style.transform);
+    const before = await transform();
+    const box = await node.boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + box!.width / 2 + 170, box!.y + box!.height / 2 + 95, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(transform).not.toBe(before);
+    const moved = await transform();
+
+    for (const checkbox of await page.getByLabel("Acknowledge").all()) await checkbox.check();
+    const downloads: Download[] = [];
+    page.on("download", (download) => downloads.push(download));
+    await page.getByRole("button", { name: "File" }).click();
+    await page.getByRole("menuitem", { name: "Export files" }).click();
+    await expect.poll(() => downloads.length).toBe(3);
+    const exported = await Promise.all(downloads.map(async (download) => {
+      const path = await download.path();
+      if (!path) throw new Error(`No download path for ${download.suggestedFilename()}`);
+      return { name: download.suggestedFilename(), mimeType: "application/json", buffer: await readFile(path) };
+    }));
+
+    await page.getByRole("button", { name: "File" }).click();
+    await page.getByRole("menuitem", { name: "Close show" }).click();
+    await page.getByLabel("Import show or backup").setInputFiles(exported.reverse());
+
+    await expect(page.getByText("Imported complete Studio package with its saved canvas layout.")).toBeVisible();
+    await expect.poll(transform).toBe(moved);
   });
 
   test("supports every recent-draft action, including deleting persisted drafts", async ({ page }) => {
