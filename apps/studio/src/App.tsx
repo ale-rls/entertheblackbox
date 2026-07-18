@@ -397,7 +397,7 @@ export function App() {
     <div className="home-actions">
       <button className="sc-tool-button" data-sc-tool-variant="primary" onClick={createShow}>New show</button>
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" aria-describedby={importFeedback ? "studio-home-feedback" : undefined} onClick={() => importInputRef.current?.click()}>Import show or backup</button>
-      <input ref={importInputRef} hidden multiple type="file" accept="application/json" onChange={(event) => {
+      <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json" onChange={(event) => {
         void importFiles(event.currentTarget.files);
         event.currentTarget.value = "";
       }} />
@@ -473,7 +473,7 @@ export function App() {
       <SaveStatus status={status} />
       <button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => setPreviewing(true)}>Preview</button>
       <button className="sc-tool-button export" data-sc-tool-variant="secondary" aria-label="Export for deployment" aria-describedby={exportFeedback ? "studio-export-feedback" : undefined} disabled={blocked} title={blocked ? "Resolve errors and acknowledge warnings first" : undefined} onClick={exportDeployment}>Export</button>
-      <input ref={importInputRef} hidden multiple type="file" accept="application/json" onChange={(event) => {
+      <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json" onChange={(event) => {
         void importFiles(event.currentTarget.files);
         event.currentTarget.value = "";
       }} />

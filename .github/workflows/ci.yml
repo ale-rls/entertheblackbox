@@ -28,3 +28,17 @@ jobs:
       - name: Build versioned container
         run: docker build --build-arg BUILD_VERSION="${GITHUB_SHA}" --tag "smartphonecracy:${GITHUB_SHA}" .
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.17.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e

@@ -37,7 +37,10 @@ test.describe("Show Studio v1", () => {
     ]);
     await expect(page.getByLabel("Show name")).toHaveValue("Imported show");
     await page.getByLabel("Show name").fill("Curator regression");
-    for (const checkbox of await page.getByLabel("Acknowledge").all()) await checkbox.check();
+    await expect(page.getByText("Media “video-1.mp4” is never referenced.")).toBeVisible();
+    const acknowledgements = page.getByLabel("Acknowledge");
+    await expect(acknowledgements.first()).toBeVisible();
+    for (const checkbox of await acknowledgements.all()) await checkbox.check();
     await expect(page.getByRole("button", { name: "Export for deployment" })).toBeEnabled();
 
     await page.getByRole("button", { name: "Preview" }).click();
@@ -57,7 +60,6 @@ test.describe("Show Studio v1", () => {
   });
 
   test("supports every recent-draft action, including deleting persisted drafts", async ({ page }) => {
-    await page.addInitScript(() => { window.confirm = () => true; });
     await page.goto(studio.baseUrl);
 
     await page.getByRole("button", { name: "New show" }).click();
@@ -84,6 +86,7 @@ test.describe("Show Studio v1", () => {
     expect((await downloadPromise).suggestedFilename()).toBe("Landing actions.studio-backup.json");
 
     await page.getByRole("button", { name: "Landing actions copy", exact: true }).locator("..").getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("alertdialog", { name: "Delete “Landing actions copy”?" }).getByRole("button", { name: "Delete draft" }).click();
     await expect(page.getByRole("button", { name: "Landing actions copy", exact: true })).toHaveCount(0);
 
     await page.reload();
@@ -159,7 +162,6 @@ test.describe("Show Studio v1", () => {
   });
 
   test("switches question handles and restores them with undo and redo", async ({ page }) => {
-    await page.addInitScript(() => { window.confirm = () => true; });
     await page.goto(studio.baseUrl);
     await page.getByLabel("Import show or backup").setInputFiles([
       { name: "scenario.json", mimeType: "application/json", buffer: await fixture("content/scenarios/dev.json") },
@@ -171,6 +173,7 @@ test.describe("Show Studio v1", () => {
     await expect.poll(handles).toEqual(["q1 · top right", "q2 · top left", "q3 · bottom left", "q4 · bottom right / center", "tie", "no votes"]);
 
     await page.getByLabel("Quadrant layout").selectOption("two-quadrant-x");
+    await page.getByRole("alertdialog", { name: "Change “question-quadrant” to left / right quadrants?" }).getByRole("button", { name: "Replace connections" }).click();
     await expect(page.getByLabel("Quadrant layout")).toHaveValue("two-quadrant-x");
     await expect.poll(handles).toEqual(["min · left · Deregulate", "max · right · Regulate", "tie", "no votes"]);
 
