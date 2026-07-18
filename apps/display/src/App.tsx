@@ -71,14 +71,7 @@ export function App() {
     [cursorField],
   );
 
-  useEffect(() => {
-    connection.start();
-    const disposeKiosk = applyKioskGuards();
-    return () => {
-      connection.stop();
-      disposeKiosk();
-    };
-  }, [connection]);
+  useEffect(() => applyKioskGuards(), []);
 
   useEffect(() => {
     if (state.reloadRequired) void performReload();
@@ -113,6 +106,17 @@ export function App() {
   const phase = state.phase;
   const isIdle = phase === null || phase.kind === "idle";
   const mediaReady = media.status.state === "ready";
+
+  // Do not authenticate the installation display until every manifest
+  // entry is available and verified. Until then the local idle attract
+  // loop and preparation status remain usable, but the server cannot
+  // expose a join grant or admit visitors into an unprepared show.
+  useEffect(() => {
+    if (!mediaReady) return;
+    connection.start();
+    return () => connection.stop();
+  }, [connection, mediaReady]);
+
   const sendDisplayMessage = useCallback(
     (message: DisplayToServerMessage) => connection.send(message),
     [connection],
@@ -149,7 +153,7 @@ export function App() {
 
       {/* Layer 2: UI */}
       <section className="layer layer-ui">
-        {state.connection !== "open" && (
+        {mediaReady && state.connection !== "open" && (
           <div className="reconnecting">reconnecting…</div>
         )}
         {!mediaReady && (

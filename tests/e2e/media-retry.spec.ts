@@ -2,7 +2,12 @@ import { cp, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { startServer, REPO_ROOT, type E2eServer } from "./helpers/server.js";
+import {
+  adminStatus,
+  startServer,
+  REPO_ROOT,
+  type E2eServer,
+} from "./helpers/server.js";
 import { displayUrl } from "./helpers/clients.js";
 
 /**
@@ -41,12 +46,14 @@ test.describe("media failure retry", () => {
     const display = await context.newPage();
     await display.goto(displayUrl(server.baseUrl));
     await expect(display.locator(".media-status")).toContainText(/retrying/, { timeout: 20_000 });
+    await expect.poll(async () => (await adminStatus(server.baseUrl)).displayConnected).toBe(false);
 
     // Restore the good bytes; capped-backoff retry (1s, 2s, 4s…) must
     // reach ready on its own — no reload, no operator action.
     await writeFile(join(mediaDir, "intro.mp4"), goodBytes);
     await expect(display.locator(".media-status")).toBeHidden({ timeout: 30_000 });
     await expect(display.locator(".idle")).toBeVisible();
+    await expect.poll(async () => (await adminStatus(server.baseUrl)).displayConnected).toBe(true);
 
     await context.close();
   });
