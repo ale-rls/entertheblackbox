@@ -36,33 +36,6 @@ async function api(path: string, token: string, init?: RequestInit): Promise<Res
   return response;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function textValue(value: unknown): string | null {
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  return null;
-}
-
-function safeJson(value: unknown): string {
-  try {
-    const json = JSON.stringify(value, null, 2);
-    return json ?? String(value);
-  } catch {
-    return "Raw payload could not be serialized";
-  }
-}
-
-export function normalizeError(value: unknown, index: number) {
-  const record = isRecord(value) ? value : null;
-  const at = textValue(record?.at) ?? textValue(record?.timestamp) ?? "—";
-  const source = textValue(record?.path) ?? textValue(record?.source) ?? "—";
-  const message = textValue(record?.message) ?? textValue(record?.error) ?? textValue(value) ?? "Unstructured error payload";
-  return { key: `${index}-${at}-${source}`, at, source, message, raw: safeJson(value) };
-}
-
 function formatDuration(milliseconds: number): string {
   const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
   const hours = Math.floor(totalSeconds / 3600);
@@ -126,7 +99,6 @@ export function App() {
   const [token, setToken] = useState(storedToken);
   const [connectedToken, setConnectedToken] = useState(storedToken);
   const [status, setStatus] = useState<Status | null>(null);
-  const [errors, setErrors] = useState<unknown[]>([]);
   const [connectionError, setConnectionError] = useState("");
   const [statusStale, setStatusStale] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
@@ -140,25 +112,19 @@ export function App() {
   const refresh = useCallback(async () => {
     if (!connectedToken) return;
     setRefreshing(true);
-    const [statusResult, errorsResult] = await Promise.allSettled([
-      api("status", connectedToken).then(async (response) => await response.json() as Status),
-      api("errors", connectedToken).then(async (response) => await response.json() as unknown),
-    ]);
-
-    if (statusResult.status === "fulfilled") {
-      statusRef.current = statusResult.value;
-      setStatus(statusResult.value);
+    try {
+      const response = await api("status", connectedToken);
+      const nextStatus = await response.json() as Status;
+      statusRef.current = nextStatus;
+      setStatus(nextStatus);
       setStatusStale(false);
-      setConnectionError(errorsResult.status === "rejected" ? "Connected, but recent errors could not be loaded." : "");
-    } else {
+      setConnectionError("");
+    } catch (error) {
       setStatusStale(statusRef.current !== null);
-      setConnectionError(statusResult.reason instanceof Error ? statusResult.reason.message : "Could not connect to the admin API.");
+      setConnectionError(error instanceof Error ? error.message : "Could not connect to the admin API.");
+    } finally {
+      setRefreshing(false);
     }
-    if (errorsResult.status === "fulfilled") {
-      const payload = errorsResult.value;
-      setErrors(isRecord(payload) && Array.isArray(payload.errors) ? payload.errors : []);
-    }
-    setRefreshing(false);
   }, [connectedToken]);
 
   useEffect(() => {
@@ -182,7 +148,6 @@ export function App() {
     else {
       statusRef.current = null;
       setStatus(null);
-      setErrors([]);
       setConnectedToken(token);
     }
   };
@@ -222,31 +187,9 @@ export function App() {
     });
   };
 
-  const download = async (format: "json" | "csv") => {
-    if (!status?.sessionId || status.sessionId === "idle") return;
-    setWorkingAction(`export-${format}`);
-    setFeedback(null);
-    try {
-      const response = await api(`sessions/${encodeURIComponent(status.sessionId)}/export?format=${format}`, connectedToken);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${status.sessionId}.${format}`;
-      link.click();
-      URL.revokeObjectURL(url);
-      setFeedback({ status: "success", message: `${format.toUpperCase()} export prepared.` });
-    } catch (error) {
-      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "The export failed." });
-    } finally {
-      setWorkingAction(null);
-    }
-  };
-
   const isActive = status?.lifecycle === "active";
   const canStart = Boolean(status && !isActive && status.displayConnected && status.connectedParticipants > 0);
   const canReturnToIdle = Boolean(status?.lifecycle && status.lifecycle !== "idle");
-  const canExport = Boolean(status?.sessionId && status.sessionId !== "idle");
   const busy = workingAction !== null;
   const playbackStatus: ToolStatus = status?.displayPlaybackIssue?.status === "stalled" ? "warning" : status?.displayPlaybackIssue ? "danger" : "success";
   const globalStatus: ToolStatus = status ? (statusStale || !status.healthy || !status.ready ? "warning" : status.displayPlaybackIssue ? playbackStatus : "success") : connectionError ? "danger" : "info";
@@ -307,20 +250,6 @@ export function App() {
           </div>
         </section>
 
-        <section className="sc-tool-panel" aria-labelledby="admin-export-heading">
-          <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">Session archive</p><h2 id="admin-export-heading">Session export</h2></div><StatusLabel status={canExport ? "success" : "info"}>{canExport ? "Ready" : "Unavailable"}</StatusLabel></div>
-          <p className="sc-tool-copy admin-copy">Download the data available for the current session.</p>
-          {status.sessionId && <p className="admin-export-id sc-tool-mono">{status.sessionId}</p>}
-          <div className="admin-button-row"><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={!canExport || busy} onClick={() => void download("csv")}>Export CSV</button><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!canExport || busy} onClick={() => void download("json")}>Export JSON</button></div>
-          {!canExport && <p className="sc-tool-help">A current session ID is required before an export can be prepared.</p>}
-        </section>
-
-        <section className="sc-tool-panel admin-errors" aria-labelledby="admin-errors-heading">
-          <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">Server log</p><h2 id="admin-errors-heading">Recent errors</h2></div><StatusLabel status={errors.length ? "warning" : "success"}>{errors.length ? `${errors.length} reported` : "None reported"}</StatusLabel></div>
-          {errors.length ? <div className="sc-tool-table-region" role="region" aria-label="Recent operational errors" tabIndex={0}>
-            <table className="sc-tool-table"><caption className="sc-tool-visually-hidden">Recent errors returned by the admin API</caption><thead><tr><th>Time</th><th>Source</th><th>Message</th><th>Payload</th></tr></thead><tbody>{errors.map((error, index) => { const row = normalizeError(error, index); return <tr key={row.key}><td className="sc-tool-mono">{row.at}</td><td className="sc-tool-mono">{row.source}</td><td>{row.message}</td><td><details><summary>Raw</summary><pre>{row.raw}</pre></details></td></tr>; })}</tbody></table>
-          </div> : <p className="sc-tool-copy admin-copy">No recent errors were returned by the server.</p>}
-        </section>
       </div>}
     </main>
     {confirmAction && <ConfirmationDialog action={confirmAction} onCancel={closeConfirmation} onConfirm={confirmControl} />}

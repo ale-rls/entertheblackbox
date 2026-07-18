@@ -12,8 +12,8 @@ describe("Admin design proof", () => {
     expect(html).toContain("Skip current phase");
     expect(html).toContain("Return to idle");
     expect(html).toContain("Restart show");
-    expect(html).toContain("Session export");
-    expect(html).toContain("Recent errors");
+    expect(html).not.toContain("Session export");
+    expect(html).not.toContain("Recent errors");
     expect(html).not.toContain("Advance phase");
     expect(html).not.toContain("Pause session");
     expect(html).not.toContain("End session");

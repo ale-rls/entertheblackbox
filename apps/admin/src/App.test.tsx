@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { App, normalizeError, type Status } from "./App.js";
+import { App, type Status } from "./App.js";
 
 const activeStatus: Status = {
   healthy: true,
@@ -57,15 +57,13 @@ function button(label: string): HTMLButtonElement {
   return match;
 }
 
-function createAdminFetch(options?: { errors?: unknown[]; status?: Status; rejectAction?: string }) {
+function createAdminFetch(options?: { status?: Status; rejectAction?: string }) {
   const requests: Array<{ url: string; method: string }> = [];
   const mock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     requests.push({ url, method });
     if (url.endsWith("/status")) return jsonResponse(options?.status ?? activeStatus);
-    if (url.endsWith("/errors")) return jsonResponse({ errors: options?.errors ?? [] });
-    if (url.includes("/export?format=csv")) return new Response("id\n5H7D-A2", { headers: { "Content-Type": "text/csv" } });
     if (method === "POST" && url.endsWith(`/${options?.rejectAction ?? "\0"}`)) return jsonResponse({ ok: false, reason: "wrong-phase" }, 409);
     return jsonResponse({ ok: true });
   });
@@ -86,7 +84,7 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).not.toContain("question-02");
   });
 
-  it("stores a submitted token, authenticates, fetches both resources, and polls every two seconds", async () => {
+  it("stores a submitted token, authenticates, fetches status, and polls every two seconds", async () => {
     const { requests } = createAdminFetch();
     const intervalSpy = vi.spyOn(window, "setInterval");
     await renderApp();
@@ -101,10 +99,8 @@ describe("Admin operations UI", () => {
     await flush();
 
     expect(sessionStorage.getItem("admin-token")).toBe("operator-secret");
-    expect(requests).toEqual(expect.arrayContaining([
-      { url: "/api/admin/status", method: "GET" },
-      { url: "/api/admin/errors", method: "GET" },
-    ]));
+    expect(requests).toContainEqual({ url: "/api/admin/status", method: "GET" });
+    expect(requests.some(({ url }) => url === "/api/admin/errors")).toBe(false);
     expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 2_000);
     expect(document.body.textContent).toContain("System ready");
     expect(document.body.textContent).toContain("question-02");
@@ -191,7 +187,7 @@ describe("Admin operations UI", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
       if (url.endsWith("/status")) return failStatus ? jsonResponse({ error: "unavailable" }, 503) : jsonResponse(activeStatus);
-      return jsonResponse({ errors: [] });
+      return jsonResponse({ ok: true });
     }));
     const intervalSpy = vi.spyOn(window, "setInterval");
     await renderApp();
@@ -215,34 +211,13 @@ describe("Admin operations UI", () => {
     expect(document.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it("renders known and unknown recent-error payloads with a usable raw fallback", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
-    createAdminFetch({ errors: [{ at: "2026-07-14T12:00:00Z", path: "/display", message: "heartbeat missed", code: 12 }, "plain failure", { nested: { reason: "unknown" } }] });
-    await renderApp();
-
-    expect(document.body.textContent).toContain("heartbeat missed");
-    expect(document.body.textContent).toContain("plain failure");
-    expect(document.body.textContent).toContain("Unstructured error payload");
-    expect(document.querySelectorAll("details")).toHaveLength(3);
-    expect(normalizeError(Symbol("unserializable"), 0).message).toBe("Unstructured error payload");
-  });
-
-  it("downloads the current session as CSV and announces completion", async () => {
+  it("does not present inactive recent-error or session-export features", async () => {
     sessionStorage.setItem("admin-token", "operator-secret");
     const { requests } = createAdminFetch();
-    const createObjectURL = vi.fn(() => "blob:admin-export");
-    const revokeObjectURL = vi.fn();
-    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL, revokeObjectURL }));
-    let downloadName = "";
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloadName = this.download; });
     await renderApp();
 
-    await act(async () => { button("Export CSV").click(); });
-    await flush();
-    expect(requests).toContainEqual({ url: "/api/admin/sessions/5H7D-A2/export?format=csv", method: "GET" });
-    expect(downloadName).toBe("5H7D-A2.csv");
-    expect(createObjectURL).toHaveBeenCalledOnce();
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:admin-export");
-    expect(document.body.textContent).toContain("CSV export prepared");
+    expect(document.body.textContent).not.toContain("Recent errors");
+    expect(document.body.textContent).not.toContain("Session export");
+    expect(requests.some(({ url }) => url.includes("/errors") || url.includes("/export"))).toBe(false);
   });
 });

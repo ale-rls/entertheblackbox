@@ -69,32 +69,6 @@ export function AdminProof() {
           <p className="sc-tool-help">Start is unavailable while a show is active. Skip resolves the current question using its latest participant positions.</p>
         </section>
 
-        <section className="sc-tool-panel" aria-labelledby="admin-export-heading">
-          <div className="admin-proof-section-heading">
-            <div><p className="sc-tool-eyebrow">Session archive</p><h2 id="admin-export-heading">Session export</h2></div>
-            <Status status="success">Ready</Status>
-          </div>
-          <p className="sc-tool-copy admin-proof-copy">Download participant events and resolved outcomes for the current session.</p>
-          <div className="admin-proof-export-meta sc-tool-mono"><span>5H7D-A2</span><span>1,842 events</span><span>2.4 MB</span></div>
-          <div className="admin-proof-button-row"><Button variant="primary">Export CSV</Button><Button>Export JSON</Button></div>
-        </section>
-
-        <section className="sc-tool-panel admin-proof-errors" aria-labelledby="admin-errors-heading">
-          <div className="admin-proof-section-heading">
-            <div><p className="sc-tool-eyebrow">Last 30 minutes</p><h2 id="admin-errors-heading">Recent errors</h2></div>
-            <Status status="warning">2 unresolved</Status>
-          </div>
-          <div className="sc-tool-table-region">
-            <table className="sc-tool-table">
-              <caption className="sc-tool-visually-hidden">Recent operational errors</caption>
-              <thead><tr><th>Time</th><th>Source</th><th>Event</th><th>Status</th></tr></thead>
-              <tbody>
-                <tr><td className="sc-tool-mono">14:28:17</td><td>phone</td><td>Participant p-094 missed two heartbeats</td><td><Status status="warning">Monitoring</Status></td></tr>
-                <tr><td className="sc-tool-mono">14:21:03</td><td>display</td><td>Media prefetch retried for question-02</td><td><Status status="info">Recovered</Status></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
       </div>
     </main>
   </div>;
