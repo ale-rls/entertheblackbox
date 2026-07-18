@@ -1,160 +1,92 @@
-# Operations runbook
+# Local installation operations runbook
 
-> Hosting-specific references in this runbook (Fly status, Fly metrics/logs)
-> assume the cloud design, which is pending the architecture decision in issue
-> [#37](https://github.com/ale-rls/smartphonecracy-runner/issues/37). The staff
-> procedures themselves are architecture-neutral.
+This runbook is for museum floor staff and the technical operator. Keep a
+printed copy beside the installation computer. Recovery drills and software
+changes happen outside visitor hours.
 
-This runbook is for venue staff and the remote technical operator. Keep a
-printed copy beside the venue computer. Visitors must never be present during a
-deploy, rollback, or recovery drill.
+The installation computer serves the display, phone client, admin interface,
+scenario, and media on the venue network. An interrupted session may be
+discarded and returned to idle; preserving a broken live session is not an
+operational goal.
 
 ## Daily opening check
 
 1. Confirm the screen shows the idle/attract experience, not a browser error or
-   a reconnecting message.
-2. Open the protected admin page through the private VPN. Confirm readiness,
-   display connectivity, heartbeat age, participant count, session, and phase
-   all look plausible. Never share the admin URL or token with visitors.
-3. Confirm `/healthz` and `/readyz` return HTTP 200 and check that no monitoring
-   alert remains open.
-4. Scan the displayed QR with a test phone, join, and then close the test
-   session with the admin control. Confirm the display returns to idle.
-5. Check the venue computer, display, Ethernet, and UPS for loose cables or
-   warning lights.
+   reconnecting message.
+2. Open the protected admin page and confirm readiness, display connectivity,
+   heartbeat age, participant count, session, and phase look plausible. Never
+   share the admin token with visitors.
+3. Confirm local `/healthz` and `/readyz` return HTTP 200.
+4. Scan the displayed QR with a test phone, join, and close the test session
+   with the admin control. Confirm the display returns to idle.
+5. Check the installation computer, display, local network equipment, and UPS
+   for loose cables or warning lights.
 
-## Join rate-limit network decision
+## Join-rate network check
 
-The current join-abuse limit of 30 attempts per source IP per 60 seconds is
-accepted for the expected venue Wi-Fi setup. During venue acceptance, test a
-doors-open burst at the full 30-phone capacity, including realistic reconnects
-or retries.
-
-Before directing visitors to cellular data, or using any network topology that
-presents many phones behind one shared NAT address, the technical operator must
-reassess the limit and repeat the burst test. Carrier-grade NAT can make many
-legitimate phones consume the same per-IP bucket; do not discover that during
-a live opening.
-
-At closing, leave the computer powered if overnight monitoring or a soak test
-is scheduled. Otherwise follow the venue's approved shutdown policy; do not
-unplug a running UPS.
+The current limit is 30 join attempts per source IP per 60 seconds. During
+acceptance, test a doors-open burst at the full 30-phone capacity, including
+reconnects. Re-test if the network topology changes or if many phones appear to
+the server behind one shared address.
 
 ## Staff power-cycle procedure
 
-Use this procedure when the display is frozen or blank and the remote operator
-cannot recover it. It requires no SSH access.
-
 1. Tell visitors the installation is temporarily unavailable and stop new
    sessions. A power cycle aborts any active session.
-2. Photograph or write down the screen message and the current time.
-3. Check that the display has power and that its input is set to the venue
-   computer. Reseat the display and Ethernet cables once.
-4. Press the venue computer's power button briefly. Wait up to two minutes for
-   the idle screen. Do not repeatedly press the button while it is booting.
-5. If it does not recover, hold the power button for about ten seconds until it
-   turns off, wait ten seconds, then press it once to start it.
-6. Wait up to five minutes. Confirm the idle screen appears and perform the QR
-   opening check above.
-7. If recovery fails, leave the computer powered, note any on-screen error, and
-   contact the technical escalation owner. Do not enter BIOS, reinstall the
-   browser, expose the admin page publicly, or factory-reset equipment.
+2. Record the screen message and current time.
+3. Check display power/input and reseat the display and network cables once.
+4. Press the computer power button briefly and wait up to two minutes for idle.
+5. If it does not recover, hold the power button for about ten seconds, wait ten
+   seconds, and press it once to start it.
+6. Wait up to five minutes, confirm idle appears, and repeat the QR opening
+   check.
+7. If recovery fails, leave the computer powered, record the visible error, and
+   contact the technical operator. Do not enter BIOS, reinstall software, or
+   factory-reset equipment.
 
 ## Incident triage
 
-- **Cloud health and readiness both fail:** keep the installation closed. The
-  technical operator checks Fly status, application logs, the database, and
-  the last deployment. Use [deployment.md](deployment.md) for rollback.
-- **Server healthy, display heartbeat missing:** check venue power/network,
-  then power-cycle using the procedure above. The kiosk watchdog should restart
-  a crashed browser automatically.
-- **Both heartbeat and venue checks missing:** treat this as a venue computer,
-  power, or network incident. Check the UPS, Ethernet, router, and VPN.
-- **Display says reconnecting:** wait two minutes. If cloud health is good and
-  it persists, power-cycle the venue computer.
-- **Media retry exceeds two minutes:** close the installation and escalate.
-  Do not bypass media verification or replace production files by hand.
-- **Repeated session aborts or failure to return to idle:** close admission,
-  use the admin `idle` control once, and escalate with timestamps and recent
-  error records.
-- **Database queue degradation:** gameplay may continue briefly, but repeated
-  or sustained warnings require technical escalation; do not deploy until the
-  queue has recovered.
+- **Health and readiness both fail:** keep the installation closed. Check the
+  local server process, logs, scenario, media manifest, disk, and last change.
+- **Server healthy, display heartbeat missing:** restart the kiosk browser, then
+  power-cycle if it does not recover.
+- **Display says reconnecting:** verify the local server and network, wait two
+  minutes, then power-cycle if it persists.
+- **Media retry exceeds two minutes:** close the installation and verify the
+  locked media files and manifest. Do not replace files during opening hours.
+- **Repeated session aborts:** use the admin `idle` control once and escalate
+  with timestamps and the visible phase/session identifiers.
+- **Disk, memory, or temperature warning:** close the installation before the
+  computer becomes unstable and contact the technical operator.
 
-Record the time, visible symptom, actions taken, recovery time, build version,
-and any session/phase identifiers. Do not record participant IP addresses or
-other unnecessary personal data.
+Do not record participant IP addresses or unnecessary visitor data.
 
-## Monitoring and alerts
+## Monitoring
 
-The monitoring owner must maintain three independent views: cloud server,
-display heartbeat, and venue network/computer. Route urgent alerts to both the
-technical on-call contact and the venue duty contact.
+Monitor the local server process, display heartbeat, free disk space, memory,
+temperature, and process restarts. Alerts should reach both the technical
+operator and museum duty contact.
 
 | Signal | Alert condition | First response |
 |---|---|---|
-| `/healthz` or `/readyz` | unavailable for 2 minutes | Check Fly and application logs; keep venue closed if readiness fails. |
-| Display heartbeat | absent for 2 minutes during opening hours while server is healthy | Check venue network/browser; power-cycle if needed. |
-| Venue-specific network check | missing with display heartbeat | Check power, UPS, Ethernet, router, and VPN. |
-| Display reconnects | repeated above the agreed baseline | Correlate with network, deploy, and restart events. |
-| Media download/hash retry | continuous for more than 2 minutes | Close installation and inspect CDN/media integrity. |
-| Session aborts | above the director-approved threshold, or any failure to recover to idle | Inspect structured events and recent admin errors. |
-| Memory or process restarts | spike above the agreed baseline | Inspect Fly metrics; compare with deploy and soak-test results. |
-| Database write queue | sustained degradation or growth | Check Supabase connectivity/capacity and buffered-write health events. |
-| Participant retention cleanup | any `retention-cleanup-failed` event, or expired vote rows remain after a successful run | Check database connectivity/function permissions, verify manually, and escalate until deletion succeeds. |
-| Deployment validation | scenario validation or image build fails | Block production deployment. |
+| `/healthz` or `/readyz` | unavailable for 2 minutes | Check the local server and logs; keep the installation closed. |
+| Display heartbeat | absent for 2 minutes while server is healthy | Restart the kiosk browser, then power-cycle if needed. |
+| Media verification | retrying for more than 2 minutes | Verify local media and manifest integrity. |
+| Disk space | below the agreed reserve | Rotate diagnostics and investigate unexpected growth. |
+| Memory or restarts | sustained growth or repeated restart | Compare with the hardware soak baseline. |
+| Temperature | above the hardware-approved range | Check ventilation and close the installation if needed. |
 
-Thresholds not fixed in the implementation plan must be agreed and recorded in
-the monitoring dashboard before launch. Test every alert during the staged
-failure drills and record its owner, notification route, and escalation timer.
-Use the credential/input checklist and alert drill record in
-`infra/provisioning.md`; it intentionally records secret-manager references,
-not secret values.
+## Handoff package
 
-## Participant-data retention check
+The museum should receive:
 
-The production privacy commitment is that participant identifiers and final
-positions in `votes` are retained only until the configured installation closing
-date plus 90 days. The server enforces this by calling
-`delete_expired_participant_data(now())` once at every persistence-enabled boot
-and again 24 hours after each completed cleanup. Runs cannot overlap. A database
-error is logged as `retention-cleanup-failed` without crashing the running show;
-the next boot or daily run retries it.
-
-The technical operator must alert on every `retention-cleanup-failed` event and
-confirm that a later `retention-cleanup-succeeded` event appears. That success
-event includes `cutoff` and `deletedRows`. After the retention deadline, and
-after any cleanup failure, verify with read-only database access:
-
-```sql
-select count(*) as expired_votes
-from votes
-where retained_until <= now();
-```
-
-The result must be zero after a successful cleanup. If it is not, keep the
-incident open, check application/database logs and the migration/function
-permissions, then have an authorized database operator run
-`select delete_expired_participant_data(now());`. Repeat the read-only query and
-record the timestamp and deleted-row count in the privacy operations log. Do not
-export participant rows while diagnosing retention, and do not extend
-`INSTALLATION_CLOSES_AT` or edit `retained_until` without an approved policy
-change.
-
-## Handoff package check
-
-Before operational ownership transfers, confirm receipt of:
-
-- source repository and automated test suite;
-- locked production scenario and media manifest;
-- database migrations and environment-variable reference;
-- deployment configuration, protected deployment access, and rollback guide;
-- venue installation guide and this operations runbook;
-- admin credential transfer procedure (through an approved secret manager);
-- monitoring dashboard, alert inventory, notification routes, and test record;
-- approved retention/privacy document, visitor notice, processor list, and
-  deletion procedure; and
-- named technical and venue escalation contacts, including out-of-hours rules.
+- source repository and automated tests;
+- locked scenario, manifest, and production media;
+- installation configuration and credential-transfer procedure;
+- venue installation guide and this runbook;
+- restorable system image or configured spare computer;
+- monitoring destinations and named escalation contacts; and
+- recorded hardware, OS, browser, and application versions.
 
 The receiving operator should complete the opening check and one supervised
-power-cycle without developer assistance before signing the handoff.
+power cycle without developer assistance before sign-off.

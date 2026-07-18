@@ -22,7 +22,7 @@ protocol; that file is retained as a historical record of steps 000–048.
 - **Cheap/medium implementation work defaults to codex** (larger credit
   budget). Claude handles complex or high-risk work.
 - **Frontier claude (Fable) reviews only high-failure-potential changes**:
-  crypto (grants/leases), vote/resolution correctness, persistence
+  crypto (grants/leases), vote/resolution correctness, local runtime
   integrity/privacy, admission security, and data-loss paths.
 - **Codex-authored low-risk PRs self-verify** (tests + typecheck + build in the
   PR description); claude-authored PRs are cross-reviewed by codex.

@@ -25,9 +25,6 @@ jobs:
       - run: pnpm validate-scenario content/scenarios/dev.json
       - name: Build display, phone, and admin bundles
         run: pnpm --filter @smartphonecracy/display build && pnpm --filter @smartphonecracy/phone build && pnpm --filter @smartphonecracy/admin build
-      - name: Build versioned container
-        run: docker build --build-arg BUILD_VERSION="${GITHUB_SHA}" --tag "smartphonecracy:${GITHUB_SHA}" .
-
   e2e:
     runs-on: ubuntu-latest
     steps:

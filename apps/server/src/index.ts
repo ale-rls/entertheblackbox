@@ -2,14 +2,12 @@ import { pathToFileURL } from "node:url";
 import { loadConfig } from "./config.js";
 import { buildServer } from "./server.js";
 import { loadScenarioReadiness } from "./readiness.js";
-import { createPersistenceRuntime, type PersistenceRuntimeEvent } from "./persistence/index.js";
 
 export * from "./config.js";
 export * from "./readiness.js";
 export * from "./server.js";
 export * from "./admission/index.js";
 export * from "./engine/phase-engine.js";
-export * from "./persistence/index.js";
 
 type ListeningApp = {
   listen(options: { host: string; port: number }): Promise<unknown>;
@@ -18,7 +16,6 @@ type ListeningApp = {
 
 export async function listenWithCleanup(
   app: ListeningApp,
-  persistenceRuntime: Pick<NonNullable<Awaited<ReturnType<typeof createPersistenceRuntime>>>, "close"> | null,
   options: { host: string; port: number },
 ): Promise<void> {
   try {
@@ -29,12 +26,6 @@ export async function listenWithCleanup(
       await app.close();
     } catch (cleanupError) {
       cleanupErrors.push(cleanupError);
-    } finally {
-      try {
-        await persistenceRuntime?.close();
-      } catch (cleanupError) {
-        cleanupErrors.push(cleanupError);
-      }
     }
     if (cleanupErrors.length > 0) throw new AggregateError([error, ...cleanupErrors], "server listen and cleanup failed");
     throw error;
@@ -44,29 +35,16 @@ export async function listenWithCleanup(
 export async function startServer(): Promise<void> {
   const config = loadConfig();
   const readiness = await loadScenarioReadiness(config);
-  const persistenceRuntime = readiness.ready
-    ? await createPersistenceRuntime(config, readiness.scenario, {
-        log: (event: PersistenceRuntimeEvent) => console.error(JSON.stringify({ component: "persistence", ...event })),
-      })
-    : null;
-  const { app } = await buildServer({
-    config,
-    readiness,
-    ...(persistenceRuntime === null ? {} : { persistence: persistenceRuntime.persistence }),
-  });
+  const { app } = await buildServer({ config, readiness });
   let shutdownPromise: Promise<void> | null = null;
   const shutdown = async (signal: NodeJS.Signals) => {
     shutdownPromise ??= (async () => {
       app.log.info({ signal }, "shutting down");
-      try {
-        await app.close();
-      } finally {
-        await persistenceRuntime?.close();
-      }
+      await app.close();
     })();
     return shutdownPromise;
   };
-  await listenWithCleanup(app, persistenceRuntime, { host: config.host, port: config.port });
+  await listenWithCleanup(app, { host: config.host, port: config.port });
   const handleSignal = (signal: NodeJS.Signals) => {
     void shutdown(signal).catch((error: unknown) => {
       console.error("server shutdown failed", error);
