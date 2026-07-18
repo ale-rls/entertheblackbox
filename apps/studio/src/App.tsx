@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { addEdge, Background, ReactFlow, type Connection, type Edge, type Node, useEdgesState, useNodesState } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Autosave, IndexedDbDraftDatabase, recoverDraft, type SaveStatus as SaveStatusValue } from "./drafts.js";
-import { exportArtifacts, exportBackup, importBackup, importRuntime } from "./io.js";
+import { exportArtifacts, exportBackup, importRuntime, importStudioFiles } from "./io.js";
 import type { Draft } from "./model.js";
 import { applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, phaseOutputHandles, pruneEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./canvas/graph.js";
 import { nodeDataForPhase, nodeTypes } from "./canvas/nodes.js";
@@ -139,15 +139,24 @@ export function App() {
     if (!history.current || history.current.value.draft.id !== nextDraft.id) history.current = new SessionHistory({ draft: draft ?? nextDraft, edges });
     applyHistory(history.current.apply({ draft: nextDraft, edges: nextEdges }));
   };
-  const readJson = (file: File) => file.text().then(JSON.parse);
+  const readImportFile = async (file: File) => {
+    const text = await file.text();
+    if (file.name.toLowerCase().endsWith(".txt")) return { name: file.name, value: text };
+    try {
+      return { name: file.name, value: JSON.parse(text) as unknown };
+    } catch {
+      throw new Error(`${file.name} is not valid JSON.`);
+    }
+  };
   const importFiles = async (files: FileList | null) => {
     if (!files?.length) return;
     setImportFeedback(undefined);
     try {
-      const parsed = await Promise.all([...files].map(readJson));
-      const imported = files.length === 1 ? importBackup(parsed[0]) : importRuntime(parsed[0], parsed[1]);
+      const parsed = await Promise.all([...files].map(readImportFile));
+      const imported = importStudioFiles(parsed);
       history.current = undefined;
-      save(imported);
+      save(imported.draft);
+      setImportFeedback({ status: "success", message: imported.message });
     } catch (error) {
       const detail = error instanceof Error ? error.message : "The selected files could not be read.";
       setImportFeedback({ status: "danger", message: `Import failed: ${detail} Choose a Studio backup, or select scenario.json and media-manifest.json together.` });
@@ -397,7 +406,7 @@ export function App() {
     <div className="home-actions">
       <button className="sc-tool-button" data-sc-tool-variant="primary" onClick={createShow}>New show</button>
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" aria-describedby={importFeedback ? "studio-home-feedback" : undefined} onClick={() => importInputRef.current?.click()}>Import show or backup</button>
-      <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json" onChange={(event) => {
+      <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json,text/plain,.json,.txt" onChange={(event) => {
         void importFiles(event.currentTarget.files);
         event.currentTarget.value = "";
       }} />
@@ -473,7 +482,7 @@ export function App() {
       <SaveStatus status={status} />
       <button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => setPreviewing(true)}>Preview</button>
       <button className="sc-tool-button export" data-sc-tool-variant="secondary" aria-label="Export for deployment" aria-describedby={exportFeedback ? "studio-export-feedback" : undefined} disabled={blocked} title={blocked ? "Resolve errors and acknowledge warnings first" : undefined} onClick={exportDeployment}>Export</button>
-      <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json" onChange={(event) => {
+      <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json,text/plain,.json,.txt" onChange={(event) => {
         void importFiles(event.currentTarget.files);
         event.currentTarget.value = "";
       }} />
