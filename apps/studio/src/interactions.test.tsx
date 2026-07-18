@@ -172,6 +172,7 @@ describe("Studio feedback and keyboard entry", () => {
 
     expect(importButton.tagName).toBe("BUTTON");
     expect(input.hidden).toBe(true);
+    expect(input.getAttribute("aria-label")).toBe("Import show or backup");
     expect(document.querySelectorAll('button, input:not([hidden])')).toContain(importButton);
     importButton.focus();
     await act(async () => {

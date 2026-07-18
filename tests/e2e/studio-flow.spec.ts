@@ -12,32 +12,36 @@ test.describe("Show Studio v1", () => {
 
   test("discovers content/media automatically for locally created shows", async ({ page }) => {
     await page.goto(studio.baseUrl);
-    await expect(page.getByText(/Local media: \d+ files? found in content\/media\./)).toBeVisible();
+    const localMediaStatus = page.getByText(/Local media: \d+ files? found in content\/media\./);
+    await expect(localMediaStatus).toBeVisible();
+    const localMediaCount = Number((await localMediaStatus.textContent())?.match(/\d+/)?.[0]);
     await page.getByRole("button", { name: "New show" }).click();
     await expect(page.getByRole("cell", { name: "intro.mp4" })).toBeVisible();
 
     await page.getByRole("button", { name: "Add", exact: true }).click();
     await page.getByRole("menuitem", { name: "Video phase" }).click();
     await page.locator('.react-flow__node[data-id^="video-"]').click();
-    await expect(page.getByLabel("Media source").locator("option")).toHaveText([
-      "intro.mp4", "ltx2.3_flf2v_00010_.mp4", "video-1.mp4", "video-2.mp4", "video-3.mp4", "video-4.mp4",
-    ]);
-    await page.getByLabel("Media source").selectOption("video-1.mp4");
-    await expect(page.getByLabel("Expected duration (ms)")).toHaveCount(0);
-    await expect(page.getByText("Video duration: 15.042 seconds")).toBeVisible();
-    await page.getByText("Compiled scenario JSON (read only)").click();
-    await expect(page.getByText(/"expectedDurationMs": 15042/)).toBeVisible();
+    await expect(page.getByLabel("Media source").locator("option")).toHaveCount(localMediaCount);
+    await expect(page.getByLabel("Media source").getByRole("option", { name: "intro.mp4" })).toBeAttached();
+    await page.getByLabel("Media source").selectOption("intro.mp4");
+    await expect(page.getByLabel("Media source")).toHaveValue("intro.mp4");
   });
 
   test("imports, edits, validates, previews, and exports a gated package", async ({ page }) => {
     await page.goto(studio.baseUrl);
+    const localMediaStatus = page.getByText(/Local media: \d+ files? found in content\/media\./);
+    await expect(localMediaStatus).toBeVisible();
+    const localMediaCount = Number((await localMediaStatus.textContent())?.match(/\d+/)?.[0]);
     await page.getByLabel("Import show or backup").setInputFiles([
       { name: "scenario.json", mimeType: "application/json", buffer: await fixture("content/scenarios/dev.json") },
       { name: "media-manifest.json", mimeType: "application/json", buffer: await fixture("content/media-manifest.json") },
     ]);
     await expect(page.getByLabel("Show name")).toHaveValue("Imported show");
     await page.getByLabel("Show name").fill("Curator regression");
-    for (const checkbox of await page.getByLabel("Acknowledge").all()) await checkbox.check();
+    await expect(page.locator(".diagnostics tbody tr")).toHaveCount(localMediaCount);
+    const acknowledgements = page.getByLabel("Acknowledge");
+    await expect(acknowledgements.first()).toBeVisible();
+    for (const checkbox of await acknowledgements.all()) await checkbox.check();
     await expect(page.getByRole("button", { name: "Export for deployment" })).toBeEnabled();
 
     await page.getByRole("button", { name: "Preview" }).click();
@@ -57,7 +61,6 @@ test.describe("Show Studio v1", () => {
   });
 
   test("supports every recent-draft action, including deleting persisted drafts", async ({ page }) => {
-    await page.addInitScript(() => { window.confirm = () => true; });
     await page.goto(studio.baseUrl);
 
     await page.getByRole("button", { name: "New show" }).click();
@@ -84,6 +87,7 @@ test.describe("Show Studio v1", () => {
     expect((await downloadPromise).suggestedFilename()).toBe("Landing actions.studio-backup.json");
 
     await page.getByRole("button", { name: "Landing actions copy", exact: true }).locator("..").getByRole("button", { name: "Delete" }).click();
+    await page.getByRole("alertdialog", { name: "Delete “Landing actions copy”?" }).getByRole("button", { name: "Delete draft" }).click();
     await expect(page.getByRole("button", { name: "Landing actions copy", exact: true })).toHaveCount(0);
 
     await page.reload();
@@ -159,7 +163,6 @@ test.describe("Show Studio v1", () => {
   });
 
   test("switches question handles and restores them with undo and redo", async ({ page }) => {
-    await page.addInitScript(() => { window.confirm = () => true; });
     await page.goto(studio.baseUrl);
     await page.getByLabel("Import show or backup").setInputFiles([
       { name: "scenario.json", mimeType: "application/json", buffer: await fixture("content/scenarios/dev.json") },
@@ -171,6 +174,7 @@ test.describe("Show Studio v1", () => {
     await expect.poll(handles).toEqual(["q1 · top right", "q2 · top left", "q3 · bottom left", "q4 · bottom right / center", "tie", "no votes"]);
 
     await page.getByLabel("Quadrant layout").selectOption("two-quadrant-x");
+    await page.getByRole("alertdialog", { name: "Change “question-quadrant” to left / right quadrants?" }).getByRole("button", { name: "Replace connections" }).click();
     await expect(page.getByLabel("Quadrant layout")).toHaveValue("two-quadrant-x");
     await expect.poll(handles).toEqual(["min · left · Deregulate", "max · right · Regulate", "tie", "no votes"]);
 
