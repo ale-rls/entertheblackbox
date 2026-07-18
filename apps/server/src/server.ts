@@ -5,7 +5,6 @@ import { AdmissionController } from "./admission/index.js";
 import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
-import type { InstallationPersistence } from "./persistence/index.js";
 import { loadScenarioReadiness, type ScenarioReadiness } from "./readiness.js";
 import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
@@ -20,7 +19,6 @@ export type BuildServerOptions = {
   readiness?: ScenarioReadiness;
   onWebSocketConnection?: (socket: WebSocket) => void;
   admission?: AdmissionController;
-  persistence?: InstallationPersistence;
   adminData?: AdminDataSource;
   maxWebSocketConnections?: number;
   webSocketKeepAliveIntervalMs?: number;
@@ -62,7 +60,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
           .map((phase) => [phase.id, phase.src]),
       )
     : null;
-  const adminData = options.adminData ?? options.persistence;
+  const adminData = options.adminData;
   let engine: PhaseEngine | null = null;
   const admission = options.admission ?? new AdmissionController({
     installationId: config.installationId,
@@ -93,8 +91,6 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         issueGrant: (now) => admission.issueJoinGrant(now),
         allowLateJoin: config.allowLateJoin,
       },
-      onCheckpoint: (checkpoint) => options.persistence?.checkpoint(checkpoint),
-      onVoteSnapshotEnqueued: (snapshot) => options.persistence?.voteSnapshot(snapshot),
       onSessionEnded: ({ endedAt }) => admission.endParticipantSession(endedAt),
     });
     engine.start();
@@ -192,16 +188,6 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     engine?.stop();
     for (const socket of webSockets.clients) socket.terminate();
     await new Promise<void>((resolve) => webSockets.close(() => resolve()));
-    if (options.persistence !== undefined) {
-      try {
-        const result = await options.persistence.shutdown(config.persistenceFlushTimeoutMs);
-        if (result.timedOut) {
-          app.log.error({ abandonedWrites: result.abandonedWrites }, "persistence shutdown flush timed out");
-        }
-      } catch (error) {
-        app.log.error({ error }, "persistence shutdown flush failed");
-      }
-    }
   });
 
   return { app, config, readiness, webSockets, admission, engine, startedAt };

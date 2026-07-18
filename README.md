@@ -2,11 +2,11 @@
 
 Smartphonecracy Runner is the runtime and visual authoring toolkit for a browser-based, multiplayer installation. Visitors scan a QR code, use their phones as cursors, and collectively navigate questions and video branches on a shared display.
 
-The server is authoritative: it manages admission, room state, timed vote snapshots, branch resolution, recovery, persistence, and the operational admin API. Shows are versioned scenario graphs rather than hard-coded application flows.
+The server is authoritative: it manages admission, room state, timed vote snapshots, branch resolution, recovery, and the operational admin API. Shows are versioned scenario graphs rather than hard-coded application flows.
 
 ## Applications
 
-- `apps/server` — Fastify HTTP and WebSocket server, phase engine, admission, persistence, and admin API.
+- `apps/server` — Fastify HTTP and WebSocket server, phase engine, admission, and admin API.
 - `apps/display` — fullscreen React client for the installation screen.
 - `apps/phone` — mobile React controller used by participants.
 - `apps/admin` — protected operational interface.
@@ -29,7 +29,7 @@ corepack enable
 pnpm install
 ```
 
-The checked-in development scenario and media manifest are used by default. No database is required for local development; persistence is enabled when `DATABASE_URL` and the related production configuration are supplied.
+The checked-in development scenario and media manifest are used by default. The installation runs without a database or external service.
 
 ## Run locally
 
@@ -44,7 +44,7 @@ pnpm --filter @smartphonecracy/admin build
 Then start the installation server and leave it running:
 
 ```bash
-env HOST=127.0.0.1 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=test node --import tsx apps/server/src/index.ts
+env HOST=127.0.0.1 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=development node --import tsx apps/server/src/index.ts
 ```
 
 Open the authenticated installation display:
@@ -75,7 +75,7 @@ scenario is not ready, it fails closed with HTTP 503 and
 metadata (the public media manifest already lists media paths), so authors must
 not put secrets or private visitor information in either field.
 
-Development credentials in the server configuration are intentionally local-only defaults. Set strong `ADMIN_TOKEN`, `JOIN_GRANT_SECRET`, display credentials, and production URLs before deployment.
+Development credentials in the server configuration are intentionally local-only defaults. Set installation-specific `ADMIN_TOKEN`, `JOIN_GRANT_SECRET`, and `DISPLAY_TOKEN` values before venue operation.
 
 The admin API applies process-local per-IP limits in separate buckets for authenticated traffic and failed authentication, so bad-token traffic cannot exhaust an operator's allowance on a shared network. Defaults are 600 authenticated requests and 30 authentication failures per 60 seconds. Override them with `ADMIN_RATE_LIMIT_MAX_REQUESTS`, `ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES`, and `ADMIN_RATE_LIMIT_WINDOW_MS`. `X-Forwarded-For` is used only when `TRUST_PROXY=true`.
 
@@ -84,17 +84,17 @@ The admin API applies process-local per-IP limits in separate buckets for authen
 The normal command loads the default development show. To run `showtest1`, stop the installation server with `Ctrl+C` and restart it with its checked-in scenario and media manifest:
 
 ```bash
-env HOST=127.0.0.1 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=test SCENARIO_PATH=content/scenarios/showtest1.json MEDIA_MANIFEST_PATH=content/media-manifests/showtest1.json node --import tsx apps/server/src/index.ts
+env HOST=127.0.0.1 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=development SCENARIO_PATH=content/scenarios/showtest1.json MEDIA_MANIFEST_PATH=content/media-manifests/showtest1.json node --import tsx apps/server/src/index.ts
 ```
 
-Studio drafts and deployment exports do not automatically publish to the running installation. Restarting the server with these paths is what selects the checked-in show locally.
+Studio drafts and exports do not automatically publish to the running installation. Restarting the server with these paths is what selects the show locally. The scenario and manifest are tracked, but the real `showtest1` videos are not; copy the matching media files into `content/media` before starting it.
 
 ### Connect a physical phone
 
 The installation server already serves the phone client; no second phone server is needed. Find the Mac's LAN IP (often `ipconfig getifaddr en0` on macOS), substitute it below, and start the server with a network-visible host and QR destination:
 
 ```bash
-env HOST=0.0.0.0 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=test PHONE_JOIN_BASE_URL=http://192.168.1.23:3000/phone/ node --import tsx apps/server/src/index.ts
+env HOST=0.0.0.0 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=development PHONE_JOIN_BASE_URL=http://192.168.1.23:3000/phone/ node --import tsx apps/server/src/index.ts
 ```
 
 Keep the authenticated display open on the Mac as above, then scan its QR code. The phone and Mac must be on the same Wi-Fi network, and the macOS firewall must allow incoming connections to Node.js on port 3000. Do not use `localhost` in `PHONE_JOIN_BASE_URL`: on the phone, that means the phone itself.
@@ -102,7 +102,7 @@ Keep the authenticated display open on the Mac as above, then scan its QR code. 
 To run `showtest1` and accept physical phones at the same time, combine both sets of environment variables:
 
 ```bash
-env HOST=0.0.0.0 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=test PHONE_JOIN_BASE_URL=http://192.168.1.23:3000/phone/ SCENARIO_PATH=content/scenarios/showtest1.json MEDIA_MANIFEST_PATH=content/media-manifests/showtest1.json node --import tsx apps/server/src/index.ts
+env HOST=0.0.0.0 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=development PHONE_JOIN_BASE_URL=http://192.168.1.23:3000/phone/ SCENARIO_PATH=content/scenarios/showtest1.json MEDIA_MANIFEST_PATH=content/media-manifests/showtest1.json node --import tsx apps/server/src/index.ts
 ```
 
 ### Stale display or missing video
@@ -129,7 +129,7 @@ See [the Studio curator guide](docs/studio-guide.md) and [runtime compatibility 
 pnpm typecheck
 pnpm test
 pnpm test:e2e
-pnpm validate-scenario
+pnpm validate-scenario content/scenarios/dev.json --manifest content/media-manifest.json --media-dir content/media
 ```
 
 The end-to-end suite builds the installation clients and runs Playwright flows against real server processes. Some environments require permission to bind local ports.
@@ -150,16 +150,14 @@ pnpm simulate-clients
 
 Scenarios and manifests are validated at startup and before Studio deployment export. Visual Studio layout metadata remains separate from runtime JSON.
 
-## Deployment and operations
+## Venue operation
 
-The current production design targets a single authoritative Fly.io server, Supabase Postgres for durable events and checkpoints, and externally hosted media — but whether production runs in the cloud or on-premises at the venue is an open decision ([#37](https://github.com/ale-rls/smartphonecracy-runner/issues/37)). Deployment is manually gated and must happen while the venue is closed.
+The supported architecture is a local installation computer serving the application and media on the venue network. Runtime operation does not depend on cloud hosting, a remote database, or a CDN.
 
-- [Deployment and rollback](docs/deployment.md)
 - [Operations runbook](docs/operations.md)
 - [Venue installation guide](docs/venue-installation.md)
-- [Persistence model](docs/persistence.md)
 
-The application and Show Studio v1 are implemented and tested. A real venue launch still requires production content and privacy approval, infrastructure provisioning, exact-hardware acceptance, and the final soak test.
+The application and Show Studio v1 are implemented and tested. A venue launch still requires production content, exact-hardware acceptance, a recovery image or spare computer, and the final soak test.
 
 ## Project status
 

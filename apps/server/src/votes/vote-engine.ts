@@ -281,7 +281,7 @@ export class VoteEngine {
       recordedAt,
       votes: Object.freeze(votes),
     });
-    // Mark it final before the hook so a synchronous persistence enqueue cannot
+    // Mark it final before the hook so a synchronous snapshot consumer cannot
     // accidentally re-enter and mutate the live question.
     question.finalized = snapshot;
     this._lastSnapshot = snapshot;

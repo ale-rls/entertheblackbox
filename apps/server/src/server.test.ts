@@ -140,7 +140,6 @@ describe("configuration", () => {
     });
     expect(() => loadConfig({ PORT: "70000" })).toThrow(ConfigError);
     expect(() => loadConfig({ ADMIN_RATE_LIMIT_MAX_REQUESTS: "0" })).toThrow(ConfigError);
-    expect(() => loadConfig({ DATABASE_URL: "postgres://db" })).toThrow(/INSTALLATION_CLOSES_AT/);
     expect(loadConfig({
       ADMIN_RATE_LIMIT_MAX_REQUESTS: "900",
       ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES: "12",
@@ -150,11 +149,6 @@ describe("configuration", () => {
       maxAuthenticationFailures: 12,
       windowMs: 30_000,
     });
-    const persistent = loadConfig({
-      DATABASE_URL: "postgres://db",
-      INSTALLATION_CLOSES_AT: "2026-12-31T23:00:00+00:00",
-    });
-    expect(persistent.participantDataExpiresAt).toBe(Date.parse("2027-03-31T23:00:00Z"));
   });
 
   it("rejects an invalid WebSocket keepalive interval", async () => {
@@ -297,31 +291,26 @@ describe("HTTP readiness and bundles", () => {
 });
 
 describe("WebSocket lifecycle", () => {
-  it("closes app resources before persistence when listening fails", async () => {
+  it("closes app resources when listening fails", async () => {
     const order: string[] = [];
     const failure = new Error("listen failed");
     await expect(listenWithCleanup({
       listen: async () => { throw failure; },
       close: async () => { order.push("app"); },
-    }, {
-      close: async () => { order.push("persistence"); },
     }, { host: "127.0.0.1", port: 3001 })).rejects.toBe(failure);
-    expect(order).toEqual(["app", "persistence"]);
+    expect(order).toEqual(["app"]);
   });
 
   it("preserves listen and cleanup failures together", async () => {
     const listenError = new Error("listen failed");
     const closeError = new Error("app close failed");
-    const persistenceError = new Error("persistence close failed");
     const result = listenWithCleanup({
       listen: async () => { throw listenError; },
       close: async () => { throw closeError; },
-    }, {
-      close: async () => { throw persistenceError; },
     }, { host: "127.0.0.1", port: 3001 });
     await expect(result).rejects.toMatchObject({
       name: "AggregateError",
-      errors: [listenError, closeError, persistenceError],
+      errors: [listenError, closeError],
     });
   });
 
