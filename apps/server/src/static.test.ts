@@ -24,7 +24,7 @@ async function bundleApp(): Promise<FastifyInstance> {
 
   const app = Fastify();
   apps.push(app);
-  registerBundleRoutes(app, { display: root, phone: root, admin: root });
+  registerBundleRoutes(app, { display: root, phone: root, admin: root, studio: root });
   return app;
 }
 

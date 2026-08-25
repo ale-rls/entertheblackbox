@@ -170,11 +170,11 @@ export function registerMediaRoutes(
 
 export function registerBundleRoutes(
   app: FastifyInstance,
-  bundles: Record<"display" | "phone" | "admin", string>,
+  bundles: Record<"display" | "phone" | "admin" | "studio", string>,
 ): void {
   app.get("/", async (_request, reply) => reply.redirect("/display/"));
 
-  for (const role of ["display", "phone", "admin"] as const) {
+  for (const role of ["display", "phone", "admin", "studio"] as const) {
     app.get(`/${role}`, async (_request, reply) => reply.redirect(`/${role}/`));
     app.get<{ Params: { "*": string } }>(`/${role}/*`, async (request, reply) => {
       await sendBundleFile(reply, bundles[role], request.params["*"], request.headers.range);

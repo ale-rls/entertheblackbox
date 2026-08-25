@@ -6,4 +6,4 @@ import { localMediaManifestPlugin } from "./local-media.js";
 const mediaDirectory = process.env.SMARTPHONECRACY_STUDIO_MEDIA_DIR
   ?? fileURLToPath(new URL("../../content/media", import.meta.url));
 
-export default defineConfig({ plugins: [react(), localMediaManifestPlugin(mediaDirectory)] });
+export default defineConfig({ base: "/studio/", plugins: [react(), localMediaManifestPlugin(mediaDirectory)] });

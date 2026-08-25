@@ -6,6 +6,7 @@ import type {
   MovementRecordingFinalized,
   MovementRecordingStarted,
 } from "../movement/index.js";
+import type { InstallationConfigOverride } from "../persistence/installation-config.js";
 import type { FinalVoteSnapshot } from "../votes/index.js";
 
 export type AdminExport = { json: unknown; csv: string };
@@ -32,7 +33,16 @@ export type RegisterAdminOptions = {
   rateLimitPolicy?: AdminRateLimitPolicy;
   rateLimiters?: AdminRateLimiters;
   now?: () => number;
+  installationConfig?: {
+    /** The installationId/roomId this running process was started with. */
+    active: InstallationConfigOverride;
+    /** The operator-saved override, if any -- takes effect on next restart. */
+    read: () => Promise<InstallationConfigOverride | null>;
+    write: (value: InstallationConfigOverride) => Promise<void>;
+  };
 };
+
+const INSTALLATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
 
 export type AdminRateLimitPolicy = {
   maxAuthenticatedRequests: number;
@@ -106,6 +116,27 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       };
     });
     admin.get("/errors", async () => ({ errors: await options.data?.recentErrors() ?? [] }));
+    admin.get("/installation", async (_request, reply) => {
+      if (!options.installationConfig) return reply.code(503).send({ error: "installation_config_unavailable" });
+      return {
+        active: options.installationConfig.active,
+        pending: await options.installationConfig.read(),
+      };
+    });
+    admin.post<{ Body: { installationId?: unknown; roomId?: unknown } }>("/installation", async (request, reply) => {
+      if (!options.installationConfig) return reply.code(503).send({ error: "installation_config_unavailable" });
+      const { installationId, roomId } = request.body ?? {};
+      if (
+        typeof installationId !== "string" || !INSTALLATION_ID_PATTERN.test(installationId)
+        || typeof roomId !== "string" || !INSTALLATION_ID_PATTERN.test(roomId)
+      ) {
+        return reply.code(400).send({ error: "invalid_installation_config" });
+      }
+      const value = { installationId, roomId };
+      await options.installationConfig.write(value);
+      options.data?.audit({ action: "set-installation-config", at: new Date().toISOString(), detail: value });
+      return { ok: true, pending: value };
+    });
     admin.get<{ Params: { sessionId: string }; Querystring: { format?: string } }>("/sessions/:sessionId/export", async (request, reply) => {
       const result = await options.data?.exportSession(request.params.sessionId);
       if (!result) return reply.code(404).send({ error: "session_not_found" });

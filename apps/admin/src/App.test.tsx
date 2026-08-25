@@ -83,6 +83,9 @@ function createAdminFetch(options?: { status?: Status; rejectAction?: string }) 
     const method = init?.method ?? "GET";
     requests.push({ url, method });
     if (url.endsWith("/status")) return jsonResponse(options?.status ?? activeStatus);
+    if (url.endsWith("/installation") && method === "GET") {
+      return jsonResponse({ active: { installationId: "dev-installation", roomId: "main" }, pending: null });
+    }
     if (method === "POST" && url.endsWith(`/${options?.rejectAction ?? "\0"}`)) return jsonResponse({ ok: false, reason: "wrong-phase" }, 409);
     return jsonResponse({ ok: true });
   });
@@ -214,6 +217,7 @@ describe("Admin operations UI", () => {
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
       if (url.endsWith("/status")) return failStatus ? jsonResponse({ error: "unavailable" }, 503) : jsonResponse(activeStatus);
+      if (url.endsWith("/installation")) return jsonResponse({ active: { installationId: "dev-installation", roomId: "main" }, pending: null });
       return jsonResponse({ ok: true });
     }));
     const intervalSpy = vi.spyOn(window, "setInterval");
@@ -236,6 +240,43 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).toContain("Authenticated");
     expect(document.body.textContent).not.toContain("Status stale");
     expect(document.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("shows the active installation/room and saves a pending override", async () => {
+    sessionStorage.setItem("admin-token", "operator-secret");
+    const requests: Array<{ url: string; method: string; body?: string }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ url, method, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
+      if (url.endsWith("/status")) return jsonResponse(activeStatus);
+      if (url.endsWith("/installation") && method === "GET") {
+        return jsonResponse({ active: { installationId: "dev-installation", roomId: "main" }, pending: null });
+      }
+      if (url.endsWith("/installation") && method === "POST") {
+        return jsonResponse({ ok: true, pending: { installationId: "venue-b", roomId: "stage-2" } });
+      }
+      return jsonResponse({ ok: true });
+    }));
+    await renderApp();
+
+    expect(document.body.textContent).toContain("dev-installation / main");
+
+    const installationId = document.querySelector<HTMLInputElement>("#installation-id")!;
+    const roomId = document.querySelector<HTMLInputElement>("#room-id")!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(installationId, "venue-b");
+      installationId.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(roomId, "stage-2");
+      roomId.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { button("Save (restart required)").click(); });
+    await flush();
+
+    const saveRequest = requests.find(({ url, method }) => url.endsWith("/installation") && method === "POST");
+    expect(saveRequest?.body).toBe(JSON.stringify({ installationId: "venue-b", roomId: "stage-2" }));
+    expect(document.body.textContent).toContain("Restart the server in Coolify to apply it");
   });
 
   it("does not present inactive recent-error or session-export features", async () => {

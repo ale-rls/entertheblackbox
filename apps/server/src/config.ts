@@ -30,6 +30,7 @@ const envSchema = z.object({
   DISPLAY_DIST_DIR: z.string().min(1).optional(),
   PHONE_DIST_DIR: z.string().min(1).optional(),
   ADMIN_DIST_DIR: z.string().min(1).optional(),
+  STUDIO_DIST_DIR: z.string().min(1).optional(),
   POCKETBASE_URL: z.string().url().default("http://127.0.0.1:8090"),
   POCKETBASE_ADMIN_EMAIL: z.string().email().default("dev@smartphonecracy.local"),
   POCKETBASE_ADMIN_PASSWORD: z.string().min(8).default(DEVELOPMENT_POCKETBASE_ADMIN_PASSWORD),
@@ -56,7 +57,7 @@ export type ServerConfig = {
   scenarioPath: string;
   mediaManifestPath: string;
   mediaDir: string;
-  bundleDirs: Record<"display" | "phone" | "admin", string>;
+  bundleDirs: Record<"display" | "phone" | "admin" | "studio", string>;
   pocketbase: {
     url: string;
     adminEmail: string;
@@ -123,6 +124,7 @@ export function loadConfig(
       display: fromRoot(value.DISPLAY_DIST_DIR, "apps/display/dist"),
       phone: fromRoot(value.PHONE_DIST_DIR, "apps/phone/dist"),
       admin: fromRoot(value.ADMIN_DIST_DIR, "apps/admin/dist"),
+      studio: fromRoot(value.STUDIO_DIST_DIR, "apps/studio/dist"),
     },
     pocketbase: {
       url: value.POCKETBASE_URL,

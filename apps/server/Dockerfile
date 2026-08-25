@@ -15,9 +15,18 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 
+# apps/admin authenticates operators against PocketBase directly from the
+# browser, so it needs PocketBase's URL baked in at build time via Vite's
+# import.meta.env.VITE_* convention (apps/admin/src/App.tsx). A Coolify
+# build ARG isn't visible to RUN steps as a process env var on its own --
+# this ENV line is what makes `vite build` actually see it.
+ARG VITE_POCKETBASE_URL
+ENV VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL
+
 RUN pnpm --filter @smartphonecracy/display build \
   && pnpm --filter @smartphonecracy/phone build \
-  && pnpm --filter @smartphonecracy/admin build
+  && pnpm --filter @smartphonecracy/admin build \
+  && pnpm --filter @smartphonecracy/studio build
 
 FROM node:22-bookworm-slim
 

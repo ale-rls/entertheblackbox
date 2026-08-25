@@ -6,6 +6,8 @@ import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
 import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
+import { readInstallationConfigOverride, writeInstallationConfigOverride } from "./persistence/installation-config.js";
+import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 import { loadScenarioReadiness, type ScenarioReadiness } from "./readiness.js";
 import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
@@ -21,6 +23,7 @@ export type BuildServerOptions = {
   onWebSocketConnection?: (socket: WebSocket) => void;
   admission?: AdmissionController;
   adminData?: AdminDataSource;
+  pocketbase?: PocketBaseClient;
   verifyOperatorToken?: (token: string) => Promise<boolean>;
   maxWebSocketConnections?: number;
   webSocketKeepAliveIntervalMs?: number;
@@ -141,6 +144,13 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,
     ...(adminData === undefined ? {} : { data: adminData }),
+    ...(options.pocketbase === undefined ? {} : {
+      installationConfig: {
+        active: { installationId: config.installationId, roomId: config.roomId },
+        read: () => readInstallationConfigOverride(options.pocketbase!),
+        write: (value) => writeInstallationConfigOverride(options.pocketbase!, value),
+      },
+    }),
   });
 
   registerMediaRoutes(app, config.mediaManifestPath, config.mediaDir);

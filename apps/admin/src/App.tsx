@@ -25,6 +25,8 @@ export type Status = {
 
 type Feedback = { status: "success" | "danger"; message: string };
 type ConfirmAction = "idle" | "restart";
+type InstallationConfig = { installationId: string; roomId: string };
+type InstallationInfo = { active: InstallationConfig; pending: InstallationConfig | null };
 
 async function api(path: string, token: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`/api/admin/${path}`, {
@@ -110,6 +112,9 @@ export function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [workingAction, setWorkingAction] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [installationInfo, setInstallationInfo] = useState<InstallationInfo | null>(null);
+  const [installationForm, setInstallationForm] = useState<InstallationConfig>({ installationId: "", roomId: "" });
+  const [savingInstallation, setSavingInstallation] = useState(false);
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
   const controlsHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -132,12 +137,47 @@ export function App() {
     }
   }, [connectedToken]);
 
+  const loadInstallation = useCallback(async () => {
+    if (!connectedToken) return;
+    try {
+      const response = await api("installation", connectedToken);
+      const info = await response.json() as InstallationInfo;
+      if (!info?.active) return;
+      setInstallationInfo(info);
+      setInstallationForm(info.pending ?? info.active);
+    } catch {
+      // A stale/invalid token already surfaces via the main connection
+      // error banner from refresh(); a transient failure here just means
+      // this panel doesn't populate until the next successful load.
+    }
+  }, [connectedToken]);
+
   useEffect(() => {
     if (!connectedToken) return;
     void refresh();
+    void loadInstallation();
     const timer = window.setInterval(() => { void refresh(); }, 2_000);
     return () => window.clearInterval(timer);
-  }, [connectedToken, refresh]);
+  }, [connectedToken, refresh, loadInstallation]);
+
+  const saveInstallation = async (event: FormEvent) => {
+    event.preventDefault();
+    setSavingInstallation(true);
+    setFeedback(null);
+    try {
+      await api("installation", connectedToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(installationForm),
+      });
+      setFeedback({ status: "success", message: "Saved. Restart the server in Coolify to apply it." });
+      await loadInstallation();
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not save installation config." });
+    } finally {
+      setSavingInstallation(false);
+    }
+  };
 
   const connect = async (event: FormEvent) => {
     event.preventDefault();
@@ -267,6 +307,26 @@ export function App() {
             <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
             <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={!canReturnToIdle || busy} onClick={(event) => requestConfirmation("idle", event.currentTarget)}>Return to idle</button><span>Stop the current show</span></div>
           </div>
+        </section>
+
+        <section className="sc-tool-panel" aria-labelledby="admin-installation-heading">
+          <div className="admin-section-heading">
+            <div><p className="sc-tool-eyebrow">One show at a time</p><h2 id="admin-installation-heading">Installation &amp; room</h2></div>
+          </div>
+          <dl className="admin-session-facts">
+            <div><dt>Currently running</dt><dd className="sc-tool-mono">{installationInfo ? `${installationInfo.active.installationId} / ${installationInfo.active.roomId}` : "—"}</dd></div>
+            {installationInfo?.pending && <div><dt>Pending (needs restart)</dt><dd className="sc-tool-mono">{installationInfo.pending.installationId} / {installationInfo.pending.roomId}</dd></div>}
+          </dl>
+          <form className="admin-connection-form" onSubmit={(event) => void saveInstallation(event)}>
+            <label className="sc-tool-label" htmlFor="installation-id">Installation ID
+              <input id="installation-id" className="sc-tool-field sc-tool-mono" value={installationForm.installationId} onChange={(event) => setInstallationForm((form) => ({ ...form, installationId: event.target.value }))} />
+            </label>
+            <label className="sc-tool-label" htmlFor="room-id">Room ID
+              <input id="room-id" className="sc-tool-field sc-tool-mono" value={installationForm.roomId} onChange={(event) => setInstallationForm((form) => ({ ...form, roomId: event.target.value }))} />
+            </label>
+            <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingInstallation}>{savingInstallation ? "Saving…" : "Save (restart required)"}</button>
+          </form>
+          <p className="sc-tool-help">Takes effect the next time the server restarts — restart it manually in Coolify once saved.</p>
         </section>
 
       </div>}
