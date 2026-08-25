@@ -53,6 +53,34 @@ describe("CursorField", () => {
     expect(a!.x).toBe(0.3);
   });
 
+  it("upsertOne/removeOne apply single-cursor realtime-ws events without touching other cursors", () => {
+    const field = new CursorField();
+    field.ingest(batch(1, [["a", 0.1, 0.1], ["b", 0.2, 0.2]]), 1000);
+    field.upsertOne("c", "#abc", 0.5, 0.5, 1010);
+    expect(field.size).toBe(3);
+
+    field.upsertOne("a", "#abc", 0.9, 0.9, 1020);
+    const rendered = field.renderAt(5000);
+    expect(rendered.find((c) => c.clientId === "a")?.x).toBe(0.9);
+    expect(rendered.find((c) => c.clientId === "b")?.x).toBe(0.2); // untouched
+
+    field.removeOne("b");
+    expect(field.size).toBe(2);
+    expect(field.renderAt(5000).map((c) => c.clientId).sort()).toEqual(["a", "c"]);
+  });
+
+  it("ignores upsertOne/removeOne while frozen", () => {
+    const field = new CursorField();
+    field.upsertOne("a", "#abc", 0.3, 0.3, 1000);
+    field.setFrozen(true);
+    field.upsertOne("a", "#abc", 0.9, 0.9, 1050);
+    field.upsertOne("b", "#abc", 0.1, 0.1, 1050);
+    expect(field.size).toBe(1);
+    expect(field.renderAt(5000)[0]!.x).toBe(0.3);
+    field.removeOne("a");
+    expect(field.size).toBe(1);
+  });
+
   it("clears positions and accepts fresh ticks for a new session", () => {
     const field = new CursorField();
     field.ingest(batch(8, [["a", 0.3, 0.3]]), 1000);

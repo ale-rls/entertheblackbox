@@ -46,6 +46,24 @@ export class CursorField {
     }
   }
 
+  /**
+   * Ingest a single cursor event from the realtime-ws low-latency side
+   * channel (apps/realtime-ws), additive to ingest()'s batched main-protocol
+   * ticks rather than a replacement for them -- unlike ingest(), this never
+   * evicts cursors absent from the update, since a single-cursor event
+   * carries no information about who else is still present.
+   */
+  upsertOne(clientId: string, color: string, x: number, y: number, at: number): void {
+    if (this.frozen) return;
+    this.upsert({ clientId, color, x, y }, at);
+  }
+
+  /** Drop one cursor (realtime-ws cursor_leave), leaving all others untouched. */
+  removeOne(clientId: string): void {
+    if (this.frozen) return;
+    this.cursors.delete(clientId);
+  }
+
   private upsert(cursor: Cursor, at: number): void {
     const existing = this.cursors.get(cursor.clientId);
     const sample: Sample = { x: cursor.x, y: cursor.y, at };

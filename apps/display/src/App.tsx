@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { DisplayToServerMessage } from "@smartphonecracy/protocol";
 import { CursorField } from "./cursors/cursorField.js";
 import { CursorCanvas } from "./cursors/CursorCanvas.js";
+import { RealtimeWsClient } from "./cursors/realtimeWsClient.js";
 import { DisplayConnection } from "./lib/connection.js";
 import { applyKioskGuards, performReload } from "./lib/kiosk.js";
 import { IDLE_PLACEHOLDER, startHeartbeat } from "./lib/heartbeat.js";
@@ -26,6 +27,7 @@ import { PhaseVideo } from "./components/PhaseVideo.js";
  */
 
 declare const __BUILD_VERSION__: string | undefined;
+declare const __REALTIME_WS_URL__: string | undefined;
 
 const config = {
   url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
@@ -35,6 +37,8 @@ const config = {
     new URLSearchParams(location.search).get("installation") ?? "inst-1",
   roomId: new URLSearchParams(location.search).get("room") ?? "room-1",
   displayToken: new URLSearchParams(location.search).get("token") ?? "",
+  realtimeWsUrl:
+    typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };
 
 export function App() {
@@ -70,6 +74,37 @@ export function App() {
       }),
     [cursorField],
   );
+
+  // Low-latency cursor overlay (apps/realtime-ws): additive to the main
+  // connection's batched `cursors` messages above, gated by the same
+  // idle-phase check so no cursors render on the attract loop.
+  const realtimeWs = useMemo(
+    () =>
+      new RealtimeWsClient({
+        url: config.realtimeWsUrl,
+        room: `${config.installationId}:${config.roomId}`,
+        onSnapshot: (cursors) => {
+          const phase = stateRef.current.phase;
+          if (phase === null || phase.kind === "idle") return;
+          const at = Date.now();
+          for (const cursor of cursors) {
+            cursorField.upsertOne(cursor.clientId, cursor.color, cursor.x, cursor.y, at);
+          }
+        },
+        onUpdate: (cursor) => {
+          const phase = stateRef.current.phase;
+          if (phase === null || phase.kind === "idle") return;
+          cursorField.upsertOne(cursor.clientId, cursor.color, cursor.x, cursor.y, Date.now());
+        },
+        onLeave: (clientId) => cursorField.removeOne(clientId),
+      }),
+    [cursorField],
+  );
+
+  useEffect(() => {
+    realtimeWs.start();
+    return () => realtimeWs.stop();
+  }, [realtimeWs]);
 
   useEffect(() => applyKioskGuards(), []);
 

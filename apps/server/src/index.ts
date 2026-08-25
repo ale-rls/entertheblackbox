@@ -10,6 +10,7 @@ export * from "./readiness.js";
 export * from "./server.js";
 export * from "./admission/index.js";
 export * from "./engine/phase-engine.js";
+export * from "./movement/index.js";
 export * from "./persistence/admin-data.js";
 export * from "./persistence/pocketbase-client.js";
 

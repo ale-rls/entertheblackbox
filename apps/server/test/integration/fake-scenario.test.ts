@@ -71,6 +71,7 @@ function createHarness(
     registry: admission.registry,
     installationId: "inst-1",
     roomId: "room-1",
+    showId: "show-1",
     displayToken: "display-secret",
     now: () => now,
     sessionIdFactory: () => `session-${++sessionCounter}`,

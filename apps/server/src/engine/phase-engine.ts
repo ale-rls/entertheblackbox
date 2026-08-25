@@ -111,6 +111,7 @@ export class PhaseEngine {
   private readonly registry: ParticipantRegistry;
   private readonly installationId: string;
   private readonly roomId: string;
+  private readonly showId: string;
   private readonly displayToken: string;
   private readonly policy: PhaseEnginePolicy;
   private readonly now: () => number;
@@ -152,6 +153,7 @@ export class PhaseEngine {
     this.registry = options.registry;
     this.installationId = options.installationId;
     this.roomId = options.roomId;
+    this.showId = options.showId;
     this.displayToken = options.displayToken;
     this.policy = { ...DEFAULT_PHASE_ENGINE_POLICY, ...options.policy };
     this.now = options.now ?? (() => Date.now());
@@ -170,6 +172,15 @@ export class PhaseEngine {
       sendCursors: (message) => this.sendToDisplay(message),
       sendPresence: (message) => this.broadcast(message),
       canSendCursors: () => this.displaySocket !== undefined,
+    });
+    this.movement = new MovementRecorder({
+      showId: this.showId,
+      scenarioVersion: this.scenario.version,
+      installationId: this.installationId,
+      roomId: this.roomId,
+      onRecordingStarted: (event) => options.onMovementRecordingStarted?.(event),
+      onBatchFlushed: (event) => options.onMovementBatchFlushed?.(event),
+      onRecordingFinalized: (event) => options.onMovementRecordingFinalized?.(event),
     });
     this.qr = options.qr === undefined ? null : new QrGrantPushLoop({
       ...options.qr,
@@ -241,8 +252,14 @@ export class PhaseEngine {
 
   adminRestart(now = this.now()): TransitionResult {
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
+    // A restart ends the current session's data collection early (as
+    // "completed", not "abandoned" — it's a deliberate operator action, not
+    // a dropped connection) before starting a fresh sessionId, so movement
+    // recordings stay correctly bounded to one live playthrough each.
+    this.movement.finalizeSession(now);
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
+    this.joinMovementRecordingForConnectedParticipants();
     this.enterPhase(this.scenario.entryPhaseId, now, "admin-restart");
     return { ok: true };
   }
@@ -276,6 +293,7 @@ export class PhaseEngine {
     if (this.timer !== null) return;
     this.timer = setInterval(() => this.tick(), 250);
     this.cursors.start();
+    this.movement.start();
     this.qr?.start();
   }
 
@@ -283,6 +301,7 @@ export class PhaseEngine {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.cursors.stop();
+    this.movement.stop();
     this.qr?.stop();
   }
 
@@ -382,6 +401,7 @@ export class PhaseEngine {
     if (_participant !== undefined) {
       this.participantIds.set(socket, _participant.clientId);
       this.cursors.join(_participant.clientId, _participant.color);
+      if (this.lifecycle === "active") this.movement.join(_participant.clientId, this.sessionId);
       this.votes.addParticipant({
         participantId: _participant.clientId,
         connected: true,
@@ -404,6 +424,7 @@ export class PhaseEngine {
       if (![...this.participantIds.values()].includes(participantId)) {
         this.votes.setConnected(participantId, false, this.now());
         this.cursors.leave(participantId);
+        this.movement.leave(participantId, this.now());
       }
       this.queueQuestionStatus();
     }
@@ -464,6 +485,7 @@ export class PhaseEngine {
           const participantId = this.participantIds.get(socket);
           if (participantId !== undefined) {
             if (this.cursors.recordInput(participantId, message.seq, message.x, message.y)) {
+              this.movement.recordSample(participantId, message.x, message.y, this.now());
               // Video movement updates only the projected cursor. Votes and
               // question activity remain scoped to position-question phases.
               if (this.currentPhase().kind === "position-question") {
@@ -596,7 +618,14 @@ export class PhaseEngine {
     this.sessionStartedAt = now;
     this.lastInputAt = null;
     this.noParticipantSince = null;
+    this.joinMovementRecordingForConnectedParticipants();
     this.enterPhase(this.scenario.entryPhaseId, now, "session-start");
+  }
+
+  private joinMovementRecordingForConnectedParticipants(): void {
+    for (const participant of this.registry.values()) {
+      this.movement.join(participant.clientId, this.sessionId);
+    }
   }
 
   private advanceTo(target: string, now: number, reason: string): TransitionResult {
@@ -608,6 +637,7 @@ export class PhaseEngine {
   private enterPhase(target: string, now: number, reason: string): void {
     const phase = this.requirePhase(target);
     const sessionEnded = this.lifecycle !== "idle" && phase.kind === "idle";
+    if (sessionEnded) this.movement.finalizeSession(now);
     this.votes.clearQuestion();
     this.questionStatusDirty = false;
     this.lastQuestionStatusAt = null;

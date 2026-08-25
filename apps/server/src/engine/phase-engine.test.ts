@@ -3,6 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import { scenarioSchema } from "@smartphonecracy/scenario";
 import type { WebSocket } from "ws";
 import { ParticipantRegistry } from "../admission/index.js";
+import type {
+  MovementBatchFlushed,
+  MovementRecordingFinalized,
+  MovementRecordingStarted,
+} from "../movement/index.js";
 import { PhaseEngine, type PhaseCheckpoint } from "./phase-engine.js";
 import type { FinalVoteSnapshot } from "../votes/index.js";
 
@@ -58,6 +63,9 @@ function setup(options: {
   testScenario?: typeof scenario;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
   sessionEnds?: Array<{ reason: string; endedAt: number }>;
+  movementStarted?: MovementRecordingStarted[];
+  movementBatches?: MovementBatchFlushed[];
+  movementFinalized?: MovementRecordingFinalized[];
   qr?: boolean;
 } ) {
   const registry = new ParticipantRegistry(2, 50);
@@ -67,6 +75,7 @@ function setup(options: {
     registry,
     installationId: "inst-1",
     roomId: "room-1",
+    showId: "show-1",
     displayToken: "display-secret",
     now: options.now,
     sessionIdFactory: () => "session-1",
@@ -84,6 +93,18 @@ function setup(options: {
     ...(options.onVoteSnapshotEnqueued === undefined
       ? {}
       : { onVoteSnapshotEnqueued: options.onVoteSnapshotEnqueued }),
+    ...(options.movementStarted === undefined
+      ? {}
+      : { onMovementRecordingStarted: (event: MovementRecordingStarted) => options.movementStarted!.push(event) }),
+    ...(options.movementBatches === undefined
+      ? {}
+      : { onMovementBatchFlushed: (event: MovementBatchFlushed) => options.movementBatches!.push(event) }),
+    ...(options.movementFinalized === undefined
+      ? {}
+      : {
+          onMovementRecordingFinalized: (event: MovementRecordingFinalized) =>
+            options.movementFinalized!.push(event),
+        }),
     ...(options.qr
       ? {
           qr: {
@@ -692,6 +713,78 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.adminSkip(1_120)).toEqual({ ok: true });
     expect(snapshot?.votes).toEqual([
       expect.objectContaining({ participantId: "p1", x: 0.1, y: 0.9 }),
+    ]);
+  });
+
+  it("records movement during a video phase, not just position-question phases", () => {
+    let now = 1_000;
+    const movementStarted: MovementRecordingStarted[] = [];
+    const movementBatches: MovementBatchFlushed[] = [];
+    const { engine, registry } = setup({ now: () => now, movementStarted, movementBatches });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    expect(engine.currentPhaseId).toBe("intro");
+
+    const videoEpoch = engine.currentPhaseEpoch;
+    engine.handleClientMessage({
+      t: "input", v: 2, sessionId: "session-1", phaseEpoch: videoEpoch, seq: 0, x: 0.4, y: 0.6,
+    }, phone as unknown as WebSocket);
+
+    expect(movementStarted).toEqual([
+      expect.objectContaining({ sessionId: "session-1", participantId: "p1", showId: "show-1", startedAt: now }),
+    ]);
+    engine.tick(now + 100);
+    expect(movementBatches).toEqual([]);
+  });
+
+  it("finalizes every open movement recording as completed when the session ends", () => {
+    let now = 1_000;
+    const movementFinalized: MovementRecordingFinalized[] = [];
+    const { engine, registry } = setup({ now: () => now, movementFinalized });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    const videoEpoch = engine.currentPhaseEpoch;
+    engine.handleClientMessage({
+      t: "input", v: 2, sessionId: "session-1", phaseEpoch: videoEpoch, seq: 0, x: 0.4, y: 0.6,
+    }, phone as unknown as WebSocket);
+
+    now = 1_050;
+    expect(engine.adminIdle(now)).toEqual({ ok: true });
+    expect(movementFinalized).toEqual([
+      expect.objectContaining({ status: "completed", sampleCount: 1, endedAt: now }),
+    ]);
+  });
+
+  it("finalizes a movement recording as abandoned when the participant's socket closes mid-session", () => {
+    let now = 1_000;
+    const movementFinalized: MovementRecordingFinalized[] = [];
+    const { engine, registry } = setup({ now: () => now, movementFinalized });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    const videoEpoch = engine.currentPhaseEpoch;
+    engine.handleClientMessage({
+      t: "input", v: 2, sessionId: "session-1", phaseEpoch: videoEpoch, seq: 0, x: 0.4, y: 0.6,
+    }, phone as unknown as WebSocket);
+
+    now = 1_030;
+    registry.releaseSocket(phone as unknown as WebSocket, now);
+    engine.socketClosed(phone as unknown as WebSocket);
+    expect(movementFinalized).toEqual([
+      expect.objectContaining({ status: "abandoned", sampleCount: 1, endedAt: now }),
     ]);
   });
 

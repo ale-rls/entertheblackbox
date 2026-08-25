@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { InMemoryIpRateLimiter, requestIp } from "../admission/rate-limit.js";
 import type { PhaseCheckpoint, PhaseEngine, TransitionResult } from "../engine/phase-engine.js";
+import type {
+  MovementBatchFlushed,
+  MovementRecordingFinalized,
+  MovementRecordingStarted,
+} from "../movement/index.js";
 import type { FinalVoteSnapshot } from "../votes/index.js";
 
 export type AdminExport = { json: unknown; csv: string };
@@ -11,6 +16,9 @@ export interface AdminDataSource {
   recordError?(entry: { message: string; at: string; path: string }): void;
   recordCheckpoint?(checkpoint: PhaseCheckpoint): void;
   recordVoteSnapshot?(snapshot: FinalVoteSnapshot): void;
+  recordMovementStarted?(event: MovementRecordingStarted): void;
+  recordMovementBatch?(event: MovementBatchFlushed): void;
+  recordMovementFinalized?(event: MovementRecordingFinalized): void;
 }
 
 export type RegisterAdminOptions = {

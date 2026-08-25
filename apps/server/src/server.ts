@@ -86,6 +86,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       registry: admission.registry,
       installationId: config.installationId,
       roomId: config.roomId,
+      showId: readiness.showId,
       displayToken: config.displayToken,
       participantLeaseTtlMs: admission.participantLeaseTtlMs,
       qr: {
@@ -96,6 +97,9 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       onSessionEnded: ({ endedAt }) => admission.endParticipantSession(endedAt),
       onCheckpoint: (checkpoint) => adminData?.recordCheckpoint?.(checkpoint),
       onVoteSnapshotEnqueued: (snapshot) => adminData?.recordVoteSnapshot?.(snapshot),
+      onMovementRecordingStarted: (event) => adminData?.recordMovementStarted?.(event),
+      onMovementBatchFlushed: (event) => adminData?.recordMovementBatch?.(event),
+      onMovementRecordingFinalized: (event) => adminData?.recordMovementFinalized?.(event),
     });
     engine.start();
   }

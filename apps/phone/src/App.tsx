@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import { PROTOCOL_VERSION } from "@smartphonecracy/protocol";
 import { PhoneConnection } from "./lib/connection.js";
+import { RealtimeCursorPublisher } from "./lib/realtimeWsClient.js";
 import {
   applyDelta,
   InputThrottle,
@@ -17,6 +18,7 @@ import { initialPhoneState, phoneReducer } from "./state/store.js";
  */
 
 declare const __BUILD_VERSION__: string | undefined;
+declare const __REALTIME_WS_URL__: string | undefined;
 
 const params = new URLSearchParams(location.search);
 const config = {
@@ -26,6 +28,8 @@ const config = {
   installationId: params.get("installation") ?? "inst-1",
   roomId: params.get("room") ?? "room-1",
   joinGrant: params.get("g") ?? "",
+  realtimeWsUrl:
+    typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };
 
 const REJECTION_TEXT: Record<string, string> = {
@@ -37,10 +41,12 @@ const REJECTION_TEXT: Record<string, string> = {
 
 export function App() {
   const [state, dispatch] = useReducer(phoneReducer, initialPhoneState);
+  const identity = state.join.kind === "accepted" ? state.join.identity : null;
   const position = useRef<TrackpadState>({ ...TRACKPAD_CENTER });
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   const seq = useRef(0);
   const throttle = useMemo(() => new InputThrottle(), []);
+  const realtimeWs = useRef<RealtimeCursorPublisher | null>(null);
 
   const connection = useMemo(
     () =>
@@ -64,6 +70,26 @@ export function App() {
     return () => connection.stop();
   }, [connection]);
 
+  // Low-latency cursor overlay (apps/realtime-ws): additive to the "input"
+  // message sent over the main connection above, published once this
+  // phone's server-assigned identity (clientId + color) is known so the
+  // display renders it with the same color everywhere.
+  useEffect(() => {
+    if (identity === null) return;
+    const publisher = new RealtimeCursorPublisher({
+      url: config.realtimeWsUrl,
+      room: `${config.installationId}:${config.roomId}`,
+      clientId: identity.clientId,
+      color: identity.color,
+    });
+    realtimeWs.current = publisher;
+    publisher.start();
+    return () => {
+      publisher.stop();
+      realtimeWs.current = null;
+    };
+  }, [identity?.clientId, identity?.color]);
+
   useEffect(() => {
     if (state.reloadRequired) {
       void (async () => {
@@ -86,6 +112,7 @@ export function App() {
         ? throttle.shouldFlushFinal(now)
         : throttle.shouldSend(now);
     if (!shouldSend) return;
+    realtimeWs.current?.send(position.current.x, position.current.y);
     connection.send({
       t: "input",
       v: PROTOCOL_VERSION,
@@ -120,8 +147,6 @@ export function App() {
     lastPointer.current = null;
     sendPosition("final");
   };
-
-  const identity = state.join.kind === "accepted" ? state.join.identity : null;
 
   return (
     <main
