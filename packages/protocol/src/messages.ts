@@ -17,6 +17,16 @@ export const PROTOCOL_VERSION = 2;
 /** Private WebSocket close code: the visit ended and the phone must scan a fresh QR. */
 export const SHOW_ENDED_CLOSE_CODE = 4003;
 
+/**
+ * Private WebSocket close code: a newer display connection has taken over
+ * the single authenticated display slot. The replaced side must NOT
+ * auto-reconnect on this code -- doing so would immediately replace the
+ * new connection right back, and if two displays are both open (e.g. two
+ * tabs/devices), each side's own reconnect would perpetually kick the
+ * other in an infinite loop.
+ */
+export const DISPLAY_REPLACED_CLOSE_CODE = 4002;
+
 const v = z.literal(PROTOCOL_VERSION);
 const nonEmpty = z.string().min(1);
 /** Epoch-milliseconds timestamp as exchanged on the wire. */
@@ -67,7 +77,14 @@ export const joinSchema = z.object({
   clientVersion: nonEmpty,
   installationId: nonEmpty,
   roomId: nonEmpty,
-  joinGrant: nonEmpty,
+  // Deliberately not nonEmpty: a returning participant with a still-valid
+  // participantLease doesn't need a grant at all (admission/controller.ts's
+  // returningParticipant bypass), and an empty/garbage grant otherwise
+  // already gets a graceful join_rejected from verifyJoinGrant (which
+  // safely returns null on malformed input) -- rejecting the whole
+  // message here instead would turn either case into a silent
+  // close-and-retry loop with no user-facing explanation.
+  joinGrant: z.string(),
   participantLease: nonEmpty.optional(),
 });
 

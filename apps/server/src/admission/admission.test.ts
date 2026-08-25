@@ -124,6 +124,19 @@ describe("participant admission", () => {
     expect(lastMessage(freshQrJoin)).toMatchObject({ t: "identity" });
   });
 
+  it("rejects an empty join grant gracefully instead of closing the socket", () => {
+    // A phone that loads /phone/ with no ?g= at all (bookmarked base URL,
+    // stripped query string) sends joinGrant: "" -- this must reach the
+    // same expired_grant rejection a garbage grant gets, not fail schema
+    // validation and close the connection outright (which the client
+    // would just silently retry forever with the same empty grant).
+    const admission = controller();
+    const s = socket();
+    join(admission, s, "");
+    expect(lastMessage(s)).toMatchObject({ t: "join_rejected", reason: "expired_grant" });
+    expect((s as unknown as MockSocket).closeCalls).toEqual([]);
+  });
+
   it("catches client message handler failures and closes only the offending socket", async () => {
     const failure = new Error("bad phase target");
     const reported: unknown[] = [];

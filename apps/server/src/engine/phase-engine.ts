@@ -1,4 +1,5 @@
 import {
+  DISPLAY_REPLACED_CLOSE_CODE,
   encodeMessage,
   PROTOCOL_VERSION,
   type ClientToServerMessage,
@@ -564,7 +565,7 @@ export class PhaseEngine {
         level: "warning",
         message: "This display connection was replaced.",
       });
-      this.close(this.displaySocket, 4002, "display replaced");
+      this.close(this.displaySocket, DISPLAY_REPLACED_CLOSE_CODE, "display replaced");
     }
     this.displaySocket = socket;
     this.cursors.requestSnapshot();
