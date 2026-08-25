@@ -186,13 +186,9 @@ body:has(.editor),
   color: var(--sc-tool-color-success);
 }
 
-[data-sc-tool-root] .menubar > button {
+[data-sc-tool-root] .menubar > button,
+[data-sc-tool-root] .menubar > a {
   flex: 0 0 auto;
-}
-
-[data-sc-tool-root] .menubar button.export:not(:disabled) {
-  border-color: var(--sc-tool-color-action);
-  color: var(--sc-tool-color-action);
 }
 
 /* Canvas and React Flow chrome */

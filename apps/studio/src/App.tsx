@@ -484,7 +484,11 @@ export function App() {
       <input aria-label="Show name" className="sc-tool-field show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
       <SaveStatus status={status} />
       <button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => setPreviewing(true)}>Preview</button>
-      <button className="sc-tool-button export" data-sc-tool-variant="secondary" aria-label="Export for deployment" aria-describedby={exportFeedback ? "studio-export-feedback" : undefined} disabled={blocked} title={blocked ? "Resolve errors and acknowledge warnings first" : undefined} onClick={exportDeployment}>Export</button>
+      {/* Export moved into File -> Export files / Export for deployment: PocketBase sync is
+          now the primary save path, so a standalone export button no longer needs top billing.
+          This slot goes to the operator console instead -- relative link, so it only resolves
+          when Studio is served from apps/server alongside /admin/ (not the standalone dev server). */}
+      <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/admin/" target="_blank" rel="noreferrer">Monitor show</a>
       <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json,text/plain,.json,.txt" onChange={(event) => {
         void importFiles(event.currentTarget.files);
         event.currentTarget.value = "";
