@@ -34,6 +34,14 @@ ENV VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL
 ARG SOURCE_COMMIT=dev
 ENV BUILD_VERSION=$SOURCE_COMMIT
 
+# apps/display and apps/phone both bake the cursor-relay URL in at build
+# time as __REALTIME_WS_URL__ (their vite.config.ts); unset, both fall
+# back to ws://localhost:9001, which only ever works on a developer's own
+# machine. Point this at the realtime-ws-coolify deployment's public
+# wss:// URL, e.g. wss://smartphonocracy-websockets.enabler.space:9002.
+ARG REALTIME_WS_URL
+ENV REALTIME_WS_URL=$REALTIME_WS_URL
+
 RUN pnpm --filter @smartphonecracy/display build \
   && pnpm --filter @smartphonecracy/phone build \
   && pnpm --filter @smartphonecracy/admin build \
