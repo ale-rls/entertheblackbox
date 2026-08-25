@@ -1,5 +1,8 @@
 import { StatusIcon, type ToolStatus } from "@smartphonecracy/tool-ui";
+import PocketBase from "pocketbase";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+
+const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 export type Status = {
   healthy: boolean;
@@ -29,7 +32,7 @@ async function api(path: string, token: string, init?: RequestInit): Promise<Res
     headers: { ...init?.headers, Authorization: `Bearer ${token}` },
   });
   if (!response.ok) {
-    if (response.status === 401) throw new Error("Invalid admin token");
+    if (response.status === 401) throw new Error("Your session has expired. Sign in again.");
     if (response.status === 409) throw new Error("The server refused this action in the current show state.");
     throw new Error(`Request failed (${response.status})`);
   }
@@ -96,7 +99,9 @@ function ConfirmationDialog({ action, onCancel, onConfirm }: { action: ConfirmAc
 
 export function App() {
   const storedToken = sessionStorage.getItem("admin-token") ?? "";
-  const [token, setToken] = useState(storedToken);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
   const [connectedToken, setConnectedToken] = useState(storedToken);
   const [status, setStatus] = useState<Status | null>(null);
   const [connectionError, setConnectionError] = useState("");
@@ -134,21 +139,32 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [connectedToken, refresh]);
 
-  const connect = (event: FormEvent) => {
+  const connect = async (event: FormEvent) => {
     event.preventDefault();
-    if (!token) {
-      setFeedback({ status: "danger", message: "Enter an admin token before connecting." });
+    if (!email || !password) {
+      setFeedback({ status: "danger", message: "Enter your operator email and password." });
       return;
     }
-    sessionStorage.setItem("admin-token", token);
     setFeedback(null);
     setConnectionError("");
     setStatusStale(false);
-    if (token === connectedToken) void refresh();
-    else {
-      statusRef.current = null;
-      setStatus(null);
-      setConnectedToken(token);
+    setSigningIn(true);
+    try {
+      const pb = new PocketBase(POCKETBASE_URL);
+      await pb.collection("operators").authWithPassword(email, password);
+      const nextToken = pb.authStore.token;
+      sessionStorage.setItem("admin-token", nextToken);
+      setPassword("");
+      if (nextToken === connectedToken) void refresh();
+      else {
+        statusRef.current = null;
+        setStatus(null);
+        setConnectedToken(nextToken);
+      }
+    } catch {
+      setFeedback({ status: "danger", message: "Invalid operator email or password." });
+    } finally {
+      setSigningIn(false);
     }
   };
 
@@ -207,13 +223,16 @@ export function App() {
           <div><p className="sc-tool-eyebrow">Secure access</p><h2 id="admin-connection-heading">Admin connection</h2></div>
           {status && <StatusLabel status={statusStale ? "warning" : "success"}>{statusStale ? "Last status received" : "Authenticated"}</StatusLabel>}
         </div>
-        <form className="admin-connection-form" onSubmit={connect}>
-          <label className="sc-tool-label" htmlFor="admin-token">Admin token
-            <input id="admin-token" className="sc-tool-field sc-tool-mono" type="password" autoComplete="current-password" value={token} onChange={(event) => setToken(event.target.value)} aria-describedby="admin-token-help" />
+        <form className="admin-connection-form" onSubmit={(event) => void connect(event)}>
+          <label className="sc-tool-label" htmlFor="admin-email">Operator email
+            <input id="admin-email" className="sc-tool-field" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} />
           </label>
-          <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={refreshing}>{status ? "Reconnect" : refreshing ? "Connecting…" : "Connect"}</button>
+          <label className="sc-tool-label" htmlFor="admin-password">Password
+            <input id="admin-password" className="sc-tool-field sc-tool-mono" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} aria-describedby="admin-token-help" />
+          </label>
+          <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={refreshing || signingIn}>{status ? "Reconnect" : signingIn ? "Signing in…" : refreshing ? "Connecting…" : "Sign in"}</button>
         </form>
-        <p id="admin-token-help" className="sc-tool-help">Token is held for this browser session. Connected sessions refresh every 2 seconds.</p>
+        <p id="admin-token-help" className="sc-tool-help">Signed in for this browser session. Connected sessions refresh every 2 seconds.</p>
         {connectionError && <p className="sc-tool-feedback admin-feedback" data-sc-tool-status={statusStale ? "warning" : "danger"} role="alert"><StatusIcon status={statusStale ? "warning" : "danger"} /><span>{connectionError}{statusStale ? " Showing the last received status." : ""}</span></p>}
       </section>
 

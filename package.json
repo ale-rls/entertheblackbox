@@ -11,10 +11,14 @@
     "test:e2e": "pnpm --filter @smartphonecracy/display build && pnpm --filter @smartphonecracy/phone build && pnpm --filter @smartphonecracy/admin build && playwright test --config tests/e2e/playwright.config.ts",
     "validate-scenario": "tsx scripts/validate-scenario.ts",
     "build-media-manifest": "tsx scripts/build-media-manifest.ts",
-    "simulate-clients": "tsx scripts/simulate-clients.ts"
+    "simulate-clients": "tsx scripts/simulate-clients.ts",
+    "pocketbase:download": "pocketbase/scripts/download.sh",
+    "pocketbase:dev": "pocketbase/scripts/dev.sh",
+    "publish-scenario": "tsx scripts/publish-scenario-to-pocketbase.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
+    "pocketbase": "^0.27.3",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"

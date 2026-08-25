@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addEdge, Background, ReactFlow, type Connection, type Edge, type Node, useEdgesState, useNodesState } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { Autosave, IndexedDbDraftDatabase, recoverDraft, type SaveStatus as SaveStatusValue } from "./drafts.js";
+import { Autosave, recoverDraft, type SaveStatus as SaveStatusValue } from "./drafts.js";
+import { PocketbaseDraftDatabase } from "./pocketbase-drafts.js";
 import { exportArtifacts, exportBackup, importRuntime, importStudioFiles } from "./io.js";
 import type { Draft } from "./model.js";
 import { applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, phaseOutputHandles, pruneEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./canvas/graph.js";
@@ -63,7 +64,9 @@ const edgesForDraft = (draft: Draft): Edge[] => {
 };
 
 export function App() {
-  const db = useMemo(() => new IndexedDbDraftDatabase(), []);
+  const db = useMemo(() => new PocketbaseDraftDatabase(
+    import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090",
+  ), []);
   const autosave = useMemo(() => new Autosave(db), [db]);
   const [recent, setRecent] = useState<Draft[]>([]);
   const [draft, setDraft] = useState<Draft>();

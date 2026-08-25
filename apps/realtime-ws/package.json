@@ -1,0 +1,22 @@
+{
+  "name": "@smartphonecracy/realtime-ws",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Room-scoped uWebSockets.js relay for high-frequency cursor position broadcast, adapted from the standalone ai-democracy-websocket-server deployment.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.56.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

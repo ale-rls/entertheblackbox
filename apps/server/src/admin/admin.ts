@@ -1,7 +1,7 @@
-import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { InMemoryIpRateLimiter, requestIp } from "../admission/rate-limit.js";
-import type { PhaseEngine, TransitionResult } from "../engine/phase-engine.js";
+import type { PhaseCheckpoint, PhaseEngine, TransitionResult } from "../engine/phase-engine.js";
+import type { FinalVoteSnapshot } from "../votes/index.js";
 
 export type AdminExport = { json: unknown; csv: string };
 export interface AdminDataSource {
@@ -9,10 +9,13 @@ export interface AdminDataSource {
   exportSession(sessionId: string): Promise<AdminExport | null>;
   audit(entry: { action: string; at: string; detail: unknown }): void;
   recordError?(entry: { message: string; at: string; path: string }): void;
+  recordCheckpoint?(checkpoint: PhaseCheckpoint): void;
+  recordVoteSnapshot?(snapshot: FinalVoteSnapshot): void;
 }
 
 export type RegisterAdminOptions = {
-  token: string;
+  /** Validates a bearer token against the operators auth collection. */
+  verifyToken: (token: string) => Promise<boolean>;
   engine: () => PhaseEngine | null;
   ready: boolean;
   startedAt: number;
@@ -41,12 +44,10 @@ export const DEFAULT_ADMIN_RATE_LIMIT_POLICY: AdminRateLimitPolicy = {
   windowMs: 60_000,
 };
 
-function authorized(request: FastifyRequest, token: string): boolean {
+async function authorized(request: FastifyRequest, verifyToken: (token: string) => Promise<boolean>): Promise<boolean> {
   const value = request.headers.authorization;
   if (!value?.startsWith("Bearer ")) return false;
-  const supplied = Buffer.from(value.slice(7));
-  const expected = Buffer.from(token);
-  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+  return verifyToken(value.slice(7));
 }
 
 export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdminOptions): void {
@@ -65,7 +66,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
 
   app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
-      const isAuthorized = authorized(request, options.token);
+      const isAuthorized = await authorized(request, options.verifyToken);
       const rate = (isAuthorized ? rateLimiters.authenticated : rateLimiters.authenticationFailures)
         .consume(requestIp(request.raw, options.trustProxy ?? false), now());
       if (!rate.allowed) {

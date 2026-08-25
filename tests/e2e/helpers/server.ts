@@ -1,14 +1,12 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { E2E_POCKETBASE_URL, e2eOperatorToken } from "./pocketbase.js";
+import { REPO_ROOT } from "./paths.js";
 
-export const REPO_ROOT = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
-
+export { REPO_ROOT };
 export const INSTALLATION_ID = "dev-installation";
 export const ROOM_ID = "main";
 export const DISPLAY_TOKEN = "dev-display-token";
-export const ADMIN_TOKEN = "dev-admin-token-please-change";
 export const JOIN_GRANT_SECRET = "dev-join-grant-secret-please-change";
 
 const E2E_SCENARIO = "tests/e2e/fixtures/scenario.json";
@@ -58,6 +56,7 @@ function launch(port: number, env: Record<string, string>): ChildProcess {
         // bundles under test, or every join triggers the STEP-031 reload
         // path. The stale-bundle spec overrides this deliberately.
         BUILD_VERSION: "0.0.0-dev",
+        POCKETBASE_URL: E2E_POCKETBASE_URL,
         ...env,
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -119,8 +118,9 @@ export async function adminStatus(baseUrl: string): Promise<{
   displayConnected: boolean;
   connectedParticipants: number;
 }> {
+  const token = await e2eOperatorToken();
   const res = await fetch(`${baseUrl}/api/admin/status`, {
-    headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+    headers: { authorization: `Bearer ${token}` },
   });
   if (res.status !== 200) throw new Error(`admin status ${res.status}`);
   return (await res.json()) as ReturnType<typeof adminStatus> extends Promise<infer T> ? T : never;

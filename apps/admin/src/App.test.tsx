@@ -2,6 +2,24 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+const pocketbaseAuth = vi.hoisted(() => ({ authWithPassword: vi.fn() }));
+
+vi.mock("pocketbase", () => ({
+  default: class {
+    authStore = { token: "" };
+    collection() {
+      return {
+        authWithPassword: async (email: string, password: string) => {
+          const result = await pocketbaseAuth.authWithPassword(email, password);
+          this.authStore.token = result.token;
+          return result;
+        },
+      };
+    }
+  },
+}));
+
 import { App, type Status } from "./App.js";
 
 const activeStatus: Status = {
@@ -31,6 +49,7 @@ afterEach(async () => {
   sessionStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  pocketbaseAuth.authWithPassword.mockReset();
 });
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -84,21 +103,29 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).not.toContain("question-02");
   });
 
-  it("stores a submitted token, authenticates, fetches status, and polls every two seconds", async () => {
+  it("signs in via PocketBase, stores the resulting token, fetches status, and polls every two seconds", async () => {
+    pocketbaseAuth.authWithPassword.mockResolvedValue({
+      token: "pb-operator-token",
+      record: { id: "op1", email: "operator@smartphonecracy.local", role: "operator" },
+    });
     const { requests } = createAdminFetch();
     const intervalSpy = vi.spyOn(window, "setInterval");
     await renderApp();
 
-    const token = document.querySelector<HTMLInputElement>("#admin-token")!;
+    const email = document.querySelector<HTMLInputElement>("#admin-email")!;
+    const password = document.querySelector<HTMLInputElement>("#admin-password")!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(token, "operator-secret");
-      token.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(email, "operator@smartphonecracy.local");
+      email.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(password, "operator-secret");
+      password.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await act(async () => { button("Connect").click(); });
+    await act(async () => { button("Sign in").click(); });
     await flush();
 
-    expect(sessionStorage.getItem("admin-token")).toBe("operator-secret");
+    expect(pocketbaseAuth.authWithPassword).toHaveBeenCalledWith("operator@smartphonecracy.local", "operator-secret");
+    expect(sessionStorage.getItem("admin-token")).toBe("pb-operator-token");
     expect(requests).toContainEqual({ url: "/api/admin/status", method: "GET" });
     expect(requests.some(({ url }) => url === "/api/admin/errors")).toBe(false);
     expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 2_000);
@@ -176,7 +203,7 @@ describe("Admin operations UI", () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ error: "unauthorized" }, 401)));
     await renderApp();
 
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain("Invalid admin token");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("Your session has expired. Sign in again.");
     expect(document.body.textContent).toContain("Connect to load live status");
     expect(document.body.textContent).not.toContain("Current phase");
   });

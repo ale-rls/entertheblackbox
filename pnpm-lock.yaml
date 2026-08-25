@@ -11,6 +11,9 @@ importers:
       '@playwright/test':
         specifier: ^1.49.1
         version: 1.61.1
+      pocketbase:
+        specifier: ^0.27.3
+        version: 0.27.3
       tsx:
         specifier: ^4.19.2
         version: 4.23.0
@@ -32,6 +35,9 @@ importers:
       '@smartphonecracy/tool-ui':
         specifier: workspace:*
         version: link:../../packages/tool-ui
+      pocketbase:
+        specifier: ^0.27.3
+        version: 0.27.3
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -141,6 +147,25 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
 
+  apps/realtime-ws:
+    dependencies:
+      uWebSockets.js:
+        specifier: github:uNetworking/uWebSockets.js#v20.56.0
+        version: https://codeload.github.com/uNetworking/uWebSockets.js/tar.gz/d04e707a1292928d50163ff7545e45c3e84c5ec3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)
+
   apps/server:
     dependencies:
       '@smartphonecracy/protocol':
@@ -155,6 +180,9 @@ importers:
       fastify:
         specifier: ^5.1.0
         version: 5.10.0
+      pocketbase:
+        specifier: ^0.27.3
+        version: 0.27.3
       ws:
         specifier: ^8.18.0
         version: 8.21.0
@@ -189,6 +217,9 @@ importers:
       '@xyflow/react':
         specifier: ^12.3.6
         version: 12.11.2(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      pocketbase:
+        specifier: ^0.27.3
+        version: 0.27.3
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -1631,6 +1662,9 @@ packages:
     resolution: {integrity: sha512-40QW5YalBNfQo5yRYmiw7Yz6TKKVr3h6970B2YE+3fQpsWcrbj1PzJgxeJ19DRQjhMbKPIuMY8rFaXc8moolVw==}
     engines: {node: '>=10.13.0'}
 
+  pocketbase@0.27.3:
+    resolution: {integrity: sha512-n2rtQrg3kTF44066B+2eVvQdiYRGZ+RI7isIZqmAptfElLCSDIZrEKLhSrIQA2k5pvQM29Gx5JqGv5n+gtm6dg==}
+
   postcss@8.5.17:
     resolution: {integrity: sha512-J7EF+8X+CzRPaJPOv9Ck2wNWJvGnnl3PcNPAdGg6GTLjyVpyQ0yATMSXRFRV01BviT/9Gwuc3rjEyJbDJG9a4w==}
     engines: {node: ^10 || ^12 || >=14}
@@ -1827,6 +1861,10 @@ packages:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
     hasBin: true
+
+  uWebSockets.js@https://codeload.github.com/uNetworking/uWebSockets.js/tar.gz/d04e707a1292928d50163ff7545e45c3e84c5ec3:
+    resolution: {tarball: https://codeload.github.com/uNetworking/uWebSockets.js/tar.gz/d04e707a1292928d50163ff7545e45c3e84c5ec3}
+    version: 20.56.0
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
@@ -3207,6 +3245,8 @@ snapshots:
 
   pngjs@5.0.0: {}
 
+  pocketbase@0.27.3: {}
+
   postcss@8.5.17:
     dependencies:
       nanoid: 3.3.15
@@ -3384,6 +3424,8 @@ snapshots:
       fsevents: 2.3.3
 
   typescript@5.9.3: {}
+
+  uWebSockets.js@https://codeload.github.com/uNetworking/uWebSockets.js/tar.gz/d04e707a1292928d50163ff7545e45c3e84c5ec3: {}
 
   undici-types@6.21.0: {}
 

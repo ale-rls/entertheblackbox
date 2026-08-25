@@ -5,6 +5,7 @@ import { AdmissionController } from "./admission/index.js";
 import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
+import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
 import { loadScenarioReadiness, type ScenarioReadiness } from "./readiness.js";
 import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
@@ -20,6 +21,7 @@ export type BuildServerOptions = {
   onWebSocketConnection?: (socket: WebSocket) => void;
   admission?: AdmissionController;
   adminData?: AdminDataSource;
+  verifyOperatorToken?: (token: string) => Promise<boolean>;
   maxWebSocketConnections?: number;
   webSocketKeepAliveIntervalMs?: number;
 };
@@ -92,6 +94,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         allowLateJoin: config.allowLateJoin,
       },
       onSessionEnded: ({ endedAt }) => admission.endParticipantSession(endedAt),
+      onCheckpoint: (checkpoint) => adminData?.recordCheckpoint?.(checkpoint),
+      onVoteSnapshotEnqueued: (snapshot) => adminData?.recordVoteSnapshot?.(snapshot),
     });
     engine.start();
   }
@@ -126,7 +130,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     adminData?.recordError?.({ message: error.message, at: new Date().toISOString(), path: request.url });
   });
   registerAdminRoutes(app, {
-    token: config.adminToken,
+    verifyToken: options.verifyOperatorToken ?? createOperatorTokenVerifier(config.pocketbase.url),
     engine: () => engine,
     ready: readiness.ready,
     startedAt,

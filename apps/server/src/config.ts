@@ -5,8 +5,8 @@ import { z } from "zod";
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 
 const DEVELOPMENT_DISPLAY_TOKEN = "dev-display-token";
-const DEVELOPMENT_ADMIN_TOKEN = "dev-admin-token-please-change";
 const DEVELOPMENT_JOIN_GRANT_SECRET = "dev-join-grant-secret-please-change";
+const DEVELOPMENT_POCKETBASE_ADMIN_PASSWORD = "dev-pocketbase-password";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -15,8 +15,8 @@ const envSchema = z.object({
   BUILD_VERSION: z.string().min(1).default("dev"),
   INSTALLATION_ID: z.string().min(1).default("dev-installation"),
   ROOM_ID: z.string().min(1).default("main"),
+  SHOW_ID: z.string().min(1).default("local-dev"),
   DISPLAY_TOKEN: z.string().min(1).default(DEVELOPMENT_DISPLAY_TOKEN),
-  ADMIN_TOKEN: z.string().min(16).default(DEVELOPMENT_ADMIN_TOKEN),
   ADMIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(600),
   ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES: z.coerce.number().int().positive().default(30),
   ADMIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
@@ -30,6 +30,9 @@ const envSchema = z.object({
   DISPLAY_DIST_DIR: z.string().min(1).optional(),
   PHONE_DIST_DIR: z.string().min(1).optional(),
   ADMIN_DIST_DIR: z.string().min(1).optional(),
+  POCKETBASE_URL: z.string().url().default("http://127.0.0.1:8090"),
+  POCKETBASE_ADMIN_EMAIL: z.string().email().default("dev@smartphonecracy.local"),
+  POCKETBASE_ADMIN_PASSWORD: z.string().min(8).default(DEVELOPMENT_POCKETBASE_ADMIN_PASSWORD),
 });
 
 export type ServerConfig = {
@@ -39,8 +42,8 @@ export type ServerConfig = {
   buildVersion: string;
   installationId: string;
   roomId: string;
+  showId: string;
   displayToken: string;
-  adminToken: string;
   adminRateLimit: {
     maxAuthenticatedRequests: number;
     maxAuthenticationFailures: number;
@@ -54,6 +57,11 @@ export type ServerConfig = {
   mediaManifestPath: string;
   mediaDir: string;
   bundleDirs: Record<"display" | "phone" | "admin", string>;
+  pocketbase: {
+    url: string;
+    adminEmail: string;
+    adminPassword: string;
+  };
 };
 
 export class ConfigError extends Error {
@@ -79,9 +87,9 @@ export function loadConfig(
   const value = parsed.data;
   if (value.NODE_ENV === "production") {
     const defaultSecret = [
-      ["ADMIN_TOKEN", value.ADMIN_TOKEN, DEVELOPMENT_ADMIN_TOKEN],
       ["JOIN_GRANT_SECRET", value.JOIN_GRANT_SECRET, DEVELOPMENT_JOIN_GRANT_SECRET],
       ["DISPLAY_TOKEN", value.DISPLAY_TOKEN, DEVELOPMENT_DISPLAY_TOKEN],
+      ["POCKETBASE_ADMIN_PASSWORD", value.POCKETBASE_ADMIN_PASSWORD, DEVELOPMENT_POCKETBASE_ADMIN_PASSWORD],
     ].find(([, configured, developmentDefault]) => configured === developmentDefault);
     if (defaultSecret !== undefined) {
       throw new ConfigError(`invalid server configuration: ${defaultSecret[0]} must be set in production`);
@@ -97,8 +105,8 @@ export function loadConfig(
     buildVersion: value.BUILD_VERSION,
     installationId: value.INSTALLATION_ID,
     roomId: value.ROOM_ID,
+    showId: value.SHOW_ID,
     displayToken: value.DISPLAY_TOKEN,
-    adminToken: value.ADMIN_TOKEN,
     adminRateLimit: {
       maxAuthenticatedRequests: value.ADMIN_RATE_LIMIT_MAX_REQUESTS,
       maxAuthenticationFailures: value.ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES,
@@ -115,6 +123,11 @@ export function loadConfig(
       display: fromRoot(value.DISPLAY_DIST_DIR, "apps/display/dist"),
       phone: fromRoot(value.PHONE_DIST_DIR, "apps/phone/dist"),
       admin: fromRoot(value.ADMIN_DIST_DIR, "apps/admin/dist"),
+    },
+    pocketbase: {
+      url: value.POCKETBASE_URL,
+      adminEmail: value.POCKETBASE_ADMIN_EMAIL,
+      adminPassword: value.POCKETBASE_ADMIN_PASSWORD,
     },
   };
 }

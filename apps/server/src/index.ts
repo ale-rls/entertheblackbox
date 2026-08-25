@@ -1,13 +1,17 @@
 import { pathToFileURL } from "node:url";
 import { loadConfig } from "./config.js";
 import { buildServer } from "./server.js";
-import { loadScenarioReadiness } from "./readiness.js";
+import { loadPublishedScenarioFromPocketbase, loadScenarioReadiness } from "./readiness.js";
+import { PocketBaseAdminDataSource } from "./persistence/admin-data.js";
+import { PocketBaseClient } from "./persistence/pocketbase-client.js";
 
 export * from "./config.js";
 export * from "./readiness.js";
 export * from "./server.js";
 export * from "./admission/index.js";
 export * from "./engine/phase-engine.js";
+export * from "./persistence/admin-data.js";
+export * from "./persistence/pocketbase-client.js";
 
 type ListeningApp = {
   listen(options: { host: string; port: number }): Promise<unknown>;
@@ -34,8 +38,20 @@ export async function listenWithCleanup(
 
 export async function startServer(): Promise<void> {
   const config = loadConfig();
-  const readiness = await loadScenarioReadiness(config);
-  const { app } = await buildServer({ config, readiness });
+  const pocketbase = new PocketBaseClient(config);
+  const adminData = new PocketBaseAdminDataSource(pocketbase, {
+    installationId: config.installationId,
+    roomId: config.roomId,
+  });
+  // PocketBase is the source of truth for published scenarios once Studio
+  // publishes one; the local content/ JSON files remain the fallback so
+  // dev/CI keep working against an empty PocketBase instance.
+  const readiness = await loadPublishedScenarioFromPocketbase(pocketbase, config.mediaDir)
+    .catch((error: unknown) => {
+      console.error("pocketbase: failed to load published scenario, falling back to local file", error);
+      return null;
+    }) ?? await loadScenarioReadiness(config);
+  const { app } = await buildServer({ config, readiness, adminData });
   let shutdownPromise: Promise<void> | null = null;
   const shutdown = async (signal: NodeJS.Signals) => {
     shutdownPromise ??= (async () => {

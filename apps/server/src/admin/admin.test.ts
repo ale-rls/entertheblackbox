@@ -23,7 +23,7 @@ function setup(options: {
   };
   const app = Fastify();
   registerAdminRoutes(app, {
-    token: "strong-admin-token",
+    verifyToken: async (token) => token === "strong-admin-token",
     engine: () => engine,
     ready: true,
     startedAt: Date.now(),

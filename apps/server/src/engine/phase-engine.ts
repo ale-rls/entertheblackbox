@@ -15,6 +15,12 @@ import type { ParticipantRecord, ParticipantRegistry } from "../admission/index.
 import { QrGrantPushLoop, type QrGrantPushLoopOptions } from "../admission/qr.js";
 import { CursorPipeline } from "../cursors/index.js";
 import {
+  MovementRecorder,
+  type MovementBatchFlushed,
+  type MovementRecordingFinalized,
+  type MovementRecordingStarted,
+} from "../movement/index.js";
+import {
   VoteEngine,
   type FinalVoteSnapshot,
   type VoteParticipantSeed,
@@ -71,6 +77,7 @@ export type PhaseEngineOptions = {
   registry: ParticipantRegistry;
   installationId: string;
   roomId: string;
+  showId: string;
   displayToken: string;
   participantLeaseTtlMs?: number;
   policy?: Partial<PhaseEnginePolicy>;
@@ -80,6 +87,9 @@ export type PhaseEngineOptions = {
   onPhaseDeadline?: (event: PhaseDeadlineEvent) => void;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
   onSessionEnded?: (event: { reason: string; endedAt: number }) => void;
+  onMovementRecordingStarted?: (event: MovementRecordingStarted) => void;
+  onMovementBatchFlushed?: (event: MovementBatchFlushed) => void;
+  onMovementRecordingFinalized?: (event: MovementRecordingFinalized) => void;
   qr?: Omit<QrGrantPushLoopOptions, "send" | "lifecycle" | "hasDisplay" | "now">;
 };
 
@@ -110,6 +120,7 @@ export class PhaseEngine {
   private readonly onSessionEnded: ((event: { reason: string; endedAt: number }) => void) | undefined;
   private readonly votes: VoteEngine;
   private readonly cursors: CursorPipeline;
+  private readonly movement: MovementRecorder;
   private readonly video = new VideoPhaseHandler();
   private readonly qr: QrGrantPushLoop | null;
   private readonly clients = new Set<WebSocket>();

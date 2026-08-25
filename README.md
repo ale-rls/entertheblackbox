@@ -29,7 +29,24 @@ corepack enable
 pnpm install
 ```
 
-The checked-in development scenario and media manifest are used by default. The installation runs without a database or external service.
+The checked-in development scenario and media manifest are used by default. The installation's live runtime state stays in-process with no database dependency, but the admin dashboard and persisted operational data (errors, audit log, session exports) require a local PocketBase instance — see below.
+
+## PocketBase
+
+The server talks to a local, self-hosted PocketBase instance (SQLite-backed, no external/cloud service) for admin-dashboard login and operational persistence:
+
+```bash
+pnpm pocketbase:download   # fetch the pinned binary for your platform (once)
+pnpm pocketbase:dev        # run PocketBase on http://127.0.0.1:8090, leave it running
+```
+
+On first run, create a PocketBase superuser (prompted at the URL PocketBase prints, or via `pocketbase/bin/pocketbase superuser upsert <email> <password>`), then provision an admin-dashboard operator account:
+
+```bash
+pocketbase/scripts/create-operator.sh <email> <password>
+```
+
+Sign in at `/admin/` with that email/password. See [pocketbase/README.md](pocketbase/README.md) for more.
 
 ## Run locally
 
@@ -75,7 +92,9 @@ scenario is not ready, it fails closed with HTTP 503 and
 metadata (the public media manifest already lists media paths), so authors must
 not put secrets or private visitor information in either field.
 
-Development credentials in the server configuration are intentionally local-only defaults. Set installation-specific `ADMIN_TOKEN`, `JOIN_GRANT_SECRET`, and `DISPLAY_TOKEN` values before venue operation.
+Development credentials in the server configuration are intentionally local-only defaults. Set installation-specific `JOIN_GRANT_SECRET`, `DISPLAY_TOKEN`, and `POCKETBASE_ADMIN_PASSWORD` values before venue operation.
+
+The admin dashboard (`/admin/`) authenticates operators against PocketBase's `operators` collection instead of a shared static token — see [PocketBase setup](#pocketbase) below for provisioning an operator account.
 
 The admin API applies process-local per-IP limits in separate buckets for authenticated traffic and failed authentication, so bad-token traffic cannot exhaust an operator's allowance on a shared network. Defaults are 600 authenticated requests and 30 authentication failures per 60 seconds. Override them with `ADMIN_RATE_LIMIT_MAX_REQUESTS`, `ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES`, and `ADMIN_RATE_LIMIT_WINDOW_MS`. `X-Forwarded-For` is used only when `TRUST_PROXY=true`.
 

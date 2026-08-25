@@ -11,14 +11,17 @@ vi.mock("./drafts.js", () => ({
   Autosave: class {
     schedule(_draft: Draft, changed?: (status: "saved") => void) { changed?.("saved"); }
   },
-  IndexedDbDraftDatabase: class {
+  recoverDraft: async () => undefined,
+}));
+
+vi.mock("./pocketbase-drafts.js", () => ({
+  PocketbaseDraftDatabase: class {
     async list() { return database.drafts; }
     async delete(id: string) {
       database.deleted.push(id);
       database.drafts = database.drafts.filter((draft) => draft.id !== id);
     }
   },
-  recoverDraft: async () => undefined,
 }));
 
 vi.mock("./media/local.js", () => ({
