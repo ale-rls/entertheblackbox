@@ -6,6 +6,7 @@ import { RealtimeWsClient } from "./cursors/realtimeWsClient.js";
 import { DisplayConnection } from "./lib/connection.js";
 import { applyKioskGuards, performReload } from "./lib/kiosk.js";
 import { IDLE_PLACEHOLDER, startHeartbeat } from "./lib/heartbeat.js";
+import { startQrGrantRefresh } from "./qr/refreshGrant.js";
 import { useMedia } from "./media/useMedia.js";
 import { displayReducer, initialDisplayState } from "./state/store.js";
 import { Countdown } from "./components/Countdown.js";
@@ -128,6 +129,18 @@ export function App() {
         phaseId: stateRef.current.phase?.id ?? IDLE_PLACEHOLDER,
         phaseEpoch: Math.max(0, stateRef.current.phaseEpoch),
       }),
+      send: (message) => connection.send(message),
+    });
+    return dispose;
+  }, [connection]);
+
+  // QR grants expire 2 minutes after being issued and the server only
+  // ever issues one on its own (at display_join) -- without this, any
+  // display connection older than that shows an already-expired or
+  // already-hidden code for the rest of its lifetime (see refreshGrant.ts).
+  useEffect(() => {
+    const dispose = startQrGrantRefresh({
+      isOpen: () => connection.currentStatus === "open",
       send: (message) => connection.send(message),
     });
     return dispose;
