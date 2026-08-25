@@ -28,6 +28,7 @@ import { PhaseVideo } from "./components/PhaseVideo.js";
 
 declare const __BUILD_VERSION__: string | undefined;
 declare const __REALTIME_WS_URL__: string | undefined;
+declare const __DISPLAY_TOKEN__: string | undefined;
 
 const config = {
   url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
@@ -36,7 +37,9 @@ const config = {
   installationId:
     new URLSearchParams(location.search).get("installation") ?? "inst-1",
   roomId: new URLSearchParams(location.search).get("room") ?? "room-1",
-  displayToken: new URLSearchParams(location.search).get("token") ?? "",
+  displayToken:
+    new URLSearchParams(location.search).get("token")
+      ?? (typeof __DISPLAY_TOKEN__ === "string" ? __DISPLAY_TOKEN__ : ""),
   realtimeWsUrl:
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };

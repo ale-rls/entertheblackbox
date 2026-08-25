@@ -42,6 +42,15 @@ ENV BUILD_VERSION=$SOURCE_COMMIT
 ARG REALTIME_WS_URL
 ENV REALTIME_WS_URL=$REALTIME_WS_URL
 
+# apps/display also bakes DISPLAY_TOKEN in as __DISPLAY_TOKEN__, so the
+# venue's one kiosk can load bare /display/ with no ?token= at all.
+# Deliberately build-time-only (not exposed via the public /api/status
+# the way installationId/roomId are) -- this must match the DISPLAY_TOKEN
+# apps/server is given at runtime, and changing it later needs apps/display
+# rebuilt, not just the server restarted.
+ARG DISPLAY_TOKEN
+ENV DISPLAY_TOKEN=$DISPLAY_TOKEN
+
 RUN pnpm --filter @smartphonecracy/display build \
   && pnpm --filter @smartphonecracy/phone build \
   && pnpm --filter @smartphonecracy/admin build \
