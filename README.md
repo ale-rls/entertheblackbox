@@ -68,7 +68,7 @@ Open the authenticated installation display:
 
 <http://127.0.0.1:3000/display/?installation=dev-installation&room=main&token=dev-display-token>
 
-The query parameters identify the installation and room and authenticate this browser as the official display. The server allows only one authenticated display connection. The root page (`http://127.0.0.1:3000/`) redirects to an unauthenticated `/display/` fallback: it can show the attract visuals, but it cannot receive the live QR code or installation state.
+The query parameters identify the installation and room and authenticate this browser as the official display. The server allows only one authenticated display connection. The root page (`http://127.0.0.1:3000/`) redirects to `/phone/` instead, since most root-page visitors are participants, not the venue's one display kiosk.
 
 The server also exposes:
 

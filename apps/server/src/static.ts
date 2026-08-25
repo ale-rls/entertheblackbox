@@ -172,7 +172,10 @@ export function registerBundleRoutes(
   app: FastifyInstance,
   bundles: Record<"display" | "phone" | "admin" | "studio", string>,
 ): void {
-  app.get("/", async (_request, reply) => reply.redirect("/display/"));
+  // Most root-page visitors are participants scanning a join link;
+  // display is only ever loaded with its own full authenticated URL for
+  // the venue's one big-screen kiosk, never via the bare root path.
+  app.get("/", async (_request, reply) => reply.redirect("/phone/"));
 
   for (const role of ["display", "phone", "admin", "studio"] as const) {
     app.get(`/${role}`, async (_request, reply) => reply.redirect(`/${role}/`));
