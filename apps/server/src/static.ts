@@ -58,12 +58,16 @@ async function sendBundleFile(
     return;
   }
 
-  await sendFile(
-    reply,
-    filePath,
-    extension === ".html" ? "no-cache" : "public, max-age=31536000, immutable",
-    "asset_not_found",
-  );
+  // sw.js (apps/display's app-shell service worker) must never get the
+  // year-long immutable cache below: browsers otherwise keep an old SW
+  // in control of the page for up to 24h (or until manually cleared),
+  // which keeps serving its own old cached bundle regardless of how many
+  // times the server gets redeployed with a fix.
+  const cacheControl = relative === "sw.js"
+    ? "no-cache"
+    : extension === ".html" ? "no-cache" : "public, max-age=31536000, immutable";
+
+  await sendFile(reply, filePath, cacheControl, "asset_not_found");
 }
 
 type ByteRange = {

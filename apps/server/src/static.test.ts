@@ -19,6 +19,7 @@ async function bundleApp(): Promise<FastifyInstance> {
   roots.push(root);
   await mkdir(assets);
   await writeFile(join(root, "index.html"), "<h1>display</h1>");
+  await writeFile(join(root, "sw.js"), "self.addEventListener('fetch', () => {})");
   await writeFile(join(assets, "idle-attract.mp4"), "0123456789");
   await writeFile(join(assets, "app.js"), "console.log('ready')");
 
@@ -78,5 +79,18 @@ describe("bundle video assets", () => {
     expect(response.body).toBe("console.log('ready')");
     expect(response.headers["accept-ranges"]).toBeUndefined();
     expect(response.headers["content-range"]).toBeUndefined();
+  });
+
+  it("never lets the app-shell service worker be cached, unlike other bundle assets", async () => {
+    const app = await bundleApp();
+
+    const sw = await app.inject({ url: "/display/sw.js" });
+    expect(sw.statusCode).toBe(200);
+    expect(sw.headers["cache-control"]).toBe("no-cache");
+
+    // A hashed asset with the same .js extension stays immutable -- only
+    // the fixed sw.js filename is special-cased.
+    const hashedAsset = await app.inject({ url: "/display/assets/app.js" });
+    expect(hashedAsset.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
   });
 });
