@@ -18,7 +18,8 @@ import { assembleDeploymentPackage } from "./export/deployment.js";
 import { Menu } from "./chrome/Menu.js";
 import { ConfirmationDialog, type ConfirmationDetails } from "./chrome/ConfirmationDialog.js";
 import { SaveStatus } from "./chrome/SaveStatus.js";
-import { loadLocalMediaManifest, refreshDraftLocalMedia, runtimeMediaManifest, uploadLocalMedia, type MediaManifest } from "./media/local.js";
+import { refreshDraftLocalMedia, runtimeMediaManifest, type MediaManifest } from "./media/local.js";
+import { PocketbaseMediaLibrary } from "./media/pocketbase-media.js";
 import "@smartphonecracy/tool-ui/styles.css";
 import "./style.css";
 
@@ -68,6 +69,7 @@ const edgesForDraft = (draft: Draft): Edge[] => {
 
 export function App() {
   const db = useMemo(() => new PocketbaseDraftDatabase(POCKETBASE_URL), []);
+  const media = useMemo(() => new PocketbaseMediaLibrary(POCKETBASE_URL), []);
   const autosave = useMemo(() => new Autosave(db), [db]);
   const [recent, setRecent] = useState<Draft[]>([]);
   const [draft, setDraft] = useState<Draft>();
@@ -97,10 +99,10 @@ export function App() {
 
   useEffect(() => void db.list().then(setRecent), [db]);
   useEffect(() => {
-    void loadLocalMediaManifest().then((manifest) => {
+    void media.list().then((manifest) => {
       if (manifest) setLocalManifest(manifest);
     });
-  }, []);
+  }, [media]);
   useEffect(() => {
     if (!draft || !localManifest) return;
     save(refreshDraftLocalMedia(draft, localManifest));
@@ -178,21 +180,21 @@ export function App() {
     for (const [index, file] of selected.entries()) {
       setImportFeedback({ status: "info", message: `Adding ${file.name} (${index + 1} of ${selected.length})…` });
       try {
-        await uploadLocalMedia(file);
+        await media.upload(file);
         added.push(file.name);
       } catch (error) {
         failed.push({ name: file.name, reason: error instanceof Error ? error.message : "The video could not be added." });
       }
     }
 
-    const manifest = await loadLocalMediaManifest();
+    const manifest = await media.list();
     if (manifest) setLocalManifest(manifest);
     const addedSummary = added.length ? `Added ${added.length}: ${added.join(", ")}.` : "No videos were added.";
     const failedSummary = failed.length
       ? ` Failed ${failed.length}: ${failed.map(({ name, reason }) => `${name} — ${reason}`).join("; ")}`
       : "";
     if (!manifest) {
-      setImportFeedback({ status: "danger", message: `Add Media finished, but the library could not be refreshed. ${addedSummary}${failedSummary} Reload Studio to rescan content/media.` });
+      setImportFeedback({ status: "danger", message: `Add Media finished, but the library could not be refreshed. ${addedSummary}${failedSummary} Check that PocketBase is reachable and reload Studio.` });
     } else if (failed.length) {
       setImportFeedback({ status: "danger", message: `${addedSummary}${failedSummary}` });
     } else {
@@ -421,7 +423,7 @@ export function App() {
     </div>
     {importFeedback && <Feedback id="studio-home-feedback" feedback={importFeedback} />}
     <h2>Recent drafts</h2>{recent.length === 0 && <p className="sc-tool-copy lede">No local drafts yet. Import scenario.json and media-manifest.json together.</p>}
-    {localManifest && <p className="sc-tool-copy lede">Local media: {localManifest.files.length} file{localManifest.files.length === 1 ? "" : "s"} found in content/media.</p>}
+    {localManifest && <p className="sc-tool-copy lede">Media library: {localManifest.files.length} file{localManifest.files.length === 1 ? "" : "s"} available.</p>}
     {recent.map((item) => <article key={item.id}><button className="sc-tool-button draft-open" data-sc-tool-variant="quiet" onClick={() => void recoverDraft(db, item.id).then((recovered) => setDraft(recovered && localManifest ? refreshDraftLocalMedia(recovered, localManifest) : recovered))}>{item.name}</button><small className="sc-tool-copy sc-tool-mono">{new Date(item.updatedAt).toLocaleString()}</small><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => duplicate(item)}>Duplicate</button><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => download(`${item.name}.studio-backup.json`, exportBackup(item))}>Export backup</button><button className="sc-tool-button" data-sc-tool-variant="danger" onClick={(event) => remove(item, event.currentTarget)}>Delete</button></article>)}
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}
   </main>;

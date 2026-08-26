@@ -19,10 +19,10 @@ function toDraft(record: DraftRecord): Draft {
 /**
  * DraftDatabase backed by PocketBase instead of browser IndexedDB, so
  * Studio drafts survive across devices/browsers. `localMediaSources` is
- * deliberately not persisted here: it's a list of local file paths
- * recomputed each session from the machine's own media directory (see
- * App.tsx's refreshDraftLocalMedia effect), not something that should
- * round-trip through shared storage.
+ * deliberately not persisted here: it's recomputed each session from the
+ * shared PocketBase media library (see App.tsx's refreshDraftLocalMedia
+ * effect and media/pocketbase-media.ts), not something that should
+ * round-trip through draft storage itself.
  */
 export class PocketbaseDraftDatabase implements DraftDatabase {
   private readonly pb: PocketBase;

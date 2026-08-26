@@ -25,10 +25,15 @@ vi.mock("./pocketbase-drafts.js", () => ({
 }));
 
 vi.mock("./media/local.js", () => ({
-  loadLocalMediaManifest: media.load,
   refreshDraftLocalMedia: (draft: Draft) => draft,
   runtimeMediaManifest: () => ({ files: [] }),
-  uploadLocalMedia: media.upload,
+}));
+
+vi.mock("./media/pocketbase-media.js", () => ({
+  PocketbaseMediaLibrary: class {
+    list = media.load;
+    upload = media.upload;
+  },
 }));
 
 import { App } from "./App.js";

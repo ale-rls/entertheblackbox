@@ -5,6 +5,7 @@ import { loadPublishedScenarioFromPocketbase, loadScenarioReadiness } from "./re
 import { PocketBaseAdminDataSource } from "./persistence/admin-data.js";
 import { PocketBaseClient } from "./persistence/pocketbase-client.js";
 import { readServerConfigOverride } from "./persistence/installation-config.js";
+import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
 
 export * from "./config.js";
 export * from "./readiness.js";
@@ -60,6 +61,13 @@ async function boot(config: ServerConfig, pocketbase: PocketBaseClient): Promise
     installationId: effectiveConfig.installationId,
     roomId: effectiveConfig.roomId,
   });
+  // Mirror Studio's uploaded media down onto local disk before validating
+  // the scenario against it -- readiness below stats mediaDir directly and
+  // has no PocketBase awareness of its own. Missing/unreachable PocketBase
+  // just means whatever's already on disk is used, same as before this
+  // sync existed.
+  await syncMediaFromPocketbase(pocketbase, effectiveConfig.mediaDir)
+    .catch((error: unknown) => console.error("pocketbase: failed to sync media library", error));
   // PocketBase is the source of truth for published scenarios once Studio
   // publishes one; the local content/ JSON files remain the fallback so
   // dev/CI keep working against an empty PocketBase instance.
@@ -91,9 +99,10 @@ export async function startServer(): Promise<void> {
   // -- see the installation_config migration. What used to require an
   // operator to notice and manually restart/redeploy is now automatic:
   // PocketBase's realtime feed (SSE) pushes a message the instant Studio
-  // publishes a show or an operator changes the active show/installation,
-  // and we react by rebooting in place -- same restart, just triggered by
-  // PocketBase instead of a human.
+  // publishes a show, uploads media, or an operator changes the active
+  // show/installation, and we react by rebooting in place (which re-runs
+  // the media sync too) -- same restart, just triggered by PocketBase
+  // instead of a human.
   const restart = (reason: string): void => {
     if (restarting || shuttingDown) return;
     restarting = true;
@@ -113,6 +122,8 @@ export async function startServer(): Promise<void> {
     .catch((error: unknown) => console.error("pocketbase: failed to subscribe to scenarios", error));
   await pocketbase.pb.collection("installation_config").subscribe("*", () => restart("installation_config"))
     .catch((error: unknown) => console.error("pocketbase: failed to subscribe to installation_config", error));
+  await pocketbase.pb.collection("media").subscribe("*", () => restart("media"))
+    .catch((error: unknown) => console.error("pocketbase: failed to subscribe to media", error));
 
   const shutdown = async (signal: NodeJS.Signals) => {
     if (shuttingDown) return;
@@ -120,6 +131,7 @@ export async function startServer(): Promise<void> {
     runtime.app.log.info({ signal }, "shutting down");
     await pocketbase.pb.collection("scenarios").unsubscribe().catch(() => {});
     await pocketbase.pb.collection("installation_config").unsubscribe().catch(() => {});
+    await pocketbase.pb.collection("media").unsubscribe().catch(() => {});
     await runtime.app.close();
   };
   const handleSignal = (signal: NodeJS.Signals) => {
