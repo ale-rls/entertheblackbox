@@ -7,6 +7,7 @@ import type {
   MovementRecordingStarted,
 } from "../movement/index.js";
 import type { InstallationConfigOverride } from "../persistence/installation-config.js";
+import type { PublishedShowSummary } from "../readiness.js";
 import type { FinalVoteSnapshot } from "../votes/index.js";
 
 export type AdminExport = { json: unknown; csv: string };
@@ -39,6 +40,14 @@ export type RegisterAdminOptions = {
     /** The operator-saved override, if any -- takes effect on next restart. */
     read: () => Promise<InstallationConfigOverride | null>;
     write: (value: InstallationConfigOverride) => Promise<void>;
+  };
+  showConfig?: {
+    /** The showId this running process actually booted with, or null if no scenario is ready. */
+    activeShowId: string | null;
+    list: () => Promise<PublishedShowSummary[]>;
+    /** The operator-saved pending selection, if any -- takes effect on next restart. */
+    readPending: () => Promise<string | null>;
+    write: (showId: string) => Promise<void>;
   };
 };
 
@@ -136,6 +145,28 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       await options.installationConfig.write(value);
       options.data?.audit({ action: "set-installation-config", at: new Date().toISOString(), detail: value });
       return { ok: true, pending: value };
+    });
+    admin.get("/shows", async (_request, reply) => {
+      if (!options.showConfig) return reply.code(503).send({ error: "show_config_unavailable" });
+      return {
+        active: options.showConfig.activeShowId,
+        pending: await options.showConfig.readPending(),
+        shows: await options.showConfig.list(),
+      };
+    });
+    admin.post<{ Body: { showId?: unknown } }>("/shows", async (request, reply) => {
+      if (!options.showConfig) return reply.code(503).send({ error: "show_config_unavailable" });
+      const { showId } = request.body ?? {};
+      if (typeof showId !== "string" || showId === "") {
+        return reply.code(400).send({ error: "invalid_show_id" });
+      }
+      const shows = await options.showConfig.list();
+      if (!shows.some((show) => show.showId === showId)) {
+        return reply.code(400).send({ error: "unknown_show_id" });
+      }
+      await options.showConfig.write(showId);
+      options.data?.audit({ action: "set-active-show", at: new Date().toISOString(), detail: { showId } });
+      return { ok: true, pending: showId };
     });
     admin.get<{ Params: { sessionId: string }; Querystring: { format?: string } }>("/sessions/:sessionId/export", async (request, reply) => {
       const result = await options.data?.exportSession(request.params.sessionId);

@@ -5,26 +5,42 @@ export type InstallationConfigOverride = {
   roomId: string;
 };
 
+/** The pending installationId/roomId/activeShowId an operator has saved, if any -- applied on the next server restart. */
+export type ServerConfigOverride = {
+  installationId?: string;
+  roomId?: string;
+  activeShowId?: string;
+};
+
 const COLLECTION = "installation_config";
 
-async function currentRecord(
-  client: PocketBaseClient,
-): Promise<{ id: string; installationId: string; roomId: string } | null> {
+type StoredRecord = { id: string; installationId?: string; roomId?: string; activeShowId?: string };
+
+async function currentRecord(client: PocketBaseClient): Promise<StoredRecord | null> {
   try {
     const record = await client.pb.collection(COLLECTION).getFirstListItem("");
-    return { id: record.id, installationId: record.installationId, roomId: record.roomId };
+    return {
+      id: record.id,
+      installationId: record.installationId,
+      roomId: record.roomId,
+      activeShowId: record.activeShowId,
+    };
   } catch {
     return null;
   }
 }
 
-/** The pending installationId/roomId an operator has saved, if any -- applied on the next server restart. */
-export async function readInstallationConfigOverride(
+export async function readServerConfigOverride(
   client: PocketBaseClient,
-): Promise<InstallationConfigOverride | null> {
+): Promise<ServerConfigOverride | null> {
   await client.ensureAuth();
   const record = await currentRecord(client);
-  return record && { installationId: record.installationId, roomId: record.roomId };
+  if (!record) return null;
+  return {
+    ...(record.installationId === undefined ? {} : { installationId: record.installationId }),
+    ...(record.roomId === undefined ? {} : { roomId: record.roomId }),
+    ...(record.activeShowId === undefined ? {} : { activeShowId: record.activeShowId }),
+  };
 }
 
 export async function writeInstallationConfigOverride(
@@ -37,5 +53,16 @@ export async function writeInstallationConfigOverride(
     await client.pb.collection(COLLECTION).update(existing.id, value);
   } else {
     await client.pb.collection(COLLECTION).create(value);
+  }
+}
+
+/** Sets just the active show, independent of any installationId/roomId override. */
+export async function writeActiveShowId(client: PocketBaseClient, showId: string): Promise<void> {
+  await client.ensureAuth();
+  const existing = await currentRecord(client);
+  if (existing) {
+    await client.pb.collection(COLLECTION).update(existing.id, { activeShowId: showId });
+  } else {
+    await client.pb.collection(COLLECTION).create({ activeShowId: showId });
   }
 }

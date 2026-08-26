@@ -27,6 +27,8 @@ type Feedback = { status: "success" | "danger"; message: string };
 type ConfirmAction = "idle" | "restart";
 type InstallationConfig = { installationId: string; roomId: string };
 type InstallationInfo = { active: InstallationConfig; pending: InstallationConfig | null };
+type PublishedShow = { showId: string; name: string; version: string; publishedAt: number };
+type ShowsInfo = { active: string | null; pending: string | null; shows: PublishedShow[] };
 
 async function api(path: string, token: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`/api/admin/${path}`, {
@@ -47,6 +49,12 @@ function formatDuration(milliseconds: number): string {
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
   return [hours, minutes, seconds].map((part) => String(part).padStart(2, "0")).join(":");
+}
+
+function showLabel(showId: string | null, shows: PublishedShow[]): string {
+  if (!showId) return "—";
+  const show = shows.find((candidate) => candidate.showId === showId);
+  return show ? `${show.name} (${show.version})` : showId;
 }
 
 function StatusLabel({ status, children }: { status: ToolStatus; children: ReactNode }) {
@@ -115,6 +123,9 @@ export function App() {
   const [installationInfo, setInstallationInfo] = useState<InstallationInfo | null>(null);
   const [installationForm, setInstallationForm] = useState<InstallationConfig>({ installationId: "", roomId: "" });
   const [savingInstallation, setSavingInstallation] = useState(false);
+  const [showsInfo, setShowsInfo] = useState<ShowsInfo | null>(null);
+  const [selectedShowId, setSelectedShowId] = useState("");
+  const [savingShow, setSavingShow] = useState(false);
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
   const controlsHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -152,13 +163,28 @@ export function App() {
     }
   }, [connectedToken]);
 
+  const loadShows = useCallback(async () => {
+    if (!connectedToken) return;
+    try {
+      const response = await api("shows", connectedToken);
+      const info = await response.json() as ShowsInfo;
+      if (!info || !Array.isArray(info.shows)) return;
+      setShowsInfo(info);
+      setSelectedShowId(info.pending ?? info.active ?? info.shows[0]?.showId ?? "");
+    } catch {
+      // Same rationale as loadInstallation: a stale/invalid token already
+      // surfaces via the main connection error banner.
+    }
+  }, [connectedToken]);
+
   useEffect(() => {
     if (!connectedToken) return;
     void refresh();
     void loadInstallation();
+    void loadShows();
     const timer = window.setInterval(() => { void refresh(); }, 2_000);
     return () => window.clearInterval(timer);
-  }, [connectedToken, refresh, loadInstallation]);
+  }, [connectedToken, refresh, loadInstallation, loadShows]);
 
   const saveInstallation = async (event: FormEvent) => {
     event.preventDefault();
@@ -176,6 +202,26 @@ export function App() {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not save installation config." });
     } finally {
       setSavingInstallation(false);
+    }
+  };
+
+  const saveShow = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!selectedShowId) return;
+    setSavingShow(true);
+    setFeedback(null);
+    try {
+      await api("shows", connectedToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ showId: selectedShowId }),
+      });
+      setFeedback({ status: "success", message: "Saved. Restart the server in Coolify to apply it." });
+      await loadShows();
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not save the active show." });
+    } finally {
+      setSavingShow(false);
     }
   };
 
@@ -326,6 +372,29 @@ export function App() {
             </label>
             <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingInstallation}>{savingInstallation ? "Saving…" : "Save (restart required)"}</button>
           </form>
+          <p className="sc-tool-help">Takes effect the next time the server restarts — restart it manually in Coolify once saved.</p>
+        </section>
+
+        <section className="sc-tool-panel" aria-labelledby="admin-show-heading">
+          <div className="admin-section-heading">
+            <div><p className="sc-tool-eyebrow">Which content is live</p><h2 id="admin-show-heading">Active show</h2></div>
+          </div>
+          <dl className="admin-session-facts">
+            <div><dt>Currently running</dt><dd className="sc-tool-mono">{showLabel(showsInfo?.active ?? null, showsInfo?.shows ?? [])}</dd></div>
+            {showsInfo?.pending && <div><dt>Pending (needs restart)</dt><dd className="sc-tool-mono">{showLabel(showsInfo.pending, showsInfo.shows)}</dd></div>}
+          </dl>
+          {showsInfo && showsInfo.shows.length === 0
+            ? <p className="sc-tool-copy">No shows have been published to PocketBase yet.</p>
+            : <form className="admin-connection-form" onSubmit={(event) => void saveShow(event)}>
+                <label className="sc-tool-label" htmlFor="active-show">Show
+                  <select id="active-show" className="sc-tool-field" value={selectedShowId} onChange={(event) => setSelectedShowId(event.target.value)}>
+                    {(showsInfo?.shows ?? []).map((show) => (
+                      <option key={show.showId} value={show.showId}>{show.name} ({show.version}) — {new Date(show.publishedAt).toLocaleString()}</option>
+                    ))}
+                  </select>
+                </label>
+                <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingShow || !selectedShowId}>{savingShow ? "Saving…" : "Save (restart required)"}</button>
+              </form>}
           <p className="sc-tool-help">Takes effect the next time the server restarts — restart it manually in Coolify once saved.</p>
         </section>
 

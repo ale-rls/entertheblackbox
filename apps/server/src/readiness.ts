@@ -95,14 +95,25 @@ type PublishedScenarioRecord = {
  * externally hosted"), so `mediaDir` is still needed to validate sizes.
  * Returns `null` when no scenario has been published yet, so callers can
  * fall back to the file-based loader.
+ *
+ * Every publish creates a new record rather than updating one (see
+ * scripts/publish-scenario-to-pocketbase.ts), so without `activeShowId`
+ * this picks whichever `status = "published"` record is newest,
+ * regardless of showId -- the zero-config default before an operator has
+ * ever chosen an active show via /api/admin/shows. Once one has been
+ * chosen, only records for that showId are considered.
  */
 export async function loadPublishedScenarioFromPocketbase(
   client: PocketBaseClient,
   mediaDir: string,
+  activeShowId?: string,
 ): Promise<ScenarioReadiness | null> {
   await client.ensureAuth();
+  const filter = activeShowId === undefined
+    ? 'status = "published"'
+    : client.pb.filter('status = "published" && showId = {:showId}', { showId: activeShowId });
   const published = await client.pb.collection<PublishedScenarioRecord>("scenarios").getFirstListItem(
-    'status = "published"',
+    filter,
     { sort: "-publishedAt" },
   ).catch((error: unknown) => {
     if (error instanceof Error && "status" in error && (error as { status?: number }).status === 404) return null;
@@ -110,4 +121,33 @@ export async function loadPublishedScenarioFromPocketbase(
   });
   if (!published) return null;
   return validateScenarioContent(published.scenario, published.mediaManifest, [], mediaDir, published.showId);
+}
+
+export type PublishedShowSummary = {
+  showId: string;
+  name: string;
+  version: string;
+  publishedAt: number;
+};
+
+/**
+ * Every publish's own showId, deduped to its most recent record (by
+ * publishedAt) -- the option list for /api/admin/shows's picker.
+ */
+export async function listPublishedShows(client: PocketBaseClient): Promise<PublishedShowSummary[]> {
+  await client.ensureAuth();
+  const records = await client.pb.collection<PublishedScenarioRecord & { id: string; name?: string }>("scenarios")
+    .getFullList({ filter: 'status = "published"', sort: "-publishedAt" });
+  const byShowId = new Map<string, PublishedShowSummary>();
+  for (const record of records) {
+    if (byShowId.has(record.showId)) continue;
+    const scenario = record.scenario as { version?: string } | null;
+    byShowId.set(record.showId, {
+      showId: record.showId,
+      name: record.name?.trim() || record.showId,
+      version: scenario?.version ?? "unknown",
+      publishedAt: record.publishedAt,
+    });
+  }
+  return [...byShowId.values()];
 }

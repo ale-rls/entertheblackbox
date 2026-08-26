@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { InMemoryIpRateLimiter } from "../admission/rate-limit.js";
 import type { PhaseEngine } from "../engine/phase-engine.js";
 import type { InstallationConfigOverride } from "../persistence/installation-config.js";
+import type { PublishedShowSummary } from "../readiness.js";
 import { registerAdminRoutes, type AdminDataSource, type AdminRateLimiters } from "./admin.js";
 
 function setup(options: {
@@ -13,6 +14,12 @@ function setup(options: {
     active: InstallationConfigOverride;
     read: () => Promise<InstallationConfigOverride | null>;
     write: (value: InstallationConfigOverride) => Promise<void>;
+  };
+  showConfig?: {
+    activeShowId: string | null;
+    list: () => Promise<PublishedShowSummary[]>;
+    readPending: () => Promise<string | null>;
+    write: (showId: string) => Promise<void>;
   };
 } = {}) {
   const audit = vi.fn();
@@ -172,6 +179,57 @@ describe("admin API", () => {
     const headers = { authorization: "Bearer strong-admin-token" };
     expect((await app.inject({ url: "/api/admin/installation", headers })).statusCode).toBe(503);
     expect((await app.inject({ method: "POST", url: "/api/admin/installation", headers, payload: {} })).statusCode).toBe(503);
+  });
+
+  it("lists available shows and switches the pending active show", async () => {
+    const shows: PublishedShowSummary[] = [
+      { showId: "show-a", name: "Election night", version: "1.0.0", publishedAt: 1_000 },
+      { showId: "show-b", name: "Housing town hall", version: "2.0.0", publishedAt: 2_000 },
+    ];
+    let pending: string | null = null;
+    const write = vi.fn(async (showId: string) => { pending = showId; });
+    const { app, audit } = setup({
+      showConfig: {
+        activeShowId: "show-a",
+        list: async () => shows,
+        readPending: async () => pending,
+        write,
+      },
+    });
+    const headers = { authorization: "Bearer strong-admin-token" };
+
+    expect((await app.inject({ url: "/api/admin/shows", headers })).json()).toEqual({
+      active: "show-a",
+      pending: null,
+      shows,
+    });
+
+    const invalid = await app.inject({
+      method: "POST", url: "/api/admin/shows", headers, payload: { showId: "not-a-real-show" },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toEqual({ error: "unknown_show_id" });
+    expect(write).not.toHaveBeenCalled();
+
+    const saved = await app.inject({
+      method: "POST", url: "/api/admin/shows", headers, payload: { showId: "show-b" },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toEqual({ ok: true, pending: "show-b" });
+    expect(write).toHaveBeenCalledWith("show-b");
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "set-active-show" }));
+
+    expect((await app.inject({ url: "/api/admin/shows", headers })).json()).toMatchObject({
+      active: "show-a",
+      pending: "show-b",
+    });
+  });
+
+  it("returns 503 for show routes when no store is configured", async () => {
+    const { app } = setup();
+    const headers = { authorization: "Bearer strong-admin-token" };
+    expect((await app.inject({ url: "/api/admin/shows", headers })).statusCode).toBe(503);
+    expect((await app.inject({ method: "POST", url: "/api/admin/shows", headers, payload: {} })).statusCode).toBe(503);
   });
 
   it("uses the direct peer unless proxy trust is explicitly enabled", async () => {

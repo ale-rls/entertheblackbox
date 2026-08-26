@@ -6,9 +6,13 @@ import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
 import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
-import { readInstallationConfigOverride, writeInstallationConfigOverride } from "./persistence/installation-config.js";
+import {
+  readServerConfigOverride,
+  writeActiveShowId,
+  writeInstallationConfigOverride,
+} from "./persistence/installation-config.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
-import { loadScenarioReadiness, type ScenarioReadiness } from "./readiness.js";
+import { listPublishedShows, loadScenarioReadiness, type ScenarioReadiness } from "./readiness.js";
 import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
 export const WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024;
@@ -147,8 +151,19 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     ...(options.pocketbase === undefined ? {} : {
       installationConfig: {
         active: { installationId: config.installationId, roomId: config.roomId },
-        read: () => readInstallationConfigOverride(options.pocketbase!),
+        read: async () => {
+          const override = await readServerConfigOverride(options.pocketbase!);
+          return override?.installationId !== undefined && override.roomId !== undefined
+            ? { installationId: override.installationId, roomId: override.roomId }
+            : null;
+        },
         write: (value) => writeInstallationConfigOverride(options.pocketbase!, value),
+      },
+      showConfig: {
+        activeShowId: readiness.ready ? readiness.showId : null,
+        list: () => listPublishedShows(options.pocketbase!),
+        readPending: async () => (await readServerConfigOverride(options.pocketbase!))?.activeShowId ?? null,
+        write: (showId) => writeActiveShowId(options.pocketbase!, showId),
       },
     }),
   });

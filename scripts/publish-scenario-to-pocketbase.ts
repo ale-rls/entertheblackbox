@@ -7,7 +7,7 @@
  * call over HTTP instead of shelling out to.
  *
  * Usage:
- *   tsx scripts/publish-scenario-to-pocketbase.ts <scenario.json> [--manifest <manifest.json>] [--show-id <id>]
+ *   tsx scripts/publish-scenario-to-pocketbase.ts <scenario.json> [--manifest <manifest.json>] [--show-id <id>] [--name <label>]
  *
  * Env:
  *   POCKETBASE_URL (default http://127.0.0.1:8090)
@@ -23,6 +23,7 @@ function parseArgs(argv: string[]) {
   const positional: string[] = [];
   let manifestPath = "content/media-manifest.json";
   let showId = "default";
+  let name: string | undefined;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -30,6 +31,8 @@ function parseArgs(argv: string[]) {
       manifestPath = argv[(i += 1)] ?? manifestPath;
     } else if (arg === "--show-id") {
       showId = argv[(i += 1)] ?? showId;
+    } else if (arg === "--name") {
+      name = argv[(i += 1)] ?? name;
     } else if (arg) {
       positional.push(arg);
     }
@@ -37,9 +40,9 @@ function parseArgs(argv: string[]) {
 
   const scenarioPath = positional[0];
   if (!scenarioPath) {
-    throw new Error("usage: publish-scenario-to-pocketbase <scenario.json> [--manifest <manifest.json>] [--show-id <id>]");
+    throw new Error("usage: publish-scenario-to-pocketbase <scenario.json> [--manifest <manifest.json>] [--show-id <id>] [--name <label>]");
   }
-  return { scenarioPath, manifestPath, showId };
+  return { scenarioPath, manifestPath, showId, name };
 }
 
 async function readJson(path: string): Promise<unknown> {
@@ -47,7 +50,7 @@ async function readJson(path: string): Promise<unknown> {
 }
 
 async function main(): Promise<void> {
-  const { scenarioPath, manifestPath, showId } = parseArgs(process.argv.slice(2));
+  const { scenarioPath, manifestPath, showId, name } = parseArgs(process.argv.slice(2));
   const scenario = await readJson(resolve(process.cwd(), scenarioPath)) as { version: string };
   const mediaManifest = await readJson(resolve(process.cwd(), manifestPath));
 
@@ -59,6 +62,10 @@ async function main(): Promise<void> {
 
   const record = await pb.collection("scenarios").create({
     showId,
+    // Falls back to showId so the admin dashboard's show picker always
+    // has something more useful than a blank label, even for a publish
+    // that skipped --name.
+    name: name ?? showId,
     version: scenario.version,
     status: "published",
     scenario,
@@ -66,7 +73,7 @@ async function main(): Promise<void> {
     publishedAt: Date.now(),
   });
 
-  console.log(`OK: published "${showId}" version ${scenario.version} as scenarios/${record.id}`);
+  console.log(`OK: published "${record.name}" (${showId}) version ${scenario.version} as scenarios/${record.id}`);
 }
 
 main().catch((error: unknown) => {

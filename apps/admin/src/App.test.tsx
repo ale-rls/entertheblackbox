@@ -86,6 +86,9 @@ function createAdminFetch(options?: { status?: Status; rejectAction?: string }) 
     if (url.endsWith("/installation") && method === "GET") {
       return jsonResponse({ active: { installationId: "dev-installation", roomId: "main" }, pending: null });
     }
+    if (url.endsWith("/shows") && method === "GET") {
+      return jsonResponse({ active: "show-a", pending: null, shows: [{ showId: "show-a", name: "Election night", version: "1.0.0", publishedAt: 1_000 }] });
+    }
     if (method === "POST" && url.endsWith(`/${options?.rejectAction ?? "\0"}`)) return jsonResponse({ ok: false, reason: "wrong-phase" }, 409);
     return jsonResponse({ ok: true });
   });
@@ -276,6 +279,46 @@ describe("Admin operations UI", () => {
 
     const saveRequest = requests.find(({ url, method }) => url.endsWith("/installation") && method === "POST");
     expect(saveRequest?.body).toBe(JSON.stringify({ installationId: "venue-b", roomId: "stage-2" }));
+    expect(document.body.textContent).toContain("Restart the server in Coolify to apply it");
+  });
+
+  it("shows the active show and saves a pending selection", async () => {
+    sessionStorage.setItem("admin-token", "operator-secret");
+    const requests: Array<{ url: string; method: string; body?: string }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ url, method, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
+      if (url.endsWith("/status")) return jsonResponse(activeStatus);
+      if (url.endsWith("/installation")) return jsonResponse({ active: { installationId: "dev-installation", roomId: "main" }, pending: null });
+      if (url.endsWith("/shows") && method === "GET") {
+        return jsonResponse({
+          active: "show-a", pending: null,
+          shows: [
+            { showId: "show-a", name: "Election night", version: "1.0.0", publishedAt: 1_000 },
+            { showId: "show-b", name: "Housing town hall", version: "2.0.0", publishedAt: 2_000 },
+          ],
+        });
+      }
+      if (url.endsWith("/shows") && method === "POST") return jsonResponse({ ok: true, pending: "show-b" });
+      return jsonResponse({ ok: true });
+    }));
+    await renderApp();
+
+    expect(document.body.textContent).toContain("Election night (1.0.0)");
+
+    const select = document.querySelector<HTMLSelectElement>("#active-show")!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(select, "show-b");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const saveShowButton = select.closest("form")!.querySelector<HTMLButtonElement>("button[type=submit]")!;
+    await act(async () => { saveShowButton.click(); });
+    await flush();
+
+    const saveRequest = requests.find(({ url, method }) => url.endsWith("/shows") && method === "POST");
+    expect(saveRequest?.body).toBe(JSON.stringify({ showId: "show-b" }));
     expect(document.body.textContent).toContain("Restart the server in Coolify to apply it");
   });
 
