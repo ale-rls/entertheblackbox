@@ -133,6 +133,18 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
 
     return publicVideoPhases;
   });
+  // Must reflect whatever scenario is actually active, not a static local
+  // file -- display's MediaStore (apps/display/src/media/mediaStore.ts)
+  // treats this as the list of files to sync, so a manifest that doesn't
+  // match the running show means display silently never downloads/plays
+  // its videos.
+  app.get("/media-manifest.json", async (_request, reply) => {
+    if (!readiness.ready) {
+      return reply.code(503).send({ error: "media_manifest_not_found" });
+    }
+    reply.header("cache-control", "no-cache");
+    return readiness.mediaManifest;
+  });
   app.addHook("onError", async (request, _reply, error) => {
     adminData?.recordError?.({ message: error.message, at: new Date().toISOString(), path: request.url });
   });
@@ -155,7 +167,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     }),
   });
 
-  registerMediaRoutes(app, config.mediaManifestPath, config.mediaDir);
+  registerMediaRoutes(app, config.mediaDir);
   registerBundleRoutes(app, config.bundleDirs);
 
   app.server.on("upgrade", (request, socket, head) => {

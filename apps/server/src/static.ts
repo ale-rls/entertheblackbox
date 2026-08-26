@@ -153,13 +153,8 @@ async function sendRangedFile(
 
 export function registerMediaRoutes(
   app: FastifyInstance,
-  mediaManifestPath: string,
   mediaDir: string,
 ): void {
-  app.get("/media-manifest.json", async (_request, reply) => {
-    await sendFile(reply, resolve(mediaManifestPath), "no-cache", "media_manifest_not_found");
-  });
-
   app.get<{ Params: { "*": string } }>("/media/*", async (request, reply) => {
     const rootPath = resolve(mediaDir);
     const filePath = resolve(rootPath, request.params["*"]);

@@ -5,13 +5,14 @@ import {
   statSizeWithNodeFs,
   validateMediaManifest,
   validateScenario,
+  type MediaManifest,
   type Scenario,
 } from "@smartphonecracy/scenario";
 import type { ServerConfig } from "./config.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 
 export type ScenarioReadiness =
-  | { ready: true; scenario: Scenario; warnings: string[]; showId: string }
+  | { ready: true; scenario: Scenario; mediaManifest: MediaManifest; warnings: string[]; showId: string }
   | { ready: false; scenario: null; errors: string[]; warnings: string[] };
 
 async function readJson(path: string): Promise<unknown> {
@@ -55,10 +56,10 @@ async function validateScenarioContent(
     errors.push(...media.errors.map((issue) => issue.message));
   }
 
-  if (errors.length > 0 || !scenarioResult.success) {
+  if (errors.length > 0 || !scenarioResult.success || !manifestResult.success) {
     return { ready: false, scenario: null, errors, warnings };
   }
-  return { ready: true, scenario: scenarioResult.data, warnings, showId };
+  return { ready: true, scenario: scenarioResult.data, mediaManifest: manifestResult.data, warnings, showId };
 }
 
 /** Validate all deployment content without preventing liveness endpoints from booting. */
