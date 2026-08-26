@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import PocketBase from "pocketbase";
 import { addEdge, Background, ReactFlow, type Connection, type Edge, type Node, useEdgesState, useNodesState } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Autosave, recoverDraft, type SaveStatus as SaveStatusValue } from "./drafts.js";
@@ -29,6 +30,8 @@ const download = (name: string, value: unknown) => {
 };
 
 type InlineFeedback = { status: "info" | "success" | "danger"; message: string };
+
+const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 function Feedback({ feedback, id, className = "" }: { feedback: InlineFeedback; id: string; className?: string }) {
   return <p id={id} className={`sc-tool-feedback studio-feedback ${className}`.trim()} data-sc-tool-status={feedback.status} role={feedback.status === "danger" ? "alert" : "status"} aria-atomic="true">{feedback.message}</p>;
@@ -64,9 +67,7 @@ const edgesForDraft = (draft: Draft): Edge[] => {
 };
 
 export function App() {
-  const db = useMemo(() => new PocketbaseDraftDatabase(
-    import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090",
-  ), []);
+  const db = useMemo(() => new PocketbaseDraftDatabase(POCKETBASE_URL), []);
   const autosave = useMemo(() => new Autosave(db), [db]);
   const [recent, setRecent] = useState<Draft[]>([]);
   const [draft, setDraft] = useState<Draft>();
@@ -82,6 +83,10 @@ export function App() {
   const [importFeedback, setImportFeedback] = useState<InlineFeedback>();
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
   const [exportFeedback, setExportFeedback] = useState<InlineFeedback>();
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishForm, setPublishForm] = useState({ email: "", password: "", showId: "", name: "" });
+  const [publishing, setPublishing] = useState(false);
+  const [publishFeedback, setPublishFeedback] = useState<InlineFeedback>();
   const [confirmation, setConfirmation] = useState<ConfirmationDetails>();
   const importInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
@@ -444,6 +449,48 @@ export function App() {
       setExportFeedback({ status: "danger", message: `Deployment export failed: ${detail} Review Diagnostics, resolve the reported issues, and try again.` });
     }
   };
+  const openPublish = () => {
+    setPublishFeedback(undefined);
+    setPublishForm({ email: "", password: "", showId: draft.id, name: draft.name });
+    setPublishOpen(true);
+  };
+  const publishDraft = async (event: FormEvent) => {
+    event.preventDefault();
+    setPublishing(true);
+    setPublishFeedback(undefined);
+    try {
+      const pb = new PocketBase(POCKETBASE_URL);
+      await pb.collection("operators").authWithPassword(publishForm.email, publishForm.password);
+      const artifacts = exportArtifacts(draft);
+      // Relative fetch: only resolves when Studio is served from apps/server
+      // alongside /api/admin (same as the "Monitor show" link) -- publishing
+      // from the standalone `vite dev` Studio server isn't supported.
+      const response = await fetch("/api/admin/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${pb.authStore.token}` },
+        body: JSON.stringify({
+          showId: publishForm.showId,
+          name: publishForm.name,
+          scenario: artifacts["scenario.json"],
+          mediaManifest: artifacts["media-manifest.json"],
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error === "invalid_publish_request"
+          ? "Show ID must be letters, numbers, - or _ only, and Name can't be empty."
+          : `Publish failed (${response.status}).`);
+      }
+      setPublishFeedback({ status: "success", message: `Published "${publishForm.name}". Pick it in /admin's Active show panel and restart the server to make it live.` });
+    } catch (error) {
+      setPublishFeedback({
+        status: "danger",
+        message: error instanceof Error && error.message !== "" ? error.message : "Invalid operator email or password, or publish failed.",
+      });
+    } finally {
+      setPublishing(false);
+    }
+  };
   const saveLayout = (positionedNodes = nodes) => saveCanvas(draft, positionedNodes, edges);
   const saveMovedNodes = (movedNodes: Node[]) => {
     const movedPositions = new Map(movedNodes.map((node) => [node.id, node.position]));
@@ -463,6 +510,7 @@ export function App() {
         { separator: true },
         { label: "Export files", onSelect: () => Object.entries(exportArtifacts(draft)).forEach(([name, value]) => download(name, value)), disabled: blocked },
         { label: "Export for deployment", onSelect: exportDeployment, disabled: blocked },
+        { label: "Publish to PocketBase…", onSelect: openPublish, disabled: blocked },
         { label: "Save backup", onSelect: () => download(`${draft.name}.studio-backup.json`, exportBackup(draft)) },
         { separator: true },
         { label: "Close show", onSelect: closeShow },
@@ -499,6 +547,29 @@ export function App() {
       }} />
       {importFeedback && <Feedback id="studio-import-feedback" className="menubar-feedback" feedback={importFeedback} />}
       {exportFeedback && <Feedback id="studio-export-feedback" className="menubar-feedback" feedback={exportFeedback} />}
+      {publishOpen && <div className="sc-tool-panel publish-panel" role="dialog" aria-labelledby="publish-heading">
+        <p className="sc-tool-eyebrow" id="publish-heading">Publish to PocketBase</p>
+        <p className="sc-tool-help">Sign in with your operator credentials (the same ones used for /admin). Publishing only works when Studio is served from apps/server.</p>
+        <form onSubmit={(event) => void publishDraft(event)}>
+          <label className="sc-tool-label" htmlFor="publish-email">Operator email
+            <input id="publish-email" className="sc-tool-field" type="email" autoComplete="username" value={publishForm.email} onChange={(event) => setPublishForm((form) => ({ ...form, email: event.target.value }))} />
+          </label>
+          <label className="sc-tool-label" htmlFor="publish-password">Password
+            <input id="publish-password" className="sc-tool-field sc-tool-mono" type="password" autoComplete="current-password" value={publishForm.password} onChange={(event) => setPublishForm((form) => ({ ...form, password: event.target.value }))} />
+          </label>
+          <label className="sc-tool-label" htmlFor="publish-show-id">Show ID
+            <input id="publish-show-id" className="sc-tool-field sc-tool-mono" value={publishForm.showId} onChange={(event) => setPublishForm((form) => ({ ...form, showId: event.target.value }))} />
+          </label>
+          <label className="sc-tool-label" htmlFor="publish-name">Name
+            <input id="publish-name" className="sc-tool-field" value={publishForm.name} onChange={(event) => setPublishForm((form) => ({ ...form, name: event.target.value }))} />
+          </label>
+          <div className="publish-panel-actions">
+            <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => setPublishOpen(false)}>Cancel</button>
+            <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={publishing || !publishForm.email || !publishForm.password || !publishForm.showId || !publishForm.name}>{publishing ? "Publishing…" : "Publish"}</button>
+          </div>
+        </form>
+        {publishFeedback && <Feedback id="studio-publish-feedback" className="menubar-feedback" feedback={publishFeedback} />}
+      </div>}
     </header>
     <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
     <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onKindChange={changeSelectedKind} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} />

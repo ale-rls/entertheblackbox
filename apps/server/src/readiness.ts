@@ -131,6 +131,34 @@ export type PublishedShowSummary = {
 };
 
 /**
+ * Writes a new published scenarios record -- the HTTP write side Studio's
+ * "Publish" action calls, so an operator never needs superuser PocketBase
+ * credentials in the browser (scenarios' createRule is superuser-only,
+ * same as scripts/publish-scenario-to-pocketbase.ts's CLI equivalent).
+ * Deliberately does no scenario/media validation here, matching the CLI
+ * script it replaces -- richer validation already happens when the server
+ * next boots with this show selected (validateScenarioContent).
+ */
+export async function publishShow(
+  client: PocketBaseClient,
+  record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown },
+): Promise<PublishedShowSummary> {
+  await client.ensureAuth();
+  const version = (record.scenario as { version?: unknown } | null)?.version;
+  const publishedAt = Date.now();
+  await client.pb.collection("scenarios").create({
+    showId: record.showId,
+    name: record.name,
+    version: typeof version === "string" ? version : "unknown",
+    status: "published",
+    scenario: record.scenario,
+    mediaManifest: record.mediaManifest,
+    publishedAt,
+  });
+  return { showId: record.showId, name: record.name, version: typeof version === "string" ? version : "unknown", publishedAt };
+}
+
+/**
  * Every publish's own showId, deduped to its most recent record (by
  * publishedAt) -- the option list for /api/admin/shows's picker.
  */

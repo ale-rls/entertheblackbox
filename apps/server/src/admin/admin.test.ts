@@ -20,6 +20,7 @@ function setup(options: {
     list: () => Promise<PublishedShowSummary[]>;
     readPending: () => Promise<string | null>;
     write: (showId: string) => Promise<void>;
+    publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown }) => Promise<PublishedShowSummary>;
   };
 } = {}) {
   const audit = vi.fn();
@@ -194,6 +195,7 @@ describe("admin API", () => {
         list: async () => shows,
         readPending: async () => pending,
         write,
+        publish: vi.fn(),
       },
     });
     const headers = { authorization: "Bearer strong-admin-token" };
@@ -223,6 +225,37 @@ describe("admin API", () => {
       active: "show-a",
       pending: "show-b",
     });
+  });
+
+  it("publishes a new show from a request body, matching Studio's export shape", async () => {
+    const publish = vi.fn(async (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown }) => ({
+      showId: record.showId, name: record.name, version: "1.0.0", publishedAt: 5_000,
+    }));
+    const { app, audit } = setup({
+      showConfig: { activeShowId: null, list: async () => [], readPending: async () => null, write: vi.fn(), publish },
+    });
+    const headers = { authorization: "Bearer strong-admin-token" };
+
+    const invalid = await app.inject({
+      method: "POST", url: "/api/admin/publish", headers, payload: { showId: "has spaces", name: "x", scenario: {}, mediaManifest: {} },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(publish).not.toHaveBeenCalled();
+
+    const published = await app.inject({
+      method: "POST", url: "/api/admin/publish", headers,
+      payload: { showId: "draft-a", name: "Election night", scenario: { version: "1.0.0" }, mediaManifest: { files: [] } },
+    });
+    expect(published.statusCode).toBe(200);
+    expect(published.json()).toEqual({ ok: true, show: { showId: "draft-a", name: "Election night", version: "1.0.0", publishedAt: 5_000 } });
+    expect(publish).toHaveBeenCalledWith({ showId: "draft-a", name: "Election night", scenario: { version: "1.0.0" }, mediaManifest: { files: [] } });
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "publish-show" }));
+  });
+
+  it("returns 503 for publish when no show store is configured", async () => {
+    const { app } = setup();
+    const headers = { authorization: "Bearer strong-admin-token" };
+    expect((await app.inject({ method: "POST", url: "/api/admin/publish", headers, payload: {} })).statusCode).toBe(503);
   });
 
   it("returns 503 for show routes when no store is configured", async () => {

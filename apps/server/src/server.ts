@@ -12,7 +12,7 @@ import {
   writeInstallationConfigOverride,
 } from "./persistence/installation-config.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
-import { listPublishedShows, loadScenarioReadiness, type ScenarioReadiness } from "./readiness.js";
+import { listPublishedShows, loadScenarioReadiness, publishShow, type ScenarioReadiness } from "./readiness.js";
 import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
 export const WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024;
@@ -164,6 +164,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         list: () => listPublishedShows(options.pocketbase!),
         readPending: async () => (await readServerConfigOverride(options.pocketbase!))?.activeShowId ?? null,
         write: (showId) => writeActiveShowId(options.pocketbase!, showId),
+        publish: (record) => publishShow(options.pocketbase!, record),
       },
     }),
   });

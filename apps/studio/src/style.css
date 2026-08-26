@@ -118,6 +118,7 @@ body:has(.editor),
 
 /* Menus and document state */
 .menubar {
+  position: relative;
   z-index: 20;
   display: flex;
   min-width: 0;
@@ -127,6 +128,30 @@ body:has(.editor),
   padding: var(--sc-tool-space-2) var(--sc-tool-space-4);
   border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
   background: var(--sc-tool-color-surface-1);
+}
+
+.publish-panel {
+  position: absolute;
+  top: 100%;
+  right: var(--sc-tool-space-4);
+  z-index: 30;
+  width: min(22rem, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc-tool-space-2);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+.publish-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sc-tool-space-2);
+}
+
+.publish-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sc-tool-space-2);
 }
 
 .menubar-feedback {

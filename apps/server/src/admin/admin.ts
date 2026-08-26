@@ -48,6 +48,7 @@ export type RegisterAdminOptions = {
     /** The operator-saved pending selection, if any -- takes effect on next restart. */
     readPending: () => Promise<string | null>;
     write: (showId: string) => Promise<void>;
+    publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown }) => Promise<PublishedShowSummary>;
   };
 };
 
@@ -167,6 +168,21 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       await options.showConfig.write(showId);
       options.data?.audit({ action: "set-active-show", at: new Date().toISOString(), detail: { showId } });
       return { ok: true, pending: showId };
+    });
+    admin.post<{ Body: { showId?: unknown; name?: unknown; scenario?: unknown; mediaManifest?: unknown } }>("/publish", async (request, reply) => {
+      if (!options.showConfig) return reply.code(503).send({ error: "show_config_unavailable" });
+      const { showId, name, scenario, mediaManifest } = request.body ?? {};
+      if (
+        typeof showId !== "string" || !INSTALLATION_ID_PATTERN.test(showId)
+        || typeof name !== "string" || name.trim() === ""
+        || typeof scenario !== "object" || scenario === null
+        || typeof mediaManifest !== "object" || mediaManifest === null
+      ) {
+        return reply.code(400).send({ error: "invalid_publish_request" });
+      }
+      const published = await options.showConfig.publish({ showId, name, scenario, mediaManifest });
+      options.data?.audit({ action: "publish-show", at: new Date().toISOString(), detail: { showId, name } });
+      return { ok: true, show: published };
     });
     admin.get<{ Params: { sessionId: string }; Querystring: { format?: string } }>("/sessions/:sessionId/export", async (request, reply) => {
       const result = await options.data?.exportSession(request.params.sessionId);
