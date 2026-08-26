@@ -70,7 +70,7 @@ export function App() {
     return () => connection.stop();
   }, [connection]);
 
-  // Low-latency cursor overlay (apps/realtime-ws): additive to the "input"
+  // Low-latency cursor overlay (apps/realtime-ws-coolify): additive to the "input"
   // message sent over the main connection above, published once this
   // phone's server-assigned identity (clientId + color) is known so the
   // display renders it with the same color everywhere.

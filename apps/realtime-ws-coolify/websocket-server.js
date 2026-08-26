@@ -2,25 +2,32 @@ const uWS = require("uWebSockets.js");
 
 /**
  * Room-scoped cursor relay, packaged to match the proven Coolify deployment
- * layout of manegame/uwebsocket-server (flat dir, plain JS, npm ci). Logic
- * ported from apps/realtime-ws/src/server.ts -- see that package's README
- * for the relationship to the main protocol / phase engine.
+ * layout of manegame/uwebsocket-server (flat dir, plain JS, npm ci).
  *
  * Each installation's phones/display connect with `?room=<installationId>:<roomId>`
- * and only ever see cursor traffic from their own room.
+ * and only ever see cursor traffic from their own room. Connections also
+ * carry `?role=phone|display` (default `phone`): phones only ever publish
+ * position, so cursor traffic is broadcast to display sockets only, and
+ * position updates are coalesced into a periodic `cursor_batch` rather than
+ * relayed one-for-one. Without this, a room-wide broadcast of every phone's
+ * update to every other phone is O(n^2) in room size and is what actually
+ * falls over with a few hundred phones in a room -- not the display's
+ * canvas rendering, which stays cheap regardless of cursor count.
  */
 
 const PORT = Number(process.env.WS_PORT || 9001);
 const MAX_PAYLOAD_LENGTH = 4 * 1024;
 const IDLE_TIMEOUT = 32;
 const PING_INTERVAL_MS = 30000;
-const MAX_BACKPRESSURE = 1024;
+const MAX_BACKPRESSURE = 64 * 1024;
 const RATE_LIMIT_WINDOW_MS = 1000;
 const RATE_LIMIT_MAX_MESSAGES = 50;
 const MAX_ROOM_ID_LENGTH = 200;
 const MAX_CLIENT_ID_LENGTH = 200;
+const FLUSH_INTERVAL_MS = 75;
 
 const rooms = new Map();
+const pendingByRoom = new Map();
 const rateLimits = new Map();
 
 function clamp01(value) {
@@ -47,12 +54,31 @@ function roomMembers(room) {
   return members;
 }
 
-function broadcastToRoom(room, message, exceptId) {
+function roomPending(room) {
+  let pending = pendingByRoom.get(room);
+  if (!pending) {
+    pending = new Map();
+    pendingByRoom.set(room, pending);
+  }
+  return pending;
+}
+
+function roomDisplays(room) {
   const members = rooms.get(room);
-  if (!members) return;
+  if (!members) return [];
+  const displays = [];
+  for (const socket of members.values()) {
+    if (socket.getUserData().role === "display") displays.push(socket);
+  }
+  return displays;
+}
+
+function broadcastToDisplays(room, message, exceptId) {
+  const displays = roomDisplays(room);
+  if (displays.length === 0) return;
   const encoded = JSON.stringify(message);
-  for (const [id, socket] of members) {
-    if (id === exceptId) continue;
+  for (const socket of displays) {
+    if (socket.getUserData().id === exceptId) continue;
     socket.send(encoded);
   }
 }
@@ -68,6 +94,22 @@ setInterval(() => {
   }
 }, 60000).unref();
 
+// Coalesce phone position updates per room and flush them to that room's
+// display socket(s) as one `cursor_batch` message, instead of relaying each
+// `cursor_update` the instant it arrives. Caps outbound message volume at a
+// fixed rate regardless of how many phones are in the room.
+setInterval(() => {
+  for (const [room, pending] of pendingByRoom) {
+    if (pending.size === 0) continue;
+    const displays = roomDisplays(room);
+    if (displays.length > 0) {
+      const encoded = JSON.stringify({ t: "cursor_batch", cursors: [...pending.values()] });
+      for (const socket of displays) socket.send(encoded);
+    }
+    pending.clear();
+  }
+}, FLUSH_INTERVAL_MS).unref();
+
 const app = uWS.App()
   .ws("/*", {
     compression: uWS.SHARED_COMPRESSOR,
@@ -79,6 +121,7 @@ const app = uWS.App()
       const room = (req.getQuery("room") || "").slice(0, MAX_ROOM_ID_LENGTH);
       const clientId = (req.getQuery("clientId") || randomId()).slice(0, MAX_CLIENT_ID_LENGTH);
       const color = (req.getQuery("color") || "#ffffff").slice(0, 20);
+      const role = req.getQuery("role") === "display" ? "display" : "phone";
       const secWebSocketKey = req.getHeader("sec-websocket-key");
       const secWebSocketProtocol = req.getHeader("sec-websocket-protocol");
       const secWebSocketExtensions = req.getHeader("sec-websocket-extensions");
@@ -87,7 +130,7 @@ const app = uWS.App()
         return;
       }
       res.upgrade(
-        { id: randomId(), room, clientId, color, isAlive: true, x: null, y: null },
+        { id: randomId(), room, clientId, color, role, isAlive: true, x: null, y: null },
         secWebSocketKey,
         secWebSocketProtocol,
         secWebSocketExtensions,
@@ -98,15 +141,17 @@ const app = uWS.App()
     open: (ws) => {
       const data = ws.getUserData();
       roomMembers(data.room).set(data.id, ws);
-      const snapshot = [...roomMembers(data.room).values()]
-        .filter((socket) => socket !== ws)
-        .map((socket) => {
-          const other = socket.getUserData();
-          return { clientId: other.clientId, color: other.color, x: other.x, y: other.y };
-        })
-        .filter((cursor) => cursor.x !== null && cursor.y !== null);
-      ws.send(JSON.stringify({ t: "cursor_snapshot", cursors: snapshot }));
-      broadcastToRoom(data.room, { t: "cursor_join", clientId: data.clientId, color: data.color }, data.id);
+      if (data.role === "display") {
+        const snapshot = [...roomMembers(data.room).values()]
+          .filter((socket) => socket !== ws)
+          .map((socket) => {
+            const other = socket.getUserData();
+            return { clientId: other.clientId, color: other.color, x: other.x, y: other.y };
+          })
+          .filter((cursor) => cursor.x !== null && cursor.y !== null);
+        ws.send(JSON.stringify({ t: "cursor_snapshot", cursors: snapshot }));
+      }
+      broadcastToDisplays(data.room, { t: "cursor_join", clientId: data.clientId, color: data.color }, data.id);
     },
 
     message: (ws, message) => {
@@ -123,13 +168,7 @@ const app = uWS.App()
       if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) return;
       data.x = clamp01(x);
       data.y = clamp01(y);
-      broadcastToRoom(data.room, {
-        t: "cursor_update",
-        clientId: data.clientId,
-        color: data.color,
-        x: data.x,
-        y: data.y,
-      }, data.id);
+      roomPending(data.room).set(data.clientId, { clientId: data.clientId, color: data.color, x: data.x, y: data.y });
     },
 
     pong: (ws) => {
@@ -139,9 +178,14 @@ const app = uWS.App()
     close: (ws) => {
       const data = ws.getUserData();
       roomMembers(data.room).delete(data.id);
-      if (roomMembers(data.room).size === 0) rooms.delete(data.room);
+      const pending = pendingByRoom.get(data.room);
+      if (pending) pending.delete(data.clientId);
+      if (roomMembers(data.room).size === 0) {
+        rooms.delete(data.room);
+        pendingByRoom.delete(data.room);
+      }
       rateLimits.delete(data.id);
-      broadcastToRoom(data.room, { t: "cursor_leave", clientId: data.clientId });
+      broadcastToDisplays(data.room, { t: "cursor_leave", clientId: data.clientId });
     },
   })
 
@@ -198,6 +242,7 @@ function gracefulShutdown(signal) {
     for (const socket of members.values()) socket.close();
   }
   rooms.clear();
+  pendingByRoom.clear();
   rateLimits.clear();
   process.exit(0);
 }

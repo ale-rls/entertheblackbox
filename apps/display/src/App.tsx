@@ -79,7 +79,7 @@ export function App() {
     [cursorField],
   );
 
-  // Low-latency cursor overlay (apps/realtime-ws): additive to the main
+  // Low-latency cursor overlay (apps/realtime-ws-coolify): additive to the main
   // connection's batched `cursors` messages above, gated by the same
   // idle-phase check so no cursors render on the attract loop.
   const realtimeWs = useMemo(

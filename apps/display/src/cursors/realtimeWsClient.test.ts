@@ -50,7 +50,7 @@ describe("RealtimeWsClient", () => {
     const { client, sockets } = harness();
     client.start();
     expect(sockets).toHaveLength(1);
-    expect(sockets[0]!.url).toBe("ws://relay.test/?room=inst-1%3Aroom-1");
+    expect(sockets[0]!.url).toBe("ws://relay.test/?room=inst-1%3Aroom-1&role=display");
     client.stop();
   });
 
@@ -68,6 +68,24 @@ describe("RealtimeWsClient", () => {
     expect(snapshots).toEqual([[{ clientId: "a", color: "#fff", x: 0.1, y: 0.2 }]]);
     expect(updates).toEqual([{ clientId: "b", color: "#000", x: 0.5, y: 0.5 }]);
     expect(leaves).toEqual(["a"]);
+    client.stop();
+  });
+
+  it("dispatches every cursor in a cursor_batch to onUpdate", () => {
+    const { client, sockets, updates } = harness();
+    client.start();
+    sockets[0]!.serverMessage({
+      t: "cursor_batch",
+      cursors: [
+        { clientId: "a", color: "#fff", x: 0.1, y: 0.2 },
+        { clientId: "b", color: "#000", x: 0.5, y: 0.5 },
+      ],
+    });
+
+    expect(updates).toEqual([
+      { clientId: "a", color: "#fff", x: 0.1, y: 0.2 },
+      { clientId: "b", color: "#000", x: 0.5, y: 0.5 },
+    ]);
     client.stop();
   });
 

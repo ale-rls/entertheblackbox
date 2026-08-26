@@ -47,8 +47,8 @@ export class CursorField {
   }
 
   /**
-   * Ingest a single cursor event from the realtime-ws low-latency side
-   * channel (apps/realtime-ws), additive to ingest()'s batched main-protocol
+   * Ingest a single cursor event from the realtime-ws-coolify low-latency
+   * side channel, additive to ingest()'s batched main-protocol
    * ticks rather than a replacement for them -- unlike ingest(), this never
    * evicts cursors absent from the update, since a single-cursor event
    * carries no information about who else is still present.

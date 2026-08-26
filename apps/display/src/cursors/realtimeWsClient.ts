@@ -1,9 +1,12 @@
 import { Backoff } from "../lib/backoff.js";
 
 /**
- * Client for apps/realtime-ws's low-latency cursor relay -- a separate,
- * simpler wire protocol from packages/protocol, additive to (not a
- * replacement for) the main /ws connection's batched `cursors` messages.
+ * Client for apps/realtime-ws-coolify's low-latency cursor relay -- a
+ * separate, simpler wire protocol from packages/protocol, additive to (not
+ * a replacement for) the main /ws connection's batched `cursors` messages.
+ * The relay coalesces phone position updates into periodic `cursor_batch`
+ * messages rather than relaying each one individually, so `cursor_batch`
+ * fans out to the same onUpdate callback as a single `cursor_update`.
  * Delivers parsed events via callbacks rather than writing into a
  * CursorField directly, so the caller can apply the same phase/session
  * gating it already applies to the main-protocol path.
@@ -57,7 +60,7 @@ export class RealtimeWsClient {
 
   private connect(): void {
     const factory = this.options.webSocketFactory ?? ((url: string) => new WebSocket(url));
-    const params = new URLSearchParams({ room: this.options.room });
+    const params = new URLSearchParams({ room: this.options.room, role: "display" });
     const ws = factory(`${this.options.url}/?${params.toString()}`);
     this.ws = ws;
 
@@ -92,6 +95,13 @@ export class RealtimeWsClient {
       case "cursor_update":
         if (isRelayCursor(message)) {
           this.options.onUpdate({ clientId: message.clientId, color: message.color, x: message.x, y: message.y });
+        }
+        return;
+      case "cursor_batch":
+        if (Array.isArray(message.cursors)) {
+          for (const cursor of message.cursors.filter(isRelayCursor)) {
+            this.options.onUpdate(cursor);
+          }
         }
         return;
       case "cursor_leave":

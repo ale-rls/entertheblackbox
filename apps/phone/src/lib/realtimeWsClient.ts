@@ -1,10 +1,12 @@
 /**
- * Publishes this phone's position to apps/realtime-ws's low-latency cursor
- * relay -- a separate, simpler wire protocol from packages/protocol,
+ * Publishes this phone's position to apps/realtime-ws-coolify's low-latency
+ * cursor relay -- a separate, simpler wire protocol from packages/protocol,
  * additive to (not a replacement for) the authoritative `input` message
  * sent over the main /ws connection. Reconnect backoff mirrors
  * connection.ts's inline exponential-backoff-with-jitter (no shared
- * Backoff class in this app).
+ * Backoff class in this app). Phones only ever publish position -- the
+ * relay fans cursor traffic out to display sockets only, never back to
+ * other phones -- so this client has no onmessage handler.
  */
 
 export type RealtimeCursorPublisherOptions = {
@@ -52,6 +54,7 @@ export class RealtimeCursorPublisher {
       room: this.options.room,
       clientId: this.options.clientId,
       color: this.options.color,
+      role: "phone",
     });
     const ws = factory(`${this.options.url}/?${params.toString()}`);
     this.ws = ws;
