@@ -40,7 +40,7 @@ export async function listenWithCleanup(
 }
 
 /**
- * Boots one server instance: resolve the operator override, load the
+ * Boots one server instance: resolve the active-show override, load the
  * published scenario, build the Fastify app, and start listening. Called
  * once at process start and again by `restart()` below every time
  * PocketBase reports a change, so it must be fully self-contained and
@@ -52,31 +52,26 @@ async function boot(config: ServerConfig, pocketbase: PocketBaseClient): Promise
       console.error("pocketbase: failed to load server config override", error);
       return null;
     });
-  const effectiveConfig = {
-    ...config,
-    installationId: override?.installationId ?? config.installationId,
-    roomId: override?.roomId ?? config.roomId,
-  };
   const adminData = new PocketBaseAdminDataSource(pocketbase, {
-    installationId: effectiveConfig.installationId,
-    roomId: effectiveConfig.roomId,
+    installationId: config.installationId,
+    roomId: config.roomId,
   });
   // Mirror Studio's uploaded media down onto local disk before validating
   // the scenario against it -- readiness below stats mediaDir directly and
   // has no PocketBase awareness of its own. Missing/unreachable PocketBase
   // just means whatever's already on disk is used, same as before this
   // sync existed.
-  await syncMediaFromPocketbase(pocketbase, effectiveConfig.mediaDir)
+  await syncMediaFromPocketbase(pocketbase, config.mediaDir)
     .catch((error: unknown) => console.error("pocketbase: failed to sync media library", error));
   // PocketBase is the source of truth for published scenarios once Studio
   // publishes one; the local content/ JSON files remain the fallback so
   // dev/CI keep working against an empty PocketBase instance.
-  const readiness = await loadPublishedScenarioFromPocketbase(pocketbase, effectiveConfig.mediaDir, override?.activeShowId)
+  const readiness = await loadPublishedScenarioFromPocketbase(pocketbase, config.mediaDir, override?.activeShowId)
     .catch((error: unknown) => {
       console.error("pocketbase: failed to load published scenario, falling back to local file", error);
       return null;
-    }) ?? await loadScenarioReadiness(effectiveConfig);
-  const runtime = await buildServer({ config: effectiveConfig, readiness, adminData, pocketbase });
+    }) ?? await loadScenarioReadiness(config);
+  const runtime = await buildServer({ config, readiness, adminData, pocketbase });
   await listenWithCleanup(runtime.app, { host: config.host, port: config.port });
   return runtime;
 }
@@ -92,17 +87,16 @@ export async function startServer(): Promise<void> {
   let restarting = false;
   let shuttingDown = false;
 
-  // installationId/roomId/showId are baked into long-lived per-process
-  // objects (PhaseEngine, AdmissionController, MovementRecorder) and
-  // already-issued join tokens, so applying a change without a clean
-  // restart would either do nothing or break active connections mid-show
-  // -- see the installation_config migration. What used to require an
-  // operator to notice and manually restart/redeploy is now automatic:
-  // PocketBase's realtime feed (SSE) pushes a message the instant Studio
-  // publishes a show, uploads media, or an operator changes the active
-  // show/installation, and we react by rebooting in place (which re-runs
-  // the media sync too) -- same restart, just triggered by PocketBase
-  // instead of a human.
+  // The active showId is baked into long-lived per-process objects
+  // (PhaseEngine, AdmissionController, MovementRecorder) and already-issued
+  // join tokens, so applying a change without a clean restart would either
+  // do nothing or break active connections mid-show -- see the
+  // installation_config migration. What used to require an operator to
+  // notice and manually restart/redeploy is now automatic: PocketBase's
+  // realtime feed (SSE) pushes a message the instant Studio publishes a
+  // show, uploads media, or an operator changes the active show, and we
+  // react by rebooting in place (which re-runs the media sync too) -- same
+  // restart, just triggered by PocketBase instead of a human.
   const restart = (reason: string): void => {
     if (restarting || shuttingDown) return;
     restarting = true;

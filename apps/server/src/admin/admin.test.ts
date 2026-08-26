@@ -2,7 +2,6 @@ import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { InMemoryIpRateLimiter } from "../admission/rate-limit.js";
 import type { PhaseEngine } from "../engine/phase-engine.js";
-import type { InstallationConfigOverride } from "../persistence/installation-config.js";
 import type { PublishedShowSummary } from "../readiness.js";
 import { registerAdminRoutes, type AdminDataSource, type AdminRateLimiters } from "./admin.js";
 
@@ -10,11 +9,6 @@ function setup(options: {
   rateLimiters?: AdminRateLimiters;
   trustProxy?: boolean;
   now?: () => number;
-  installationConfig?: {
-    active: InstallationConfigOverride;
-    read: () => Promise<InstallationConfigOverride | null>;
-    write: (value: InstallationConfigOverride) => Promise<void>;
-  };
   showConfig?: {
     activeShowId: string | null;
     list: () => Promise<PublishedShowSummary[]>;
@@ -134,52 +128,6 @@ describe("admin API", () => {
 
     limiters.authenticated.clear();
     expect((await app.inject({ url: "/api/admin/status", headers })).statusCode).toBe(200);
-  });
-
-  it("reports and updates the pending installation/room override", async () => {
-    let pending: InstallationConfigOverride | null = null;
-    const write = vi.fn(async (value: InstallationConfigOverride) => { pending = value; });
-    const { app, audit } = setup({
-      installationConfig: {
-        active: { installationId: "venue-a", roomId: "main" },
-        read: async () => pending,
-        write,
-      },
-    });
-    const headers = { authorization: "Bearer strong-admin-token" };
-
-    expect((await app.inject({ url: "/api/admin/installation", headers })).json()).toEqual({
-      active: { installationId: "venue-a", roomId: "main" },
-      pending: null,
-    });
-
-    const invalid = await app.inject({
-      method: "POST", url: "/api/admin/installation", headers,
-      payload: { installationId: "has spaces", roomId: "main" },
-    });
-    expect(invalid.statusCode).toBe(400);
-    expect(write).not.toHaveBeenCalled();
-
-    const saved = await app.inject({
-      method: "POST", url: "/api/admin/installation", headers,
-      payload: { installationId: "venue-b", roomId: "stage-2" },
-    });
-    expect(saved.statusCode).toBe(200);
-    expect(saved.json()).toEqual({ ok: true, pending: { installationId: "venue-b", roomId: "stage-2" } });
-    expect(write).toHaveBeenCalledWith({ installationId: "venue-b", roomId: "stage-2" });
-    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "set-installation-config" }));
-
-    expect((await app.inject({ url: "/api/admin/installation", headers })).json()).toEqual({
-      active: { installationId: "venue-a", roomId: "main" },
-      pending: { installationId: "venue-b", roomId: "stage-2" },
-    });
-  });
-
-  it("returns 503 for installation config routes when no store is configured", async () => {
-    const { app } = setup();
-    const headers = { authorization: "Bearer strong-admin-token" };
-    expect((await app.inject({ url: "/api/admin/installation", headers })).statusCode).toBe(503);
-    expect((await app.inject({ method: "POST", url: "/api/admin/installation", headers, payload: {} })).statusCode).toBe(503);
   });
 
   it("lists available shows and switches the pending active show", async () => {

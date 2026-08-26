@@ -25,8 +25,6 @@ export type Status = {
 
 type Feedback = { status: "success" | "danger"; message: string };
 type ConfirmAction = "idle" | "restart";
-type InstallationConfig = { installationId: string; roomId: string };
-type InstallationInfo = { active: InstallationConfig; pending: InstallationConfig | null };
 type PublishedShow = { showId: string; name: string; version: string; publishedAt: number };
 type ShowsInfo = { active: string | null; pending: string | null; shows: PublishedShow[] };
 
@@ -120,20 +118,15 @@ export function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [workingAction, setWorkingAction] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
-  const [installationInfo, setInstallationInfo] = useState<InstallationInfo | null>(null);
-  const [installationForm, setInstallationForm] = useState<InstallationConfig>({ installationId: "", roomId: "" });
-  const [savingInstallation, setSavingInstallation] = useState(false);
   const [showsInfo, setShowsInfo] = useState<ShowsInfo | null>(null);
   const [selectedShowId, setSelectedShowId] = useState("");
   const [savingShow, setSavingShow] = useState(false);
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
   const controlsHeadingRef = useRef<HTMLHeadingElement | null>(null);
-  // installationForm/selectedShowId are edited in-place while
-  // loadInstallation/loadShows now poll every 2s (see the effect below) --
-  // without these, a poll mid-edit would stomp whatever the operator just
-  // typed/selected back to the last-known pending/active value.
-  const installationTouched = useRef(false);
+  // selectedShowId is edited in-place while loadShows now polls every 2s
+  // (see the effect below) -- without this, a poll mid-edit would stomp
+  // whatever the operator just selected back to the last-known value.
   const selectedShowIdTouched = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -154,21 +147,6 @@ export function App() {
     }
   }, [connectedToken]);
 
-  const loadInstallation = useCallback(async () => {
-    if (!connectedToken) return;
-    try {
-      const response = await api("installation", connectedToken);
-      const info = await response.json() as InstallationInfo;
-      if (!info?.active) return;
-      setInstallationInfo(info);
-      if (!installationTouched.current) setInstallationForm(info.pending ?? info.active);
-    } catch {
-      // A stale/invalid token already surfaces via the main connection
-      // error banner from refresh(); a transient failure here just means
-      // this panel doesn't populate until the next successful load.
-    }
-  }, [connectedToken]);
-
   const loadShows = useCallback(async () => {
     if (!connectedToken) return;
     try {
@@ -178,47 +156,26 @@ export function App() {
       setShowsInfo(info);
       if (!selectedShowIdTouched.current) setSelectedShowId(info.pending ?? info.active ?? info.shows[0]?.showId ?? "");
     } catch {
-      // Same rationale as loadInstallation: a stale/invalid token already
-      // surfaces via the main connection error banner.
+      // A stale/invalid token already surfaces via the main connection
+      // error banner from refresh(); a transient failure here just means
+      // this panel doesn't populate until the next successful load.
     }
   }, [connectedToken]);
 
   useEffect(() => {
     if (!connectedToken) return;
     void refresh();
-    void loadInstallation();
     void loadShows();
-    // installation/shows poll alongside status so the Active show dropdown
-    // can't go stale while this tab sits open -- selecting an option that
-    // fell out of date (e.g. Studio published while this tab was open)
-    // used to 400 with unknown_show_id instead of just re-populating.
+    // shows polls alongside status so the Active show dropdown can't go
+    // stale while this tab sits open -- selecting an option that fell out
+    // of date (e.g. Studio published while this tab was open) used to
+    // 400 with unknown_show_id instead of just re-populating.
     const timer = window.setInterval(() => {
       void refresh();
-      void loadInstallation();
       void loadShows();
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [connectedToken, refresh, loadInstallation, loadShows]);
-
-  const saveInstallation = async (event: FormEvent) => {
-    event.preventDefault();
-    setSavingInstallation(true);
-    setFeedback(null);
-    try {
-      await api("installation", connectedToken, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(installationForm),
-      });
-      installationTouched.current = false;
-      setFeedback({ status: "success", message: "Saved -- applies automatically within moments." });
-      await loadInstallation();
-    } catch (error) {
-      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not save installation config." });
-    } finally {
-      setSavingInstallation(false);
-    }
-  };
+  }, [connectedToken, refresh, loadShows]);
 
   const saveShow = async (event: FormEvent) => {
     event.preventDefault();
@@ -371,25 +328,6 @@ export function App() {
           </div>
         </section>
 
-        <section className="sc-tool-panel" aria-labelledby="admin-installation-heading">
-          <div className="admin-section-heading">
-            <div><p className="sc-tool-eyebrow">One show at a time</p><h2 id="admin-installation-heading">Installation &amp; room</h2></div>
-          </div>
-          <dl className="admin-session-facts">
-            <div><dt>Currently running</dt><dd className="sc-tool-mono">{installationInfo ? `${installationInfo.active.installationId} / ${installationInfo.active.roomId}` : "—"}</dd></div>
-            {installationInfo?.pending && <div><dt>Applying</dt><dd className="sc-tool-mono">{installationInfo.pending.installationId} / {installationInfo.pending.roomId}</dd></div>}
-          </dl>
-          <form className="admin-connection-form" onSubmit={(event) => void saveInstallation(event)}>
-            <label className="sc-tool-label" htmlFor="installation-id">Installation ID
-              <input id="installation-id" className="sc-tool-field sc-tool-mono" value={installationForm.installationId} onChange={(event) => { installationTouched.current = true; setInstallationForm((form) => ({ ...form, installationId: event.target.value })); }} />
-            </label>
-            <label className="sc-tool-label" htmlFor="room-id">Room ID
-              <input id="room-id" className="sc-tool-field sc-tool-mono" value={installationForm.roomId} onChange={(event) => { installationTouched.current = true; setInstallationForm((form) => ({ ...form, roomId: event.target.value })); }} />
-            </label>
-            <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingInstallation}>{savingInstallation ? "Saving…" : "Save"}</button>
-          </form>
-          <p className="sc-tool-help">Applies automatically within moments of saving -- no manual restart needed.</p>
-        </section>
 
         <section className="sc-tool-panel" aria-labelledby="admin-show-heading">
           <div className="admin-section-heading">
