@@ -274,12 +274,12 @@ describe("Admin operations UI", () => {
       setter?.call(roomId, "stage-2");
       roomId.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await act(async () => { button("Save (restart required)").click(); });
+    await act(async () => { button("Save").click(); });
     await flush();
 
     const saveRequest = requests.find(({ url, method }) => url.endsWith("/installation") && method === "POST");
     expect(saveRequest?.body).toBe(JSON.stringify({ installationId: "venue-b", roomId: "stage-2" }));
-    expect(document.body.textContent).toContain("Restart the server in Coolify to apply it");
+    expect(document.body.textContent).toContain("applies automatically");
   });
 
   it("shows the active show and saves a pending selection", async () => {
@@ -319,7 +319,7 @@ describe("Admin operations UI", () => {
 
     const saveRequest = requests.find(({ url, method }) => url.endsWith("/shows") && method === "POST");
     expect(saveRequest?.body).toBe(JSON.stringify({ showId: "show-b" }));
-    expect(document.body.textContent).toContain("Restart the server in Coolify to apply it");
+    expect(document.body.textContent).toContain("applies automatically");
   });
 
   it("does not present inactive recent-error or session-export features", async () => {

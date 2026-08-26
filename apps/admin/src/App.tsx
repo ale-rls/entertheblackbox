@@ -129,6 +129,12 @@ export function App() {
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
   const controlsHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  // installationForm/selectedShowId are edited in-place while
+  // loadInstallation/loadShows now poll every 2s (see the effect below) --
+  // without these, a poll mid-edit would stomp whatever the operator just
+  // typed/selected back to the last-known pending/active value.
+  const installationTouched = useRef(false);
+  const selectedShowIdTouched = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!connectedToken) return;
@@ -155,7 +161,7 @@ export function App() {
       const info = await response.json() as InstallationInfo;
       if (!info?.active) return;
       setInstallationInfo(info);
-      setInstallationForm(info.pending ?? info.active);
+      if (!installationTouched.current) setInstallationForm(info.pending ?? info.active);
     } catch {
       // A stale/invalid token already surfaces via the main connection
       // error banner from refresh(); a transient failure here just means
@@ -170,7 +176,7 @@ export function App() {
       const info = await response.json() as ShowsInfo;
       if (!info || !Array.isArray(info.shows)) return;
       setShowsInfo(info);
-      setSelectedShowId(info.pending ?? info.active ?? info.shows[0]?.showId ?? "");
+      if (!selectedShowIdTouched.current) setSelectedShowId(info.pending ?? info.active ?? info.shows[0]?.showId ?? "");
     } catch {
       // Same rationale as loadInstallation: a stale/invalid token already
       // surfaces via the main connection error banner.
@@ -182,7 +188,15 @@ export function App() {
     void refresh();
     void loadInstallation();
     void loadShows();
-    const timer = window.setInterval(() => { void refresh(); }, 2_000);
+    // installation/shows poll alongside status so the Active show dropdown
+    // can't go stale while this tab sits open -- selecting an option that
+    // fell out of date (e.g. Studio published while this tab was open)
+    // used to 400 with unknown_show_id instead of just re-populating.
+    const timer = window.setInterval(() => {
+      void refresh();
+      void loadInstallation();
+      void loadShows();
+    }, 2_000);
     return () => window.clearInterval(timer);
   }, [connectedToken, refresh, loadInstallation, loadShows]);
 
@@ -196,7 +210,8 @@ export function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(installationForm),
       });
-      setFeedback({ status: "success", message: "Saved. Restart the server in Coolify to apply it." });
+      installationTouched.current = false;
+      setFeedback({ status: "success", message: "Saved -- applies automatically within moments." });
       await loadInstallation();
     } catch (error) {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not save installation config." });
@@ -216,7 +231,8 @@ export function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ showId: selectedShowId }),
       });
-      setFeedback({ status: "success", message: "Saved. Restart the server in Coolify to apply it." });
+      selectedShowIdTouched.current = false;
+      setFeedback({ status: "success", message: "Saved -- applies automatically within moments." });
       await loadShows();
     } catch (error) {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not save the active show." });
@@ -361,18 +377,18 @@ export function App() {
           </div>
           <dl className="admin-session-facts">
             <div><dt>Currently running</dt><dd className="sc-tool-mono">{installationInfo ? `${installationInfo.active.installationId} / ${installationInfo.active.roomId}` : "—"}</dd></div>
-            {installationInfo?.pending && <div><dt>Pending (needs restart)</dt><dd className="sc-tool-mono">{installationInfo.pending.installationId} / {installationInfo.pending.roomId}</dd></div>}
+            {installationInfo?.pending && <div><dt>Applying</dt><dd className="sc-tool-mono">{installationInfo.pending.installationId} / {installationInfo.pending.roomId}</dd></div>}
           </dl>
           <form className="admin-connection-form" onSubmit={(event) => void saveInstallation(event)}>
             <label className="sc-tool-label" htmlFor="installation-id">Installation ID
-              <input id="installation-id" className="sc-tool-field sc-tool-mono" value={installationForm.installationId} onChange={(event) => setInstallationForm((form) => ({ ...form, installationId: event.target.value }))} />
+              <input id="installation-id" className="sc-tool-field sc-tool-mono" value={installationForm.installationId} onChange={(event) => { installationTouched.current = true; setInstallationForm((form) => ({ ...form, installationId: event.target.value })); }} />
             </label>
             <label className="sc-tool-label" htmlFor="room-id">Room ID
-              <input id="room-id" className="sc-tool-field sc-tool-mono" value={installationForm.roomId} onChange={(event) => setInstallationForm((form) => ({ ...form, roomId: event.target.value }))} />
+              <input id="room-id" className="sc-tool-field sc-tool-mono" value={installationForm.roomId} onChange={(event) => { installationTouched.current = true; setInstallationForm((form) => ({ ...form, roomId: event.target.value })); }} />
             </label>
-            <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingInstallation}>{savingInstallation ? "Saving…" : "Save (restart required)"}</button>
+            <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingInstallation}>{savingInstallation ? "Saving…" : "Save"}</button>
           </form>
-          <p className="sc-tool-help">Takes effect the next time the server restarts — restart it manually in Coolify once saved.</p>
+          <p className="sc-tool-help">Applies automatically within moments of saving -- no manual restart needed.</p>
         </section>
 
         <section className="sc-tool-panel" aria-labelledby="admin-show-heading">
@@ -381,21 +397,21 @@ export function App() {
           </div>
           <dl className="admin-session-facts">
             <div><dt>Currently running</dt><dd className="sc-tool-mono">{showLabel(showsInfo?.active ?? null, showsInfo?.shows ?? [])}</dd></div>
-            {showsInfo?.pending && <div><dt>Pending (needs restart)</dt><dd className="sc-tool-mono">{showLabel(showsInfo.pending, showsInfo.shows)}</dd></div>}
+            {showsInfo?.pending && <div><dt>Applying</dt><dd className="sc-tool-mono">{showLabel(showsInfo.pending, showsInfo.shows)}</dd></div>}
           </dl>
           {showsInfo && showsInfo.shows.length === 0
             ? <p className="sc-tool-copy">No shows have been published to PocketBase yet.</p>
             : <form className="admin-connection-form" onSubmit={(event) => void saveShow(event)}>
                 <label className="sc-tool-label" htmlFor="active-show">Show
-                  <select id="active-show" className="sc-tool-field" value={selectedShowId} onChange={(event) => setSelectedShowId(event.target.value)}>
+                  <select id="active-show" className="sc-tool-field" value={selectedShowId} onChange={(event) => { selectedShowIdTouched.current = true; setSelectedShowId(event.target.value); }}>
                     {(showsInfo?.shows ?? []).map((show) => (
                       <option key={show.showId} value={show.showId}>{show.name} ({show.version}) — {new Date(show.publishedAt).toLocaleString()}</option>
                     ))}
                   </select>
                 </label>
-                <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingShow || !selectedShowId}>{savingShow ? "Saving…" : "Save (restart required)"}</button>
+                <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingShow || !selectedShowId}>{savingShow ? "Saving…" : "Save"}</button>
               </form>}
-          <p className="sc-tool-help">Takes effect the next time the server restarts — restart it manually in Coolify once saved.</p>
+          <p className="sc-tool-help">Applies automatically within moments of saving -- no manual restart needed.</p>
         </section>
 
       </div>}
