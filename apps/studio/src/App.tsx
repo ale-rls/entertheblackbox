@@ -481,7 +481,7 @@ export function App() {
           ? "Show ID must be letters, numbers, - or _ only, and Name can't be empty."
           : `Publish failed (${response.status}).`);
       }
-      setPublishFeedback({ status: "success", message: `Published "${publishForm.name}". Pick it in /admin's Active show panel and restart the server to make it live.` });
+      setPublishFeedback({ status: "success", message: `Published "${publishForm.name}". It goes live automatically within moments -- pick it in /admin's Active show panel first if another show is currently pinned as active.` });
     } catch (error) {
       setPublishFeedback({
         status: "danger",

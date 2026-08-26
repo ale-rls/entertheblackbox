@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
-import { loadConfig } from "./config.js";
-import { buildServer } from "./server.js";
+import { loadConfig, type ServerConfig } from "./config.js";
+import { buildServer, type ServerRuntime } from "./server.js";
 import { loadPublishedScenarioFromPocketbase, loadScenarioReadiness } from "./readiness.js";
 import { PocketBaseAdminDataSource } from "./persistence/admin-data.js";
 import { PocketBaseClient } from "./persistence/pocketbase-client.js";
@@ -38,14 +38,14 @@ export async function listenWithCleanup(
   }
 }
 
-export async function startServer(): Promise<void> {
-  const config = loadConfig();
-  const pocketbase = new PocketBaseClient(config);
-  // An operator-saved installation/room/active-show (apps/server's
-  // /api/admin/installation and /api/admin/shows) takes effect on the
-  // next restart, overriding the env-var defaults for the rest of this
-  // process's lifetime -- see the installation_config migration for why
-  // this can't be applied live instead.
+/**
+ * Boots one server instance: resolve the operator override, load the
+ * published scenario, build the Fastify app, and start listening. Called
+ * once at process start and again by `restart()` below every time
+ * PocketBase reports a change, so it must be fully self-contained and
+ * side-effect-free beyond what it returns.
+ */
+async function boot(config: ServerConfig, pocketbase: PocketBaseClient): Promise<ServerRuntime> {
   const override = await readServerConfigOverride(pocketbase)
     .catch((error: unknown) => {
       console.error("pocketbase: failed to load server config override", error);
@@ -68,16 +68,60 @@ export async function startServer(): Promise<void> {
       console.error("pocketbase: failed to load published scenario, falling back to local file", error);
       return null;
     }) ?? await loadScenarioReadiness(effectiveConfig);
-  const { app } = await buildServer({ config: effectiveConfig, readiness, adminData, pocketbase });
-  let shutdownPromise: Promise<void> | null = null;
-  const shutdown = async (signal: NodeJS.Signals) => {
-    shutdownPromise ??= (async () => {
-      app.log.info({ signal }, "shutting down");
-      await app.close();
+  const runtime = await buildServer({ config: effectiveConfig, readiness, adminData, pocketbase });
+  await listenWithCleanup(runtime.app, { host: config.host, port: config.port });
+  return runtime;
+}
+
+export async function startServer(): Promise<void> {
+  const config = loadConfig();
+  const pocketbase = new PocketBaseClient(config);
+  await pocketbase.ensureAuth().catch((error: unknown) => {
+    console.error("pocketbase: failed initial auth", error);
+  });
+
+  let runtime = await boot(config, pocketbase);
+  let restarting = false;
+  let shuttingDown = false;
+
+  // installationId/roomId/showId are baked into long-lived per-process
+  // objects (PhaseEngine, AdmissionController, MovementRecorder) and
+  // already-issued join tokens, so applying a change without a clean
+  // restart would either do nothing or break active connections mid-show
+  // -- see the installation_config migration. What used to require an
+  // operator to notice and manually restart/redeploy is now automatic:
+  // PocketBase's realtime feed (SSE) pushes a message the instant Studio
+  // publishes a show or an operator changes the active show/installation,
+  // and we react by rebooting in place -- same restart, just triggered by
+  // PocketBase instead of a human.
+  const restart = (reason: string): void => {
+    if (restarting || shuttingDown) return;
+    restarting = true;
+    void (async () => {
+      try {
+        runtime.app.log.info({ reason }, "pocketbase change detected, restarting server");
+        await runtime.app.close();
+        runtime = await boot(config, pocketbase);
+      } catch (error) {
+        console.error("restart: failed to reboot server after pocketbase change", error);
+      } finally {
+        restarting = false;
+      }
     })();
-    return shutdownPromise;
   };
-  await listenWithCleanup(app, { host: config.host, port: config.port });
+  await pocketbase.pb.collection("scenarios").subscribe("*", () => restart("scenarios"))
+    .catch((error: unknown) => console.error("pocketbase: failed to subscribe to scenarios", error));
+  await pocketbase.pb.collection("installation_config").subscribe("*", () => restart("installation_config"))
+    .catch((error: unknown) => console.error("pocketbase: failed to subscribe to installation_config", error));
+
+  const shutdown = async (signal: NodeJS.Signals) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    runtime.app.log.info({ signal }, "shutting down");
+    await pocketbase.pb.collection("scenarios").unsubscribe().catch(() => {});
+    await pocketbase.pb.collection("installation_config").unsubscribe().catch(() => {});
+    await runtime.app.close();
+  };
   const handleSignal = (signal: NodeJS.Signals) => {
     void shutdown(signal).catch((error: unknown) => {
       console.error("server shutdown failed", error);
