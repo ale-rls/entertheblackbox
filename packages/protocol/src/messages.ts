@@ -52,6 +52,8 @@ export const cursorSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
   color: nonEmpty,
+  /** Set only for a replayed past-participant cursor (see apps/server/src/ghosts). Omitted for live cursors. */
+  ghost: z.boolean().optional(),
 });
 
 export const fourQuadrantCountsSchema = z.object({

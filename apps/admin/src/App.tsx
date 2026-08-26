@@ -27,6 +27,7 @@ type Feedback = { status: "success" | "danger"; message: string };
 type ConfirmAction = "idle" | "restart";
 type PublishedShow = { showId: string; name: string; version: string; publishedAt: number };
 type ShowsInfo = { active: string | null; pending: string | null; shows: PublishedShow[] };
+type GhostsInfo = { active: number; pending: number | null };
 
 async function api(path: string, token: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`/api/admin/${path}`, {
@@ -106,7 +107,10 @@ function ConfirmationDialog({ action, onCancel, onConfirm }: { action: ConfirmAc
 }
 
 export function App() {
-  const storedToken = sessionStorage.getItem("admin-token") ?? "";
+  // localStorage rather than sessionStorage: the operator token is valid
+  // for 30 days (operators auth collection), so the session should survive
+  // closing the tab/browser too, not just page reloads within one tab.
+  const storedToken = localStorage.getItem("admin-token") ?? "";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
@@ -121,13 +125,18 @@ export function App() {
   const [showsInfo, setShowsInfo] = useState<ShowsInfo | null>(null);
   const [selectedShowId, setSelectedShowId] = useState("");
   const [savingShow, setSavingShow] = useState(false);
+  const [ghostsInfo, setGhostsInfo] = useState<GhostsInfo | null>(null);
+  const [targetAudienceSize, setTargetAudienceSize] = useState("");
+  const [savingGhosts, setSavingGhosts] = useState(false);
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
   const controlsHeadingRef = useRef<HTMLHeadingElement | null>(null);
-  // selectedShowId is edited in-place while loadShows now polls every 2s
-  // (see the effect below) -- without this, a poll mid-edit would stomp
-  // whatever the operator just selected back to the last-known value.
+  // selectedShowId/targetAudienceSize are edited in-place while loadShows/
+  // loadGhosts now poll every 2s (see the effect below) -- without this, a
+  // poll mid-edit would stomp whatever the operator just typed/selected
+  // back to the last-known value.
   const selectedShowIdTouched = useRef(false);
+  const targetAudienceSizeTouched = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!connectedToken) return;
@@ -162,20 +171,35 @@ export function App() {
     }
   }, [connectedToken]);
 
+  const loadGhosts = useCallback(async () => {
+    if (!connectedToken) return;
+    try {
+      const response = await api("ghosts", connectedToken);
+      const info = await response.json() as GhostsInfo;
+      if (!info || typeof info.active !== "number") return;
+      setGhostsInfo(info);
+      if (!targetAudienceSizeTouched.current) setTargetAudienceSize(String(info.pending ?? info.active));
+    } catch {
+      // Same rationale as loadShows: a stale/invalid token already
+      // surfaces via the main connection error banner.
+    }
+  }, [connectedToken]);
+
   useEffect(() => {
     if (!connectedToken) return;
     void refresh();
     void loadShows();
-    // shows polls alongside status so the Active show dropdown can't go
-    // stale while this tab sits open -- selecting an option that fell out
-    // of date (e.g. Studio published while this tab was open) used to
-    // 400 with unknown_show_id instead of just re-populating.
+    void loadGhosts();
+    // shows/ghosts poll alongside status so these controls can't go stale
+    // while this tab sits open -- selecting/typing a value that fell out
+    // of date used to 400 instead of just re-populating.
     const timer = window.setInterval(() => {
       void refresh();
       void loadShows();
+      void loadGhosts();
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [connectedToken, refresh, loadShows]);
+  }, [connectedToken, refresh, loadShows, loadGhosts]);
 
   const saveShow = async (event: FormEvent) => {
     event.preventDefault();
@@ -198,6 +222,28 @@ export function App() {
     }
   };
 
+  const saveGhosts = async (event: FormEvent) => {
+    event.preventDefault();
+    const value = Number(targetAudienceSize);
+    if (!Number.isInteger(value) || value < 0) return;
+    setSavingGhosts(true);
+    setFeedback(null);
+    try {
+      await api("ghosts", connectedToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetAudienceSize: value }),
+      });
+      targetAudienceSizeTouched.current = false;
+      setFeedback({ status: "success", message: "Saved -- applies automatically within moments." });
+      await loadGhosts();
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not save the ghost fill target." });
+    } finally {
+      setSavingGhosts(false);
+    }
+  };
+
   const connect = async (event: FormEvent) => {
     event.preventDefault();
     if (!email || !password) {
@@ -212,7 +258,7 @@ export function App() {
       const pb = new PocketBase(POCKETBASE_URL);
       await pb.collection("operators").authWithPassword(email, password);
       const nextToken = pb.authStore.token;
-      sessionStorage.setItem("admin-token", nextToken);
+      localStorage.setItem("admin-token", nextToken);
       setPassword("");
       if (nextToken === connectedToken) void refresh();
       else {
@@ -291,7 +337,7 @@ export function App() {
           </label>
           <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={refreshing || signingIn}>{status ? "Reconnect" : signingIn ? "Signing in…" : refreshing ? "Connecting…" : "Sign in"}</button>
         </form>
-        <p id="admin-token-help" className="sc-tool-help">Signed in for this browser session. Connected sessions refresh every 2 seconds.</p>
+        <p id="admin-token-help" className="sc-tool-help">Stays signed in on this device for 30 days. Connected sessions refresh every 2 seconds.</p>
         {connectionError && <p className="sc-tool-feedback admin-feedback" data-sc-tool-status={statusStale ? "warning" : "danger"} role="alert"><StatusIcon status={statusStale ? "warning" : "danger"} /><span>{connectionError}{statusStale ? " Showing the last received status." : ""}</span></p>}
       </section>
 
@@ -350,6 +396,24 @@ export function App() {
                 <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingShow || !selectedShowId}>{savingShow ? "Saving…" : "Save"}</button>
               </form>}
           <p className="sc-tool-help">Applies automatically within moments of saving -- no manual restart needed.</p>
+        </section>
+
+        <section className="sc-tool-panel" aria-labelledby="admin-ghosts-heading">
+          <div className="admin-section-heading">
+            <div><p className="sc-tool-eyebrow">Fill a sparse room</p><h2 id="admin-ghosts-heading">Ghost cursors</h2></div>
+          </div>
+          <dl className="admin-session-facts">
+            <div><dt>Currently filling up to</dt><dd className="sc-tool-mono">{ghostsInfo?.active ?? "—"}</dd></div>
+            {ghostsInfo?.pending !== null && ghostsInfo?.pending !== undefined && ghostsInfo.pending !== ghostsInfo.active
+              && <div><dt>Applying</dt><dd className="sc-tool-mono">{ghostsInfo.pending}</dd></div>}
+          </dl>
+          <form className="admin-connection-form" onSubmit={(event) => void saveGhosts(event)}>
+            <label className="sc-tool-label" htmlFor="target-audience-size">Fill up to
+              <input id="target-audience-size" className="sc-tool-field sc-tool-mono" type="number" min="0" step="1" value={targetAudienceSize} onChange={(event) => { targetAudienceSizeTouched.current = true; setTargetAudienceSize(event.target.value); }} />
+            </label>
+            <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingGhosts || targetAudienceSize === ""}>{savingGhosts ? "Saving…" : "Save"}</button>
+          </form>
+          <p className="sc-tool-help">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghosts and defers to whatever the published show sets. Applies automatically within moments of saving.</p>
         </section>
 
       </div>}

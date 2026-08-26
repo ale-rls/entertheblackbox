@@ -70,6 +70,19 @@ describe("scenarioSchema structural rejection", () => {
     expect(scenarioSchema.safeParse(baseScenario).success).toBe(true);
   });
 
+  it("accepts optional targetAudienceSize and per-phase showCursors", () => {
+    const result = parse((s) => ({
+      ...s,
+      targetAudienceSize: 30,
+      phases: s.phases.map((phase) => phase.kind === "idle" ? phase : { ...phase, showCursors: false }),
+    }));
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.targetAudienceSize).toBe(30);
+      expect(result.data.phases.find((p) => p.id === "intro")).toMatchObject({ showCursors: false });
+    }
+  });
+
   it("canonicalizes legacy xAxis/yAxis questions to four quadrants", () => {
     const legacy = structuredClone(baseScenario) as unknown as Record<string, unknown>;
     const phases = legacy.phases as Array<Record<string, unknown>>;

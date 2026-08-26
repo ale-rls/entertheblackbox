@@ -75,6 +75,7 @@ const serverMessages: ServerToClientMessage[] = [
   { t: "presence", v: 2, count: 7 },
   { t: "reload", v: 2, minVersion: "1.2.0", reason: "protocol" },
   { t: "cursors", v: 2, tick: 42, cursors: [{ clientId: "c1", x: 0.5, y: 0.5, color: "#f0a" }] },
+  { t: "cursors", v: 2, tick: 43, cursors: [{ clientId: "ghost:rec-1", x: 0.5, y: 0.5, color: "#f0a", ghost: true }] },
   {
     t: "question_status",
     v: 2,

@@ -6,6 +6,7 @@ import { PocketBaseAdminDataSource } from "./persistence/admin-data.js";
 import { PocketBaseClient } from "./persistence/pocketbase-client.js";
 import { readServerConfigOverride } from "./persistence/installation-config.js";
 import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
+import { loadGhostPool } from "./persistence/ghost-pool-loader.js";
 
 export * from "./config.js";
 export * from "./readiness.js";
@@ -13,6 +14,7 @@ export * from "./server.js";
 export * from "./admission/index.js";
 export * from "./engine/phase-engine.js";
 export * from "./movement/index.js";
+export * from "./ghosts/index.js";
 export * from "./persistence/admin-data.js";
 export * from "./persistence/pocketbase-client.js";
 
@@ -71,7 +73,21 @@ async function boot(config: ServerConfig, pocketbase: PocketBaseClient): Promise
       console.error("pocketbase: failed to load published scenario, falling back to local file", error);
       return null;
     }) ?? await loadScenarioReadiness(config);
-  const runtime = await buildServer({ config, readiness, adminData, pocketbase });
+  // Past completed recordings for this showId, replayed as ghost cursors
+  // (apps/server/src/ghosts) -- refreshed on every boot, so it naturally
+  // stays in sync with whichever restart() below already triggers; there's
+  // no separate subscription for movement_recordings/_batches.
+  const ghostPool = readiness.ready
+    ? await loadGhostPool(pocketbase, readiness.showId, readiness.scenario.version)
+      .catch((error: unknown) => {
+        console.error("pocketbase: failed to load ghost pool", error);
+        return { tracks: [] };
+      })
+    : { tracks: [] };
+  const runtime = await buildServer({
+    config, readiness, adminData, pocketbase, ghostPool,
+    ...(override?.targetAudienceSize === undefined ? {} : { targetAudienceSizeOverride: override.targetAudienceSize }),
+  });
   await listenWithCleanup(runtime.app, { host: config.host, port: config.port });
   return runtime;
 }

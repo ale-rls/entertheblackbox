@@ -5,8 +5,9 @@ import { AdmissionController } from "./admission/index.js";
 import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
+import type { GhostPool } from "./ghosts/index.js";
 import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
-import { readServerConfigOverride, writeActiveShowId } from "./persistence/installation-config.js";
+import { readServerConfigOverride, writeActiveShowId, writeTargetAudienceSize } from "./persistence/installation-config.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 import { listPublishedShows, loadScenarioReadiness, publishShow, type ScenarioReadiness } from "./readiness.js";
 import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
@@ -24,6 +25,8 @@ export type BuildServerOptions = {
   admission?: AdmissionController;
   adminData?: AdminDataSource;
   pocketbase?: PocketBaseClient;
+  ghostPool?: GhostPool;
+  targetAudienceSizeOverride?: number;
   verifyOperatorToken?: (token: string) => Promise<boolean>;
   maxWebSocketConnections?: number;
   webSocketKeepAliveIntervalMs?: number;
@@ -103,6 +106,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       onMovementRecordingStarted: (event) => adminData?.recordMovementStarted?.(event),
       onMovementBatchFlushed: (event) => adminData?.recordMovementBatch?.(event),
       onMovementRecordingFinalized: (event) => adminData?.recordMovementFinalized?.(event),
+      ...(options.ghostPool === undefined ? {} : { ghostPool: options.ghostPool }),
+      ...(options.targetAudienceSizeOverride === undefined ? {} : { targetAudienceSizeOverride: options.targetAudienceSizeOverride }),
     });
     engine.start();
   }
@@ -163,6 +168,12 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         readPending: async () => (await readServerConfigOverride(options.pocketbase!))?.activeShowId ?? null,
         write: (showId) => writeActiveShowId(options.pocketbase!, showId),
         publish: (record) => publishShow(options.pocketbase!, record),
+      },
+      ghostConfig: {
+        active: options.targetAudienceSizeOverride
+          ?? (readiness.ready ? readiness.scenario.targetAudienceSize ?? 0 : 0),
+        readPending: async () => (await readServerConfigOverride(options.pocketbase!))?.targetAudienceSize ?? null,
+        write: (targetAudienceSize) => writeTargetAudienceSize(options.pocketbase!, targetAudienceSize),
       },
     }),
   });

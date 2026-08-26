@@ -105,6 +105,8 @@ export const videoPhaseSchema = z.object({
   expectedDurationMs: z.number().int().positive(),
   next: phaseIdSchema,
   allowSkip: z.boolean().optional(),
+  /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
+  showCursors: z.boolean().optional(),
 });
 
 const positionQuestionBaseSchema = z.object({
@@ -115,6 +117,8 @@ const positionQuestionBaseSchema = z.object({
   freezeMs: z.number().int().nonnegative(),
   connectionStaleAfterMs: z.number().int().positive(),
   showLiveCounts: z.boolean(),
+  /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
+  showCursors: z.boolean().optional(),
 });
 
 const canonicalPositionQuestionPhaseSchema = z.union([
@@ -173,6 +177,8 @@ const canonicalScenarioSchema = z.object({
    */
   cyclesAllowed: z.boolean().default(false),
   phases: z.array(phaseSchema).nonempty("scenario must contain at least one phase"),
+  /** Ghost-cursor fill target: live + ghost cursors are topped up to this count. Omitted/0 disables ghosts. */
+  targetAudienceSize: z.number().int().nonnegative().optional(),
 });
 
 /** Normalize all legacy position questions before unknown-field sidecars are captured. */

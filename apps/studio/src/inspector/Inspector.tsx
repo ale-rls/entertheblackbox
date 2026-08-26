@@ -11,6 +11,7 @@ type Props = {
   onKindChange: (kind: AuthorablePhaseKind, trigger: HTMLSelectElement) => void;
   onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
   onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", trigger: HTMLSelectElement) => void;
+  onTargetAudienceSizeChange: (value: number) => void;
 };
 
 const numberValue = (value: string, fallback: number) => {
@@ -18,7 +19,7 @@ const numberValue = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export function Inspector({ project, selectedId, localMedia, onRename, onChange, onKindChange, onTransitionChange, onQuestionLayoutChange }: Props) {
+export function Inspector({ project, selectedId, localMedia, onRename, onChange, onKindChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   useEffect(() => setIdInput(phase?.id ?? ""), [phase?.id]);
@@ -29,7 +30,10 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   const selectedMediaIsListed = phase?.kind === "video"
     && project.manifest.files.some((file) => file.src === phase.src);
 
-  if (!phase) return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2><p className="sc-tool-copy">Select a runtime phase to edit it.</p><Compiled project={project} /></aside>;
+  if (!phase) return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2><p className="sc-tool-copy">Select a runtime phase to edit it.</p>
+    <label className="sc-tool-label"><span>Ghost cursor fill target<small>targetAudienceSize</small></span><input className="sc-tool-field" type="number" min="0" value={project.scenario.targetAudienceSize ?? 0} onChange={(event) => onTargetAudienceSizeChange(numberValue(event.target.value, project.scenario.targetAudienceSize ?? 0))} /></label>
+    <p className="sc-tool-copy field-hint">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghost cursors.</p>
+    <Compiled project={project} /></aside>;
   const label = (plain: string, runtime: string) => <span>{plain}<small>{runtime}</small></span>;
   const text = (plain: string, runtime: string, value: string, change: (value: string) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" value={value} onChange={(event) => change(event.target.value)} /></label>;
   const number = (plain: string, runtime: string, value: number, change: (value: number) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" type="number" min="0" value={value} onChange={(event) => change(numberValue(event.target.value, value))} /></label>;
@@ -38,6 +42,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     <label className="sc-tool-label">{label("Runtime ID", "id")}<input className="sc-tool-field" aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
     {phase.kind !== "idle" && <label className="sc-tool-label">{label("Phase type", "kind")}<select className="sc-tool-select" value={phase.kind} onChange={(event) => onKindChange(event.target.value as AuthorablePhaseKind, event.currentTarget)}><option value="video">Video</option><option value="position-question">Position question</option></select></label>}
+    {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
     {phase.kind === "video" && <>
       <label className="sc-tool-label">{label("Media source", "src")}<select className="sc-tool-select" value={phase.src} onChange={(event) => {
         const src = event.target.value;

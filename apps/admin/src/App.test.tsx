@@ -46,7 +46,7 @@ afterEach(async () => {
   if (root) await act(async () => root?.unmount());
   root = null;
   document.body.replaceChildren();
-  sessionStorage.clear();
+  localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   pocketbaseAuth.authWithPassword.mockReset();
@@ -128,7 +128,7 @@ describe("Admin operations UI", () => {
     await flush();
 
     expect(pocketbaseAuth.authWithPassword).toHaveBeenCalledWith("operator@smartphonecracy.local", "operator-secret");
-    expect(sessionStorage.getItem("admin-token")).toBe("pb-operator-token");
+    expect(localStorage.getItem("admin-token")).toBe("pb-operator-token");
     expect(requests).toContainEqual({ url: "/api/admin/status", method: "GET" });
     expect(requests.some(({ url }) => url === "/api/admin/errors")).toBe(false);
     expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 2_000);
@@ -138,7 +138,7 @@ describe("Admin operations UI", () => {
   });
 
   it("derives action availability, executes Skip, and confirms Restart with keyboard-safe focus", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     const { requests } = createAdminFetch();
     await renderApp();
 
@@ -171,7 +171,7 @@ describe("Admin operations UI", () => {
   });
 
   it("keeps server-refused actions visible as inline failure feedback", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     createAdminFetch({ rejectAction: "skip" });
     await renderApp();
 
@@ -181,7 +181,7 @@ describe("Admin operations UI", () => {
   });
 
   it("surfaces a blocked phase video as a live operational failure", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     createAdminFetch({
       status: {
         ...activeStatus,
@@ -202,7 +202,7 @@ describe("Admin operations UI", () => {
   });
 
   it("reports authentication failures without exposing operational placeholders", async () => {
-    sessionStorage.setItem("admin-token", "bad-token");
+    localStorage.setItem("admin-token", "bad-token");
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ error: "unauthorized" }, 401)));
     await renderApp();
 
@@ -212,7 +212,7 @@ describe("Admin operations UI", () => {
   });
 
   it("marks cached status stale after a failed poll and clears staleness on recovery", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     let failStatus = false;
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
@@ -243,7 +243,7 @@ describe("Admin operations UI", () => {
   });
 
   it("shows the active show and saves a pending selection", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     const requests: Array<{ url: string; method: string; body?: string }> = [];
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
@@ -282,7 +282,7 @@ describe("Admin operations UI", () => {
   });
 
   it("does not present inactive recent-error or session-export features", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     const { requests } = createAdminFetch();
     await renderApp();
 

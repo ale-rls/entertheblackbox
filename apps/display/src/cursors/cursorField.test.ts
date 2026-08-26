@@ -81,6 +81,22 @@ describe("CursorField", () => {
     expect(field.size).toBe(1);
   });
 
+  it("surfaces the ghost flag from ingest() and always reports false for upsertOne", () => {
+    const field = new CursorField();
+    field.ingest({
+      t: "cursors", v: PROTOCOL_VERSION, tick: 1,
+      cursors: [
+        { clientId: "a", x: 0.1, y: 0.1, color: "#fff" },
+        { clientId: "ghost:rec-1", x: 0.2, y: 0.2, color: "#fff", ghost: true },
+      ],
+    }, 1000);
+    field.upsertOne("c", "#abc", 0.5, 0.5, 1010);
+    const rendered = field.renderAt(5000);
+    expect(rendered.find((c) => c.clientId === "a")?.ghost).toBe(false);
+    expect(rendered.find((c) => c.clientId === "ghost:rec-1")?.ghost).toBe(true);
+    expect(rendered.find((c) => c.clientId === "c")?.ghost).toBe(false);
+  });
+
   it("clears positions and accepts fresh ticks for a new session", () => {
     const field = new CursorField();
     field.ingest(batch(8, [["a", 0.3, 0.3]]), 1000);

@@ -61,7 +61,7 @@ export function App() {
           // else flows through the reducer.
           if (message.t === "cursors") {
             const phase = stateRef.current.phase;
-            if (phase === null || phase.kind === "idle") return;
+            if (phase === null || phase.kind === "idle" || phase.showCursors === false) return;
             cursorField.ingest(message, Date.now());
             return;
           }
@@ -89,7 +89,7 @@ export function App() {
         room: `${config.installationId}:${config.roomId}`,
         onSnapshot: (cursors) => {
           const phase = stateRef.current.phase;
-          if (phase === null || phase.kind === "idle") return;
+          if (phase === null || phase.kind === "idle" || phase.showCursors === false) return;
           const at = Date.now();
           for (const cursor of cursors) {
             cursorField.upsertOne(cursor.clientId, cursor.color, cursor.x, cursor.y, at);
@@ -97,7 +97,7 @@ export function App() {
         },
         onUpdate: (cursor) => {
           const phase = stateRef.current.phase;
-          if (phase === null || phase.kind === "idle") return;
+          if (phase === null || phase.kind === "idle" || phase.showCursors === false) return;
           cursorField.upsertOne(cursor.clientId, cursor.color, cursor.x, cursor.y, Date.now());
         },
         onLeave: (clientId) => cursorField.removeOne(clientId),
@@ -257,7 +257,7 @@ export function App() {
 
       {/* Layer 3: cursor canvas */}
       <section className="layer layer-cursors">
-        <CursorCanvas field={cursorField} />
+        <CursorCanvas field={cursorField} showCursors={phase !== null && phase.kind !== "idle" ? (phase.showCursors ?? true) : true} />
       </section>
     </main>
   );

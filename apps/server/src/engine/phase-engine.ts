@@ -15,6 +15,7 @@ import type { WebSocket } from "ws";
 import type { ParticipantRecord, ParticipantRegistry } from "../admission/index.js";
 import { QrGrantPushLoop, type QrGrantPushLoopOptions } from "../admission/qr.js";
 import { CursorPipeline } from "../cursors/index.js";
+import { GhostCursorPlayer, type GhostPool } from "../ghosts/index.js";
 import {
   MovementRecorder,
   type MovementBatchFlushed,
@@ -91,6 +92,10 @@ export type PhaseEngineOptions = {
   onMovementRecordingStarted?: (event: MovementRecordingStarted) => void;
   onMovementBatchFlushed?: (event: MovementBatchFlushed) => void;
   onMovementRecordingFinalized?: (event: MovementRecordingFinalized) => void;
+  /** Past completed recordings for this showId, replayed as ghost cursors. Defaults to an empty pool. */
+  ghostPool?: GhostPool;
+  /** Operator-set ghost fill cap (apps/admin) -- takes precedence over the published scenario's own targetAudienceSize when set. */
+  targetAudienceSizeOverride?: number;
   qr?: Omit<QrGrantPushLoopOptions, "send" | "lifecycle" | "hasDisplay" | "now">;
 };
 
@@ -123,6 +128,7 @@ export class PhaseEngine {
   private readonly votes: VoteEngine;
   private readonly cursors: CursorPipeline;
   private readonly movement: MovementRecorder;
+  private readonly ghosts: GhostCursorPlayer;
   private readonly video = new VideoPhaseHandler();
   private readonly qr: QrGrantPushLoop | null;
   private readonly clients = new Set<WebSocket>();
@@ -182,6 +188,14 @@ export class PhaseEngine {
       onRecordingStarted: (event) => options.onMovementRecordingStarted?.(event),
       onBatchFlushed: (event) => options.onMovementBatchFlushed?.(event),
       onRecordingFinalized: (event) => options.onMovementRecordingFinalized?.(event),
+    });
+    this.ghosts = new GhostCursorPlayer({
+      pool: options.ghostPool ?? { tracks: [] },
+      targetAudienceSize: () => options.targetAudienceSizeOverride ?? this.scenario.targetAudienceSize ?? 0,
+      liveConnectedCount: () => this.registry.connectedCount,
+      sessionStartedAt: () => this.sessionStartedAt,
+      onFrame: (frame) => this.cursors.setGhostCursors(frame),
+      now: this.now,
     });
     this.qr = options.qr === undefined ? null : new QrGrantPushLoop({
       ...options.qr,
@@ -261,6 +275,7 @@ export class PhaseEngine {
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
     this.joinMovementRecordingForConnectedParticipants();
+    this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "admin-restart");
     return { ok: true };
   }
@@ -295,6 +310,7 @@ export class PhaseEngine {
     this.timer = setInterval(() => this.tick(), 250);
     this.cursors.start();
     this.movement.start();
+    this.ghosts.start();
     this.qr?.start();
   }
 
@@ -303,6 +319,7 @@ export class PhaseEngine {
     this.timer = null;
     this.cursors.stop();
     this.movement.stop();
+    this.ghosts.stop();
     this.qr?.stop();
   }
 
@@ -620,6 +637,7 @@ export class PhaseEngine {
     this.lastInputAt = null;
     this.noParticipantSince = null;
     this.joinMovementRecordingForConnectedParticipants();
+    this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "session-start");
   }
 
@@ -638,7 +656,10 @@ export class PhaseEngine {
   private enterPhase(target: string, now: number, reason: string): void {
     const phase = this.requirePhase(target);
     const sessionEnded = this.lifecycle !== "idle" && phase.kind === "idle";
-    if (sessionEnded) this.movement.finalizeSession(now);
+    if (sessionEnded) {
+      this.movement.finalizeSession(now);
+      this.ghosts.clear();
+    }
     this.votes.clearQuestion();
     this.questionStatusDirty = false;
     this.lastQuestionStatusAt = null;
@@ -664,6 +685,7 @@ export class PhaseEngine {
       this.lifecycle = "active";
       this.lastInputAt = phase.kind === "position-question" ? now : null;
     }
+    this.ghosts.onPhaseChanged(now);
     this.transition(reason, sessionEnded ? { reason, endedAt: now } : undefined);
     if (phase.kind === "position-question") {
       const participants: VoteParticipantSeed[] = this.registry.values().map((participant) => ({

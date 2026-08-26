@@ -86,9 +86,25 @@ export function App() {
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
   const [exportFeedback, setExportFeedback] = useState<InlineFeedback>();
   const [publishOpen, setPublishOpen] = useState(false);
-  const [publishForm, setPublishForm] = useState({ email: "", password: "", showId: "", name: "" });
+  const [publishForm, setPublishForm] = useState({ showId: "", name: "" });
   const [publishing, setPublishing] = useState(false);
   const [publishFeedback, setPublishFeedback] = useState<InlineFeedback>();
+  const [signInForm, setSignInForm] = useState({ email: "", password: "" });
+  const [signingIn, setSigningIn] = useState(false);
+  const [signInFeedback, setSignInFeedback] = useState<InlineFeedback>();
+  // A plain PocketBase client's default LocalAuthStore persists to
+  // localStorage under a fixed key shared by every PocketBase instance on
+  // the page (db/media use their own instances against the same storage),
+  // so a prior sign-in here is restored automatically -- publishing no
+  // longer needs to re-prompt for credentials every time, only once every
+  // ~30 days (operators auth collection's token duration).
+  const operatorPb = useMemo(() => new PocketBase(POCKETBASE_URL), []);
+  const [operatorEmail, setOperatorEmail] = useState<string | null>(
+    operatorPb.authStore.isValid ? ((operatorPb.authStore.record as { email?: string } | null)?.email ?? "operator") : null,
+  );
+  useEffect(() => operatorPb.authStore.onChange((_token, record) => {
+    setOperatorEmail(operatorPb.authStore.isValid ? ((record as { email?: string } | null)?.email ?? "operator") : null);
+  }), [operatorPb]);
   const [confirmation, setConfirmation] = useState<ConfirmationDetails>();
   const importInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
@@ -294,6 +310,10 @@ export function App() {
     record({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } }, updatedAt: Date.now() });
     setNodes((current) => current.map((node) => node.id === nextPhase.id ? { ...node, data: nodeDataForPhase(nextPhase) } : node));
   };
+  const updateTargetAudienceSize = (targetAudienceSize: number) => {
+    if (!draft) return;
+    record({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, targetAudienceSize } }, updatedAt: Date.now() });
+  };
   const renameSelected = (nextId: string) => {
     if (!draft || !selectedId) return;
     const project = renamePhase(draft.project, selectedId, nextId);
@@ -453,23 +473,37 @@ export function App() {
   };
   const openPublish = () => {
     setPublishFeedback(undefined);
-    setPublishForm({ email: "", password: "", showId: draft.id, name: draft.name });
+    setSignInFeedback(undefined);
+    setPublishForm({ showId: draft.id, name: draft.name });
     setPublishOpen(true);
   };
+  const signIn = async (event: FormEvent) => {
+    event.preventDefault();
+    setSigningIn(true);
+    setSignInFeedback(undefined);
+    try {
+      await operatorPb.collection("operators").authWithPassword(signInForm.email, signInForm.password);
+      setSignInForm({ email: "", password: "" });
+    } catch {
+      setSignInFeedback({ status: "danger", message: "Invalid operator email or password." });
+    } finally {
+      setSigningIn(false);
+    }
+  };
+  const signOut = () => operatorPb.authStore.clear();
   const publishDraft = async (event: FormEvent) => {
     event.preventDefault();
+    if (!operatorPb.authStore.isValid) return;
     setPublishing(true);
     setPublishFeedback(undefined);
     try {
-      const pb = new PocketBase(POCKETBASE_URL);
-      await pb.collection("operators").authWithPassword(publishForm.email, publishForm.password);
       const artifacts = exportArtifacts(draft);
       // Relative fetch: only resolves when Studio is served from apps/server
       // alongside /api/admin (same as the "Monitor show" link) -- publishing
       // from the standalone `vite dev` Studio server isn't supported.
       const response = await fetch("/api/admin/publish", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${pb.authStore.token}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${operatorPb.authStore.token}` },
         body: JSON.stringify({
           showId: publishForm.showId,
           name: publishForm.name,
@@ -487,7 +521,7 @@ export function App() {
     } catch (error) {
       setPublishFeedback({
         status: "danger",
-        message: error instanceof Error && error.message !== "" ? error.message : "Invalid operator email or password, or publish failed.",
+        message: error instanceof Error && error.message !== "" ? error.message : "Publish failed.",
       });
     } finally {
       setPublishing(false);
@@ -551,30 +585,41 @@ export function App() {
       {exportFeedback && <Feedback id="studio-export-feedback" className="menubar-feedback" feedback={exportFeedback} />}
       {publishOpen && <div className="sc-tool-panel publish-panel" role="dialog" aria-labelledby="publish-heading">
         <p className="sc-tool-eyebrow" id="publish-heading">Publish to PocketBase</p>
-        <p className="sc-tool-help">Sign in with your operator credentials (the same ones used for /admin). Publishing only works when Studio is served from apps/server.</p>
-        <form onSubmit={(event) => void publishDraft(event)}>
-          <label className="sc-tool-label" htmlFor="publish-email">Operator email
-            <input id="publish-email" className="sc-tool-field" type="email" autoComplete="username" value={publishForm.email} onChange={(event) => setPublishForm((form) => ({ ...form, email: event.target.value }))} />
-          </label>
-          <label className="sc-tool-label" htmlFor="publish-password">Password
-            <input id="publish-password" className="sc-tool-field sc-tool-mono" type="password" autoComplete="current-password" value={publishForm.password} onChange={(event) => setPublishForm((form) => ({ ...form, password: event.target.value }))} />
-          </label>
-          <label className="sc-tool-label" htmlFor="publish-show-id">Show ID
-            <input id="publish-show-id" className="sc-tool-field sc-tool-mono" value={publishForm.showId} onChange={(event) => setPublishForm((form) => ({ ...form, showId: event.target.value }))} />
-          </label>
-          <label className="sc-tool-label" htmlFor="publish-name">Name
-            <input id="publish-name" className="sc-tool-field" value={publishForm.name} onChange={(event) => setPublishForm((form) => ({ ...form, name: event.target.value }))} />
-          </label>
-          <div className="publish-panel-actions">
-            <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => setPublishOpen(false)}>Cancel</button>
-            <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={publishing || !publishForm.email || !publishForm.password || !publishForm.showId || !publishForm.name}>{publishing ? "Publishing…" : "Publish"}</button>
-          </div>
-        </form>
-        {publishFeedback && <Feedback id="studio-publish-feedback" className="menubar-feedback" feedback={publishFeedback} />}
+        {operatorEmail === null ? <>
+          <p className="sc-tool-help">Sign in with your operator credentials (the same ones used for /admin). Stays signed in on this device for 30 days.</p>
+          <form onSubmit={(event) => void signIn(event)}>
+            <label className="sc-tool-label" htmlFor="publish-email">Operator email
+              <input id="publish-email" className="sc-tool-field" type="email" autoComplete="username" value={signInForm.email} onChange={(event) => setSignInForm((form) => ({ ...form, email: event.target.value }))} />
+            </label>
+            <label className="sc-tool-label" htmlFor="publish-password">Password
+              <input id="publish-password" className="sc-tool-field sc-tool-mono" type="password" autoComplete="current-password" value={signInForm.password} onChange={(event) => setSignInForm((form) => ({ ...form, password: event.target.value }))} />
+            </label>
+            <div className="publish-panel-actions">
+              <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => setPublishOpen(false)}>Cancel</button>
+              <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={signingIn || !signInForm.email || !signInForm.password}>{signingIn ? "Signing in…" : "Sign in"}</button>
+            </div>
+          </form>
+          {signInFeedback && <Feedback id="studio-signin-feedback" className="menubar-feedback" feedback={signInFeedback} />}
+        </> : <>
+          <p className="sc-tool-help">Signed in as {operatorEmail}. Publishing only works when Studio is served from apps/server. <button className="sc-tool-button" data-sc-tool-variant="quiet" type="button" onClick={signOut}>Sign out</button></p>
+          <form onSubmit={(event) => void publishDraft(event)}>
+            <label className="sc-tool-label" htmlFor="publish-show-id">Show ID
+              <input id="publish-show-id" className="sc-tool-field sc-tool-mono" value={publishForm.showId} onChange={(event) => setPublishForm((form) => ({ ...form, showId: event.target.value }))} />
+            </label>
+            <label className="sc-tool-label" htmlFor="publish-name">Name
+              <input id="publish-name" className="sc-tool-field" value={publishForm.name} onChange={(event) => setPublishForm((form) => ({ ...form, name: event.target.value }))} />
+            </label>
+            <div className="publish-panel-actions">
+              <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => setPublishOpen(false)}>Cancel</button>
+              <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={publishing || !publishForm.showId || !publishForm.name}>{publishing ? "Publishing…" : "Publish"}</button>
+            </div>
+          </form>
+          {publishFeedback && <Feedback id="studio-publish-feedback" className="menubar-feedback" feedback={publishFeedback} />}
+        </>}
       </div>}
     </header>
     <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
-    <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onKindChange={changeSelectedKind} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} />
+    <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onKindChange={changeSelectedKind} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} />
     <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}
   </main>;

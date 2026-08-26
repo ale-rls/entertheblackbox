@@ -42,6 +42,13 @@ export type RegisterAdminOptions = {
     write: (showId: string) => Promise<void>;
     publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown }) => Promise<PublishedShowSummary>;
   };
+  ghostConfig?: {
+    /** The ghost fill target this running process actually booted with (override, or the scenario's own value, or 0). */
+    active: number;
+    /** The operator-saved pending override, if any -- takes effect on next restart. */
+    readPending: () => Promise<number | null>;
+    write: (targetAudienceSize: number) => Promise<void>;
+  };
 };
 
 const INSTALLATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
@@ -139,6 +146,23 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       await options.showConfig.write(showId);
       options.data?.audit({ action: "set-active-show", at: new Date().toISOString(), detail: { showId } });
       return { ok: true, pending: showId };
+    });
+    admin.get("/ghosts", async (_request, reply) => {
+      if (!options.ghostConfig) return reply.code(503).send({ error: "ghost_config_unavailable" });
+      return {
+        active: options.ghostConfig.active,
+        pending: await options.ghostConfig.readPending(),
+      };
+    });
+    admin.post<{ Body: { targetAudienceSize?: unknown } }>("/ghosts", async (request, reply) => {
+      if (!options.ghostConfig) return reply.code(503).send({ error: "ghost_config_unavailable" });
+      const { targetAudienceSize } = request.body ?? {};
+      if (typeof targetAudienceSize !== "number" || !Number.isInteger(targetAudienceSize) || targetAudienceSize < 0) {
+        return reply.code(400).send({ error: "invalid_target_audience_size" });
+      }
+      await options.ghostConfig.write(targetAudienceSize);
+      options.data?.audit({ action: "set-target-audience-size", at: new Date().toISOString(), detail: { targetAudienceSize } });
+      return { ok: true, pending: targetAudienceSize };
     });
     admin.post<{ Body: { showId?: unknown; name?: unknown; scenario?: unknown; mediaManifest?: unknown } }>("/publish", async (request, reply) => {
       if (!options.showConfig) return reply.code(503).send({ error: "show_config_unavailable" });

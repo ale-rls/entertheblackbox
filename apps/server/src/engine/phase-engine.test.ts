@@ -9,6 +9,7 @@ import type {
   MovementRecordingStarted,
 } from "../movement/index.js";
 import { PhaseEngine, type PhaseCheckpoint } from "./phase-engine.js";
+import type { GhostPool } from "../ghosts/index.js";
 import type { FinalVoteSnapshot } from "../votes/index.js";
 
 class MockSocket extends EventEmitter {
@@ -66,6 +67,7 @@ function setup(options: {
   movementStarted?: MovementRecordingStarted[];
   movementBatches?: MovementBatchFlushed[];
   movementFinalized?: MovementRecordingFinalized[];
+  ghostPool?: GhostPool;
   qr?: boolean;
 } ) {
   const registry = new ParticipantRegistry(2, 50);
@@ -105,6 +107,7 @@ function setup(options: {
           onMovementRecordingFinalized: (event: MovementRecordingFinalized) =>
             options.movementFinalized!.push(event),
         }),
+    ...(options.ghostPool === undefined ? {} : { ghostPool: options.ghostPool }),
     ...(options.qr
       ? {
           qr: {
@@ -132,6 +135,11 @@ const liveCountsScenario = scenarioSchema.parse({
   phases: scenario.phases.map((phase) => phase.kind === "position-question"
     ? { ...phase, showLiveCounts: true }
     : phase),
+});
+
+const targetAudienceScenario = (targetAudienceSize: number) => scenarioSchema.parse({
+  ...scenario,
+  targetAudienceSize,
 });
 
 const twoQuadrantScenario = scenarioSchema.parse({
@@ -714,6 +722,85 @@ describe("PhaseEngine lifecycle", () => {
     expect(snapshot?.votes).toEqual([
       expect.objectContaining({ participantId: "p1", x: 0.1, y: 0.9 }),
     ]);
+  });
+
+  it("replays ghost cursors alongside live ones, capped at max(0, targetAudienceSize - liveCount)", () => {
+    let now = 1_000;
+    const ghostPool: GhostPool = {
+      tracks: [{ recordingId: "rec-a", samples: [{ t: 0, x: 0, y: 0 }, { t: 200, x: 1, y: 1 }] }],
+    };
+    const { engine, registry } = setup({
+      now: () => now,
+      testScenario: targetAudienceScenario(2),
+      ghostPool,
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    const participant = registry.get("lease-p1");
+    if (participant === undefined) throw new Error("expected participant record");
+    engine.participantJoined(phone as unknown as WebSocket, participant);
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+    const cursors = display.sent.filter((message) => message.t === "cursors").at(-1)?.cursors;
+    expect(cursors).toContainEqual(expect.objectContaining({ clientId: "ghost:rec-a", ghost: true }));
+    expect(cursors).toHaveLength(2); // 1 live (default position) + 1 ghost, filling to targetAudienceSize 2
+  });
+
+  it("shows no ghosts once live participants already fill targetAudienceSize", () => {
+    let now = 1_000;
+    const ghostPool: GhostPool = {
+      tracks: [{ recordingId: "rec-a", samples: [{ t: 0, x: 0, y: 0 }] }],
+    };
+    const { engine, registry } = setup({
+      now: () => now,
+      testScenario: targetAudienceScenario(1),
+      ghostPool,
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    const participant = registry.get("lease-p1");
+    if (participant === undefined) throw new Error("expected participant record");
+    engine.participantJoined(phone as unknown as WebSocket, participant);
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+    const cursors = display.sent.filter((message) => message.t === "cursors").at(-1)?.cursors;
+    expect(cursors?.some((c: { ghost?: boolean }) => c.ghost)).toBe(false);
+  });
+
+  it("clears ghosts once the session returns to idle", () => {
+    let now = 1_000;
+    const ghostPool: GhostPool = {
+      tracks: [{ recordingId: "rec-a", samples: [{ t: 0, x: 0, y: 0 }] }],
+    };
+    const { engine, registry } = setup({
+      now: () => now,
+      testScenario: targetAudienceScenario(2),
+      ghostPool,
+      interactiveIdleTimeoutMs: 1_000,
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    const participant = registry.get("lease-p1");
+    if (participant === undefined) throw new Error("expected participant record");
+    engine.participantJoined(phone as unknown as WebSocket, participant);
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+    expect(display.sent.filter((message) => message.t === "cursors").at(-1)?.cursors)
+      .toContainEqual(expect.objectContaining({ ghost: true }));
+
+    now = 1_050;
+    expect(engine.adminIdle(now)).toEqual({ ok: true });
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+    expect(display.sent.filter((message) => message.t === "cursors").at(-1)?.cursors)
+      .not.toContainEqual(expect.objectContaining({ ghost: true }));
   });
 
   it("records movement during a video phase, not just position-question phases", () => {
