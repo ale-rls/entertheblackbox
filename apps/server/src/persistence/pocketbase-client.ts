@@ -1,5 +1,14 @@
+import { EventSource } from "eventsource";
 import PocketBase from "pocketbase";
 import type { ServerConfig } from "../config.js";
+
+// PocketBase's realtime subscriptions (index.ts's auto-restart-on-publish)
+// need a global EventSource, which only exists in browsers -- Node has no
+// built-in implementation. Importing this module installs the polyfill
+// before anything can call .subscribe().
+if (typeof globalThis.EventSource === "undefined") {
+  (globalThis as unknown as { EventSource: typeof EventSource }).EventSource = EventSource;
+}
 
 /**
  * Superuser-authenticated PocketBase client for server-side persistence.
