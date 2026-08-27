@@ -1,6 +1,6 @@
 import type {
   CountablePositionVoteStatus,
-  PositionQuestionPhase,
+  PositionVotePhase,
   PositionVoteStatus,
 } from "@smartphonecracy/scenario";
 import {
@@ -107,7 +107,7 @@ function freezeVote(vote: PositionVote): PositionVote {
  * quadrant winner; plurality transitions additionally apply status filtering.
  */
 export function resolveSnapshot(
-  question: PositionQuestionPhase,
+  question: PositionVotePhase,
   snapshot: FinalVoteSnapshot,
 ): Omit<VoteResolution, "snapshot"> {
   if (question.next.type === "fixed") {
@@ -131,7 +131,7 @@ export class VoteEngine {
   private nextHeartbeatPruneAt: number | null = null;
   private question: {
     sessionId: string;
-    question: PositionQuestionPhase;
+    question: PositionVotePhase;
     phaseEpoch: number;
     phaseStartedAt: number;
     phaseDeadline: number;
@@ -157,7 +157,7 @@ export class VoteEngine {
 
   beginQuestion(options: {
     sessionId: string;
-    question: PositionQuestionPhase;
+    question: PositionVotePhase;
     phaseEpoch: number;
     phaseStartedAt: number;
     phaseDeadline: number;
@@ -298,7 +298,7 @@ export class VoteEngine {
     return this.question?.resolution ?? null;
   }
 
-  currentQuestion(): PositionQuestionPhase | null {
+  currentQuestion(): PositionVotePhase | null {
     return this.question?.question ?? null;
   }
 
@@ -343,7 +343,7 @@ export class VoteEngine {
     votes: Iterable<MutableVote>,
     statuses: Map<string, PositionVoteStatus>,
     field: PositionField,
-    next: PositionQuestionPhase["next"],
+    next: PositionVotePhase["next"],
   ): PositionQuadrantCounts {
     const counted = next.type === "quadrant-plurality"
       ? new Set<CountablePositionVoteStatus>(next.countedStatuses)

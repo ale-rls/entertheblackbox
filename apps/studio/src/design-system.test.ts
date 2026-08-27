@@ -38,7 +38,7 @@ describe("production Studio design-system contract", () => {
   it("marks the real phase domains and state hooks without flooding node bodies", () => {
     const nodes = source("./canvas/nodes.tsx");
 
-    expect(nodes).toContain('data-sc-tool-domain={value.kind === "position-question" ? "question" : value.kind}');
+    expect(nodes).toContain('data-sc-tool-domain={value.kind === "position-question" || value.kind === "video-position-question" ? "question" : value.kind}');
     expect(nodes).toContain('data-sc-tool-domain="entry"');
     expect(nodes).toContain('data-sc-tool-domain="idle"');
     expect(nodes).toContain("data-sc-tool-dragging={dragging}");

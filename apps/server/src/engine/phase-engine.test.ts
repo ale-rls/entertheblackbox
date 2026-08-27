@@ -150,6 +150,34 @@ const ratingScenario = scenarioSchema.parse({
     : phase),
 });
 
+const compositeVideoQuestionScenario = scenarioSchema.parse({
+  version: "engine-test-video-question",
+  entryPhaseId: "video-question",
+  cyclesAllowed: false,
+  phases: [
+    { kind: "idle", id: "idle" },
+    {
+      kind: "video-position-question",
+      id: "video-question",
+      src: "question.mp4",
+      expectedDurationMs: 100,
+      text: "Choose while the video plays",
+      field: {
+        type: "four-quadrant",
+        xAxis: { minLabel: "left", maxLabel: "right" },
+        yAxis: { minLabel: "up", maxLabel: "down" },
+      },
+      showAtMs: 15,
+      openAtMs: 20,
+      closeAtMs: 40,
+      hideAtMs: 50,
+      connectionStaleAfterMs: 100,
+      showLiveCounts: true,
+      next: { type: "fixed", target: "idle" },
+    },
+  ],
+});
+
 const twoQuadrantScenario = scenarioSchema.parse({
   ...scenario,
   version: "engine-test-two-quadrant",
@@ -339,6 +367,51 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.completeVideo("session-1", "intro", epoch - 1, now)).toEqual({ ok: false, reason: "stale" });
     expect(engine.completeVideo("session-1", "intro", epoch, now)).toEqual({ ok: true });
     expect(engine.currentPhaseId).toBe("question");
+  });
+
+  it("opens and freezes a video vote on its timeline, then branches when the video ends", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now, testScenario: compositeVideoQuestionScenario });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+
+    now = 1_100;
+    engine.tick(now);
+    expect(engine.currentPhaseId).toBe("video-question");
+    const epoch = engine.currentPhaseEpoch;
+
+    now = 1_119;
+    engine.tick(now);
+    expect(display.sent.some((message) => message.t === "question_status")).toBe(false);
+
+    now = 1_120;
+    engine.tick(now);
+    engine.handleClientMessage({
+      t: "input",
+      v: 2,
+      sessionId: "session-1",
+      phaseEpoch: epoch,
+      seq: 1,
+      x: 0.75,
+      y: 0.25,
+    }, phone as unknown as WebSocket);
+    expect(display.sent.some((message) => message.t === "question_status")).toBe(true);
+
+    now = 1_140;
+    engine.tick(now);
+    expect(engine.currentPhaseId).toBe("video-question");
+    expect(display.sent.find((message) => message.t === "question_resolved")).toMatchObject({
+      resolvedTarget: "idle",
+      freezeUntil: 1_150,
+      winner: "fixed",
+    });
+
+    now = 1_200;
+    expect(engine.completeVideo("session-1", "video-question", epoch, now)).toEqual({ ok: true });
+    expect(engine.currentPhaseId).toBe("idle");
   });
 
   it("accepts video_ended only from the authenticated display and cannot double-advance", () => {

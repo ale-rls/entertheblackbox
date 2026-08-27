@@ -27,7 +27,7 @@ export function withoutOutputEdge(edges: Edge[], source: string | null, sourceHa
 
 export function phaseOutputHandles(phase: Phase | undefined): readonly string[] {
   if (!phase || phase.kind === "idle") return [];
-  return phase.kind === "position-question" && phase.next.type === "quadrant-plurality"
+  return (phase.kind === "position-question" || phase.kind === "video-position-question") && phase.next.type === "quadrant-plurality"
     ? phase.field.type === "two-quadrant" ? TWO_OUTCOME_HANDLES : FOUR_OUTCOME_HANDLES
     : [FIXED_HANDLE];
 }
@@ -48,7 +48,7 @@ export function edgeTarget(target: string): string {
 
 export function replacePluralityLayoutEdges(
   edges: Edge[],
-  phase: Extract<Phase, { kind: "position-question" }>,
+  phase: Extract<Phase, { kind: "position-question" | "video-position-question" }>,
 ): Edge[] {
   if (phase.next.type !== "quadrant-plurality") return edges;
   const next = phase.next;

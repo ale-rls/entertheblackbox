@@ -6,7 +6,10 @@ import {
 } from "@smartphonecracy/protocol";
 import { useVideoPlaybackDiagnostics } from "../media/useVideoPlaybackDiagnostics.js";
 
-type VideoPhase = Extract<PhaseSnapshotMessage, { kind: "video" }>;
+type VideoPhase = Extract<
+  PhaseSnapshotMessage,
+  { kind: "video" | "video-position-question" }
+>;
 
 export type PhaseVideoProps = {
   sessionId: string | null;

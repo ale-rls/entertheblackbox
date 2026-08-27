@@ -202,6 +202,64 @@ const canonicalPositionQuestionPhaseSchema = z.union([
   polygonZonesQuestionVariantSchema,
 ]);
 
+const videoPositionQuestionBaseSchema = z.object({
+  kind: z.literal("video-position-question"),
+  id: phaseIdSchema,
+  src: z.string().min(1, "video src must be non-empty"),
+  expectedDurationMs: z.number().int().positive(),
+  text: z.string().min(1, "question text must be non-empty"),
+  /** Timeline offsets from the start of the video. */
+  showAtMs: z.number().int().nonnegative(),
+  openAtMs: z.number().int().nonnegative(),
+  closeAtMs: z.number().int().positive(),
+  hideAtMs: z.number().int().positive(),
+  connectionStaleAfterMs: z.number().int().positive(),
+  showLiveCounts: z.boolean(),
+  showCursors: z.boolean().optional(),
+});
+
+const polygonZonesVideoQuestionVariantSchema = videoPositionQuestionBaseSchema
+  .extend({
+    field: polygonZonesFieldSchema,
+    next: z.union([fixedPositionQuestionNextSchema, polygonZonesPluralityNextSchema]),
+  })
+  .superRefine((phase, ctx) => {
+    if (phase.next.type !== "quadrant-plurality") return;
+    const zoneIds = new Set(phase.field.zones.map((zone) => zone.id));
+    const mapKeys = Object.keys(phase.next.map);
+    if (mapKeys.length !== zoneIds.size || mapKeys.some((id) => !zoneIds.has(id))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "next.map keys must exactly match field.zones ids",
+        path: ["next", "map"],
+      });
+    }
+  });
+
+export const videoPositionQuestionPhaseSchema = z.union([
+  videoPositionQuestionBaseSchema.extend({
+    field: fourQuadrantFieldSchema,
+    next: z.union([fixedPositionQuestionNextSchema, fourQuadrantPluralityNextSchema]),
+  }),
+  videoPositionQuestionBaseSchema.extend({
+    field: twoQuadrantFieldSchema,
+    next: z.union([fixedPositionQuestionNextSchema, twoQuadrantPluralityNextSchema]),
+  }),
+  polygonZonesVideoQuestionVariantSchema,
+]).superRefine((phase, ctx) => {
+  const ordered = phase.showAtMs <= phase.openAtMs
+    && phase.openAtMs < phase.closeAtMs
+    && phase.closeAtMs <= phase.hideAtMs
+    && phase.hideAtMs <= phase.expectedDurationMs;
+  if (!ordered) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "timing must satisfy showAtMs <= openAtMs < closeAtMs <= hideAtMs <= expectedDurationMs",
+      path: ["showAtMs"],
+    });
+  }
+});
+
 type UnknownRecord = Record<string, unknown>;
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -235,6 +293,7 @@ export const phaseSchema = z.union([
   idlePhaseSchema,
   videoPhaseSchema,
   positionQuestionPhaseSchema,
+  videoPositionQuestionPhaseSchema,
 ]);
 
 const canonicalScenarioSchema = z.object({
@@ -293,6 +352,8 @@ export type RatingConfig = z.infer<typeof ratingConfigSchema>;
 export type IdlePhase = z.infer<typeof idlePhaseSchema>;
 export type VideoPhase = z.infer<typeof videoPhaseSchema>;
 export type PositionQuestionPhase = z.infer<typeof positionQuestionPhaseSchema>;
+export type VideoPositionQuestionPhase = z.infer<typeof videoPositionQuestionPhaseSchema>;
+export type PositionVotePhase = PositionQuestionPhase | VideoPositionQuestionPhase;
 export type Phase = z.infer<typeof phaseSchema>;
 export type Scenario = z.infer<typeof scenarioSchema>;
 export type MediaManifest = z.infer<typeof mediaManifestSchema>;

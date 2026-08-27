@@ -64,7 +64,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   const publicVideoPhases = readiness.ready
     ? Object.fromEntries(
         readiness.scenario.phases
-          .filter((phase) => phase.kind === "video")
+          .filter((phase) => phase.kind === "video" || phase.kind === "video-position-question")
           .map((phase) => [phase.id, phase.src]),
       )
     : null;

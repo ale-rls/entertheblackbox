@@ -87,7 +87,7 @@ export function outcomeVotes(field: PositionField, outcome: ForcedOutcome, inclu
 }
 export function resolvePreview(session: PreviewSession, outcome: ForcedOutcome, includeStale = true, includeDisconnected = true): PreviewSession {
   const phase = currentPhase(session);
-  if (phase.kind !== "position-question") throw new Error("Only position questions have outcomes.");
+  if (phase.kind !== "position-question" && phase.kind !== "video-position-question") throw new Error("Only position votes have outcomes.");
   const votes: PreviewVote[] = outcomeVotes(phase.field, outcome, includeStale, includeDisconnected);
   const counted = new Set<PositionStatus>(phase.next.type === "quadrant-plurality" ? phase.next.countedStatuses : ["valid", "stale", "disconnected"]);
   const classification = classifyPositionVotesForField(phase.field, votes, counted);
@@ -96,7 +96,8 @@ export function resolvePreview(session: PreviewSession, outcome: ForcedOutcome, 
     const resolvedTarget = result.winner === "tie" ? phase.next.tie : result.winner === "empty" ? phase.next.empty : (phase.next.map as Record<string, string>)[result.winner]!;
     return { ...result, resolvedTarget };
   })();
-  return { ...session, resolution: { votes, ...classification, quadrantCounts: resolved.quadrantCounts, winner: resolved.winner, resolvedTarget: resolved.resolvedTarget, freezeMs: phase.freezeMs } };
+  const freezeMs = phase.kind === "position-question" ? phase.freezeMs : phase.hideAtMs - phase.closeAtMs;
+  return { ...session, resolution: { votes, ...classification, quadrantCounts: resolved.quadrantCounts, winner: resolved.winner, resolvedTarget: resolved.resolvedTarget, freezeMs } };
 }
 export function continueAfterResolution(session: PreviewSession): PreviewSession {
   if (!session.resolution) throw new Error("Resolve the question first.");

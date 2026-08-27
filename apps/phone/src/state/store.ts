@@ -87,7 +87,8 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         inputOpen:
           m.phase.kind === "idle" ||
           m.phase.kind === "video" ||
-          m.phase.kind === "position-question",
+          m.phase.kind === "position-question" ||
+          m.phase.kind === "video-position-question",
         ratingCandidateLabel: m.phase.kind === "video" ? m.phase.rating?.candidateLabel ?? null : null,
       };
     }

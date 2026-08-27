@@ -43,6 +43,25 @@ export function changePhaseKind(phase: Phase, kind: PhaseKind): Phase {
   if (phase.kind === kind) return phase;
   if (kind === "idle") return { id: "idle", kind };
   if (kind === "video") return { id: phase.id, kind, src: "media/new-video.mp4", expectedDurationMs: 1_000, next: "idle" };
+  if (kind === "video-position-question") return {
+    id: phase.id,
+    kind,
+    src: "media/new-video.mp4",
+    expectedDurationMs: 40_000,
+    text: "New position question",
+    field: {
+      type: "four-quadrant",
+      xAxis: { minLabel: "Left", maxLabel: "Right" },
+      yAxis: { minLabel: "Top", maxLabel: "Bottom" },
+    },
+    showAtMs: 15_000,
+    openAtMs: 15_000,
+    closeAtMs: 35_000,
+    hideAtMs: 40_000,
+    connectionStaleAfterMs: 10_000,
+    showLiveCounts: QUESTION_DEFAULTS.showLiveCounts,
+    next: { type: "quadrant-plurality", map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: [...QUESTION_DEFAULTS.countedStatuses] },
+  };
   return {
     id: phase.id, kind, text: "New position question",
     field: {

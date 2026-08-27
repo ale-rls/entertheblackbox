@@ -17,6 +17,7 @@ import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhoneCount } from "./components/PhoneCount.js";
 import { PhaseVideo } from "./components/PhaseVideo.js";
 import { RatingMeter } from "./components/RatingMeter.js";
+import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -147,8 +148,25 @@ export function App() {
   // so a stale question_resolved frame can never freeze a live field
   // (codex review finding). Phase advance clears resolution → unfreeze.
   useEffect(() => {
-    cursorField.setFrozen(state.resolution !== null);
-  }, [cursorField, state.resolution]);
+    const update = () => {
+      const activePhase = stateRef.current.phase;
+      const resolution = stateRef.current.resolution;
+      if (resolution === null) {
+        cursorField.setFrozen(false);
+        return;
+      }
+      if (activePhase?.kind === "video-position-question") {
+        cursorField.setFrozen(connection.clock.now() < activePhase.startedAt + activePhase.hideAtMs);
+        return;
+      }
+      cursorField.setFrozen(true);
+    };
+    update();
+    const timer = state.resolution !== null ? setInterval(update, 100) : null;
+    return () => {
+      if (timer !== null) clearInterval(timer);
+    };
+  }, [connection.clock, cursorField, state.resolution]);
 
   const media = useMedia();
   const phase = state.phase;
@@ -189,8 +207,12 @@ export function App() {
   // Keep the Blob URL set aligned with the active phase (plan §9);
   // preloading plausible next videos needs the id→src map from STEP-026.
   useEffect(() => {
-    void media.showVideo(phase?.kind === "video" ? phase.src : null);
-  }, [phase?.kind === "video" ? phase.src : null]);
+    void media.showVideo(
+      phase?.kind === "video" || phase?.kind === "video-position-question"
+        ? phase.src
+        : null,
+    );
+  }, [phase?.kind === "video" || phase?.kind === "video-position-question" ? phase.src : null]);
 
   return (
     <main className="display-root">
@@ -203,7 +225,7 @@ export function App() {
             clock={connection.clock}
           />
         )}
-        {phase?.kind === "video" && media.videoUrl !== null && (
+        {(phase?.kind === "video" || phase?.kind === "video-position-question") && media.videoUrl !== null && (
           <PhaseVideo
             key={phase.id}
             sessionId={state.sessionId}
@@ -258,6 +280,15 @@ export function App() {
               <Countdown clock={connection.clock} deadlineAt={phase.deadlineAt} />
             )}
           </div>
+        )}
+        {phase?.kind === "video-position-question" && (
+          <VideoQuestionOverlay
+            phase={phase}
+            clock={connection.clock}
+            liveField={state.liveField}
+            liveCounts={state.liveCounts}
+            resolution={state.resolution}
+          />
         )}
         {phase?.kind === "video" && phase.rating && <RatingMeter status={state.ratingStatus} />}
         {state.notice && (

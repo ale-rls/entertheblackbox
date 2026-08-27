@@ -139,7 +139,7 @@ body:has(.editor),
   display: flex;
   flex-direction: column;
   gap: var(--sc-tool-space-2);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+  box-shadow: var(--sc-tool-shadow-2);
 }
 
 .publish-panel form {

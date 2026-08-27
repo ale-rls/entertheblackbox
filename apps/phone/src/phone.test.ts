@@ -160,7 +160,7 @@ const apply = (state: PhoneState, message: ServerToClientMessage) =>
   phoneReducer(state, { type: "server-message", message });
 
 const phase = (
-  kind: "idle" | "video" | "position-question",
+  kind: "idle" | "video" | "position-question" | "video-position-question",
   epoch: number,
   sessionId = "s1",
 ): ServerToClientMessage => ({
@@ -189,7 +189,8 @@ const phase = (
           startedAt: 0,
           deadlineAt: null,
         }
-      : {
+      : kind === "position-question"
+      ? {
           kind: "position-question",
           id: "q",
           text: "t",
@@ -202,6 +203,24 @@ const phase = (
           scenarioVersion: "dev",
           startedAt: 0,
           deadlineAt: 60_000,
+        }
+      : {
+          kind: "video-position-question",
+          id: "vq",
+          src: "vq.mp4",
+          expectedDurationMs: 40_000,
+          text: "t",
+          field: { type: "four-quadrant", xAxis: { minLabel: "a", maxLabel: "b" }, yAxis: { minLabel: "c", maxLabel: "d" } },
+          showAtMs: 5_000,
+          openAtMs: 10_000,
+          closeAtMs: 30_000,
+          hideAtMs: 35_000,
+          connectionStaleAfterMs: 30_000,
+          showLiveCounts: false,
+          next: { type: "fixed", target: "idle" },
+          scenarioVersion: "dev",
+          startedAt: 0,
+          deadlineAt: 45_000,
         },
 });
 
@@ -212,6 +231,8 @@ describe("phoneReducer", () => {
     s = apply(s, phase("video", 2));
     expect(s.inputOpen).toBe(true);
     s = apply(s, phase("position-question", 3));
+    expect(s.inputOpen).toBe(true);
+    s = apply(s, phase("video-position-question", 4));
     expect(s.inputOpen).toBe(true);
   });
 

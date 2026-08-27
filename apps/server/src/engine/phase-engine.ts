@@ -153,6 +153,7 @@ export class PhaseEngine {
   private readonly participantIds = new Map<WebSocket, string>();
   private questionFreezeUntil: number | null = null;
   private questionResolutionTarget: string | null = null;
+  private compositeVideoCompleted = false;
   private questionStatusDirty = false;
   private lastQuestionStatusAt: number | null = null;
   private ratingStatusDirty = false;
@@ -259,6 +260,14 @@ export class PhaseEngine {
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
     const phase = this.currentPhase();
     if (phase.kind === "video") return this.advanceTo(phase.next, now, "admin-skip");
+    if (phase.kind === "video-position-question") {
+      this.beginCompositeVoteIfDue(now, phase, true);
+      this.resolveCompositeQuestion(now, phase);
+      const target = this.questionResolutionTarget;
+      return target === null
+        ? { ok: false, reason: "wrong-phase" }
+        : this.advanceTo(target, now, "admin-skip");
+    }
     if (phase.kind === "position-question") {
       if (this.questionResolutionTarget !== null) {
         return this.advanceTo(this.questionResolutionTarget, now, "admin-skip");
@@ -385,6 +394,38 @@ export class PhaseEngine {
           deadlineAt: this.deadlineAt!,
         });
         this.advanceTo(phase.next, now, "video-fallback");
+      }
+      return;
+    }
+
+    if (phase.kind === "video-position-question") {
+      this.beginCompositeVoteIfDue(now, phase);
+      if (this.votes.currentQuestion() !== null && this.questionResolutionTarget === null) {
+        this.broadcastQuestionStatus(now);
+      }
+      if (now >= this.phaseStartedAt + phase.closeAtMs && this.questionResolutionTarget === null) {
+        this.resolveCompositeQuestion(now, phase);
+        if (this.compositeVideoCompleted && this.questionResolutionTarget !== null) {
+          this.advanceTo(this.questionResolutionTarget, now, "video-complete");
+          return;
+        }
+      }
+      const fallback = this.video.consumeFallback(now);
+      if (fallback !== null && this.matches(fallback.sessionId, fallback.phaseId, fallback.phaseEpoch)) {
+        this.onPhaseDeadline?.({
+          sessionId: this.sessionId,
+          phaseId: this.phaseId,
+          phaseEpoch: this.phaseEpoch,
+          phase,
+          deadlineAt: this.deadlineAt!,
+        });
+        if (this.questionResolutionTarget === null) {
+          this.beginCompositeVoteIfDue(now, phase, true);
+          this.resolveCompositeQuestion(now, phase);
+        }
+        if (this.questionResolutionTarget !== null) {
+          this.advanceTo(this.questionResolutionTarget, now, "video-fallback");
+        }
       }
       return;
     }
@@ -524,7 +565,13 @@ export class PhaseEngine {
               // activity remain scoped to an active show session.
               if (this.lifecycle === "active") {
                 this.movement.recordSample(participantId, message.x, message.y, this.now());
-                if (this.currentPhase().kind === "position-question") {
+                const activePhase = this.currentPhase();
+                if (
+                  activePhase.kind === "position-question" ||
+                  (activePhase.kind === "video-position-question" &&
+                    this.now() >= this.phaseStartedAt + activePhase.openAtMs &&
+                    this.now() < this.phaseStartedAt + activePhase.closeAtMs)
+                ) {
                   this.recordInput(this.now(), participantId, message.x, message.y);
                 }
               }
@@ -538,7 +585,11 @@ export class PhaseEngine {
   }
 
   recordInput(now = this.now(), participantId?: string, x?: number, y?: number): boolean {
-    if (this.lifecycle !== "active" || this.currentPhase().kind !== "position-question") return false;
+    const phase = this.currentPhase();
+    if (
+      this.lifecycle !== "active" ||
+      (phase.kind !== "position-question" && phase.kind !== "video-position-question")
+    ) return false;
     if (participantId !== undefined && x !== undefined && y !== undefined) {
       if (!this.votes.recordInput(participantId, x, y, now)) return false;
       this.queueQuestionStatus(now);
@@ -557,10 +608,15 @@ export class PhaseEngine {
 
   completeVideo(sessionId: string, phaseId: string, phaseEpoch: number, now = this.now()): TransitionResult {
     const phase = this.currentPhase();
-    if (phase.kind !== "video") return { ok: false, reason: "wrong-phase" };
+    if (phase.kind !== "video" && phase.kind !== "video-position-question") return { ok: false, reason: "wrong-phase" };
     if (!this.matches(sessionId, phaseId, phaseEpoch)) return { ok: false, reason: "stale" };
     if (!this.video.complete({ sessionId, phaseId, phaseEpoch })) return { ok: false, reason: "stale" };
-    return this.advanceTo(phase.next, now, "video-complete");
+    if (phase.kind === "video") return this.advanceTo(phase.next, now, "video-complete");
+    if (this.questionResolutionTarget !== null) {
+      return this.advanceTo(this.questionResolutionTarget, now, "video-complete");
+    }
+    this.compositeVideoCompleted = true;
+    return { ok: true };
   }
 
   resolveQuestion(
@@ -611,6 +667,11 @@ export class PhaseEngine {
     this.displayDisconnectedAt = null;
     this.send(socket, this.getSnapshotMessage());
     this.send(socket, { t: "presence", v: PROTOCOL_VERSION, count: this.registry.connectedCount });
+    const phase = this.currentPhase();
+    const resolution = this.votes.currentResolution();
+    if (phase.kind === "video-position-question" && resolution !== null) {
+      this.emitQuestionResolved(resolution, phase, this.now());
+    }
     if (this.lifecycle === "idle" && this.registry.connectedCount >= 1) {
       this.startLobby(this.now());
     } else {
@@ -687,11 +748,12 @@ export class PhaseEngine {
     this.lastRatingStatusAt = null;
     this.questionFreezeUntil = null;
     this.questionResolutionTarget = null;
+    this.compositeVideoCompleted = false;
     this.displayPlaybackIssue = null;
     this.phaseId = target;
     this.phaseStartedAt = now;
     this.video.cancel();
-    this.deadlineAt = phase.kind === "video"
+    this.deadlineAt = phase.kind === "video" || phase.kind === "video-position-question"
       ? this.video.begin({ sessionId: this.sessionId, phaseId: target, phaseEpoch: this.phaseEpoch + 1 }, phase.expectedDurationMs, now)
       : phase.kind === "position-question"
         ? now + phase.durationMs
@@ -705,7 +767,7 @@ export class PhaseEngine {
       this.lastInputAt = null;
     } else {
       this.lifecycle = "active";
-      this.lastInputAt = phase.kind === "position-question" ? now : null;
+      this.lastInputAt = phase.kind === "position-question" || phase.kind === "video-position-question" ? now : null;
     }
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, sessionEnded ? { reason, endedAt: now } : undefined);
@@ -720,19 +782,7 @@ export class PhaseEngine {
       this.broadcastRatingStatus(now, true);
     }
     if (phase.kind === "position-question") {
-      const participants: VoteParticipantSeed[] = this.registry.values().map((participant) => ({
-        participantId: participant.clientId,
-        connected: participant.socket !== undefined,
-        lastHeartbeatAt: participant.lastSeenAt,
-      }));
-      this.votes.beginQuestion({
-        sessionId: this.sessionId,
-        question: phase,
-        phaseEpoch: this.phaseEpoch,
-        phaseStartedAt: this.phaseStartedAt,
-        phaseDeadline: this.deadlineAt!,
-        participants,
-      });
+      this.beginPositionVote(phase, this.phaseStartedAt, this.deadlineAt!);
       this.questionStatusDirty = true;
       this.broadcastQuestionStatus(now, true);
     }
@@ -747,7 +797,7 @@ export class PhaseEngine {
   private recordDisplayPlaybackStatus(message: DisplayPlaybackStatusMessage): void {
     const phase = this.currentPhase();
     if (
-      phase.kind !== "video" ||
+      (phase.kind !== "video" && phase.kind !== "video-position-question") ||
       phase.src !== message.mediaId ||
       !this.matches(message.sessionId, message.phaseId, message.phaseEpoch)
     ) return;
@@ -792,7 +842,8 @@ export class PhaseEngine {
   }
 
   private interactiveIdleTimedOut(now: number): boolean {
-    const interactive = this.lifecycle === "lobby" || this.currentPhase().kind === "position-question";
+    const kind = this.currentPhase().kind;
+    const interactive = this.lifecycle === "lobby" || kind === "position-question" || kind === "video-position-question";
     return interactive && this.lastInputAt !== null && now - this.lastInputAt >= this.policy.interactiveIdleTimeoutMs;
   }
 
@@ -810,9 +861,52 @@ export class PhaseEngine {
     }
   }
 
+  private beginPositionVote(
+    phase: Extract<Phase, { kind: "position-question" | "video-position-question" }>,
+    phaseStartedAt: number,
+    phaseDeadline: number,
+  ): void {
+    const participants: VoteParticipantSeed[] = this.registry.values().map((participant) => ({
+      participantId: participant.clientId,
+      connected: participant.socket !== undefined,
+      lastHeartbeatAt: participant.lastSeenAt,
+    }));
+    this.votes.beginQuestion({
+      sessionId: this.sessionId,
+      question: phase,
+      phaseEpoch: this.phaseEpoch,
+      phaseStartedAt,
+      phaseDeadline,
+      participants,
+    });
+  }
+
+  private beginCompositeVoteIfDue(
+    now: number,
+    phase: Extract<Phase, { kind: "video-position-question" }>,
+    force = false,
+  ): void {
+    if (this.votes.currentQuestion() !== null || this.questionResolutionTarget !== null) return;
+    const opensAt = this.phaseStartedAt + phase.openAtMs;
+    if (!force && now < opensAt) return;
+    this.beginPositionVote(phase, opensAt, this.phaseStartedAt + phase.closeAtMs);
+    this.questionStatusDirty = true;
+    this.broadcastQuestionStatus(now, true);
+  }
+
+  private resolveCompositeQuestion(
+    now: number,
+    phase: Extract<Phase, { kind: "video-position-question" }>,
+  ): void {
+    const resolution = this.votes.finalize(now);
+    if (!resolution) return;
+    this.questionResolutionTarget = resolution.resolvedTarget;
+    this.emitQuestionResolved(resolution, phase, now);
+  }
+
   private emitQuestionResolved(
     resolution: VoteResolution,
-    phase: Extract<Phase, { kind: "position-question" }>,
+    phase: Extract<Phase, { kind: "position-question" | "video-position-question" }>,
     now: number,
   ): void {
     this.sendToDisplay({
@@ -821,7 +915,9 @@ export class PhaseEngine {
       sessionId: this.sessionId,
       phaseEpoch: this.phaseEpoch,
       resolvedTarget: resolution.resolvedTarget,
-      freezeUntil: now + phase.freezeMs,
+      freezeUntil: phase.kind === "position-question"
+        ? now + phase.freezeMs
+        : this.phaseStartedAt + phase.hideAtMs,
       field: resolution.field,
       quadrantCounts: resolution.quadrantCounts,
       winner: resolution.winner,
@@ -835,7 +931,7 @@ export class PhaseEngine {
 
   private broadcastQuestionStatus(now = this.now(), force = false): void {
     const phase = this.currentPhase();
-    if (phase.kind !== "position-question") return;
+    if (phase.kind !== "position-question" && phase.kind !== "video-position-question") return;
     if (!force && !this.questionStatusDirty) return;
     if (
       !force &&

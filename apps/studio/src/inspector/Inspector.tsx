@@ -24,10 +24,10 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   useEffect(() => setIdInput(phase?.id ?? ""), [phase?.id]);
   const idProblem = phase ? phaseIdError(project, phase.id, idInput) : undefined;
-  const detectedDuration = phase?.kind === "video"
+  const detectedDuration = phase?.kind === "video" || phase?.kind === "video-position-question"
     ? localMedia.find((file) => file.src === phase.src)?.durationMs
     : undefined;
-  const selectedMediaIsListed = phase?.kind === "video"
+  const selectedMediaIsListed = (phase?.kind === "video" || phase?.kind === "video-position-question")
     && project.manifest.files.some((file) => file.src === phase.src);
 
   if (!phase) return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2><p className="sc-tool-copy">Select a runtime phase to edit it.</p>
@@ -41,9 +41,9 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2>
     <label className="sc-tool-label">{label("Runtime ID", "id")}<input className="sc-tool-field" aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
-    {phase.kind !== "idle" && <label className="sc-tool-label">{label("Phase type", "kind")}<select className="sc-tool-select" value={phase.kind} onChange={(event) => onKindChange(event.target.value as AuthorablePhaseKind, event.currentTarget)}><option value="video">Video</option><option value="position-question">Position question</option></select></label>}
+    {phase.kind !== "idle" && <label className="sc-tool-label">{label("Phase type", "kind")}<select className="sc-tool-select" value={phase.kind} onChange={(event) => onKindChange(event.target.value as AuthorablePhaseKind, event.currentTarget)}><option value="video">Video</option><option value="position-question">Position question</option><option value="video-position-question">Video + position vote</option></select></label>}
     {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
-    {phase.kind === "video" && <>
+    {(phase.kind === "video" || phase.kind === "video-position-question") && <>
       <label className="sc-tool-label">{label("Media source", "src")}<select className="sc-tool-select" value={phase.src} onChange={(event) => {
         const src = event.target.value;
         const expectedDurationMs = localMedia.find((file) => file.src === src)?.durationMs;
@@ -56,7 +56,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         ? "Video duration is detected automatically when the selected media is available."
         : `Video duration: ${(detectedDuration / 1000).toFixed(3)} seconds`}</p>
     </>}
-    {phase.kind === "position-question" && <>
+    {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
       {phase.field.type !== "polygon-zones" && <label className="sc-tool-label">{label("Quadrant layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : `two-quadrant-${phase.field.axis}`} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option></select></label>}
       {phase.field.type === "four-quadrant" ? (() => {
@@ -79,8 +79,17 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
           Polygon zones ({field.zones.map((zone) => zone.label).join(", ")}) aren't editable here yet — edit the scenario JSON directly.
         </p>;
       })()}
-      {number("Question duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs }))}
-      {number("Outcome freeze (ms)", "freezeMs", phase.freezeMs, (freezeMs) => onChange({ ...phase, freezeMs }))}
+      {phase.kind === "position-question" && <>
+        {number("Question duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs }))}
+        {number("Outcome freeze (ms)", "freezeMs", phase.freezeMs, (freezeMs) => onChange({ ...phase, freezeMs }))}
+      </>}
+      {phase.kind === "video-position-question" && <fieldset className="timeline-fields"><legend>Vote timeline <small>milliseconds from video start</small></legend>
+        {number("Show question", "showAtMs", phase.showAtMs, (showAtMs) => onChange({ ...phase, showAtMs }))}
+        {number("Open voting", "openAtMs", phase.openAtMs, (openAtMs) => onChange({ ...phase, openAtMs }))}
+        {number("Close voting", "closeAtMs", phase.closeAtMs, (closeAtMs) => onChange({ ...phase, closeAtMs }))}
+        {number("Hide question", "hideAtMs", phase.hideAtMs, (hideAtMs) => onChange({ ...phase, hideAtMs }))}
+        <p className="sc-tool-copy field-hint">Required order: show ≤ open &lt; close ≤ hide ≤ video duration ({phase.expectedDurationMs} ms).</p>
+      </fieldset>}
       {number("Connection stale after (ms)", "connectionStaleAfterMs", phase.connectionStaleAfterMs, (connectionStaleAfterMs) => onChange({ ...phase, connectionStaleAfterMs }))}
       <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showLiveCounts} onChange={(event) => onChange({ ...phase, showLiveCounts: event.target.checked })} />{label("Show live quadrant counts", "showLiveCounts")}</label>
       <label className="sc-tool-label">{label("Transition rule", "next.type")}<select className="sc-tool-select" value={phase.next.type} onChange={(event) => onTransitionChange(event.target.value as "fixed" | "quadrant-plurality", event.currentTarget)}><option value="fixed">Fixed target</option><option value="quadrant-plurality">Quadrant plurality</option></select></label>
@@ -90,7 +99,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   </aside>;
 }
 
-function CountedStatuses({ phase, onChange }: { phase: Extract<Phase, { kind: "position-question" }>; onChange: (phase: Phase) => void }) {
+function CountedStatuses({ phase, onChange }: { phase: Extract<Phase, { kind: "position-question" | "video-position-question" }>; onChange: (phase: Phase) => void }) {
   if (phase.next.type !== "quadrant-plurality") return null;
   const next = phase.next;
   return <fieldset><legend>Count participant states <small>next.countedStatuses</small></legend>{(["valid", "stale", "disconnected"] as const).map((status) => <label className="sc-tool-checkbox check" key={status}><input type="checkbox" checked={next.countedStatuses.includes(status)} onChange={(event) => {

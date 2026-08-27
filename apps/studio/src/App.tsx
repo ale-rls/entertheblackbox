@@ -48,7 +48,7 @@ const nodesForDraft = (draft: Draft, current: Node[] = []): Node[] => {
       type: "phase",
       position: currentPositions.get(phase.id) ?? layout.get(phase.id) ?? { x: 360 + (index % 3) * 300, y: 80 + Math.floor(index / 3) * 220 },
       data,
-      ariaLabel: `${phase.kind === "position-question" ? "Question" : phase.kind} phase: ${data.label}`,
+      ariaLabel: `${phase.kind === "position-question" || phase.kind === "video-position-question" ? "Question" : phase.kind} phase: ${data.label}`,
     };
   });
   return [
@@ -283,7 +283,7 @@ export function App() {
     persistGraph(next);
     setGraphFeedback({ status: "success", message: "Connection updated." });
   };
-  const addPhase = (kind: "idle" | "video" | "position-question") => {
+  const addPhase = (kind: "idle" | "video" | "position-question" | "video-position-question") => {
     if (!draft) return;
     if (kind === "idle" && draft.project.scenario.phases.some((phase) => phase.kind === "idle")) {
       setGraphFeedback({ status: "danger", message: "Idle phase not added: this show already has its idle phase. Select the existing idle phase to edit it." });
@@ -293,12 +293,15 @@ export function App() {
     const id = kind === "idle" ? "idle" : `${kind}-${crypto.randomUUID().slice(0, 6)}`;
     const firstMedia = draft.project.manifest.files[0];
     const firstMediaDuration = localManifest?.files.find((file) => file.src === firstMedia?.src)?.durationMs;
+    const expectedDurationMs = firstMediaDuration ?? 40_000;
     const phase = kind === "idle" ? { kind, id: "idle" as const } : kind === "video"
       ? { kind, id, src: firstMedia?.src ?? "media/new-video.mp4", expectedDurationMs: firstMediaDuration ?? 1000, next: "idle" }
+      : kind === "video-position-question"
+        ? { kind, id, src: firstMedia?.src ?? "media/new-video.mp4", expectedDurationMs, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, showAtMs: Math.floor(expectedDurationMs * .25), openAtMs: Math.floor(expectedDurationMs * .3), closeAtMs: Math.max(Math.floor(expectedDurationMs * .3) + 1, Math.floor(expectedDurationMs * .75)), hideAtMs: Math.max(Math.floor(expectedDurationMs * .75), Math.floor(expectedDurationMs * .875)), connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
       : { kind, id, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, durationMs: 60000, freezeMs: 5000, connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } };
     const phases = [...draft.project.scenario.phases, phase] as Draft["project"]["scenario"]["phases"];
     const nextNodes = [...nodes, { id, type: "phase", position: { x: 400, y: 200 }, data: nodeDataForPhase(phase as Phase) }];
-    const handles = kind === "position-question" ? ["q1", "q2", "q3", "q4", "tie", "empty"] : kind === "video" ? ["next"] : [];
+    const handles = kind === "position-question" || kind === "video-position-question" ? ["q1", "q2", "q3", "q4", "tie", "empty"] : kind === "video" ? ["next"] : [];
     const nextEdges = [...edges, ...handles.map((handle) => ({ id: `${id}:${handle}`, source: id, sourceHandle: handle, target: END_NODE_ID }))];
     setNodes(nextNodes);
     setEdges(nextEdges);
@@ -326,8 +329,8 @@ export function App() {
     if (!draft || !selectedId) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === selectedId);
     if (!phase || phase.kind === kind) return;
-    const phaseKind = phase.kind === "position-question" ? "position question" : phase.kind;
-    const nextKind = kind === "position-question" ? "position question" : kind;
+    const phaseKind = phase.kind === "position-question" ? "position question" : phase.kind === "video-position-question" ? "video + position vote" : phase.kind;
+    const nextKind = kind === "position-question" ? "position question" : kind === "video-position-question" ? "video + position vote" : kind;
     setConfirmation({
       title: `Change “${phase.id}” from ${phaseKind} to ${nextKind}?`,
       description: "This replaces the phase fields and all outgoing connections. You can undo this change during this editing session.",
@@ -339,9 +342,20 @@ export function App() {
         const changedPhase = changePhaseKind(phase, kind);
         const firstMedia = draft.project.manifest.files[0];
         const firstMediaDuration = localManifest?.files.find((file) => file.src === firstMedia?.src)?.durationMs;
-        const nextPhase = changedPhase.kind === "video" && firstMedia
-          ? { ...changedPhase, src: firstMedia.src, expectedDurationMs: firstMediaDuration ?? changedPhase.expectedDurationMs }
-          : changedPhase;
+        const selectedDuration = firstMediaDuration ?? (changedPhase.kind === "video" || changedPhase.kind === "video-position-question" ? changedPhase.expectedDurationMs : 0);
+        const nextPhase = changedPhase.kind === "video-position-question" && firstMedia
+          ? {
+              ...changedPhase,
+              src: firstMedia.src,
+              expectedDurationMs: selectedDuration,
+              showAtMs: Math.floor(selectedDuration * .25),
+              openAtMs: Math.floor(selectedDuration * .3),
+              closeAtMs: Math.max(Math.floor(selectedDuration * .3) + 1, Math.floor(selectedDuration * .75)),
+              hideAtMs: Math.max(Math.floor(selectedDuration * .75), Math.floor(selectedDuration * .875)),
+            }
+          : changedPhase.kind === "video" && firstMedia
+            ? { ...changedPhase, src: firstMedia.src, expectedDurationMs: selectedDuration }
+            : changedPhase;
         const retained = edges.filter((edge) => edge.source !== selectedId);
         const nextEdges = [
           ...retained,
@@ -356,7 +370,7 @@ export function App() {
   const changeTransition = (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => {
     if (!draft || !selectedId) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === selectedId);
-    if (!phase || phase.kind !== "position-question" || phase.next.type === kind) return;
+    if (!phase || (phase.kind !== "position-question" && phase.kind !== "video-position-question") || phase.next.type === kind) return;
     const currentLabel = phase.next.type === "fixed" ? "fixed target" : "quadrant plurality";
     const nextLabel = kind === "fixed" ? "fixed target" : "quadrant plurality";
     setConfirmation({
@@ -384,7 +398,7 @@ export function App() {
   const changeQuestionLayout = (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", trigger: HTMLSelectElement) => {
     if (!draft || !selectedId) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === selectedId);
-    if (!phase || phase.kind !== "position-question") return;
+    if (!phase || (phase.kind !== "position-question" && phase.kind !== "video-position-question")) return;
     // Polygon-zones fields aren't editable through this quadrant-layout
     // control yet (no equivalent selector state), so they fall back to
     // "four-quadrant" like an unset selection.
@@ -418,7 +432,7 @@ export function App() {
       };
       const nextPhase = { ...phase, field, next } as Phase;
       const nextEdges = next.type === "quadrant-plurality"
-        ? replacePluralityLayoutEdges(edges, nextPhase as Extract<Phase, { kind: "position-question" }>)
+        ? replacePluralityLayoutEdges(edges, nextPhase as Extract<Phase, { kind: "position-question" | "video-position-question" }>)
         : edges;
       const phases = draft.project.scenario.phases.map((item) => item.id === selectedId ? nextPhase : item) as Draft["project"]["scenario"]["phases"];
       record({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } }, document: { ...draft.document, edges: nextEdges }, updatedAt: Date.now() }, nextEdges);
@@ -567,6 +581,7 @@ export function App() {
       <Menu label="Add" items={[
         { label: "Video phase", onSelect: () => addPhase("video") },
         { label: "Position question", onSelect: () => addPhase("position-question") },
+        { label: "Video + position vote", onSelect: () => addPhase("video-position-question") },
       ]} />
       <Menu label="View" items={[
         { label: showInspector ? "Hide properties" : "Show properties", onSelect: () => setShowInspector((value) => !value) },

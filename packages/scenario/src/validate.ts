@@ -33,7 +33,8 @@ function targetsOf(phase: Phase): Array<{ label: string; target: string }> {
       return [];
     case "video":
       return [{ label: "next", target: phase.next }];
-    case "position-question": {
+    case "position-question":
+    case "video-position-question": {
       const next = phase.next;
       if (next.type === "fixed") {
         return [{ label: "next.target", target: next.target }];
@@ -104,7 +105,7 @@ export function validateScenario(
   if (mediaManifest) {
     const known = new Set(mediaManifest.files.map((f) => f.src));
     for (const phase of scenario.phases) {
-      if (phase.kind === "video" && !known.has(phase.src)) {
+      if ((phase.kind === "video" || phase.kind === "video-position-question") && !known.has(phase.src)) {
         errors.push({
           severity: "error",
           code: "missing-media",

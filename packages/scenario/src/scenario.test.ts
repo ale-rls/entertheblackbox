@@ -84,6 +84,41 @@ describe("scenarioSchema structural rejection", () => {
     }
   });
 
+  it("accepts a timed video position vote and enforces its timeline order", () => {
+    const composite = {
+      version: "video-vote-1",
+      entryPhaseId: "video-vote",
+      cyclesAllowed: false,
+      phases: [
+        idle,
+        {
+          kind: "video-position-question",
+          id: "video-vote",
+          src: "question.mp4",
+          expectedDurationMs: 45_000,
+          text: "Where do you stand?",
+          field: {
+            type: "four-quadrant",
+            xAxis: { minLabel: "Left", maxLabel: "Right" },
+            yAxis: { minLabel: "Top", maxLabel: "Bottom" },
+          },
+          showAtMs: 15_000,
+          openAtMs: 15_000,
+          closeAtMs: 35_000,
+          hideAtMs: 40_000,
+          connectionStaleAfterMs: 10_000,
+          showLiveCounts: true,
+          next: { type: "fixed", target: "idle" },
+        },
+      ],
+    };
+    expect(scenarioSchema.safeParse(composite).success).toBe(true);
+    expect(scenarioSchema.safeParse({
+      ...composite,
+      phases: [composite.phases[0], { ...composite.phases[1], closeAtMs: 14_000 }],
+    }).success).toBe(false);
+  });
+
   it("canonicalizes legacy xAxis/yAxis questions to four quadrants", () => {
     const legacy = structuredClone(baseScenario) as unknown as Record<string, unknown>;
     const phases = legacy.phases as Array<Record<string, unknown>>;

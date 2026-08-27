@@ -9,7 +9,7 @@ type NodeData = {
 };
 type Phase = StudioProject["scenario"]["phases"][number];
 
-const KIND_TITLE: Record<string, string> = { idle: "Idle", video: "Video", "position-question": "Question" };
+const KIND_TITLE: Record<string, string> = { idle: "Idle", video: "Video", "position-question": "Question", "video-position-question": "Video + vote" };
 
 const InPort = () => (
   <div className="port port-in"><Handle aria-label="Input" className="sc-tool-graph-port" id="input" type="target" position={Position.Left} /><span className="port-name">in</span></div>
@@ -20,10 +20,10 @@ const OutPort = ({ id, label, tone }: { id: string; label: string; tone?: "quad"
 
 export function nodeDataForPhase(phase: Phase): NodeData {
   const data: NodeData = {
-    label: phase.kind === "position-question" ? phase.text : phase.id,
+    label: phase.kind === "position-question" || phase.kind === "video-position-question" ? phase.text : phase.id,
     kind: phase.kind,
   };
-  if (phase.kind !== "position-question" || phase.next.type !== "quadrant-plurality") return data;
+  if ((phase.kind !== "position-question" && phase.kind !== "video-position-question") || phase.next.type !== "quadrant-plurality") return data;
   if (phase.field.type === "four-quadrant") {
     data.outcomes = [
       { id: "q1", label: "q1 · top right", tone: "quad" },
@@ -64,7 +64,7 @@ export function PhaseNode({ id, data, dragging, selected }: NodeProps) {
     ? value.outcomes.map(({ id, label, tone }) => <OutPort key={id} id={id} label={label} tone={tone} />)
     : value.kind !== "idle" ? [<OutPort key="next" id="next" label="next" />] : [];
   return (
-    <div className={`studio-node sc-tool-graph-node kind-${value.kind}`} data-sc-tool-domain={value.kind === "position-question" ? "question" : value.kind} data-sc-tool-dragging={dragging} data-selected={selected}>
+    <div className={`studio-node sc-tool-graph-node kind-${value.kind}`} data-sc-tool-domain={value.kind === "position-question" || value.kind === "video-position-question" ? "question" : value.kind} data-sc-tool-dragging={dragging} data-selected={selected}>
       <div className="node-head">{KIND_TITLE[value.kind] ?? value.kind}</div>
       <div className="node-body"><div className="node-title">{value.label}</div></div>
       <div className="node-io">

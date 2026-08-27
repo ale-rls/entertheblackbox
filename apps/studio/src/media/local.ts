@@ -24,7 +24,7 @@ export function refreshDraftLocalMedia(draft: Draft, manifest: MediaManifest): D
   const durationBySource = new Map(manifest.files.flatMap((file) =>
     file.durationMs === undefined ? [] : [[file.src, file.durationMs] as const]));
   const phases = draft.project.scenario.phases.map((phase) => {
-    if (phase.kind !== "video") return phase;
+    if (phase.kind !== "video" && phase.kind !== "video-position-question") return phase;
     const expectedDurationMs = durationBySource.get(phase.src);
     return expectedDurationMs === undefined ? phase : { ...phase, expectedDurationMs };
   }) as Draft["project"]["scenario"]["phases"];

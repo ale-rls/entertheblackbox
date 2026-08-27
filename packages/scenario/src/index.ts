@@ -2,7 +2,7 @@
  * Scenario types, validation, and graph utilities (plan §5).
  */
 
-export const SCENARIO_SCHEMA_VERSION = 2;
+export const SCENARIO_SCHEMA_VERSION = 3;
 
 export {
   axisSchema,
@@ -27,6 +27,7 @@ export {
   twoQuadrantPluralityNextSchema,
   twoQuadrantSchema,
   videoPhaseSchema,
+  videoPositionQuestionPhaseSchema,
   normalizePositionQuestionInput,
   normalizeScenarioInput,
 } from "./schema.js";
@@ -54,6 +55,8 @@ export type {
   TwoQuadrantField,
   TwoQuadrantPluralityNext,
   VideoPhase,
+  VideoPositionQuestionPhase,
+  PositionVotePhase,
 } from "./schema.js";
 
 export { validateScenario } from "./validate.js";

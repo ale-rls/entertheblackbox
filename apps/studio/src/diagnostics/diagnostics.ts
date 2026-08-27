@@ -5,7 +5,7 @@ export type Diagnostic = { severity: "error" | "warning" | "info"; code: string;
 
 export function diagnostics(project: StudioProject): Diagnostic[] {
   const result: Diagnostic[] = validateStudioProject(project);
-  const videos = project.scenario.phases.filter((phase) => phase.kind === "video");
+  const videos = project.scenario.phases.filter((phase) => phase.kind === "video" || phase.kind === "video-position-question");
   const referenced = new Set(videos.map((phase) => phase.src));
   const hashes = new Map<string, string>();
   for (const file of project.manifest.files) {
@@ -18,7 +18,7 @@ export function diagnostics(project: StudioProject): Diagnostic[] {
   result.push({ severity: "info", code: "media-budget", message: `Distinct referenced media: ${total.toLocaleString()} / ${MEDIA_BUDGET_BYTES.toLocaleString()} bytes.` });
   if (total > MEDIA_BUDGET_BYTES) result.push({ severity: "error", code: "media-budget-exceeded", message: "Distinct referenced media exceeds the 2 GiB limit." });
   for (const phase of project.scenario.phases) {
-    if (phase.kind !== "position-question") continue;
+    if (phase.kind !== "position-question" && phase.kind !== "video-position-question") continue;
     if (phase.showLiveCounts) result.push({ severity: "warning", code: "live-counts-influence", phaseId: phase.id, message: "Live counts may influence voter behaviour.", acknowledgementRequired: true });
     if (phase.next.type !== "quadrant-plurality") continue;
     const outcomes: Array<[string, string]> = [...Object.entries(phase.next.map), ["tie", phase.next.tie], ["empty", phase.next.empty]];
