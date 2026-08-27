@@ -32,6 +32,7 @@ afterEach(async () => {
 async function renderVideo(
   send: (message: DisplayToServerMessage) => void,
   sessionId: string | null = "session-1",
+  soundEnabled = false,
 ) {
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
   document.body.innerHTML = '<div id="root"></div>';
@@ -43,6 +44,7 @@ async function renderVideo(
         phase={phase}
         phaseEpoch={7}
         src="blob:cached-intro"
+        soundEnabled={soundEnabled}
         send={send}
       />,
     );
@@ -89,5 +91,12 @@ describe("PhaseVideo", () => {
     video.dispatchEvent(new Event("ended"));
 
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("unmutes scenario video after the display sound control is enabled", async () => {
+    const video = await renderVideo(vi.fn(), "session-1", true);
+
+    expect(video.muted).toBe(false);
+    expect(video.playsInline).toBe(true);
   });
 });

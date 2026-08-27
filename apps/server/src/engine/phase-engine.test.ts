@@ -676,6 +676,36 @@ describe("PhaseEngine lifecycle", () => {
     expect(sessionEnds).toHaveLength(1);
   });
 
+  it("projects live cursor movement during the lobby without starting a movement recording", () => {
+    const now = 1_000;
+    const movementStarted: MovementRecordingStarted[] = [];
+    const { engine, registry } = setup({ now: () => now, movementStarted });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    const participant = registry.get("lease-p1");
+    if (participant === undefined) throw new Error("expected participant record");
+    engine.participantJoined(phone as unknown as WebSocket, participant);
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.lifecycleState).toBe("lobby");
+
+    engine.handleClientMessage({
+      t: "input",
+      v: 2,
+      sessionId: "lobby",
+      phaseEpoch: engine.currentPhaseEpoch,
+      seq: 0,
+      x: 0.25,
+      y: 0.75,
+    }, phone as unknown as WebSocket);
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+
+    expect(display.sent.filter((message) => message.t === "cursors").at(-1)).toMatchObject({
+      cursors: [{ clientId: "p1", color: participant.color, x: 0.25, y: 0.75 }],
+    });
+    expect(movementStarted).toEqual([]);
+  });
+
   it("resets the cursor sequence when a replacement socket rejoins before the old socket closes", () => {
     let now = 1_000;
     let snapshot: FinalVoteSnapshot | undefined;

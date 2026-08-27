@@ -513,17 +513,20 @@ export class PhaseEngine {
       case "input":
         if (
           this.participantSockets.has(socket) &&
-          this.lifecycle === "active" &&
+          (this.lifecycle === "lobby" || this.lifecycle === "active") &&
           this.matches(message.sessionId, this.phaseId, message.phaseEpoch)
         ) {
           const participantId = this.participantIds.get(socket);
           if (participantId !== undefined) {
             if (this.cursors.recordInput(participantId, message.seq, message.x, message.y)) {
-              this.movement.recordSample(participantId, message.x, message.y, this.now());
-              // Video movement updates only the projected cursor. Votes and
-              // question activity remain scoped to position-question phases.
-              if (this.currentPhase().kind === "position-question") {
-                this.recordInput(this.now(), participantId, message.x, message.y);
+              // Lobby movement is projected so visitors see their cursors in
+              // the waiting room, but recordings, votes, and question
+              // activity remain scoped to an active show session.
+              if (this.lifecycle === "active") {
+                this.movement.recordSample(participantId, message.x, message.y, this.now());
+                if (this.currentPhase().kind === "position-question") {
+                  this.recordInput(this.now(), participantId, message.x, message.y);
+                }
               }
             }
           }

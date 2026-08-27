@@ -38,7 +38,7 @@ ENV BUILD_VERSION=$SOURCE_COMMIT
 # time as __REALTIME_WS_URL__ (their vite.config.ts); unset, both fall
 # back to ws://localhost:9001, which only ever works on a developer's own
 # machine. Point this at the realtime-ws-coolify deployment's public
-# wss:// URL, e.g. wss://smartphonocracy-websockets.enabler.space:9002.
+# wss:// URL, e.g. wss://smartphonocracy-websockets.enabler.space.
 ARG REALTIME_WS_URL
 ENV REALTIME_WS_URL=$REALTIME_WS_URL
 

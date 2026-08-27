@@ -7,8 +7,8 @@ import type {
 
 /**
  * Phone state reducer. The phone intentionally renders almost nothing
- * (plan §10): it needs its identity marker, whether input is currently
- * accepted (position-question phases only), and join/connection status.
+ * (plan §10): it needs its identity marker, whether cursor input is currently
+ * accepted, and join/connection status.
  */
 
 export type JoinState =
@@ -22,7 +22,7 @@ export type PhoneState = {
   join: JoinState;
   sessionId: string | null;
   phaseEpoch: number;
-  /** Input is only accepted during position questions (plan §10). */
+  /** Cursor input is accepted in the lobby, videos, and position questions. */
   inputOpen: boolean;
   currentPhaseId: string | null;
   statusMessage: string | null;
@@ -84,7 +84,10 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         sessionId: m.sessionId,
         phaseEpoch: m.phaseEpoch,
         currentPhaseId: m.phase.id,
-        inputOpen: m.phase.kind === "video" || m.phase.kind === "position-question",
+        inputOpen:
+          m.phase.kind === "idle" ||
+          m.phase.kind === "video" ||
+          m.phase.kind === "position-question",
         ratingCandidateLabel: m.phase.kind === "video" ? m.phase.rating?.candidateLabel ?? null : null,
       };
     }

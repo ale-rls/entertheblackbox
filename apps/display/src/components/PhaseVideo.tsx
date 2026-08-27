@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import {
   PROTOCOL_VERSION,
   type DisplayToServerMessage,
@@ -12,6 +13,8 @@ export type PhaseVideoProps = {
   phase: VideoPhase;
   phaseEpoch: number;
   src: string;
+  soundEnabled: boolean;
+  onVideoElement?: (video: HTMLVideoElement | null) => void;
   send: (message: DisplayToServerMessage) => void;
 };
 
@@ -20,6 +23,8 @@ export function PhaseVideo({
   phase,
   phaseEpoch,
   src,
+  soundEnabled,
+  onVideoElement,
   send,
 }: PhaseVideoProps) {
   const diagnostics = useVideoPlaybackDiagnostics({
@@ -30,6 +35,10 @@ export function PhaseVideo({
     videoUrl: src,
     send,
   });
+  const setVideoRef = useCallback((video: HTMLVideoElement | null) => {
+    diagnostics.ref.current = video;
+    onVideoElement?.(video);
+  }, [diagnostics.ref, onVideoElement]);
 
   const handleEnded = () => {
     if (sessionId === null) return;
@@ -45,10 +54,11 @@ export function PhaseVideo({
 
   return (
     <video
-      ref={diagnostics.ref}
+      ref={setVideoRef}
       src={src}
       autoPlay
-      muted
+      muted={!soundEnabled}
+      playsInline
       onEnded={handleEnded}
       onPlaying={diagnostics.onPlaying}
       onStalled={diagnostics.onStalled}

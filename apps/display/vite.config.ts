@@ -8,7 +8,7 @@ export default defineConfig({
   // Baked into the bundle so display_join carries the real build version
   // (plan §7 reload-on-mismatch); falls back to "0.0.0-dev" in App.tsx.
   // REALTIME_WS_URL must be set at build time for any deployed build (e.g.
-  // "wss://smartphonocracy-websockets.enabler.space:9002"); falls back to
+  // "wss://smartphonocracy-websockets.enabler.space"); falls back to
   // the local apps/realtime-ws-coolify dev port in App.tsx.
   define: {
     __BUILD_VERSION__: JSON.stringify(process.env.BUILD_VERSION ?? "0.0.0-dev"),

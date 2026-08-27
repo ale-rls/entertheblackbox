@@ -160,7 +160,7 @@ const apply = (state: PhoneState, message: ServerToClientMessage) =>
   phoneReducer(state, { type: "server-message", message });
 
 const phase = (
-  kind: "video" | "position-question",
+  kind: "idle" | "video" | "position-question",
   epoch: number,
   sessionId = "s1",
 ): ServerToClientMessage => ({
@@ -170,7 +170,15 @@ const phase = (
   phaseEpoch: epoch,
   serverTime: 0,
   phase:
-    kind === "video"
+    kind === "idle"
+      ? {
+          kind: "idle",
+          id: "idle",
+          scenarioVersion: "dev",
+          startedAt: 0,
+          deadlineAt: 10_000,
+        }
+      : kind === "video"
       ? {
           kind: "video",
           id: "v",
@@ -198,12 +206,12 @@ const phase = (
 });
 
 describe("phoneReducer", () => {
-  it("opens cursor input during videos and position questions", () => {
-    let s = apply(initialPhoneState, phase("video", 1));
+  it("opens cursor input during the waiting room, videos, and position questions", () => {
+    let s = apply(initialPhoneState, phase("idle", 1, "lobby"));
     expect(s.inputOpen).toBe(true);
-    s = apply(s, phase("position-question", 2));
+    s = apply(s, phase("video", 2));
     expect(s.inputOpen).toBe(true);
-    s = apply(s, phase("video", 3));
+    s = apply(s, phase("position-question", 3));
     expect(s.inputOpen).toBe(true);
   });
 

@@ -18,11 +18,26 @@ const harness = vi.hoisted(() => {
       | { state: "idle" }
       | { state: "ready" },
     showVideo: vi.fn(),
+    realtimeStart: vi.fn(),
+    realtimeStop: vi.fn(),
+    realtimeOptions: null as null | {
+      onSnapshot: (cursors: ReadonlyArray<{ clientId: string; color: string; x: number; y: number }>) => void;
+      onUpdate: (cursor: { clientId: string; color: string; x: number; y: number }) => void;
+      onLeave: (clientId: string) => void;
+    },
+    cursorField: null as null | { size: number },
   };
 });
 
 vi.mock("./lib/connection.js", () => ({
   DisplayConnection: vi.fn(() => harness.connection),
+}));
+
+vi.mock("./cursors/realtimeWsClient.js", () => ({
+  RealtimeWsClient: vi.fn((options: NonNullable<typeof harness.realtimeOptions>) => {
+    harness.realtimeOptions = options;
+    return { start: harness.realtimeStart, stop: harness.realtimeStop };
+  }),
 }));
 
 vi.mock("./media/useMedia.js", () => ({
@@ -49,7 +64,12 @@ vi.mock("./components/IdleAttract.js", () => ({
 }));
 vi.mock("./components/LobbyCountdown.js", () => ({ LobbyCountdown: () => null }));
 vi.mock("./components/PhoneCount.js", () => ({ PhoneCount: () => null }));
-vi.mock("./cursors/CursorCanvas.js", () => ({ CursorCanvas: () => null }));
+vi.mock("./cursors/CursorCanvas.js", () => ({
+  CursorCanvas: ({ field }: { field: { size: number } }) => {
+    harness.cursorField = field;
+    return null;
+  },
+}));
 
 let root: Root | null = null;
 
@@ -66,6 +86,10 @@ afterEach(async () => {
   harness.connection.stop.mockClear();
   harness.connection.send.mockClear();
   harness.showVideo.mockClear();
+  harness.realtimeStart.mockClear();
+  harness.realtimeStop.mockClear();
+  harness.realtimeOptions = null;
+  harness.cursorField = null;
   harness.mediaStatus = { state: "idle" };
 });
 
@@ -100,5 +124,31 @@ describe("App media-readiness gate", () => {
     await act(async () => root?.unmount());
     root = null;
     expect(harness.connection.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("ingests realtime cursor positions while the waiting room is idle", async () => {
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+
+    expect(harness.cursorField?.size).toBe(0);
+    harness.realtimeOptions?.onSnapshot([
+      { clientId: "p1", color: "#ff00aa", x: 0.25, y: 0.75 },
+    ]);
+    expect(harness.cursorField?.size).toBe(1);
+  });
+
+  it("provides an explicit user-gesture sound toggle", async () => {
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+
+    const button = document.querySelector<HTMLButtonElement>(".sound-control")!;
+    expect(button.textContent).toBe("Enable sound");
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+
+    await act(async () => button.click());
+    expect(button.textContent).toBe("Mute sound");
+    expect(button.getAttribute("aria-pressed")).toBe("true");
   });
 });

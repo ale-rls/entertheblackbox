@@ -34,7 +34,7 @@ export function useVideoPlaybackDiagnostics({
   videoUrl,
   send,
 }: VideoPlaybackDiagnosticsOptions) {
-  const ref = useRef<HTMLVideoElement>(null);
+  const ref = useRef<HTMLVideoElement | null>(null);
 
   const report = useCallback((status: PlaybackStatus, detail?: string) => {
     if (sessionId === null || phaseId === null || mediaId === null) return;

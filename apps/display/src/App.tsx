@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { DisplayToServerMessage } from "@smartphonecracy/protocol";
 import { CursorField } from "./cursors/cursorField.js";
 import { CursorCanvas } from "./cursors/CursorCanvas.js";
@@ -48,7 +48,9 @@ const config = {
 
 export function App() {
   const [state, dispatch] = useReducer(displayReducer, initialDisplayState);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const stateRef = useRef(state);
+  const activeVideoRef = useRef<HTMLVideoElement | null>(null);
   stateRef.current = state;
 
   const cursorField = useMemo(() => new CursorField(), []);
@@ -61,8 +63,6 @@ export function App() {
           // Cursor batches bypass React state (20–30 Hz), everything
           // else flows through the reducer.
           if (message.t === "cursors") {
-            const phase = stateRef.current.phase;
-            if (phase === null || phase.kind === "idle" || phase.showCursors === false) return;
             cursorField.ingest(message, Date.now());
             return;
           }
@@ -89,16 +89,12 @@ export function App() {
         url: config.realtimeWsUrl,
         room: `${config.installationId}:${config.roomId}`,
         onSnapshot: (cursors) => {
-          const phase = stateRef.current.phase;
-          if (phase === null || phase.kind === "idle" || phase.showCursors === false) return;
           const at = Date.now();
           for (const cursor of cursors) {
             cursorField.upsertOne(cursor.clientId, cursor.color, cursor.x, cursor.y, at);
           }
         },
         onUpdate: (cursor) => {
-          const phase = stateRef.current.phase;
-          if (phase === null || phase.kind === "idle" || phase.showCursors === false) return;
           cursorField.upsertOne(cursor.clientId, cursor.color, cursor.x, cursor.y, Date.now());
         },
         onLeave: (clientId) => cursorField.removeOne(clientId),
@@ -173,6 +169,22 @@ export function App() {
     (message: DisplayToServerMessage) => connection.send(message),
     [connection],
   );
+  const setActiveVideo = useCallback((video: HTMLVideoElement | null) => {
+    activeVideoRef.current = video;
+  }, []);
+  const toggleSound = useCallback(() => {
+    const enable = !soundEnabled;
+    if (enable && activeVideoRef.current !== null) {
+      // Keep this play() call inside the click handler: browsers require an
+      // explicit user gesture before they allow audible media playback.
+      activeVideoRef.current.muted = false;
+      const play = activeVideoRef.current.play();
+      void play?.catch((error: unknown) => {
+        console.warn("display: failed to enable audible playback:", error);
+      });
+    }
+    setSoundEnabled(enable);
+  }, [soundEnabled]);
 
   // Keep the Blob URL set aligned with the active phase (plan §9);
   // preloading plausible next videos needs the id→src map from STEP-026.
@@ -198,6 +210,8 @@ export function App() {
             phase={phase}
             phaseEpoch={state.phaseEpoch}
             src={media.videoUrl}
+            soundEnabled={soundEnabled}
+            onVideoElement={setActiveVideo}
             send={sendDisplayMessage}
           />
         )}
@@ -205,6 +219,14 @@ export function App() {
 
       {/* Layer 2: UI */}
       <section className="layer layer-ui">
+        <button
+          type="button"
+          className="sound-control"
+          aria-pressed={soundEnabled}
+          onClick={toggleSound}
+        >
+          {soundEnabled ? "Mute sound" : "Enable sound"}
+        </button>
         {mediaReady && state.connection !== "open" && (
           <div className="reconnecting">reconnecting…</div>
         )}
