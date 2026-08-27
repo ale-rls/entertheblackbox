@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   fourQuadrantFieldSchema,
   phaseSchema,
+  polygonZonesFieldSchema,
   quadrantSchema,
   twoQuadrantFieldSchema,
   twoQuadrantSchema,
@@ -71,6 +72,8 @@ export const twoQuadrantCountsSchema = z.object({
 /** Compatibility name for the original four-quadrant counts schema. */
 export const quadrantCountsSchema = fourQuadrantCountsSchema;
 
+export const polygonZonesCountsSchema = z.record(z.string().min(1), z.number().int().nonnegative());
+
 // ---------------------------------------------------------------- phone → server
 
 export const joinSchema = z.object({
@@ -109,10 +112,24 @@ export const pingSchema = z.object({
   clientTime: timestamp,
 });
 
+/**
+ * Applause/boo tap during a rating-enabled video phase (plan §7 extension).
+ * Unlimited per participant -- each tap increments a live server-side
+ * counter, it never replaces a prior vote the way `input` positions do.
+ */
+export const reactionSchema = z.object({
+  t: z.literal("reaction"),
+  v,
+  sessionId: nonEmpty,
+  phaseEpoch: z.number().int().nonnegative(),
+  kind: z.enum(["applause", "boo"]),
+});
+
 export const phoneToServerSchema = z.discriminatedUnion("t", [
   joinSchema,
   inputSchema,
   pingSchema,
+  reactionSchema,
 ]);
 
 // -------------------------------------------------------------- display → server
@@ -173,6 +190,7 @@ export const clientToServerSchema = z.discriminatedUnion("t", [
   joinSchema,
   inputSchema,
   pingSchema,
+  reactionSchema,
   displayJoinSchema,
   videoEndedSchema,
   displayHeartbeatSchema,
@@ -249,9 +267,15 @@ export const twoQuadrantQuestionStatusSchema = questionStatusBaseSchema.extend({
   quadrantCounts: twoQuadrantCountsSchema.optional(),
 });
 
+export const polygonZonesQuestionStatusSchema = questionStatusBaseSchema.extend({
+  field: polygonZonesFieldSchema,
+  quadrantCounts: polygonZonesCountsSchema.optional(),
+});
+
 export const questionStatusSchema = z.union([
   fourQuadrantQuestionStatusSchema,
   twoQuadrantQuestionStatusSchema,
+  polygonZonesQuestionStatusSchema,
 ]);
 
 const questionResolvedBaseSchema = z.object({
@@ -278,10 +302,28 @@ export const twoQuadrantQuestionResolvedSchema = questionResolvedBaseSchema.exte
   winner: z.union([twoQuadrantSchema, nonQuadrantWinnerSchema]),
 });
 
+export const polygonZonesQuestionResolvedSchema = questionResolvedBaseSchema.extend({
+  field: polygonZonesFieldSchema,
+  quadrantCounts: polygonZonesCountsSchema,
+  winner: z.union([z.string().min(1), nonQuadrantWinnerSchema]),
+});
+
 export const questionResolvedSchema = z.union([
   fourQuadrantQuestionResolvedSchema,
   twoQuadrantQuestionResolvedSchema,
+  polygonZonesQuestionResolvedSchema,
 ]);
+
+/** Live applause/boo tally broadcast while a rating-enabled video plays. */
+export const ratingStatusSchema = z.object({
+  t: z.literal("rating_status"),
+  v,
+  sessionId: nonEmpty,
+  phaseEpoch: z.number().int().nonnegative(),
+  candidateLabel: nonEmpty,
+  applause: z.number().int().nonnegative(),
+  boo: z.number().int().nonnegative(),
+});
 
 export const qrGrantSchema = z.object({
   t: z.literal("qr_grant"),
@@ -346,6 +388,7 @@ export const serverToClientSchema = z.union([
   cursorsSchema,
   questionStatusSchema,
   questionResolvedSchema,
+  ratingStatusSchema,
   qrGrantSchema,
   qrHiddenSchema,
   displayNoticeSchema,
@@ -362,10 +405,12 @@ export type Cursor = z.infer<typeof cursorSchema>;
 export type QuadrantCounts = z.infer<typeof quadrantCountsSchema>;
 export type FourQuadrantCounts = z.infer<typeof fourQuadrantCountsSchema>;
 export type TwoQuadrantCounts = z.infer<typeof twoQuadrantCountsSchema>;
+export type PolygonZonesCounts = z.infer<typeof polygonZonesCountsSchema>;
 
 export type JoinMessage = z.infer<typeof joinSchema>;
 export type InputMessage = z.infer<typeof inputSchema>;
 export type PingMessage = z.infer<typeof pingSchema>;
+export type ReactionMessage = z.infer<typeof reactionSchema>;
 export type PhoneToServerMessage = z.infer<typeof phoneToServerSchema>;
 
 export type DisplayJoinMessage = z.infer<typeof displayJoinSchema>;
@@ -384,6 +429,7 @@ export type ReloadMessage = z.infer<typeof reloadSchema>;
 export type CursorsMessage = z.infer<typeof cursorsSchema>;
 export type QuestionStatusMessage = z.infer<typeof questionStatusSchema>;
 export type QuestionResolvedMessage = z.infer<typeof questionResolvedSchema>;
+export type RatingStatusMessage = z.infer<typeof ratingStatusSchema>;
 export type QrGrantMessage = z.infer<typeof qrGrantSchema>;
 export type QrHiddenMessage = z.infer<typeof qrHiddenSchema>;
 export type DisplayNoticeMessage = z.infer<typeof displayNoticeSchema>;

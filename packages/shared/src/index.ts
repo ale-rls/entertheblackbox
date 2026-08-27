@@ -52,15 +52,35 @@ export type TwoQuadrantField = {
   labels: Axis;
 };
 
-export type PositionField = FourQuadrantField | TwoQuadrantField;
+export type PolygonPoint = { x: number; y: number };
+
+export type PolygonZone = {
+  id: string;
+  label: string;
+  /** Normalized (0..1) polygon vertices, at least 3. */
+  points: PolygonPoint[];
+};
+
+export type PolygonZonesField = {
+  type: "polygon-zones";
+  zones: PolygonZone[];
+};
+
+export type PositionField = FourQuadrantField | TwoQuadrantField | PolygonZonesField;
 
 export type PositionQuadrant<Field extends PositionField = PositionField> =
-  Field extends FourQuadrantField ? FourQuadrant : TwoQuadrant;
+  Field extends FourQuadrantField
+    ? FourQuadrant
+    : Field extends TwoQuadrantField
+      ? TwoQuadrant
+      : string;
 
 export type PositionQuadrantCounts<Field extends PositionField = PositionField> =
   Field extends FourQuadrantField
     ? Record<FourQuadrant, number>
-    : Record<TwoQuadrant, number>;
+    : Field extends TwoQuadrantField
+      ? Record<TwoQuadrant, number>
+      : Record<string, number>;
 
 /**
  * Quadrant assignment for a normalized position (0..1, y grows downward).
@@ -75,23 +95,60 @@ export function quadrantOf(x: number, y: number): Quadrant {
 }
 
 /**
- * Assign a normalized position to one of the field's spatial quadrants.
+ * Point-in-polygon test (ray casting) for a normalized (0..1) point against
+ * a polygon's vertices. Points exactly on an edge may resolve either way;
+ * zones are expected to be drawn with a visible gap between them so this
+ * doesn't matter in practice.
+ */
+function pointInPolygon(points: readonly PolygonPoint[], x: number, y: number): boolean {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i]!;
+    const b = points[j]!;
+    const crosses = a.y > y !== b.y > y;
+    if (crosses && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Zone containing a normalized position, or null when the point falls
+ * outside every zone (zones need not tile the whole arena). The first
+ * matching zone wins if zones overlap.
+ */
+export function zoneOfPolygons(zones: readonly PolygonZone[], x: number, y: number): string | null {
+  for (const zone of zones) {
+    if (pointInPolygon(zone.points, x, y)) return zone.id;
+  }
+  return null;
+}
+
+/**
+ * Assign a normalized position to one of the field's spatial quadrants/zones.
  * The exact 0.5 boundary belongs to the max side: right for x, bottom for y.
+ * Polygon zones return null when the point isn't inside any defined zone.
  */
 export function quadrantOfField(field: FourQuadrantField, x: number, y: number): FourQuadrant;
 export function quadrantOfField(field: TwoQuadrantField, x: number, y: number): TwoQuadrant;
-export function quadrantOfField(field: PositionField, x: number, y: number): PositionQuadrant;
-export function quadrantOfField(field: PositionField, x: number, y: number): PositionQuadrant {
+export function quadrantOfField(field: PolygonZonesField, x: number, y: number): string | null;
+export function quadrantOfField(field: PositionField, x: number, y: number): PositionQuadrant | null;
+export function quadrantOfField(field: PositionField, x: number, y: number): PositionQuadrant | null {
   if (field.type === "four-quadrant") return quadrantOf(x, y);
-  const coordinate = field.axis === "x" ? x : y;
-  return coordinate >= 0.5 ? "max" : "min";
+  if (field.type === "two-quadrant") {
+    const coordinate = field.axis === "x" ? x : y;
+    return coordinate >= 0.5 ? "max" : "min";
+  }
+  return zoneOfPolygons(field.zones, x, y);
 }
 
 export function quadrantsOfField(field: FourQuadrantField): typeof FOUR_QUADRANTS;
 export function quadrantsOfField(field: TwoQuadrantField): typeof TWO_QUADRANTS;
-export function quadrantsOfField(field: PositionField): typeof FOUR_QUADRANTS | typeof TWO_QUADRANTS;
-export function quadrantsOfField(field: PositionField): typeof FOUR_QUADRANTS | typeof TWO_QUADRANTS {
-  return field.type === "four-quadrant" ? FOUR_QUADRANTS : TWO_QUADRANTS;
+export function quadrantsOfField(field: PolygonZonesField): string[];
+export function quadrantsOfField(field: PositionField): typeof FOUR_QUADRANTS | typeof TWO_QUADRANTS | string[];
+export function quadrantsOfField(field: PositionField): typeof FOUR_QUADRANTS | typeof TWO_QUADRANTS | string[] {
+  if (field.type === "four-quadrant") return FOUR_QUADRANTS;
+  if (field.type === "two-quadrant") return TWO_QUADRANTS;
+  return field.zones.map((zone) => zone.id);
 }
 
 export * from "./resolution.js";

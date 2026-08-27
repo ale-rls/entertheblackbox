@@ -2,7 +2,7 @@ import type {
   QuestionResolvedMessage,
   QuestionStatusMessage,
 } from "@smartphonecracy/protocol";
-import type { Axis, PositionField } from "@smartphonecracy/scenario";
+import type { Axis, PolygonZonesField, PositionField } from "@smartphonecracy/scenario";
 
 export type AxisLabels = Axis;
 export type QuestionField = PositionField;
@@ -37,11 +37,83 @@ function isTwoQuadrantCounts(
   return "min" in counts && "max" in counts;
 }
 
+/** Anything that isn't the fixed q1-q4/min-max shapes is a zone-id-keyed record. */
+function isPolygonZonesCounts(counts: PositionCounts): counts is Record<string, number> {
+  return !isFourQuadrantCounts(counts) && !isTwoQuadrantCounts(counts);
+}
+
 function sameField(left: QuestionField, right: QuestionField): boolean {
+  if (left.type !== right.type) return false;
+  if (left.type === "two-quadrant") return right.type === "two-quadrant" && left.axis === right.axis;
+  if (left.type === "polygon-zones") {
+    return (
+      right.type === "polygon-zones" &&
+      left.zones.length === right.zones.length &&
+      left.zones.every((zone, i) => zone.id === right.zones[i]?.id)
+    );
+  }
+  return true; // four-quadrant: no sub-shape to compare
+}
+
+function centroid(points: readonly { x: number; y: number }[]): { x: number; y: number } {
+  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  return { x: sum.x / points.length, y: sum.y / points.length };
+}
+
+/**
+ * Arbitrary-polygon zones (e.g. a 3-way statue vote). Shapes render in an
+ * SVG stretched to the arena's aspect ratio; labels/counts render as plain
+ * HTML positioned at each zone's centroid so text never gets skewed by a
+ * non-uniform SVG scale.
+ */
+function PolygonZoneOverlay({
+  field,
+  counts,
+  winner,
+}: {
+  field: PolygonZonesField;
+  counts: Record<string, number> | null;
+  winner: string | null;
+}) {
   return (
-    left.type === right.type &&
-    (left.type === "four-quadrant" ||
-      (right.type === "two-quadrant" && left.axis === right.axis))
+    <div className="quadrant-overlay quadrant-overlay-polygon-zones">
+      <svg className="zone-shapes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+        {field.zones.map((zone) => (
+          <polygon
+            key={zone.id}
+            className={[
+              "zone-shape",
+              winner === zone.id ? "zone-shape-winner" : "",
+              winner !== null && winner !== zone.id ? "zone-shape-dimmed" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            points={zone.points.map((p) => `${p.x * 100},${p.y * 100}`).join(" ")}
+          />
+        ))}
+      </svg>
+      {field.zones.map((zone) => {
+        const c = centroid(zone.points);
+        return (
+          <div
+            key={zone.id}
+            className={[
+              "zone-label",
+              winner === zone.id ? "zone-label-winner" : "",
+              winner !== null && winner !== zone.id ? "zone-label-dimmed" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%` }}
+          >
+            <span className="zone-name">{zone.label}</span>
+            {counts !== null && <span className="zone-count">{counts[zone.id] ?? 0}</span>}
+          </div>
+        );
+      })}
+      {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
+      {winner === "empty" && <div className="outcome outcome-empty" />}
+    </div>
   );
 }
 
@@ -109,6 +181,18 @@ export function QuadrantOverlay({
     !resolutionMatches || resolution.winner === "fixed"
       ? null
       : resolution.winner;
+
+  if (field.type === "polygon-zones") {
+    const counts =
+      countSource !== null && isPolygonZonesCounts(countSource) ? countSource : null;
+    return (
+      <PolygonZoneOverlay
+        field={field}
+        counts={counts}
+        winner={winner === "tie" || winner === "empty" ? winner : (winner as string | null)}
+      />
+    );
+  }
 
   if (field.type === "four-quadrant") {
     const counts =

@@ -58,7 +58,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     </>}
     {phase.kind === "position-question" && <>
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
-      <label className="sc-tool-label">{label("Quadrant layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : `two-quadrant-${phase.field.axis}`} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option></select></label>
+      {phase.field.type !== "polygon-zones" && <label className="sc-tool-label">{label("Quadrant layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : `two-quadrant-${phase.field.axis}`} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option></select></label>}
       {phase.field.type === "four-quadrant" ? (() => {
         const field = phase.field;
         return <>
@@ -67,12 +67,17 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
           {text("Y axis minimum", "field.yAxis.minLabel", field.yAxis.minLabel, (minLabel) => onChange({ ...phase, field: { ...field, yAxis: { ...field.yAxis, minLabel } } } as Phase))}
           {text("Y axis maximum", "field.yAxis.maxLabel", field.yAxis.maxLabel, (maxLabel) => onChange({ ...phase, field: { ...field, yAxis: { ...field.yAxis, maxLabel } } } as Phase))}
         </>;
-      })() : (() => {
+      })() : phase.field.type === "two-quadrant" ? (() => {
         const field = phase.field;
         return <>
           {text(`${field.axis === "x" ? "Left" : "Top"} quadrant`, "field.labels.minLabel", field.labels.minLabel, (minLabel) => onChange({ ...phase, field: { ...field, labels: { ...field.labels, minLabel } } } as Phase))}
           {text(`${field.axis === "x" ? "Right" : "Bottom"} quadrant`, "field.labels.maxLabel", field.labels.maxLabel, (maxLabel) => onChange({ ...phase, field: { ...field, labels: { ...field.labels, maxLabel } } } as Phase))}
         </>;
+      })() : (() => {
+        const field = phase.field;
+        return <p className="sc-tool-copy field-hint">
+          Polygon zones ({field.zones.map((zone) => zone.label).join(", ")}) aren't editable here yet — edit the scenario JSON directly.
+        </p>;
       })()}
       {number("Question duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs }))}
       {number("Outcome freeze (ms)", "freezeMs", phase.freezeMs, (freezeMs) => onChange({ ...phase, freezeMs }))}

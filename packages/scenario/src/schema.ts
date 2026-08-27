@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@smartphonecracy/shared";
 
+const unitCoordinateSchema = z.number().min(0).max(1);
+
 /**
  * Zod schemas for the scenario model (plan §5).
  * Structural validity lives here; graph-level checks live in validate.ts.
@@ -42,9 +44,31 @@ export const twoQuadrantFieldSchema = z.object({
   labels: axisSchema,
 });
 
+export const polygonPointSchema = z.object({
+  x: unitCoordinateSchema,
+  y: unitCoordinateSchema,
+});
+
+export const polygonZoneSchema = z.object({
+  id: phaseIdSchema,
+  label: z.string().min(1, "zone label must be non-empty"),
+  points: z.array(polygonPointSchema).min(3, "a zone polygon needs at least 3 points"),
+});
+
+export const polygonZonesFieldSchema = z.object({
+  type: z.literal("polygon-zones"),
+  zones: z
+    .array(polygonZoneSchema)
+    .min(2, "polygon-zones needs at least 2 zones")
+    .refine((zones) => new Set(zones.map((zone) => zone.id)).size === zones.length, {
+      message: "zone ids must be unique",
+    }),
+});
+
 export const positionFieldSchema = z.discriminatedUnion("type", [
   fourQuadrantFieldSchema,
   twoQuadrantFieldSchema,
+  polygonZonesFieldSchema,
 ]);
 
 const fixedPositionQuestionNextSchema = z.object({
@@ -87,15 +111,40 @@ export const twoQuadrantPluralityNextSchema = z.object({
     }),
 });
 
+export const polygonZonesPluralityNextSchema = z.object({
+  type: z.literal("quadrant-plurality"),
+  // Keyed by zone id; cross-checked against field.zones in the phase-level refine below.
+  map: z.record(z.string().min(1), phaseIdSchema),
+  tie: phaseIdSchema,
+  empty: phaseIdSchema,
+  countedStatuses: z
+    .array(countablePositionVoteStatusSchema)
+    .nonempty("countedStatuses must include at least one status")
+    .refine((s) => new Set(s).size === s.length, {
+      message: "countedStatuses must not contain duplicates",
+    }),
+});
+
 export const positionQuestionNextSchema = z.union([
   fixedPositionQuestionNextSchema,
   fourQuadrantPluralityNextSchema,
   twoQuadrantPluralityNextSchema,
+  polygonZonesPluralityNextSchema,
 ]);
 
 export const idlePhaseSchema = z.object({
   kind: z.literal("idle"),
   id: z.literal("idle"),
+});
+
+/**
+ * Enables live 👏/👎 tallying from phones while a video plays. Purely a
+ * displayed signal — it never affects `next`, which stays fixed like any
+ * other video phase.
+ */
+export const ratingConfigSchema = z.object({
+  /** Shown on the live meter, e.g. the candidate's name. */
+  candidateLabel: z.string().min(1, "candidateLabel must be non-empty"),
 });
 
 export const videoPhaseSchema = z.object({
@@ -107,6 +156,7 @@ export const videoPhaseSchema = z.object({
   allowSkip: z.boolean().optional(),
   /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
   showCursors: z.boolean().optional(),
+  rating: ratingConfigSchema.optional(),
 });
 
 const positionQuestionBaseSchema = z.object({
@@ -121,6 +171,25 @@ const positionQuestionBaseSchema = z.object({
   showCursors: z.boolean().optional(),
 });
 
+const polygonZonesQuestionVariantSchema = positionQuestionBaseSchema
+  .extend({
+    field: polygonZonesFieldSchema,
+    next: z.union([fixedPositionQuestionNextSchema, polygonZonesPluralityNextSchema]),
+  })
+  .superRefine((phase, ctx) => {
+    if (phase.next.type !== "quadrant-plurality") return;
+    const zoneIds = new Set(phase.field.zones.map((zone) => zone.id));
+    const mapKeys = Object.keys(phase.next.map);
+    const mismatch = mapKeys.length !== zoneIds.size || mapKeys.some((id) => !zoneIds.has(id));
+    if (mismatch) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "next.map keys must exactly match field.zones ids",
+        path: ["next", "map"],
+      });
+    }
+  });
+
 const canonicalPositionQuestionPhaseSchema = z.union([
   positionQuestionBaseSchema.extend({
     field: fourQuadrantFieldSchema,
@@ -130,6 +199,7 @@ const canonicalPositionQuestionPhaseSchema = z.union([
     field: twoQuadrantFieldSchema,
     next: z.union([fixedPositionQuestionNextSchema, twoQuadrantPluralityNextSchema]),
   }),
+  polygonZonesQuestionVariantSchema,
 ]);
 
 type UnknownRecord = Record<string, unknown>;
@@ -215,6 +285,11 @@ export type CountablePositionVoteStatus = z.infer<
 export type PositionQuestionNext = z.infer<typeof positionQuestionNextSchema>;
 export type FourQuadrantPluralityNext = z.infer<typeof fourQuadrantPluralityNextSchema>;
 export type TwoQuadrantPluralityNext = z.infer<typeof twoQuadrantPluralityNextSchema>;
+export type PolygonPoint = z.infer<typeof polygonPointSchema>;
+export type PolygonZone = z.infer<typeof polygonZoneSchema>;
+export type PolygonZonesField = z.infer<typeof polygonZonesFieldSchema>;
+export type PolygonZonesPluralityNext = z.infer<typeof polygonZonesPluralityNextSchema>;
+export type RatingConfig = z.infer<typeof ratingConfigSchema>;
 export type IdlePhase = z.infer<typeof idlePhaseSchema>;
 export type VideoPhase = z.infer<typeof videoPhaseSchema>;
 export type PositionQuestionPhase = z.infer<typeof positionQuestionPhaseSchema>;

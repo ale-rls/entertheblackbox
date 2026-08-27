@@ -23,6 +23,7 @@ import {
   type MovementRecordingStarted,
 } from "../movement/index.js";
 import {
+  RatingEngine,
   VoteEngine,
   type FinalVoteSnapshot,
   type VoteParticipantSeed,
@@ -126,6 +127,7 @@ export class PhaseEngine {
   private readonly onPhaseDeadline: ((event: PhaseDeadlineEvent) => void) | undefined;
   private readonly onSessionEnded: ((event: { reason: string; endedAt: number }) => void) | undefined;
   private readonly votes: VoteEngine;
+  private readonly ratings = new RatingEngine();
   private readonly cursors: CursorPipeline;
   private readonly movement: MovementRecorder;
   private readonly ghosts: GhostCursorPlayer;
@@ -153,6 +155,8 @@ export class PhaseEngine {
   private questionResolutionTarget: string | null = null;
   private questionStatusDirty = false;
   private lastQuestionStatusAt: number | null = null;
+  private ratingStatusDirty = false;
+  private lastRatingStatusAt: number | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(options: PhaseEngineOptions) {
@@ -370,6 +374,7 @@ export class PhaseEngine {
     const phase = this.currentPhase();
 
     if (phase.kind === "video") {
+      if (phase.rating) this.broadcastRatingStatus(now);
       const fallback = this.video.consumeFallback(now);
       if (fallback !== null && this.matches(fallback.sessionId, fallback.phaseId, fallback.phaseEpoch)) {
         this.onPhaseDeadline?.({
@@ -492,6 +497,17 @@ export class PhaseEngine {
       case "video_ended":
         if (socket === this.displaySocket) {
           this.completeVideo(message.sessionId, message.phaseId, message.phaseEpoch);
+        }
+        return;
+      case "reaction":
+        if (
+          this.participantSockets.has(socket) &&
+          this.lifecycle === "active" &&
+          this.matches(message.sessionId, this.phaseId, message.phaseEpoch)
+        ) {
+          if (this.ratings.recordReaction(message.sessionId, message.phaseEpoch, message.kind)) {
+            this.queueRatingStatus();
+          }
         }
         return;
       case "input":
@@ -663,6 +679,9 @@ export class PhaseEngine {
     this.votes.clearQuestion();
     this.questionStatusDirty = false;
     this.lastQuestionStatusAt = null;
+    this.ratings.clear();
+    this.ratingStatusDirty = false;
+    this.lastRatingStatusAt = null;
     this.questionFreezeUntil = null;
     this.questionResolutionTarget = null;
     this.displayPlaybackIssue = null;
@@ -687,6 +706,16 @@ export class PhaseEngine {
     }
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, sessionEnded ? { reason, endedAt: now } : undefined);
+    if (phase.kind === "video" && phase.rating) {
+      this.ratings.begin({
+        sessionId: this.sessionId,
+        phaseId: target,
+        phaseEpoch: this.phaseEpoch,
+        candidateLabel: phase.rating.candidateLabel,
+      });
+      this.ratingStatusDirty = true;
+      this.broadcastRatingStatus(now, true);
+    }
     if (phase.kind === "position-question") {
       const participants: VoteParticipantSeed[] = this.registry.values().map((participant) => ({
         participantId: participant.clientId,
@@ -824,6 +853,35 @@ export class PhaseEngine {
     } as Extract<ServerToClientMessage, { t: "question_status" }>);
     this.questionStatusDirty = false;
     this.lastQuestionStatusAt = now;
+  }
+
+  private queueRatingStatus(now = this.now()): void {
+    this.ratingStatusDirty = true;
+    this.broadcastRatingStatus(now);
+  }
+
+  private broadcastRatingStatus(now = this.now(), force = false): void {
+    const phase = this.currentPhase();
+    if (phase.kind !== "video" || !phase.rating) return;
+    if (!force && !this.ratingStatusDirty) return;
+    if (
+      !force &&
+      this.lastRatingStatusAt !== null &&
+      now - this.lastRatingStatusAt < QUESTION_STATUS_INTERVAL_MS
+    ) return;
+    const status = this.ratings.liveStatus();
+    if (!status) return;
+    this.sendToDisplay({
+      t: "rating_status",
+      v: PROTOCOL_VERSION,
+      sessionId: this.sessionId,
+      phaseEpoch: this.phaseEpoch,
+      candidateLabel: status.candidateLabel,
+      applause: status.applause,
+      boo: status.boo,
+    });
+    this.ratingStatusDirty = false;
+    this.lastRatingStatusAt = now;
   }
 
   private requirePhase(id: string): Phase {

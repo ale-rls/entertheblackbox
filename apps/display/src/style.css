@@ -38,6 +38,32 @@ html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflo
 .quadrant-dimmed { opacity: .28; }
 .quadrant-count { font-size: clamp(2rem, 7vw, 6rem); font-variant-numeric: tabular-nums; }
 
+.quadrant-overlay-polygon-zones { inset: 0; }
+.zone-shapes { position: absolute; inset: 0; width: 100%; height: 100%; }
+.zone-shape { fill: rgb(255 255 255 / 6%); stroke: rgb(255 255 255 / 45%); stroke-width: 0.4; transition: opacity 180ms ease, fill 180ms ease; }
+.zone-shape-winner { fill: rgb(255 255 255 / 22%); }
+.zone-shape-dimmed { opacity: .28; }
+.zone-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  transition: opacity 180ms ease;
+}
+.zone-label-dimmed { opacity: .35; }
+.zone-name { font-size: clamp(1.2rem, 3vw, 2.2rem); }
+.zone-count { font-size: clamp(2rem, 7vw, 6rem); font-variant-numeric: tabular-nums; }
+.zone-label-winner .zone-name, .zone-label-winner .zone-count { font-weight: 700; }
+
+.rating-meter { position: absolute; left: 50%; bottom: 2rem; z-index: 6; display: flex; align-items: center; gap: 1.5rem; transform: translateX(-50%); }
+.rating-meter-candidate { font-size: clamp(1.2rem, 3vw, 2rem); }
+.rating-meter-tally { display: flex; align-items: center; gap: 0.75rem; font-size: clamp(1.5rem, 4vw, 3rem); font-variant-numeric: tabular-nums; }
+.rating-meter-applause { color: #56d364; }
+.rating-meter-boo { color: #f85149; }
+
 .axis-cross, .axis-divider { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .axis-cross::before, .axis-cross::after, .axis-divider::before {
   content: "";

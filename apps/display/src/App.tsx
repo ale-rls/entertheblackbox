@@ -16,6 +16,7 @@ import { IdleAttract } from "./components/IdleAttract.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhoneCount } from "./components/PhoneCount.js";
 import { PhaseVideo } from "./components/PhaseVideo.js";
+import { RatingMeter } from "./components/RatingMeter.js";
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -236,6 +237,7 @@ export function App() {
             )}
           </div>
         )}
+        {phase?.kind === "video" && phase.rating && <RatingMeter status={state.ratingStatus} />}
         {state.notice && (
           <div
             className={[

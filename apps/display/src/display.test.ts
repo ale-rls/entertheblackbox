@@ -120,6 +120,26 @@ describe("displayReducer", () => {
     expect(s.reloadRequired?.reason).toBe("assets");
   });
 
+  it("adopts a rating_status for the current session/epoch and drops stale ones", () => {
+    let s = apply(initialDisplayState, snapshot({ sessionId: "s1", phaseEpoch: 4 }));
+    s = apply(s, {
+      t: "rating_status", v: PROTOCOL_VERSION, sessionId: "s1", phaseEpoch: 4,
+      candidateLabel: "OpenApollo", applause: 3, boo: 1,
+    });
+    expect(s.ratingStatus).toMatchObject({ candidateLabel: "OpenApollo", applause: 3, boo: 1 });
+
+    // Stale epoch is ignored.
+    s = apply(s, {
+      t: "rating_status", v: PROTOCOL_VERSION, sessionId: "s1", phaseEpoch: 3,
+      candidateLabel: "Dionysos69", applause: 9, boo: 0,
+    });
+    expect(s.ratingStatus?.candidateLabel).toBe("OpenApollo");
+
+    // A new phase clears the previous rating tally.
+    s = apply(s, snapshot({ sessionId: "s1", phaseEpoch: 5, id: "next" }));
+    expect(s.ratingStatus).toBeNull();
+  });
+
   it("drops the QR grant while reconnecting (server resends after join)", () => {
     let s = apply(initialDisplayState, {
       t: "qr_grant",

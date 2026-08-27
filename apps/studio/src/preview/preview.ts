@@ -44,21 +44,37 @@ export function advanceTimer(session: PreviewSession, milliseconds: number): Pre
   return { ...session, elapsedMs: session.elapsedMs + milliseconds };
 }
 const fourPoint = { q1: [0.75, 0.25], q2: [0.25, 0.25], q3: [0.25, 0.75], q4: [0.75, 0.75] } as const;
+const zoneCentroid = (points: readonly { x: number; y: number }[]): readonly [number, number] => {
+  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  return [sum.x / points.length, sum.y / points.length];
+};
 const pointFor = (field: PositionField, quadrant: PositionQuadrant): readonly [number, number] => {
   if (field.type === "four-quadrant") return fourPoint[quadrant as keyof typeof fourPoint];
+  if (field.type === "polygon-zones") {
+    const zone = field.zones.find((z) => z.id === quadrant);
+    if (!zone) throw new Error(`Unknown zone "${String(quadrant)}".`);
+    return zoneCentroid(zone.points);
+  }
   if (field.axis === "x") return quadrant === "min" ? [0.25, 0.5] : [0.75, 0.5];
   return quadrant === "min" ? [0.5, 0.25] : [0.5, 0.75];
 };
 export function forcedOutcomes(field: PositionField): ForcedOutcome[] {
-  return field.type === "two-quadrant"
-    ? ["min", "max", "tie", "empty", "abandoned-solo"]
-    : ["q1", "q2", "q3", "q4", "tie", "empty", "abandoned-solo"];
+  if (field.type === "two-quadrant") return ["min", "max", "tie", "empty", "abandoned-solo"];
+  if (field.type === "polygon-zones") {
+    return [...field.zones.map((zone) => zone.id), "tie", "empty", "abandoned-solo"] as ForcedOutcome[];
+  }
+  return ["q1", "q2", "q3", "q4", "tie", "empty", "abandoned-solo"];
 }
 export function outcomeVotes(field: PositionField, outcome: ForcedOutcome, includeStale: boolean, includeDisconnected: boolean): PreviewVote[] {
   if (outcome === "empty") return [{ participantId: "never-moved", x: null, y: null, status: "never-moved" }];
-  const pair: PositionQuadrant[] = field.type === "two-quadrant" ? ["min", "max"] : ["q1", "q2"];
+  const pair: PositionQuadrant[] = field.type === "two-quadrant"
+    ? ["min", "max"]
+    : field.type === "polygon-zones"
+      ? [field.zones[0]!.id, field.zones[1]!.id]
+      : ["q1", "q2"];
   if (outcome === "abandoned-solo") {
-    const [x, y] = pointFor(field, field.type === "two-quadrant" ? "max" : "q4");
+    const soloQuadrant = field.type === "two-quadrant" ? "max" : field.type === "polygon-zones" ? field.zones[0]!.id : "q4";
+    const [x, y] = pointFor(field, soloQuadrant);
     return [{ participantId: "solo", x, y, status: "disconnected" }];
   }
   const winners: PositionQuadrant[] = outcome === "tie" ? pair : [outcome];

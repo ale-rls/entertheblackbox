@@ -3,6 +3,7 @@ import type {
   QrGrantMessage,
   QuestionResolvedMessage,
   QuestionStatusMessage,
+  RatingStatusMessage,
   ReloadMessage,
   ServerToClientMessage,
 } from "@smartphonecracy/protocol";
@@ -31,6 +32,8 @@ export type DisplayState = {
   liveField: QuestionStatusMessage["field"] | null;
   /** Set by question_resolved; cleared when the next phase arrives. */
   resolution: QuestionResolvedMessage | null;
+  /** Live applause/boo tally for the current rating-enabled video phase, if any. */
+  ratingStatus: RatingStatusMessage | null;
 };
 
 export const initialDisplayState: DisplayState = {
@@ -46,6 +49,7 @@ export const initialDisplayState: DisplayState = {
   liveCounts: null,
   liveField: null,
   resolution: null,
+  ratingStatus: null,
 };
 
 export type DisplayAction =
@@ -83,6 +87,7 @@ export function displayReducer(
         liveCounts: null,
         liveField: null,
         resolution: null,
+        ratingStatus: null,
       };
     }
     case "presence":
@@ -101,6 +106,11 @@ export function displayReducer(
         return state;
       }
       return { ...state, resolution: m };
+    case "rating_status":
+      if (m.sessionId !== state.sessionId || m.phaseEpoch !== state.phaseEpoch) {
+        return state; // stale rating frame
+      }
+      return { ...state, ratingStatus: m };
     case "qr_grant":
       return { ...state, qrGrant: m, qrHidden: false };
     case "qr_hidden":

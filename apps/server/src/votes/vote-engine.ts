@@ -11,6 +11,7 @@ import {
   resolvePositionFixedTransition,
   type FourQuadrant,
   type FourQuadrantField,
+  type PolygonZonesField,
   type PositionField,
   type PositionQuadrantCounts,
   type TwoQuadrant,
@@ -59,11 +60,22 @@ type TwoQuadrantResolution = {
   resolvedTarget: string;
 };
 
-export type VoteResolution = (FourQuadrantResolution | TwoQuadrantResolution) & {
+type PolygonZonesResolution = {
+  field: PolygonZonesField;
+  quadrantCounts: PositionQuadrantCounts<PolygonZonesField>;
+  winner: string | "tie" | "empty" | "fixed";
+  resolvedTarget: string;
+};
+
+export type VoteResolution = (FourQuadrantResolution | TwoQuadrantResolution | PolygonZonesResolution) & {
   snapshot: FinalVoteSnapshot;
 };
 
-export type LiveQuestionStatus = (Pick<FourQuadrantResolution, "field" | "quadrantCounts"> | Pick<TwoQuadrantResolution, "field" | "quadrantCounts">) & {
+export type LiveQuestionStatus = (
+  | Pick<FourQuadrantResolution, "field" | "quadrantCounts">
+  | Pick<TwoQuadrantResolution, "field" | "quadrantCounts">
+  | Pick<PolygonZonesResolution, "field" | "quadrantCounts">
+) & {
   connectedCount: number;
   positionedCount: number;
 };
@@ -99,28 +111,17 @@ export function resolveSnapshot(
   snapshot: FinalVoteSnapshot,
 ): Omit<VoteResolution, "snapshot"> {
   if (question.next.type === "fixed") {
-    return question.field.type === "four-quadrant"
-      ? resolvePositionFixedTransition(question.field, snapshot.votes, question.next.target)
-      : resolvePositionFixedTransition(question.field, snapshot.votes, question.next.target);
+    return resolvePositionFixedTransition(question.field, snapshot.votes, question.next.target);
   }
 
   const counted = new Set<CountablePositionVoteStatus>(question.next.countedStatuses);
-  if (question.field.type === "four-quadrant") {
-    const outcome = resolvePositionPlurality(question.field, snapshot.votes, counted);
-    const resolvedTarget = outcome.winner === "empty"
-      ? question.next.empty
-      : outcome.winner === "tie"
-        ? question.next.tie
-        : (question.next.map as Record<FourQuadrant, string>)[outcome.winner];
-    return { ...outcome, resolvedTarget };
-  }
   const outcome = resolvePositionPlurality(question.field, snapshot.votes, counted);
   const resolvedTarget = outcome.winner === "empty"
     ? question.next.empty
     : outcome.winner === "tie"
       ? question.next.tie
-      : (question.next.map as Record<TwoQuadrant, string>)[outcome.winner];
-  return { ...outcome, resolvedTarget };
+      : (question.next.map as Record<FourQuadrant | TwoQuadrant | string, string>)[outcome.winner];
+  return { ...outcome, resolvedTarget } as Omit<VoteResolution, "snapshot">;
 }
 
 export class VoteEngine {

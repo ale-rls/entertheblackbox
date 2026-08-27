@@ -142,6 +142,14 @@ const targetAudienceScenario = (targetAudienceSize: number) => scenarioSchema.pa
   targetAudienceSize,
 });
 
+const ratingScenario = scenarioSchema.parse({
+  ...scenario,
+  version: "engine-test-rating",
+  phases: scenario.phases.map((phase) => phase.id === "intro"
+    ? { ...phase, rating: { candidateLabel: "OpenApollo" } }
+    : phase),
+});
+
 const twoQuadrantScenario = scenarioSchema.parse({
   ...scenario,
   version: "engine-test-two-quadrant",
@@ -1103,5 +1111,67 @@ describe("PhaseEngine lifecycle", () => {
     now = 1_350;
     engine.tick(now);
     expect(display.sent.filter((message) => message.t === "question_status")).toHaveLength(initialCount + 1);
+  });
+
+  it("tallies applause/boo reactions during a rating-enabled video and broadcasts a live rating_status", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now, testScenario: ratingScenario });
+    const phoneA = new MockSocket();
+    const phoneB = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phoneA as unknown as WebSocket, now, "p1");
+    addParticipant(registry, phoneB as unknown as WebSocket, now, "p2");
+    engine.participantJoined(phoneA as unknown as WebSocket, registry.get("lease-p1"));
+    engine.participantJoined(phoneB as unknown as WebSocket, registry.get("lease-p2"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    now = 1_100;
+    engine.tick(now); // lobby countdown elapses, entering the rating-enabled "intro" video
+    const introEpoch = engine.currentPhaseEpoch;
+
+    // Rating begins the moment the video phase is entered.
+    expect(display.sent.find((message) => message.t === "rating_status")).toMatchObject({
+      candidateLabel: "OpenApollo", applause: 0, boo: 0,
+    });
+
+    for (const kind of ["applause", "applause", "boo"] as const) {
+      engine.handleClientMessage({
+        t: "reaction", v: 2, sessionId: "session-1", phaseEpoch: introEpoch, kind,
+      }, phoneA as unknown as WebSocket);
+    }
+    // Unlimited taps: a second participant can tap repeatedly too, and votes accumulate.
+    engine.handleClientMessage({
+      t: "reaction", v: 2, sessionId: "session-1", phaseEpoch: introEpoch, kind: "applause",
+    }, phoneB as unknown as WebSocket);
+
+    now = 1_400; // past the broadcast throttle window so the dirty tally flushes
+    engine.tick(now);
+    expect(display.sent.filter((message) => message.t === "rating_status").at(-1)).toMatchObject({
+      t: "rating_status", candidateLabel: "OpenApollo", applause: 3, boo: 1,
+    });
+  });
+
+  it("ignores stale-epoch reactions and clears the tally once the video phase ends", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now, testScenario: ratingScenario });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    now = 1_100;
+    engine.tick(now); // lobby countdown elapses, entering the rating-enabled "intro" video
+    const staleEpoch = engine.currentPhaseEpoch - 1;
+
+    engine.handleClientMessage({
+      t: "reaction", v: 2, sessionId: "session-1", phaseEpoch: staleEpoch, kind: "applause",
+    }, phone as unknown as WebSocket);
+    expect(display.sent.filter((message) => message.t === "rating_status")).toHaveLength(1); // only the initial 0/0
+
+    now = 1_100;
+    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+    display.sent.length = 0;
+    now = 1_150;
+    engine.tick(now);
+    expect(display.sent.some((message) => message.t === "rating_status")).toBe(false);
   });
 });

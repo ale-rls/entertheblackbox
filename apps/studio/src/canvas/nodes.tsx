@@ -35,6 +35,14 @@ export function nodeDataForPhase(phase: Phase): NodeData {
     ];
     return data;
   }
+  if (phase.field.type === "polygon-zones") {
+    data.outcomes = [
+      ...phase.field.zones.map((zone) => ({ id: zone.id, label: `${zone.id} · ${zone.label}`, tone: "quad" as const })),
+      { id: "tie", label: "tie", tone: "special" as const },
+      { id: "empty", label: "no votes", tone: "special" as const },
+    ];
+    return data;
+  }
   const [minPosition, maxPosition] = phase.field.axis === "x"
     ? (["left", "right"] as const)
     : (["top", "bottom"] as const);

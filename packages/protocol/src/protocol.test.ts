@@ -18,6 +18,8 @@ const clientMessages: ClientToServerMessage[] = [
     joinGrant: "grant-token",
   },
   { t: "input", v: 2, sessionId: "s1", phaseEpoch: 3, seq: 12, x: 0.25, y: 0.75 },
+  { t: "reaction", v: 2, sessionId: "s1", phaseEpoch: 3, kind: "applause" },
+  { t: "reaction", v: 2, sessionId: "s1", phaseEpoch: 3, kind: "boo" },
   { t: "ping", v: 2, clientTime: 1_752_000_000_000 },
   {
     t: "display_join",
@@ -52,6 +54,15 @@ const twoField = {
   type: "two-quadrant" as const,
   axis: "x" as const,
   labels: { minLabel: "disagree", maxLabel: "agree" },
+};
+
+const zonesField = {
+  type: "polygon-zones" as const,
+  zones: [
+    { id: "apollon", label: "Apollon", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }] },
+    { id: "dionysos", label: "Dionysos", points: [{ x: 0.35, y: 0 }, { x: 0.65, y: 0 }, { x: 0.65, y: 1 }] },
+    { id: "kassandra", label: "Kassandra", points: [{ x: 0.7, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }] },
+  ],
 };
 
 const phaseSnapshot = {
@@ -118,6 +129,28 @@ const serverMessages: ServerToClientMessage[] = [
     resolvedTarget: "video-2",
     freezeUntil: 1_752_000_063_000,
   },
+  {
+    t: "question_status",
+    v: 2,
+    sessionId: "s1",
+    phaseEpoch: 4,
+    connectedCount: 5,
+    positionedCount: 4,
+    field: zonesField,
+    quadrantCounts: { apollon: 1, dionysos: 2, kassandra: 0 },
+  },
+  {
+    t: "question_resolved",
+    v: 2,
+    sessionId: "s1",
+    phaseEpoch: 4,
+    field: zonesField,
+    quadrantCounts: { apollon: 1, dionysos: 2, kassandra: 0 },
+    winner: "dionysos",
+    resolvedTarget: "video-triumph-dionysos",
+    freezeUntil: 1_752_000_063_000,
+  },
+  { t: "rating_status", v: 2, sessionId: "s1", phaseEpoch: 5, candidateLabel: "OpenApollo", applause: 12, boo: 3 },
   { t: "qr_grant", v: 2, url: "https://x.example/j?g=abc", expiresAt: 9, placement: "corner" },
   { t: "qr_hidden", v: 2 },
   { t: "display_notice", v: 2, code: "display_replaced", level: "warning", message: "replaced" },

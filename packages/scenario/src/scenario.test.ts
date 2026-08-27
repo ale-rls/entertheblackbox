@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   mediaManifestSchema,
+  polygonZonesFieldSchema,
   scenarioSchema,
   validateMediaManifest,
   validateScenario,
@@ -178,6 +179,106 @@ describe("scenarioSchema structural rejection", () => {
   });
 });
 
+describe("polygon-zones and rating extensions", () => {
+  const threeZoneField = {
+    type: "polygon-zones" as const,
+    zones: [
+      { id: "apollon", label: "Apollon", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }, { x: 0, y: 1 }] },
+      { id: "dionysos", label: "Dionysos", points: [{ x: 0.35, y: 0 }, { x: 0.65, y: 0 }, { x: 0.65, y: 1 }, { x: 0.35, y: 1 }] },
+      { id: "kassandra", label: "Kassandra", points: [{ x: 0.7, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0.7, y: 1 }] },
+    ],
+  };
+
+  it("accepts a polygon-zones question with a matching map", () => {
+    const result = parse((s) => ({
+      ...s,
+      phases: [
+        ...s.phases,
+        {
+          kind: "position-question" as const,
+          id: "election",
+          text: "Choose your statue",
+          field: threeZoneField,
+          durationMs: 60_000,
+          freezeMs: 3_000,
+          connectionStaleAfterMs: 30_000,
+          showLiveCounts: true,
+          next: {
+            type: "quadrant-plurality" as const,
+            map: { apollon: "idle", dionysos: "idle", kassandra: "idle" },
+            tie: "idle",
+            empty: "idle",
+            countedStatuses: ["valid" as const],
+          },
+        },
+      ],
+    }));
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a polygon-zones map whose keys don't match the zone ids", () => {
+    const result = parse((s) => ({
+      ...s,
+      phases: [
+        ...s.phases,
+        {
+          kind: "position-question" as const,
+          id: "election",
+          text: "Choose your statue",
+          field: threeZoneField,
+          durationMs: 60_000,
+          freezeMs: 3_000,
+          connectionStaleAfterMs: 30_000,
+          showLiveCounts: true,
+          next: {
+            type: "quadrant-plurality" as const,
+            map: { apollon: "idle", dionysos: "idle" }, // missing kassandra
+            tie: "idle",
+            empty: "idle",
+            countedStatuses: ["valid" as const],
+          },
+        },
+      ],
+    }));
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects fewer than 2 zones and duplicate zone ids", () => {
+    expect(polygonZonesFieldSchema.safeParse({ zones: [threeZoneField.zones[0]] }).success).toBe(false);
+    expect(
+      polygonZonesFieldSchema.safeParse({
+        type: "polygon-zones",
+        zones: [threeZoneField.zones[0], threeZoneField.zones[0]],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts an optional rating config on video phases", () => {
+    const result = parse((s) => ({
+      ...s,
+      phases: s.phases.map((phase) =>
+        phase.id === "intro" ? { ...phase, rating: { candidateLabel: "OpenApollo" } } : phase,
+      ),
+    }));
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.phases.find((p) => p.id === "intro")).toMatchObject({
+        rating: { candidateLabel: "OpenApollo" },
+      });
+    }
+  });
+
+  it("rejects an empty rating candidateLabel", () => {
+    const result = parse((s) => ({
+      ...s,
+      phases: s.phases.map((phase) =>
+        phase.id === "intro" ? { ...phase, rating: { candidateLabel: "" } } : phase,
+      ),
+    }));
+    expect(result.success).toBe(false);
+  });
+});
+
 describe("validateScenario graph checks", () => {
   it("passes the base scenario", () => {
     const result = validateScenario(baseScenario);
@@ -218,6 +319,31 @@ describe("validateScenario graph checks", () => {
     const result = validateScenario(s);
     const broken = result.errors.filter((e) => e.code === "broken-target");
     expect(broken).toHaveLength(3);
+  });
+
+  it("checks zone targets for polygon-zones questions", () => {
+    const s = scenarioSchema.parse(structuredClone(baseScenario));
+    const q = s.phases[2];
+    if (q?.kind !== "position-question") throw new Error("expected question");
+    q.field = {
+      type: "polygon-zones",
+      zones: [
+        { id: "a", label: "A", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }] },
+        { id: "b", label: "B", points: [{ x: 0.7, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }] },
+      ],
+    };
+    q.next = {
+      type: "quadrant-plurality",
+      map: { a: "ghost-a", b: "ghost-b" },
+      tie: "idle",
+      empty: "idle",
+      countedStatuses: ["valid"],
+    };
+    const broken = validateScenario(s).errors.filter((e) => e.code === "broken-target");
+    expect(broken.map((e) => e.message)).toEqual([
+      'phase "q1" next.map.a points to unknown phase "ghost-a"',
+      'phase "q1" next.map.b points to unknown phase "ghost-b"',
+    ]);
   });
 
   it("checks min/max targets for two-quadrant questions", () => {

@@ -27,6 +27,8 @@ export type PhoneState = {
   currentPhaseId: string | null;
   statusMessage: string | null;
   reloadRequired: ReloadMessage | null;
+  /** Set while the current video phase has applause/boo rating enabled. */
+  ratingCandidateLabel: string | null;
 };
 
 export const initialPhoneState: PhoneState = {
@@ -37,6 +39,7 @@ export const initialPhoneState: PhoneState = {
   currentPhaseId: null,
   statusMessage: null,
   reloadRequired: null,
+  ratingCandidateLabel: null,
 };
 
 export type PhoneAction =
@@ -82,6 +85,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         phaseEpoch: m.phaseEpoch,
         currentPhaseId: m.phase.id,
         inputOpen: m.phase.kind === "video" || m.phase.kind === "position-question",
+        ratingCandidateLabel: m.phase.kind === "video" ? m.phase.rating?.candidateLabel ?? null : null,
       };
     }
     case "status":

@@ -50,9 +50,15 @@ export type FieldVoteClassification<
 function emptyPositionQuadrantCounts<Field extends PositionField>(
   field: Field,
 ): PositionQuadrantCounts<Field> {
-  return (field.type === "four-quadrant"
-    ? { q1: 0, q2: 0, q3: 0, q4: 0 }
-    : { min: 0, max: 0 }) as PositionQuadrantCounts<Field>;
+  if (field.type === "four-quadrant") {
+    return { q1: 0, q2: 0, q3: 0, q4: 0 } as PositionQuadrantCounts<Field>;
+  }
+  if (field.type === "two-quadrant") {
+    return { min: 0, max: 0 } as PositionQuadrantCounts<Field>;
+  }
+  const counts: Record<string, number> = {};
+  for (const zone of field.zones) counts[zone.id] = 0;
+  return counts as PositionQuadrantCounts<Field>;
 }
 
 /** Canonical vote classifier for both two- and four-quadrant fields. */
@@ -68,13 +74,18 @@ export function classifyPositionVotesForField<Field extends PositionField, Statu
   let includedTotal = 0;
   let excludedTotal = 0;
   for (const vote of votes) {
-    const included = vote.x !== null && vote.y !== null && countedStatuses.has(vote.status);
+    const hasCoordinates = vote.x !== null && vote.y !== null;
+    // Polygon zones need not tile the whole arena, so a positioned vote can
+    // still land outside every zone; treat that the same as not having voted.
+    const quadrant = hasCoordinates
+      ? (quadrantOfField(field, vote.x!, vote.y!) as PositionQuadrant<Field> | null)
+      : null;
+    const included = hasCoordinates && quadrant !== null && countedStatuses.has(vote.status);
     const totals = included ? includedByStatus : excludedByStatus;
     totals[vote.status] = (totals[vote.status] ?? 0) + 1;
     if (included) {
       includedTotal += 1;
-      const quadrant = quadrantOfField(field, vote.x!, vote.y!) as PositionQuadrant<Field>;
-      mutableCounts[quadrant] += 1;
+      mutableCounts[quadrant as PositionQuadrant<Field>] += 1;
     } else {
       excludedTotal += 1;
     }
@@ -129,7 +140,8 @@ export function countPositionQuadrants<Field extends PositionField, Status exten
   for (const vote of votes) {
     if (vote.x === null || vote.y === null) continue;
     if (countedStatuses !== undefined && !countedStatuses.has(vote.status)) continue;
-    const quadrant = quadrantOfField(field, vote.x, vote.y) as PositionQuadrant<Field>;
+    const quadrant = quadrantOfField(field, vote.x, vote.y) as PositionQuadrant<Field> | null;
+    if (quadrant === null) continue;
     mutableCounts[quadrant] += 1;
   }
   return counts;

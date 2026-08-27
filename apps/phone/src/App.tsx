@@ -148,6 +148,17 @@ export function App() {
     sendPosition("final");
   };
 
+  const sendReaction = (kind: "applause" | "boo") => {
+    if (state.sessionId === null) return;
+    connection.send({
+      t: "reaction",
+      v: PROTOCOL_VERSION,
+      sessionId: state.sessionId,
+      phaseEpoch: state.phaseEpoch,
+      kind,
+    });
+  };
+
   return (
     <main
       className="phone-root"
@@ -161,6 +172,25 @@ export function App() {
       ) : state.join.kind === "rejected" ? (
         <div className="rejected">
           <p>{REJECTION_TEXT[state.join.reason] ?? "Could not join."}</p>
+        </div>
+      ) : state.ratingCandidateLabel !== null ? (
+        <div className="rating-buttons">
+          <button
+            type="button"
+            className="rating-button applause"
+            onClick={() => sendReaction("applause")}
+            aria-label={`Applaud ${state.ratingCandidateLabel}`}
+          >
+            👏
+          </button>
+          <button
+            type="button"
+            className="rating-button boo"
+            onClick={() => sendReaction("boo")}
+            aria-label={`Boo ${state.ratingCandidateLabel}`}
+          >
+            👎
+          </button>
         </div>
       ) : (
         <div

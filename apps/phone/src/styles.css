@@ -45,6 +45,37 @@ body {
   cursor: grabbing;
 }
 
+.rating-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+}
+
+.rating-button {
+  display: grid;
+  place-items: center;
+  border: none;
+  font-size: clamp(3rem, 20vw, 6rem);
+  line-height: 1;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.rating-button.applause {
+  background: rgb(86 211 100 / 12%);
+}
+
+.rating-button.boo {
+  background: rgb(248 81 73 / 12%);
+}
+
+.rating-button:active {
+  filter: brightness(1.6);
+}
+
 .watch-screen,
 .rejected p {
   max-width: 24rem;

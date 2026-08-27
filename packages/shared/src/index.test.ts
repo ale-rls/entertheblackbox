@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { quadrantOf, quadrantOfField } from "./index.js";
+import { quadrantOf, quadrantOfField, quadrantsOfField, zoneOfPolygons } from "./index.js";
+import type { PolygonZone } from "./index.js";
 
 describe("quadrantOf", () => {
   it("assigns the four open quadrants", () => {
@@ -35,5 +36,30 @@ describe("quadrantOfField", () => {
     };
     expect(quadrantOfField(field, 0.9, 0.499)).toBe("min");
     expect(quadrantOfField(field, 0.1, 0.5)).toBe("max");
+  });
+});
+
+describe("polygon zones", () => {
+  const zones: PolygonZone[] = [
+    { id: "left", label: "Left", points: [{ x: 0, y: 0 }, { x: 0.2, y: 0 }, { x: 0.2, y: 1 }, { x: 0, y: 1 }] },
+    { id: "middle", label: "Middle", points: [{ x: 0.4, y: 0 }, { x: 0.6, y: 0 }, { x: 0.6, y: 1 }, { x: 0.4, y: 1 }] },
+    { id: "right", label: "Right", points: [{ x: 0.8, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0.8, y: 1 }] },
+  ];
+  const field = { type: "polygon-zones" as const, zones };
+
+  it("finds the containing zone", () => {
+    expect(zoneOfPolygons(zones, 0.1, 0.5)).toBe("left");
+    expect(zoneOfPolygons(zones, 0.5, 0.5)).toBe("middle");
+    expect(zoneOfPolygons(zones, 0.9, 0.5)).toBe("right");
+  });
+
+  it("returns null when the point is outside every zone", () => {
+    expect(zoneOfPolygons(zones, 0.3, 0.5)).toBeNull();
+  });
+
+  it("quadrantOfField and quadrantsOfField delegate to the zone list", () => {
+    expect(quadrantOfField(field, 0.1, 0.5)).toBe("left");
+    expect(quadrantOfField(field, 0.3, 0.5)).toBeNull();
+    expect(quadrantsOfField(field)).toEqual(["left", "middle", "right"]);
   });
 });

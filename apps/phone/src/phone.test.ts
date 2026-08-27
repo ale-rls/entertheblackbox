@@ -237,6 +237,34 @@ describe("phoneReducer", () => {
     expect(s.join).toEqual({ kind: "rejected", reason: "rate_limited", retryAfterMs: 2000 });
   });
 
+  it("surfaces the rating candidate label only for a rating-enabled video, clearing on other phases", () => {
+    let s = apply(initialPhoneState, phase("video", 1));
+    expect(s.ratingCandidateLabel).toBeNull();
+
+    s = apply(s, {
+      t: "phase",
+      v: PROTOCOL_VERSION,
+      sessionId: "s1",
+      phaseEpoch: 2,
+      serverTime: 0,
+      phase: {
+        kind: "video",
+        id: "v2",
+        src: "v2.mp4",
+        expectedDurationMs: 1000,
+        next: "q",
+        rating: { candidateLabel: "OpenApollo" },
+        scenarioVersion: "dev",
+        startedAt: 0,
+        deadlineAt: null,
+      },
+    });
+    expect(s.ratingCandidateLabel).toBe("OpenApollo");
+
+    s = apply(s, phase("position-question", 3));
+    expect(s.ratingCandidateLabel).toBeNull();
+  });
+
   it("closes input when the socket drops", () => {
     let s = apply(initialPhoneState, phase("position-question", 1));
     s = phoneReducer(s, { type: "socket-lost" });

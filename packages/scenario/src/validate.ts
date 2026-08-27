@@ -38,17 +38,10 @@ function targetsOf(phase: Phase): Array<{ label: string; target: string }> {
       if (next.type === "fixed") {
         return [{ label: "next.target", target: next.target }];
       }
-      const mapped = "q1" in next.map
-        ? [
-            { label: "next.map.q1", target: next.map.q1 },
-            { label: "next.map.q2", target: next.map.q2 },
-            { label: "next.map.q3", target: next.map.q3 },
-            { label: "next.map.q4", target: next.map.q4 },
-          ]
-        : [
-            { label: "next.map.min", target: next.map.min },
-            { label: "next.map.max", target: next.map.max },
-          ];
+      const mapped = Object.entries(next.map).map(([key, target]) => ({
+        label: `next.map.${key}`,
+        target,
+      }));
       return [
         ...mapped,
         { label: "next.tie", target: next.tie },

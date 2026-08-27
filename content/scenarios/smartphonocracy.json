@@ -1,0 +1,304 @@
+{
+  "version": "smartphonocracy-v14-de-1.0.0",
+  "entryPhaseId": "2-0-athene-begruessung",
+  "cyclesAllowed": false,
+  "targetAudienceSize": 30,
+  "phases": [
+    { "kind": "idle", "id": "idle" },
+
+    {
+      "kind": "video",
+      "id": "2-0-athene-begruessung",
+      "src": "2-0-athene-begruessung.mp4",
+      "expectedDurationMs": 120000,
+      "next": "2-1-cursorspiel-fangen"
+    },
+    {
+      "kind": "video",
+      "id": "2-1-cursorspiel-fangen",
+      "src": "2-1-cursorspiel-fangen.mp4",
+      "expectedDurationMs": 30000,
+      "next": "2-2-cursorspiel-fuettern"
+    },
+    {
+      "kind": "video",
+      "id": "2-2-cursorspiel-fuettern",
+      "src": "2-2-cursorspiel-fuettern.mp4",
+      "expectedDurationMs": 30000,
+      "next": "2-3-frage1-ask"
+    },
+
+    {
+      "kind": "video",
+      "id": "2-3-frage1-ask",
+      "src": "2-3-frage1-ask.mp4",
+      "expectedDurationMs": 20000,
+      "next": "2-3-frage1-vote"
+    },
+    {
+      "kind": "position-question",
+      "id": "2-3-frage1-vote",
+      "text": "OSTRAKISMÓS: Einmal im Jahr stimmten die Athener ab, ob eine übermächtige Person für zehn Jahre verbannt werden sollte — eingeritzt auf Tonscherben.",
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "labels": { "minLabel": "Lüge", "maxLabel": "Fakt" }
+      },
+      "durationMs": 30000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 8000,
+      "showLiveCounts": true,
+      "next": { "type": "fixed", "target": "2-3-frage1-aufloesung" }
+    },
+    {
+      "kind": "video",
+      "id": "2-3-frage1-aufloesung",
+      "src": "2-3-frage1-aufloesung.mp4",
+      "expectedDurationMs": 65000,
+      "next": "2-4-frage2-ask"
+    },
+
+    {
+      "kind": "video",
+      "id": "2-4-frage2-ask",
+      "src": "2-4-frage2-ask.mp4",
+      "expectedDurationMs": 20000,
+      "next": "2-4-frage2-vote"
+    },
+    {
+      "kind": "position-question",
+      "id": "2-4-frage2-vote",
+      "text": "DIE PROMETHEUS-ABGABE: Athen erhob eine Feuersteuer — wer nachts mehr als eine Öllampe brannte, zahlte eine Abgabe an den Tempel des Prometheus.",
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "labels": { "minLabel": "Lüge", "maxLabel": "Fakt" }
+      },
+      "durationMs": 30000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 8000,
+      "showLiveCounts": true,
+      "next": { "type": "fixed", "target": "2-4-frage2-aufloesung" }
+    },
+    {
+      "kind": "video",
+      "id": "2-4-frage2-aufloesung",
+      "src": "2-4-frage2-aufloesung.mp4",
+      "expectedDurationMs": 75000,
+      "next": "2-5-frage3-ask"
+    },
+
+    {
+      "kind": "video",
+      "id": "2-5-frage3-ask",
+      "src": "2-5-frage3-ask.mp4",
+      "expectedDurationMs": 20000,
+      "next": "2-5-frage3-vote"
+    },
+    {
+      "kind": "position-question",
+      "id": "2-5-frage3-vote",
+      "text": "KLĒROTERION: Die meisten politischen Ämter Athens wurden nicht gewählt, sondern verlost — von einer Maschine aus Stein.",
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "labels": { "minLabel": "Lüge", "maxLabel": "Fakt" }
+      },
+      "durationMs": 30000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 8000,
+      "showLiveCounts": true,
+      "next": { "type": "fixed", "target": "2-5-frage3-aufloesung" }
+    },
+    {
+      "kind": "video",
+      "id": "2-5-frage3-aufloesung",
+      "src": "2-5-frage3-aufloesung.mp4",
+      "expectedDurationMs": 65000,
+      "next": "2-7-abmoderation"
+    },
+
+    {
+      "kind": "video",
+      "id": "2-7-abmoderation",
+      "src": "2-7-abmoderation.mp4",
+      "expectedDurationMs": 60000,
+      "next": "3-0-wahlkampf-auftakt"
+    },
+    {
+      "kind": "video",
+      "id": "3-0-wahlkampf-auftakt",
+      "src": "3-0-wahlkampf-auftakt.mp4",
+      "expectedDurationMs": 60000,
+      "next": "3-1-apollon-rede"
+    },
+    {
+      "kind": "video",
+      "id": "3-1-apollon-rede",
+      "src": "3-1-apollon-rede.mp4",
+      "expectedDurationMs": 180000,
+      "next": "3-2-dionysos-rede",
+      "rating": { "candidateLabel": "OpenApollo" }
+    },
+    {
+      "kind": "video",
+      "id": "3-2-dionysos-rede",
+      "src": "3-2-dionysos-rede.mp4",
+      "expectedDurationMs": 180000,
+      "next": "3-3-kassandra-rede",
+      "rating": { "candidateLabel": "Dionysos69" }
+    },
+    {
+      "kind": "video",
+      "id": "3-3-kassandra-rede",
+      "src": "3-3-kassandra-rede.mp4",
+      "expectedDurationMs": 180000,
+      "next": "4-0-wahl-ansage",
+      "rating": { "candidateLabel": "Kassandra" }
+    },
+
+    {
+      "kind": "video",
+      "id": "4-0-wahl-ansage",
+      "src": "4-0-wahl-ansage.mp4",
+      "expectedDurationMs": 20000,
+      "next": "4-0-wahl-vote"
+    },
+    {
+      "kind": "position-question",
+      "id": "4-0-wahl-vote",
+      "text": "Wählt eure Zukunft: Bewegt euer Licht zu der Statue, deren Vision ihr leben wollt.",
+      "field": {
+        "type": "polygon-zones",
+        "zones": [
+          {
+            "id": "apollon",
+            "label": "Apollon",
+            "points": [
+              { "x": 0, "y": 0 },
+              { "x": 0.3, "y": 0 },
+              { "x": 0.3, "y": 1 },
+              { "x": 0, "y": 1 }
+            ]
+          },
+          {
+            "id": "dionysos",
+            "label": "Dionysos",
+            "points": [
+              { "x": 0.35, "y": 0 },
+              { "x": 0.65, "y": 0 },
+              { "x": 0.65, "y": 1 },
+              { "x": 0.35, "y": 1 }
+            ]
+          },
+          {
+            "id": "kassandra",
+            "label": "Kassandra",
+            "points": [
+              { "x": 0.7, "y": 0 },
+              { "x": 1, "y": 0 },
+              { "x": 1, "y": 1 },
+              { "x": 0.7, "y": 1 }
+            ]
+          }
+        ]
+      },
+      "durationMs": 90000,
+      "freezeMs": 10000,
+      "connectionStaleAfterMs": 8000,
+      "showLiveCounts": true,
+      "next": {
+        "type": "quadrant-plurality",
+        "map": {
+          "apollon": "5-apollon-auszaehlung",
+          "dionysos": "5-dionysos-auszaehlung",
+          "kassandra": "5-kassandra-auszaehlung"
+        },
+        "tie": "4-0-wahl-unentschieden",
+        "empty": "4-0-wahl-unentschieden",
+        "countedStatuses": ["valid", "stale", "disconnected"]
+      }
+    },
+    {
+      "kind": "video",
+      "id": "4-0-wahl-unentschieden",
+      "src": "4-0-wahl-unentschieden.mp4",
+      "expectedDurationMs": 20000,
+      "next": "idle"
+    },
+
+    {
+      "kind": "video",
+      "id": "5-apollon-auszaehlung",
+      "src": "5-auszaehlung.mp4",
+      "expectedDurationMs": 10000,
+      "next": "5-apollon-triumph"
+    },
+    {
+      "kind": "video",
+      "id": "5-apollon-triumph",
+      "src": "5-apollon-triumph.mp4",
+      "expectedDurationMs": 60000,
+      "next": "5-apollon-orakel"
+    },
+    {
+      "kind": "video",
+      "id": "5-apollon-orakel",
+      "src": "5-apollon-orakel.mp4",
+      "expectedDurationMs": 180000,
+      "next": "5-reset-datenloeschung"
+    },
+
+    {
+      "kind": "video",
+      "id": "5-dionysos-auszaehlung",
+      "src": "5-auszaehlung.mp4",
+      "expectedDurationMs": 10000,
+      "next": "5-dionysos-triumph"
+    },
+    {
+      "kind": "video",
+      "id": "5-dionysos-triumph",
+      "src": "5-dionysos-triumph.mp4",
+      "expectedDurationMs": 60000,
+      "next": "5-dionysos-orakel"
+    },
+    {
+      "kind": "video",
+      "id": "5-dionysos-orakel",
+      "src": "5-dionysos-orakel.mp4",
+      "expectedDurationMs": 180000,
+      "next": "5-reset-datenloeschung"
+    },
+
+    {
+      "kind": "video",
+      "id": "5-kassandra-auszaehlung",
+      "src": "5-auszaehlung.mp4",
+      "expectedDurationMs": 10000,
+      "next": "5-kassandra-triumph"
+    },
+    {
+      "kind": "video",
+      "id": "5-kassandra-triumph",
+      "src": "5-kassandra-triumph.mp4",
+      "expectedDurationMs": 60000,
+      "next": "5-kassandra-orakel"
+    },
+    {
+      "kind": "video",
+      "id": "5-kassandra-orakel",
+      "src": "5-kassandra-orakel.mp4",
+      "expectedDurationMs": 180000,
+      "next": "5-reset-datenloeschung"
+    },
+
+    {
+      "kind": "video",
+      "id": "5-reset-datenloeschung",
+      "src": "5-reset-datenloeschung.mp4",
+      "expectedDurationMs": 10000,
+      "next": "idle"
+    }
+  ]
+}

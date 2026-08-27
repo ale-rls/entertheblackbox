@@ -27,6 +27,15 @@ const twoYField: QuestionField = {
   labels: { minLabel: "local", maxLabel: "global" },
 };
 
+const zonesField: QuestionField = {
+  type: "polygon-zones",
+  zones: [
+    { id: "apollon", label: "Apollon", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }, { x: 0, y: 1 }] },
+    { id: "dionysos", label: "Dionysos", points: [{ x: 0.35, y: 0 }, { x: 0.65, y: 0 }, { x: 0.65, y: 1 }, { x: 0.35, y: 1 }] },
+    { id: "kassandra", label: "Kassandra", points: [{ x: 0.7, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0.7, y: 1 }] },
+  ],
+};
+
 function resolved(
   field: QuestionField,
   winner: "min" | "max" | "tie" | "empty" | "fixed",
@@ -156,5 +165,45 @@ describe("QuadrantOverlay", () => {
     expect(fixed).not.toContain("quadrant-winner");
     expect(fixed).not.toContain("quadrant-dimmed");
     expect(fixed).not.toContain('class="outcome');
+  });
+
+  it("renders polygon zones as SVG shapes with centroid labels and counts", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay
+        field={zonesField}
+        liveField={zonesField}
+        liveCounts={{ apollon: 1, dionysos: 2, kassandra: 0 }}
+        resolution={null}
+      />,
+    );
+
+    expect(html).toContain('class="quadrant-overlay quadrant-overlay-polygon-zones"');
+    expect(html.match(/class="zone-shape"/g)).toHaveLength(3);
+    expect(html).toContain("Apollon");
+    expect(html).toContain("Dionysos");
+    expect(html).toContain("Kassandra");
+    expect(html).toContain('<span class="zone-count">2</span>');
+  });
+
+  it("highlights the winning zone and dims the rest", () => {
+    const resolution = {
+      t: "question_resolved" as const,
+      v: PROTOCOL_VERSION,
+      sessionId: "session-1",
+      phaseEpoch: 2,
+      field: zonesField,
+      quadrantCounts: { apollon: 1, dionysos: 2, kassandra: 0 },
+      winner: "dionysos",
+      resolvedTarget: "next",
+      freezeUntil: 10_000,
+    } as unknown as QuestionResolvedMessage;
+
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay field={zonesField} liveField={null} liveCounts={null} resolution={resolution} />,
+    );
+
+    expect(html).toContain("zone-shape-winner");
+    expect(html.match(/zone-shape-dimmed/g)).toHaveLength(2);
+    expect(html).not.toContain('class="outcome');
   });
 });

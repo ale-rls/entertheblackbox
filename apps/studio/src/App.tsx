@@ -385,7 +385,14 @@ export function App() {
     if (!draft || !selectedId) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === selectedId);
     if (!phase || phase.kind !== "position-question") return;
-    const currentLayout = phase.field.type === "four-quadrant" ? "four-quadrant" : `two-quadrant-${phase.field.axis}`;
+    // Polygon-zones fields aren't editable through this quadrant-layout
+    // control yet (no equivalent selector state), so they fall back to
+    // "four-quadrant" like an unset selection.
+    const currentLayout = phase.field.type === "four-quadrant"
+      ? "four-quadrant"
+      : phase.field.type === "two-quadrant"
+        ? `two-quadrant-${phase.field.axis}`
+        : "four-quadrant";
     if (currentLayout === layout) return;
     const applyChange = () => {
       const field = layout === "four-quadrant"
@@ -399,7 +406,9 @@ export function App() {
           axis: layout === "two-quadrant-x" ? "x" as const : "y" as const,
           labels: phase.field.type === "four-quadrant"
             ? layout === "two-quadrant-x" ? phase.field.xAxis : phase.field.yAxis
-            : phase.field.labels,
+            : phase.field.type === "two-quadrant"
+              ? phase.field.labels
+              : { minLabel: "Min", maxLabel: "Max" },
         };
       const next = phase.next.type === "fixed" ? phase.next : {
         ...phase.next,
