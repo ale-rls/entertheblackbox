@@ -70,10 +70,12 @@ function PolygonZoneOverlay({
   field,
   counts,
   winner,
+  lotterySelected,
 }: {
   field: PolygonZonesField;
   counts: Record<string, number> | null;
   winner: string | null;
+  lotterySelected: string | null;
 }) {
   return (
     <div className="quadrant-overlay quadrant-overlay-polygon-zones">
@@ -112,6 +114,7 @@ function PolygonZoneOverlay({
         );
       })}
       {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
+      {lotterySelected !== null && <div className="outcome outcome-kleroterion">Kleroterion · {field.zones.find((zone) => zone.id === lotterySelected)?.label ?? lotterySelected}</div>}
       {winner === "empty" && <div className="outcome outcome-empty" />}
     </div>
   );
@@ -181,6 +184,7 @@ export function QuadrantOverlay({
     !resolutionMatches || resolution.winner === "fixed"
       ? null
       : resolution.winner;
+  const lotterySelected = resolutionMatches ? resolution?.tieBreak?.selected ?? null : null;
 
   if (field.type === "polygon-zones") {
     const counts =
@@ -189,7 +193,8 @@ export function QuadrantOverlay({
       <PolygonZoneOverlay
         field={field}
         counts={counts}
-        winner={winner === "tie" || winner === "empty" ? winner : (winner as string | null)}
+        winner={lotterySelected ?? (winner === "tie" || winner === "empty" ? winner : (winner as string | null))}
+        lotterySelected={lotterySelected}
       />
     );
   }

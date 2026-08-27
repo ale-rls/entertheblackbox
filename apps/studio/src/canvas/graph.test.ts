@@ -42,6 +42,43 @@ describe("Studio canvas graph", () => {
     expect(phaseOutputHandles(phases.find((phase) => phase.id === "question-fixed"))).toEqual(["next"]);
   });
 
+  it("round-trips polygon-zone outputs by their authored zone IDs", () => {
+    const value = project();
+    const election = {
+      kind: "position-question" as const,
+      id: "statue-election",
+      text: "Choose a statue",
+      field: {
+        type: "polygon-zones" as const,
+        zones: [
+          { id: "openapollo", label: "OpenApollo", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }, { x: 0, y: 1 }] },
+          { id: "dionysos69", label: "Dionysos69", points: [{ x: 0.35, y: 0 }, { x: 0.65, y: 0 }, { x: 0.65, y: 1 }, { x: 0.35, y: 1 }] },
+          { id: "kassandra", label: "Kassandra", points: [{ x: 0.7, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0.7, y: 1 }] },
+        ],
+      },
+      durationMs: 90_000,
+      freezeMs: 10_000,
+      connectionStaleAfterMs: 10_000,
+      showLiveCounts: false,
+      next: {
+        type: "quadrant-plurality" as const,
+        map: { openapollo: "intro-video", dionysos69: "question-fixed", kassandra: "idle" },
+        tie: "idle",
+        empty: "idle",
+        countedStatuses: ["valid" as const, "stale" as const, "disconnected" as const],
+      },
+    };
+    const withElection = parseRuntimeScenario({
+      ...value.scenario,
+      phases: [...value.scenario.phases, election],
+    }, value.manifest);
+    const handles = outputHandles(withElection, election.id);
+    expect(handles).toEqual(["openapollo", "dionysos69", "kassandra", "tie", "empty"]);
+    const edges = graphEdges(withElection);
+    expect(edges.filter((edge) => edge.source === election.id).map((edge) => edge.sourceHandle)).toEqual(handles);
+    expect(applyEdges(withElection, edges).scenario.phases.find((phase) => phase.id === election.id)).toEqual(election);
+  });
+
   it("preserves tie and empty routes when replacing only spatial layout outputs", () => {
     const value = project();
     const original = value.scenario.phases.find((phase) => phase.id === "question-quadrant");

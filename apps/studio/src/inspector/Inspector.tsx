@@ -12,7 +12,7 @@ type Props = {
   onChooseMedia: (phaseId: string, target: "src" | "audioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
   onKindChange: (kind: AuthorablePhaseKind, trigger: HTMLSelectElement) => void;
   onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
-  onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", trigger: HTMLSelectElement) => void;
+  onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", trigger: HTMLSelectElement) => void;
   onTargetAudienceSizeChange: (value: number) => void;
 };
 
@@ -94,11 +94,26 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         const hideAtMs = Math.min(Math.max(phase.hideAtMs, closeAtMs), nextExpectedDurationMs);
         onChange({ ...phase, tailDurationMs, expectedDurationMs: nextExpectedDurationMs, showAtMs, openAtMs, closeAtMs, hideAtMs });
       })}
+      <label className="sc-tool-checkbox check"><input
+        type="checkbox"
+        checked={phase.rating !== undefined}
+        onChange={(event) => onChange({
+          ...phase,
+          rating: event.target.checked
+            ? { candidateLabel: phase.rating?.candidateLabel ?? phase.title ?? phase.id }
+            : undefined,
+        })}
+      />{label("Applause + boo buttons", "rating")}</label>
+      {phase.rating && text("Reaction subject", "rating.candidateLabel", phase.rating.candidateLabel, (candidateLabel) => onChange({
+        ...phase,
+        rating: { candidateLabel },
+      }))}
+      {phase.kind === "video-position-question" && phase.rating && <p className="sc-tool-copy field-hint">The phone keeps the regular spectrum trackpad active and shows applause/boo as secondary buttons.</p>}
     </>}
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
-      {phase.field.type !== "polygon-zones" && <label className="sc-tool-label">{label("Quadrant layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : `two-quadrant-${phase.field.axis}`} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option></select></label>}
+      <label className="sc-tool-label">{label("Position layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : phase.field.type === "two-quadrant" ? `two-quadrant-${phase.field.axis}` : "three-candidate-zones"} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option><option value="three-candidate-zones">Three candidate zones</option></select></label>
       {phase.field.type === "four-quadrant" ? (() => {
         const field = phase.field;
         return <>
@@ -115,9 +130,27 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         </>;
       })() : (() => {
         const field = phase.field;
-        return <p className="sc-tool-copy field-hint">
-          Polygon zones ({field.zones.map((zone) => zone.label).join(", ")}) aren't editable here yet — edit the scenario JSON directly.
-        </p>;
+        return <fieldset><legend>Candidate zones <small>field.zones</small></legend>
+          <p className="sc-tool-copy field-hint">Zone IDs stay stable because they are also graph output handles. Labels and normalized polygon points are editable.</p>
+          {field.zones.map((zone, zoneIndex) => <fieldset key={zone.id}><legend>{zone.id}</legend>
+            {text("Candidate label", `field.zones.${zoneIndex}.label`, zone.label, (value) => {
+              const zones = field.zones.map((item, index) => index === zoneIndex ? { ...item, label: value } : item);
+              onChange({ ...phase, field: { ...field, zones } } as Phase);
+            })}
+            {zone.points.map((point, pointIndex) => <div className="polygon-point-fields" key={`${zone.id}-${pointIndex}`}>
+              {number(`Point ${pointIndex + 1} X`, `points.${pointIndex}.x`, point.x, (x) => {
+                const points = zone.points.map((item, index) => index === pointIndex ? { ...item, x: Math.min(1, x) } : item);
+                const zones = field.zones.map((item, index) => index === zoneIndex ? { ...item, points } : item);
+                onChange({ ...phase, field: { ...field, zones } } as Phase);
+              })}
+              {number(`Point ${pointIndex + 1} Y`, `points.${pointIndex}.y`, point.y, (y) => {
+                const points = zone.points.map((item, index) => index === pointIndex ? { ...item, y: Math.min(1, y) } : item);
+                const zones = field.zones.map((item, index) => index === zoneIndex ? { ...item, points } : item);
+                onChange({ ...phase, field: { ...field, zones } } as Phase);
+              })}
+            </div>)}
+          </fieldset>)}
+        </fieldset>;
       })()}
       {phase.kind === "position-question" && <>
         {number("Question duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs }))}
@@ -162,7 +195,7 @@ function CountedStatuses({ phase, onChange }: { phase: Extract<Phase, { kind: "p
     } else {
       onChange({ ...phase, next: { ...next, countedStatuses: values as typeof next.countedStatuses } } as Phase);
     }
-  }} />{status}</label>)}</fieldset>;
+  }} />{status}</label>)}<label className="sc-tool-checkbox check"><input type="checkbox" checked={next.tieBreak?.type === "kleroterion"} onChange={(event) => onChange({ ...phase, next: { ...next, tieBreak: event.target.checked ? { type: "kleroterion" } : undefined } } as Phase)} />Resolve exact ties with Kleroterion</label></fieldset>;
 }
 
 function Compiled({ project }: { project: StudioProject }) {

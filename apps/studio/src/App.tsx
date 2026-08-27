@@ -5,7 +5,7 @@ import "@xyflow/react/dist/style.css";
 import { Autosave, recoverDraft, type SaveStatus as SaveStatusValue } from "./drafts.js";
 import { PocketbaseDraftDatabase } from "./pocketbase-drafts.js";
 import { exportArtifacts, exportBackup, importRuntime, importStudioFiles } from "./io.js";
-import type { Draft } from "./model.js";
+import { autoLayout, type Draft } from "./model.js";
 import { applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, phaseOutputHandles, pruneEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./canvas/graph.js";
 import { nodeDataForPhase, nodeTypes } from "./canvas/nodes.js";
 import { changePhaseKind, renamePhase, type AuthorablePhaseKind, type Phase } from "./inspector/model.js";
@@ -21,6 +21,8 @@ import { refreshDraftLocalMedia, runtimeMediaManifest, type MediaManifest } from
 import { PocketbaseMediaLibrary } from "./media/pocketbase-media.js";
 import { MediaLibraryDialog, type MediaLibraryRow } from "./media/MediaLibraryDialog.js";
 import { studioMediaKindForSource, type StudioMediaKind } from "./media/library.js";
+import { appendCampaignExtension } from "./templates/campaign.js";
+import { productionDraftFromArtifact, type PublishedProductionArtifact } from "./production.js";
 import "@smartphonecracy/tool-ui/styles.css";
 import "./style.css";
 
@@ -90,6 +92,7 @@ export function App() {
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
   const [exportFeedback, setExportFeedback] = useState<InlineFeedback>();
   const [publishOpen, setPublishOpen] = useState(false);
+  const [productionImportOpen, setProductionImportOpen] = useState(false);
   const [publishForm, setPublishForm] = useState({ showId: "", name: "" });
   const [publishing, setPublishing] = useState(false);
   const [publishFeedback, setPublishFeedback] = useState<InlineFeedback>();
@@ -226,6 +229,42 @@ export function App() {
     }
   };
   const duplicate = (source: Draft) => save({ ...structuredClone(source), id: crypto.randomUUID(), name: `${source.name} copy`, updatedAt: Date.now() });
+  const signIn = async (event: FormEvent) => {
+    event.preventDefault();
+    setSigningIn(true);
+    setSignInFeedback(undefined);
+    try {
+      await operatorPb.collection("operators").authWithPassword(signInForm.email, signInForm.password);
+      setSignInForm({ email: "", password: "" });
+    } catch {
+      setSignInFeedback({ status: "danger", message: "Invalid operator email or password." });
+    } finally {
+      setSigningIn(false);
+    }
+  };
+  const signOut = () => operatorPb.authStore.clear();
+  const importLatestProduction = async () => {
+    if (!operatorPb.authStore.isValid) {
+      setProductionImportOpen(true);
+      return;
+    }
+    setImportFeedback({ status: "info", message: "Loading the active production scenario…" });
+    try {
+      const response = await fetch("/api/admin/shows/latest", {
+        headers: { Authorization: `Bearer ${operatorPb.authStore.token}` },
+      });
+      if (!response.ok) throw new Error(response.status === 404 ? "No active published production show was found." : `Production import failed (${response.status}).`);
+      const artifact = await response.json() as PublishedProductionArtifact;
+      const imported = productionDraftFromArtifact(artifact);
+      if (localManifest) imported.localMediaSources = localManifest.files.map((file) => file.src).sort();
+      history.current = undefined;
+      save(imported);
+      setProductionImportOpen(false);
+      setImportFeedback({ status: "success", message: `Created a draft from ${artifact.name} ${artifact.version}, published ${new Date(artifact.publishedAt).toLocaleString()}.` });
+    } catch (error) {
+      setImportFeedback({ status: "danger", message: error instanceof Error ? error.message : "Production import failed." });
+    }
+  };
   const createShow = () => {
     const created = importRuntime({
       version: "1.0.0",
@@ -236,6 +275,40 @@ export function App() {
     if (localManifest) created.localMediaSources = localManifest.files.map((file) => file.src).sort();
     history.current = undefined;
     save(created);
+  };
+  const addCampaignExtension = (trigger: HTMLButtonElement | null = null) => {
+    if (!draft) return;
+    const productionBaseline = draft.document.productionBaseline;
+    if (!productionBaseline) {
+      setGraphFeedback({ status: "danger", message: "Create a draft from active production before applying the campaign extension." });
+      return;
+    }
+    setConfirmation({
+      title: "Append campaign and election sections 3–5?",
+      description: "This changes the production ending from idle to the campaign intro, then adds three spectrum speeches with applause/boo, the three-zone election, winner visions, tie/empty endings, and the final return to idle. New media references must be uploaded before publishing.",
+      confirmLabel: "Append sections 3–5",
+      cancelLabel: "Keep production unchanged",
+      tone: "primary",
+      trigger,
+      onConfirm: () => {
+        try {
+          const project = appendCampaignExtension(draft.project);
+          const document = {
+            ...autoLayout(project, draft.document.showId),
+            productionBaseline,
+          };
+          const nextDraft = { ...draft, project, document, updatedAt: Date.now() };
+          const nextNodes = nodesForDraft(nextDraft);
+          const nextEdges = graphEdges(project);
+          setNodes(nextNodes);
+          setEdges(nextEdges);
+          record(nextDraft, nextEdges);
+          setGraphFeedback({ status: "success", message: "Sections 3–5 appended. Upload or select the new media files, then preview every election outcome." });
+        } catch (error) {
+          setGraphFeedback({ status: "danger", message: error instanceof Error ? error.message : "The campaign extension could not be added." });
+        }
+      },
+    });
   };
   const closeConfirmation = () => {
     const trigger = confirmation?.trigger;
@@ -366,7 +439,7 @@ export function App() {
           : { kind: "video" as const, id, ...mediaFields, next: "idle" };
     const phases = [...draft.project.scenario.phases, phase] as Draft["project"]["scenario"]["phases"];
     const nextNodes = [...nodes, { id, type: "phase", position: { x: 400, y: 200 }, data: nodeDataForPhase(phase as Phase) }];
-    const handles = phase.kind === "position-question" || phase.kind === "video-position-question" ? ["q1", "q2", "q3", "q4", "tie", "empty"] : phase.kind === "video" ? ["next"] : [];
+    const handles = phaseOutputHandles(phase as Phase);
     const nextEdges = [...edges, ...handles.map((handle) => ({ id: `${id}:${handle}`, source: id, sourceHandle: handle, target: END_NODE_ID }))];
     setNodes(nextNodes);
     setEdges(nextEdges);
@@ -474,11 +547,17 @@ export function App() {
       trigger,
       onConfirm: () => {
         const fixed = { type: "fixed" as const, target: "idle" };
-        const nextPhase = (phase.field.type === "two-quadrant"
-          ? { ...phase, next: kind === "fixed" ? fixed : { type: "quadrant-plurality", map: { min: "idle", max: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] } }
-          : { ...phase, next: kind === "fixed" ? fixed : { type: "quadrant-plurality", map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] } }) as Phase;
+        const pluralityMap = phase.field.type === "two-quadrant"
+          ? { min: "idle", max: "idle" }
+          : phase.field.type === "polygon-zones"
+            ? Object.fromEntries(phase.field.zones.map((zone) => [zone.id, "idle"]))
+            : { q1: "idle", q2: "idle", q3: "idle", q4: "idle" };
+        const nextPhase = {
+          ...phase,
+          next: kind === "fixed" ? fixed : { type: "quadrant-plurality", map: pluralityMap, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] },
+        } as Phase;
         const retained = edges.filter((edge) => edge.source !== selectedId);
-        const handles = kind === "fixed" ? ["next"] : phase.field.type === "two-quadrant" ? ["min", "max", "tie", "empty"] : ["q1", "q2", "q3", "q4", "tie", "empty"];
+        const handles = phaseOutputHandles(nextPhase);
         const nextEdges = [...retained, ...handles.map((handle) => ({ id: `${selectedId}:${handle}`, source: selectedId, sourceHandle: handle, target: END_NODE_ID }))];
         const phases = draft.project.scenario.phases.map((item) => item.id === selectedId ? nextPhase : item) as Draft["project"]["scenario"]["phases"];
         record({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } }, document: { ...draft.document, edges: nextEdges }, updatedAt: Date.now() }, nextEdges);
@@ -487,18 +566,15 @@ export function App() {
     });
   };
 
-  const changeQuestionLayout = (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", trigger: HTMLSelectElement) => {
+  const changeQuestionLayout = (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", trigger: HTMLSelectElement) => {
     if (!draft || !selectedId) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === selectedId);
     if (!phase || (phase.kind !== "position-question" && phase.kind !== "video-position-question")) return;
-    // Polygon-zones fields aren't editable through this quadrant-layout
-    // control yet (no equivalent selector state), so they fall back to
-    // "four-quadrant" like an unset selection.
     const currentLayout = phase.field.type === "four-quadrant"
       ? "four-quadrant"
       : phase.field.type === "two-quadrant"
         ? `two-quadrant-${phase.field.axis}`
-        : "four-quadrant";
+        : "three-candidate-zones";
     if (currentLayout === layout) return;
     const applyChange = () => {
       const field = layout === "four-quadrant"
@@ -507,7 +583,16 @@ export function App() {
           xAxis: phase.field.type === "two-quadrant" && phase.field.axis === "x" ? phase.field.labels : { minLabel: "Left", maxLabel: "Right" },
           yAxis: phase.field.type === "two-quadrant" && phase.field.axis === "y" ? phase.field.labels : { minLabel: "Top", maxLabel: "Bottom" },
         }
-      : {
+      : layout === "three-candidate-zones"
+        ? {
+            type: "polygon-zones" as const,
+            zones: [
+              { id: "candidate-1", label: "Candidate 1", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }, { x: 0, y: 1 }] },
+              { id: "candidate-2", label: "Candidate 2", points: [{ x: 0.35, y: 0 }, { x: 0.65, y: 0 }, { x: 0.65, y: 1 }, { x: 0.35, y: 1 }] },
+              { id: "candidate-3", label: "Candidate 3", points: [{ x: 0.7, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0.7, y: 1 }] },
+            ],
+          }
+        : {
           type: "two-quadrant" as const,
           axis: layout === "two-quadrant-x" ? "x" as const : "y" as const,
           labels: phase.field.type === "four-quadrant"
@@ -520,7 +605,9 @@ export function App() {
         ...phase.next,
         map: field.type === "two-quadrant"
           ? { min: "idle", max: "idle" }
-          : { q1: "idle", q2: "idle", q3: "idle", q4: "idle" },
+          : field.type === "polygon-zones"
+            ? Object.fromEntries(field.zones.map((zone) => [zone.id, "idle"]))
+            : { q1: "idle", q2: "idle", q3: "idle", q4: "idle" },
       };
       const nextPhase = { ...phase, field, next } as Phase;
       const nextEdges = next.type === "quadrant-plurality"
@@ -550,6 +637,7 @@ export function App() {
     <header className="home-heading"><p className="sc-tool-eyebrow">Authoring workspace</p><h1 ref={homeHeadingRef} tabIndex={-1}>Show Studio</h1><p className="sc-tool-copy lede">Create and safely round-trip Smartphonecracy shows.</p></header>
     <div className="home-actions">
       <button className="sc-tool-button" data-sc-tool-variant="primary" onClick={createShow}>New show</button>
+      <button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => void importLatestProduction()}>New from active production</button>
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" aria-describedby={importFeedback ? "studio-home-feedback" : undefined} onClick={() => importInputRef.current?.click()}>Import show or backup</button>
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={openMediaLibrary}>Media library</button>
       <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json,text/plain,.json,.txt" onChange={(event) => {
@@ -557,6 +645,18 @@ export function App() {
         event.currentTarget.value = "";
       }} />
     </div>
+    {productionImportOpen && <div className="sc-tool-panel publish-panel" role="dialog" aria-labelledby="production-import-heading">
+      <p className="sc-tool-eyebrow" id="production-import-heading">Import active production</p>
+      {operatorEmail === null ? <>
+        <p className="sc-tool-help">Sign in as an operator to read the latest active published show. Production is never modified by this action.</p>
+        <form onSubmit={(event) => void signIn(event)}>
+          <label className="sc-tool-label">Operator email<input className="sc-tool-field" type="email" autoComplete="username" value={signInForm.email} onChange={(event) => setSignInForm((form) => ({ ...form, email: event.target.value }))} /></label>
+          <label className="sc-tool-label">Password<input className="sc-tool-field" type="password" autoComplete="current-password" value={signInForm.password} onChange={(event) => setSignInForm((form) => ({ ...form, password: event.target.value }))} /></label>
+          <div className="publish-panel-actions"><button className="sc-tool-button" type="button" onClick={() => setProductionImportOpen(false)}>Cancel</button><button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={signingIn}>{signingIn ? "Signing in…" : "Sign in"}</button></div>
+        </form>
+        {signInFeedback && <Feedback id="production-signin-feedback" feedback={signInFeedback} />}
+      </> : <><p className="sc-tool-help">Signed in as {operatorEmail}. The active production record will be copied into a new immutable-baseline draft.</p><div className="publish-panel-actions"><button className="sc-tool-button" type="button" onClick={() => setProductionImportOpen(false)}>Cancel</button><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" onClick={() => void importLatestProduction()}>Create production fork</button></div></>}
+    </div>}
     {importFeedback && <Feedback id="studio-home-feedback" feedback={importFeedback} />}
     <h2>Recent drafts</h2>{recent.length === 0 && <p className="sc-tool-copy lede">No local drafts yet. Import scenario.json and media-manifest.json together.</p>}
     {localManifest && <p className="sc-tool-copy lede">Media library: {localManifest.files.length} file{localManifest.files.length === 1 ? "" : "s"} available.</p>}
@@ -591,23 +691,12 @@ export function App() {
   const openPublish = () => {
     setPublishFeedback(undefined);
     setSignInFeedback(undefined);
-    setPublishForm({ showId: draft.id, name: draft.name });
+    setPublishForm({
+      showId: draft.document.productionBaseline?.showId ?? draft.id,
+      name: draft.document.productionBaseline?.name ?? draft.name,
+    });
     setPublishOpen(true);
   };
-  const signIn = async (event: FormEvent) => {
-    event.preventDefault();
-    setSigningIn(true);
-    setSignInFeedback(undefined);
-    try {
-      await operatorPb.collection("operators").authWithPassword(signInForm.email, signInForm.password);
-      setSignInForm({ email: "", password: "" });
-    } catch {
-      setSignInFeedback({ status: "danger", message: "Invalid operator email or password." });
-    } finally {
-      setSigningIn(false);
-    }
-  };
-  const signOut = () => operatorPb.authStore.clear();
   const publishDraft = async (event: FormEvent) => {
     event.preventDefault();
     if (!operatorPb.authStore.isValid) return;
@@ -626,11 +715,16 @@ export function App() {
           name: publishForm.name,
           scenario: artifacts["scenario.json"],
           mediaManifest: artifacts["media-manifest.json"],
+          ...(draft.document.productionBaseline === undefined
+            ? {}
+            : { baseRecordId: draft.document.productionBaseline.recordId }),
         }),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(body?.error === "invalid_publish_request"
+        throw new Error(body?.error === "stale_production_baseline"
+          ? "Production changed after this draft was created. Import the latest production show and reapply the campaign changes before publishing."
+          : body?.error === "invalid_publish_request"
           ? "Show ID must be letters, numbers, - or _ only, and Name can't be empty."
           : `Publish failed (${response.status}).`);
       }
@@ -662,6 +756,7 @@ export function App() {
     <header className="menubar">
       <Menu label="File" items={[
         { label: "New show", onSelect: createShow },
+        { label: "New from active production", onSelect: () => void importLatestProduction() },
         { label: "Import…", onSelect: () => importInputRef.current?.click() },
         { label: "Media library…", onSelect: openMediaLibrary },
         { label: "Duplicate", onSelect: () => duplicate(draft) },
@@ -678,6 +773,8 @@ export function App() {
         { label: "Redo", onSelect: () => { if (history.current) applyHistory(history.current.redo()); }, disabled: !history.current?.canRedo },
       ]} />
       <Menu label="Add" items={[
+        { label: "Campaign + election sections 3–5", onSelect: () => addCampaignExtension(), disabled: !draft.document.productionBaseline },
+        { separator: true },
         { label: "Video phase", onSelect: () => addPhase("video") },
         { label: "Image + MP3 phase", onSelect: () => addPhase("image-audio") },
         { label: "Position question", onSelect: () => addPhase("position-question") },
@@ -734,6 +831,18 @@ export function App() {
           </form>
           {publishFeedback && <Feedback id="studio-publish-feedback" className="menubar-feedback" feedback={publishFeedback} />}
         </>}
+      </div>}
+      {productionImportOpen && <div className="sc-tool-panel publish-panel" role="dialog" aria-labelledby="editor-production-import-heading">
+        <p className="sc-tool-eyebrow" id="editor-production-import-heading">Import active production</p>
+        {operatorEmail === null ? <>
+          <p className="sc-tool-help">Sign in as an operator. This creates a new draft and does not modify production.</p>
+          <form onSubmit={(event) => void signIn(event)}>
+            <label className="sc-tool-label">Operator email<input className="sc-tool-field" type="email" autoComplete="username" value={signInForm.email} onChange={(event) => setSignInForm((form) => ({ ...form, email: event.target.value }))} /></label>
+            <label className="sc-tool-label">Password<input className="sc-tool-field" type="password" autoComplete="current-password" value={signInForm.password} onChange={(event) => setSignInForm((form) => ({ ...form, password: event.target.value }))} /></label>
+            <div className="publish-panel-actions"><button className="sc-tool-button" type="button" onClick={() => setProductionImportOpen(false)}>Cancel</button><button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={signingIn}>{signingIn ? "Signing in…" : "Sign in"}</button></div>
+          </form>
+          {signInFeedback && <Feedback id="editor-production-signin-feedback" feedback={signInFeedback} />}
+        </> : <><p className="sc-tool-help">Signed in as {operatorEmail}. Replace the open draft with a new fork of the active production show?</p><div className="publish-panel-actions"><button className="sc-tool-button" type="button" onClick={() => setProductionImportOpen(false)}>Cancel</button><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" onClick={() => void importLatestProduction()}>Create production fork</button></div></>}
       </div>}
     </header>
     <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>

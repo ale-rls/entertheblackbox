@@ -77,6 +77,11 @@ const fixedPositionQuestionNextSchema = z.object({
   target: phaseIdSchema,
 });
 
+export const tieBreakSchema = z.object({
+  /** Deterministic draw among the candidates tied for the highest count. */
+  type: z.literal("kleroterion"),
+});
+
 export const fourQuadrantPluralityNextSchema = z.object({
   type: z.literal("quadrant-plurality"),
   // z.record would accept partial maps; an explicit object requires all four quadrants.
@@ -94,6 +99,7 @@ export const fourQuadrantPluralityNextSchema = z.object({
     .refine((s) => new Set(s).size === s.length, {
       message: "countedStatuses must not contain duplicates",
     }),
+  tieBreak: tieBreakSchema.optional(),
 });
 
 export const twoQuadrantPluralityNextSchema = z.object({
@@ -110,6 +116,7 @@ export const twoQuadrantPluralityNextSchema = z.object({
     .refine((s) => new Set(s).size === s.length, {
       message: "countedStatuses must not contain duplicates",
     }),
+  tieBreak: tieBreakSchema.optional(),
 });
 
 export const polygonZonesPluralityNextSchema = z.object({
@@ -124,6 +131,7 @@ export const polygonZonesPluralityNextSchema = z.object({
     .refine((s) => new Set(s).size === s.length, {
       message: "countedStatuses must not contain duplicates",
     }),
+  tieBreak: tieBreakSchema.optional(),
 });
 
 export const positionQuestionNextSchema = z.union([
@@ -234,6 +242,8 @@ const videoPositionQuestionBaseSchema = z.object({
   connectionStaleAfterMs: z.number().int().positive(),
   showLiveCounts: z.boolean(),
   showCursors: z.boolean().optional(),
+  /** Optional applause/boo controls shown alongside the position spectrum. */
+  rating: ratingConfigSchema.optional(),
 });
 
 const polygonZonesVideoQuestionVariantSchema = videoPositionQuestionBaseSchema

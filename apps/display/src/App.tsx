@@ -306,7 +306,9 @@ export function App() {
             resolution={state.resolution}
           />
         )}
-        {phase?.kind === "video" && phase.rating && <RatingMeter status={state.ratingStatus} />}
+        {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.rating && (
+          <RatingMeter status={state.ratingStatus} />
+        )}
         {state.notice && (
           <div
             className={[

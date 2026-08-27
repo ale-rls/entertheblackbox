@@ -128,6 +128,7 @@ export type PositionPluralityOutcome<Field extends PositionField> = {
   field: Field;
   winner: PositionQuadrant<Field> | "tie" | "empty";
   quadrantCounts: PositionQuadrantCounts<Field>;
+  tiedCandidates?: PositionQuadrant<Field>[];
 };
 
 export function countPositionQuadrants<Field extends PositionField, Status extends string>(
@@ -158,11 +159,9 @@ export function resolvePositionPlurality<Field extends PositionField, Status ext
   const highest = Math.max(...quadrants.map((quadrant) => readableCounts[quadrant]));
   if (highest === 0) return { field, winner: "empty", quadrantCounts };
   const winners = quadrants.filter((quadrant) => readableCounts[quadrant] === highest);
-  return {
-    field,
-    winner: winners.length === 1 ? winners[0]! : "tie",
-    quadrantCounts,
-  };
+  return winners.length === 1
+    ? { field, winner: winners[0]!, quadrantCounts }
+    : { field, winner: "tie", quadrantCounts, tiedCandidates: [...winners] };
 }
 
 export function resolvePositionFixedTransition<Field extends PositionField, Status extends string>(

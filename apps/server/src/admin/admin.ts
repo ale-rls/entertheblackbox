@@ -6,7 +6,7 @@ import type {
   MovementRecordingFinalized,
   MovementRecordingStarted,
 } from "../movement/index.js";
-import type { PublishedShowSummary } from "../readiness.js";
+import type { PublishedShowArtifact, PublishedShowSummary } from "../readiness.js";
 import type { FinalVoteSnapshot } from "../votes/index.js";
 
 export type AdminExport = { json: unknown; csv: string };
@@ -40,6 +40,8 @@ export type RegisterAdminOptions = {
     /** The operator-saved pending selection, if any -- takes effect on next restart. */
     readPending: () => Promise<string | null>;
     write: (showId: string) => Promise<void>;
+    /** Latest immutable production artifact, optionally scoped to a show. */
+    latest?: (showId?: string) => Promise<PublishedShowArtifact | null>;
     publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown }) => Promise<PublishedShowSummary>;
   };
   ghostConfig?: {
@@ -133,6 +135,14 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         shows: await options.showConfig.list(),
       };
     });
+    admin.get<{ Querystring: { showId?: string } }>("/shows/latest", async (request, reply) => {
+      if (!options.showConfig?.latest) return reply.code(503).send({ error: "show_config_unavailable" });
+      const requested = request.query.showId?.trim() || undefined;
+      const showId = requested ?? options.showConfig.activeShowId ?? undefined;
+      const artifact = await options.showConfig.latest(showId);
+      if (!artifact) return reply.code(404).send({ error: "published_show_not_found" });
+      return artifact;
+    });
     admin.post<{ Body: { showId?: unknown } }>("/shows", async (request, reply) => {
       if (!options.showConfig) return reply.code(503).send({ error: "show_config_unavailable" });
       const { showId } = request.body ?? {};
@@ -164,16 +174,31 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       options.data?.audit({ action: "set-target-audience-size", at: new Date().toISOString(), detail: { targetAudienceSize } });
       return { ok: true, pending: targetAudienceSize };
     });
-    admin.post<{ Body: { showId?: unknown; name?: unknown; scenario?: unknown; mediaManifest?: unknown } }>("/publish", async (request, reply) => {
+    admin.post<{ Body: { showId?: unknown; name?: unknown; scenario?: unknown; mediaManifest?: unknown; baseRecordId?: unknown } }>("/publish", async (request, reply) => {
       if (!options.showConfig) return reply.code(503).send({ error: "show_config_unavailable" });
-      const { showId, name, scenario, mediaManifest } = request.body ?? {};
+      const { showId, name, scenario, mediaManifest, baseRecordId } = request.body ?? {};
       if (
         typeof showId !== "string" || !INSTALLATION_ID_PATTERN.test(showId)
         || typeof name !== "string" || name.trim() === ""
         || typeof scenario !== "object" || scenario === null
         || typeof mediaManifest !== "object" || mediaManifest === null
+        || (baseRecordId !== undefined && (typeof baseRecordId !== "string" || baseRecordId === ""))
       ) {
         return reply.code(400).send({ error: "invalid_publish_request" });
+      }
+      if (typeof baseRecordId === "string") {
+        if (!options.showConfig.latest) return reply.code(503).send({ error: "show_config_unavailable" });
+        const latest = await options.showConfig.latest(showId);
+        if (!latest || latest.recordId !== baseRecordId) {
+          return reply.code(409).send({
+            error: "stale_production_baseline",
+            latest: latest === null ? null : {
+              recordId: latest.recordId,
+              version: latest.version,
+              publishedAt: latest.publishedAt,
+            },
+          });
+        }
       }
       const published = await options.showConfig.publish({ showId, name, scenario, mediaManifest });
       options.data?.audit({ action: "publish-show", at: new Date().toISOString(), detail: { showId, name } });

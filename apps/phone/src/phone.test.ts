@@ -266,7 +266,7 @@ describe("phoneReducer", () => {
     expect(s.join).toEqual({ kind: "rejected", reason: "rate_limited", retryAfterMs: 2000 });
   });
 
-  it("surfaces the rating candidate label only for a rating-enabled video, clearing on other phases", () => {
+  it("surfaces the reaction subject for videos and timed spectrum questions", () => {
     let s = apply(initialPhoneState, phase("video", 1));
     expect(s.ratingCandidateLabel).toBeNull();
 
@@ -290,7 +290,13 @@ describe("phoneReducer", () => {
     });
     expect(s.ratingCandidateLabel).toBe("OpenApollo");
 
-    s = apply(s, phase("position-question", 3));
+    const spectrum = phase("video-position-question", 3);
+    if (spectrum.t !== "phase" || spectrum.phase.kind !== "video-position-question") throw new Error("fixture mismatch");
+    spectrum.phase.rating = { candidateLabel: "Dionysos69" };
+    s = apply(s, spectrum);
+    expect(s.ratingCandidateLabel).toBe("Dionysos69");
+
+    s = apply(s, phase("position-question", 4));
     expect(s.ratingCandidateLabel).toBeNull();
   });
 

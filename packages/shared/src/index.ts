@@ -35,6 +35,17 @@ export const TWO_QUADRANTS = ["min", "max"] as const;
 /** Compatibility name for the original four-quadrant-only API. */
 export const QUADRANTS = FOUR_QUADRANTS;
 
+/** Stable, auditable selection used for Kleroterion tie draws and Studio preview parity. */
+export function deterministicChoice<T extends string>(seed: string, choices: readonly T[]): T {
+  if (choices.length === 0) throw new Error("deterministicChoice requires at least one choice");
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return choices[hash % choices.length]!;
+}
+
 export type FourQuadrant = (typeof FOUR_QUADRANTS)[number];
 export type TwoQuadrant = (typeof TWO_QUADRANTS)[number];
 /** Compatibility type for the original four-quadrant-only API. */

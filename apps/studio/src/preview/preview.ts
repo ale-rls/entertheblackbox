@@ -1,5 +1,6 @@
 import {
   classifyPositionVotesForField,
+  deterministicChoice,
   resolvePositionFixedTransition,
   resolvePositionPlurality,
   type PositionField,
@@ -13,7 +14,7 @@ import { diagnostics, type Diagnostic } from "../diagnostics/diagnostics.js";
 type Phase = StudioProject["scenario"]["phases"][number];
 export type ForcedOutcome = PositionQuadrant | "tie" | "empty" | "abandoned-solo";
 export type PreviewVote = PositionedVote<PositionStatus> & { participantId: string };
-export type PreviewResolution = { field: PositionField; votes: PreviewVote[]; includedTotal: number; excludedTotal: number; includedByStatus: Partial<Record<PositionStatus, number>>; excludedByStatus: Partial<Record<PositionStatus, number>>; quadrantCounts: Partial<Record<PositionQuadrant, number>>; winner: PositionQuadrant | "tie" | "empty" | "fixed"; resolvedTarget: string; freezeMs: number };
+export type PreviewResolution = { field: PositionField; votes: PreviewVote[]; includedTotal: number; excludedTotal: number; includedByStatus: Partial<Record<PositionStatus, number>>; excludedByStatus: Partial<Record<PositionStatus, number>>; quadrantCounts: Partial<Record<PositionQuadrant, number>>; winner: PositionQuadrant | "tie" | "empty" | "fixed"; resolvedTarget: string; freezeMs: number; tieBreak?: { type: "kleroterion"; candidates: string[]; selected: string } };
 export type PreviewSession = { project: StudioProject; phaseId: string; elapsedMs: number; validation: Diagnostic[]; resolution?: PreviewResolution };
 
 export function startPreview(project: StudioProject): PreviewSession {
@@ -93,6 +94,11 @@ export function resolvePreview(session: PreviewSession, outcome: ForcedOutcome, 
   const classification = classifyPositionVotesForField(phase.field, votes, counted);
   const resolved = phase.next.type === "fixed" ? resolvePositionFixedTransition(phase.field, votes, phase.next.target) : (() => {
     const result = resolvePositionPlurality(phase.field, votes, counted);
+    if (result.winner === "tie" && phase.next.tieBreak?.type === "kleroterion") {
+      const candidates = (result.tiedCandidates ?? []) as string[];
+      const selected = deterministicChoice(`studio-preview:${phase.id}`, candidates);
+      return { ...result, resolvedTarget: (phase.next.map as Record<string, string>)[selected]!, tieBreak: { type: "kleroterion" as const, candidates, selected } };
+    }
     const resolvedTarget = result.winner === "tie" ? phase.next.tie : result.winner === "empty" ? phase.next.empty : (phase.next.map as Record<string, string>)[result.winner]!;
     return { ...result, resolvedTarget };
   })();

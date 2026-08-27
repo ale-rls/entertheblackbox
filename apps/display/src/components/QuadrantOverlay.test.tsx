@@ -206,4 +206,26 @@ describe("QuadrantOverlay", () => {
     expect(html.match(/zone-shape-dimmed/g)).toHaveLength(2);
     expect(html).not.toContain('class="outcome');
   });
+
+  it("shows and highlights the deterministic Kleroterion selection for a tied zone vote", () => {
+    const resolution = {
+      t: "question_resolved" as const,
+      v: PROTOCOL_VERSION,
+      sessionId: "session-1",
+      phaseEpoch: 2,
+      field: zonesField,
+      quadrantCounts: { apollon: 2, dionysos: 2, kassandra: 0 },
+      winner: "tie" as const,
+      resolvedTarget: "dionysos-vision",
+      freezeUntil: 10_000,
+      tieBreak: { type: "kleroterion" as const, candidates: ["apollon", "dionysos"], selected: "dionysos" },
+    } as QuestionResolvedMessage;
+
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay field={zonesField} liveField={null} liveCounts={null} resolution={resolution} />,
+    );
+    expect(html).toContain("Kleroterion · Dionysos");
+    expect(html).toContain("zone-shape-winner");
+    expect(html.match(/zone-shape-dimmed/g)).toHaveLength(2);
+  });
 });

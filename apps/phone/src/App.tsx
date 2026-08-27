@@ -173,25 +173,6 @@ export function App() {
         <div className="rejected">
           <p>{REJECTION_TEXT[state.join.reason] ?? "Could not join."}</p>
         </div>
-      ) : state.ratingCandidateLabel !== null ? (
-        <div className="rating-buttons">
-          <button
-            type="button"
-            className="rating-button applause"
-            onClick={() => sendReaction("applause")}
-            aria-label={`Applaud ${state.ratingCandidateLabel}`}
-          >
-            👏
-          </button>
-          <button
-            type="button"
-            className="rating-button boo"
-            onClick={() => sendReaction("boo")}
-            aria-label={`Boo ${state.ratingCandidateLabel}`}
-          >
-            👎
-          </button>
-        </div>
       ) : (
         <div
           className="trackpad"
@@ -202,6 +183,34 @@ export function App() {
         >
           {!state.inputOpen && (
             <p className="watch-screen">Watch the screen</p>
+          )}
+          {state.ratingCandidateLabel !== null && (
+            <div className="rating-buttons" aria-label={`Reactions for ${state.ratingCandidateLabel}`}>
+              <button
+                type="button"
+                className="rating-button applause"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  sendReaction("applause");
+                }}
+                aria-label={`Applaud ${state.ratingCandidateLabel}`}
+              >
+                👏
+              </button>
+              <button
+                type="button"
+                className="rating-button boo"
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  sendReaction("boo");
+                }}
+                aria-label={`Boo ${state.ratingCandidateLabel}`}
+              >
+                👎
+              </button>
+            </div>
           )}
         </div>
       )}

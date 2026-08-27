@@ -6,6 +6,7 @@ import type {
 import {
   countPositionQuadrants,
   DEFAULT_INSTALLATION_POLICY,
+  deterministicChoice,
   materializePositionStatus,
   resolvePositionPlurality,
   resolvePositionFixedTransition,
@@ -51,6 +52,7 @@ type FourQuadrantResolution = {
   quadrantCounts: PositionQuadrantCounts<FourQuadrantField>;
   winner: FourQuadrant | "tie" | "empty" | "fixed";
   resolvedTarget: string;
+  tieBreak?: TieBreakResolution;
 };
 
 type TwoQuadrantResolution = {
@@ -58,6 +60,7 @@ type TwoQuadrantResolution = {
   quadrantCounts: PositionQuadrantCounts<TwoQuadrantField>;
   winner: TwoQuadrant | "tie" | "empty" | "fixed";
   resolvedTarget: string;
+  tieBreak?: TieBreakResolution;
 };
 
 type PolygonZonesResolution = {
@@ -65,7 +68,10 @@ type PolygonZonesResolution = {
   quadrantCounts: PositionQuadrantCounts<PolygonZonesField>;
   winner: string | "tie" | "empty" | "fixed";
   resolvedTarget: string;
+  tieBreak?: TieBreakResolution;
 };
+
+type TieBreakResolution = { type: "kleroterion"; candidates: string[]; selected: string };
 
 export type VoteResolution = (FourQuadrantResolution | TwoQuadrantResolution | PolygonZonesResolution) & {
   snapshot: FinalVoteSnapshot;
@@ -116,6 +122,16 @@ export function resolveSnapshot(
 
   const counted = new Set<CountablePositionVoteStatus>(question.next.countedStatuses);
   const outcome = resolvePositionPlurality(question.field, snapshot.votes, counted);
+  if (outcome.winner === "tie" && question.next.tieBreak?.type === "kleroterion") {
+    const candidates = (outcome.tiedCandidates ?? []) as string[];
+    const selected = deterministicChoice(`${snapshot.sessionId}:${snapshot.questionId}:${snapshot.phaseEpoch}`, candidates);
+    const resolvedTarget = (question.next.map as Record<string, string>)[selected]!;
+    return {
+      ...outcome,
+      resolvedTarget,
+      tieBreak: { type: "kleroterion", candidates, selected },
+    } as Omit<VoteResolution, "snapshot">;
+  }
   const resolvedTarget = outcome.winner === "empty"
     ? question.next.empty
     : outcome.winner === "tie"

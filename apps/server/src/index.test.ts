@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { subscribeWithRetry } from "./index.js";
+import { createRestartScheduler, subscribeWithRetry } from "./index.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 
 function fakePocketbase(subscribe: (topic: string, callback: () => void) => Promise<() => void>): PocketBaseClient {
@@ -75,6 +75,65 @@ describe("subscribeWithRetry", () => {
       // Next delay would be 8s uncapped; capped at 5s it should have fired already.
       await vi.advanceTimersByTimeAsync(5_000);
       expect(subscribe).toHaveBeenCalledTimes(5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("createRestartScheduler", () => {
+  it("waits for a quiet period so an in-flight publish response can finish", async () => {
+    vi.useFakeTimers();
+    try {
+      const restart = vi.fn(async () => {});
+      const scheduler = createRestartScheduler(restart, () => false, 500);
+
+      scheduler.schedule("scenarios");
+      await vi.advanceTimersByTimeAsync(499);
+      expect(restart).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(restart).toHaveBeenCalledWith("scenarios");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("coalesces a burst and retains changes received during a restart", async () => {
+    vi.useFakeTimers();
+    try {
+      let finishRestart: (() => void) | undefined;
+      const restart = vi.fn(() => new Promise<void>((resolve) => {
+        finishRestart = resolve;
+      }));
+      const scheduler = createRestartScheduler(restart, () => false, 500);
+
+      scheduler.schedule("scenarios");
+      await vi.advanceTimersByTimeAsync(250);
+      scheduler.schedule("media");
+      await vi.advanceTimersByTimeAsync(499);
+      expect(restart).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(restart).toHaveBeenNthCalledWith(1, "scenarios, media");
+
+      scheduler.schedule("installation_config");
+      finishRestart?.();
+      await vi.advanceTimersByTimeAsync(500);
+      expect(restart).toHaveBeenNthCalledWith(2, "installation_config");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels a pending restart during shutdown", async () => {
+    vi.useFakeTimers();
+    try {
+      const restart = vi.fn(async () => {});
+      const scheduler = createRestartScheduler(restart, () => false, 500);
+      scheduler.schedule("scenarios");
+      scheduler.stop();
+
+      await vi.advanceTimersByTimeAsync(500);
+      expect(restart).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

@@ -285,6 +285,11 @@ const questionResolvedBaseSchema = z.object({
   phaseEpoch: z.number().int().nonnegative(),
   resolvedTarget: nonEmpty,
   freezeUntil: timestamp,
+  tieBreak: z.object({
+    type: z.literal("kleroterion"),
+    candidates: z.array(nonEmpty).min(2),
+    selected: nonEmpty,
+  }).optional(),
 });
 
 const nonQuadrantWinnerSchema = z.enum(["tie", "empty", "fixed"]);

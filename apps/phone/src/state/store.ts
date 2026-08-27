@@ -27,7 +27,7 @@ export type PhoneState = {
   currentPhaseId: string | null;
   statusMessage: string | null;
   reloadRequired: ReloadMessage | null;
-  /** Set while the current video phase has applause/boo rating enabled. */
+  /** Set while the current timed-media phase has applause/boo reactions enabled. */
   ratingCandidateLabel: string | null;
 };
 
@@ -89,7 +89,10 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
           m.phase.kind === "video" ||
           m.phase.kind === "position-question" ||
           m.phase.kind === "video-position-question",
-        ratingCandidateLabel: m.phase.kind === "video" ? m.phase.rating?.candidateLabel ?? null : null,
+        ratingCandidateLabel:
+          m.phase.kind === "video" || m.phase.kind === "video-position-question"
+            ? m.phase.rating?.candidateLabel ?? null
+            : null,
       };
     }
     case "status":

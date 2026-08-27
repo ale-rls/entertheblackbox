@@ -160,7 +160,7 @@ const compositeVideoQuestionScenario = scenarioSchema.parse({
       kind: "video-position-question",
       id: "video-question",
       src: "question.mp4",
-      expectedDurationMs: 100,
+      expectedDurationMs: 1_000,
       text: "Choose while the video plays",
       field: {
         type: "four-quadrant",
@@ -173,6 +173,7 @@ const compositeVideoQuestionScenario = scenarioSchema.parse({
       hideAtMs: 50,
       connectionStaleAfterMs: 100,
       showLiveCounts: true,
+      rating: { candidateLabel: "OpenApollo" },
       next: { type: "fixed", target: "idle" },
     },
   ],
@@ -399,6 +400,13 @@ describe("PhaseEngine lifecycle", () => {
       y: 0.25,
     }, phone as unknown as WebSocket);
     expect(display.sent.some((message) => message.t === "question_status")).toBe(true);
+    engine.handleClientMessage({
+      t: "reaction",
+      v: 2,
+      sessionId: "session-1",
+      phaseEpoch: epoch,
+      kind: "applause",
+    }, phone as unknown as WebSocket);
 
     now = 1_140;
     engine.tick(now);
@@ -409,7 +417,13 @@ describe("PhaseEngine lifecycle", () => {
       winner: "fixed",
     });
 
-    now = 1_200;
+    now = 1_400;
+    engine.tick(now);
+    expect(display.sent.filter((message) => message.t === "rating_status").at(-1)).toMatchObject({
+      candidateLabel: "OpenApollo",
+      applause: 1,
+      boo: 0,
+    });
     expect(engine.completeVideo("session-1", "video-question", epoch, now)).toEqual({ ok: true });
     expect(engine.currentPhaseId).toBe("idle");
   });

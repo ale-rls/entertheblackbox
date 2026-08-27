@@ -151,6 +151,7 @@ describe("scenarioSchema structural rejection", () => {
           hideAtMs: 40_000,
           connectionStaleAfterMs: 10_000,
           showLiveCounts: true,
+          rating: { candidateLabel: "OpenApollo" },
           next: { type: "fixed", target: "idle" },
         },
       ],

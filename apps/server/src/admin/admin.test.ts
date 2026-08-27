@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
 import { InMemoryIpRateLimiter } from "../admission/rate-limit.js";
 import type { PhaseEngine } from "../engine/phase-engine.js";
-import type { PublishedShowSummary } from "../readiness.js";
+import type { PublishedShowArtifact, PublishedShowSummary } from "../readiness.js";
 import { registerAdminRoutes, type AdminDataSource, type AdminRateLimiters } from "./admin.js";
 
 function setup(options: {
@@ -14,6 +14,7 @@ function setup(options: {
     list: () => Promise<PublishedShowSummary[]>;
     readPending: () => Promise<string | null>;
     write: (showId: string) => Promise<void>;
+    latest?: (showId?: string) => Promise<PublishedShowArtifact | null>;
     publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown }) => Promise<PublishedShowSummary>;
   };
 } = {}) {
@@ -198,6 +199,65 @@ describe("admin API", () => {
     expect(published.json()).toEqual({ ok: true, show: { showId: "draft-a", name: "Election night", version: "1.0.0", publishedAt: 5_000 } });
     expect(publish).toHaveBeenCalledWith({ showId: "draft-a", name: "Election night", scenario: { version: "1.0.0" }, mediaManifest: { files: [] } });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "publish-show" }));
+  });
+
+  it("returns the immutable latest production artifact and rejects stale-baseline publishing", async () => {
+    const artifact = {
+      recordId: "record-current",
+      showId: "show-a",
+      name: "Main v4",
+      version: "1.0.0",
+      publishedAt: 5_000,
+      scenario: { version: "1.0.0", phases: [] },
+      mediaManifest: { files: [] },
+    };
+    const publish = vi.fn(async () => ({ showId: "show-a", name: "Main v5", version: "1.1.0", publishedAt: 6_000 }));
+    const { app } = setup({
+      showConfig: {
+        activeShowId: "show-a",
+        list: async () => [],
+        readPending: async () => null,
+        write: vi.fn(),
+        latest: async () => artifact,
+        publish,
+      },
+    });
+    const headers = { authorization: "Bearer strong-admin-token" };
+
+    const latest = await app.inject({ url: "/api/admin/shows/latest", headers });
+    expect(latest.statusCode).toBe(200);
+    expect(latest.json()).toEqual(artifact);
+
+    const stale = await app.inject({
+      method: "POST",
+      url: "/api/admin/publish",
+      headers,
+      payload: {
+        showId: "show-a",
+        name: "Main v5",
+        scenario: { version: "1.1.0" },
+        mediaManifest: { files: [] },
+        baseRecordId: "record-old",
+      },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({ error: "stale_production_baseline", latest: { recordId: "record-current" } });
+    expect(publish).not.toHaveBeenCalled();
+
+    const current = await app.inject({
+      method: "POST",
+      url: "/api/admin/publish",
+      headers,
+      payload: {
+        showId: "show-a",
+        name: "Main v5",
+        scenario: { version: "1.1.0" },
+        mediaManifest: { files: [] },
+        baseRecordId: "record-current",
+      },
+    });
+    expect(current.statusCode).toBe(200);
+    expect(publish).toHaveBeenCalledOnce();
   });
 
   it("returns 503 for publish when no show store is configured", async () => {

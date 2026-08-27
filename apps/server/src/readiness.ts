@@ -83,7 +83,10 @@ export async function loadScenarioReadiness(
 }
 
 type PublishedScenarioRecord = {
+  id: string;
   showId: string;
+  name?: string;
+  version?: string;
   status: "draft" | "published";
   scenario: unknown;
   mediaManifest: unknown;
@@ -131,6 +134,40 @@ export type PublishedShowSummary = {
   publishedAt: number;
 };
 
+export type PublishedShowArtifact = PublishedShowSummary & {
+  recordId: string;
+  scenario: unknown;
+  mediaManifest: unknown;
+};
+
+/** Immutable latest published artifact used when Studio forks production. */
+export async function getLatestPublishedShow(
+  client: PocketBaseClient,
+  showId?: string,
+): Promise<PublishedShowArtifact | null> {
+  await client.ensureAuth();
+  const filter = showId === undefined
+    ? 'status = "published"'
+    : client.pb.filter('status = "published" && showId = {:showId}', { showId });
+  const record = await client.pb.collection<PublishedScenarioRecord>("scenarios")
+    .getFirstListItem(filter, { sort: "-publishedAt" })
+    .catch((error: unknown) => {
+      if (error instanceof Error && "status" in error && (error as { status?: number }).status === 404) return null;
+      throw error;
+    });
+  if (!record) return null;
+  const scenario = record.scenario as { version?: string } | null;
+  return {
+    recordId: record.id,
+    showId: record.showId,
+    name: record.name?.trim() || record.showId,
+    version: scenario?.version ?? record.version ?? "unknown",
+    publishedAt: record.publishedAt,
+    scenario: record.scenario,
+    mediaManifest: record.mediaManifest,
+  };
+}
+
 /**
  * Writes a new published scenarios record -- the HTTP write side Studio's
  * "Publish" action calls, so an operator never needs superuser PocketBase
@@ -165,7 +202,7 @@ export async function publishShow(
  */
 export async function listPublishedShows(client: PocketBaseClient): Promise<PublishedShowSummary[]> {
   await client.ensureAuth();
-  const records = await client.pb.collection<PublishedScenarioRecord & { id: string; name?: string }>("scenarios")
+  const records = await client.pb.collection<PublishedScenarioRecord>("scenarios")
     .getFullList({ filter: 'status = "published"', sort: "-publishedAt" });
   const byShowId = new Map<string, PublishedShowSummary>();
   for (const record of records) {

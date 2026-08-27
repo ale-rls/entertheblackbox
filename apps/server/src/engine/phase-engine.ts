@@ -399,6 +399,7 @@ export class PhaseEngine {
     }
 
     if (phase.kind === "video-position-question") {
+      if (phase.rating) this.broadcastRatingStatus(now);
       this.beginCompositeVoteIfDue(now, phase);
       if (this.votes.currentQuestion() !== null && this.questionResolutionTarget === null) {
         this.broadcastQuestionStatus(now);
@@ -771,7 +772,7 @@ export class PhaseEngine {
     }
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, sessionEnded ? { reason, endedAt: now } : undefined);
-    if (phase.kind === "video" && phase.rating) {
+    if ((phase.kind === "video" || phase.kind === "video-position-question") && phase.rating) {
       this.ratings.begin({
         sessionId: this.sessionId,
         phaseId: target,
@@ -921,6 +922,7 @@ export class PhaseEngine {
       field: resolution.field,
       quadrantCounts: resolution.quadrantCounts,
       winner: resolution.winner,
+      ...(resolution.tieBreak === undefined ? {} : { tieBreak: resolution.tieBreak }),
     } as Extract<ServerToClientMessage, { t: "question_resolved" }>);
   }
 
@@ -961,7 +963,7 @@ export class PhaseEngine {
 
   private broadcastRatingStatus(now = this.now(), force = false): void {
     const phase = this.currentPhase();
-    if (phase.kind !== "video" || !phase.rating) return;
+    if ((phase.kind !== "video" && phase.kind !== "video-position-question") || !phase.rating) return;
     if (!force && !this.ratingStatusDirty) return;
     if (
       !force &&

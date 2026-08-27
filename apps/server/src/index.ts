@@ -147,6 +147,63 @@ export function subscribeWithRetry(
   attemptSubscribe();
 }
 
+export const DEFAULT_RESTART_SETTLE_DELAY_MS = 500;
+
+/**
+ * Debounce PocketBase change notifications before replacing the HTTP server.
+ *
+ * PocketBase can publish a realtime collection event before the HTTP request
+ * which created the record has finished returning. Studio creates a scenarios
+ * record through this same server, so restarting immediately from that event
+ * can disconnect the in-flight /api/admin/publish response and make the
+ * reverse proxy report a 502 even though PocketBase saved the show. Waiting
+ * for a short quiet period lets that response flush, coalesces related events,
+ * and retains one follow-up restart when another event arrives during a boot.
+ */
+export function createRestartScheduler(
+  restart: (reason: string) => Promise<void>,
+  isStopped: () => boolean,
+  settleDelayMs = DEFAULT_RESTART_SETTLE_DELAY_MS,
+): { schedule: (reason: string) => void; stop: () => void } {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let running = false;
+  const pendingReasons = new Set<string>();
+
+  const scheduleTimer = () => {
+    if (timer !== null || running || isStopped()) return;
+    timer = setTimeout(() => {
+      timer = null;
+      if (isStopped()) {
+        pendingReasons.clear();
+        return;
+      }
+      const reason = [...pendingReasons].join(", ");
+      pendingReasons.clear();
+      running = true;
+      const finished = () => {
+        running = false;
+        if (pendingReasons.size > 0) scheduleTimer();
+      };
+      void restart(reason).then(finished, finished);
+    }, settleDelayMs);
+  };
+
+  return {
+    schedule(reason) {
+      if (isStopped()) return;
+      pendingReasons.add(reason);
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      scheduleTimer();
+    },
+    stop() {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      pendingReasons.clear();
+    },
+  };
+}
+
 export async function startServer(): Promise<void> {
   const config = loadConfig();
   const pocketbase = new PocketBaseClient(config);
@@ -168,29 +225,29 @@ export async function startServer(): Promise<void> {
   // show, uploads media, or an operator changes the active show, and we
   // react by rebooting in place (which re-runs the media sync too) -- same
   // restart, just triggered by PocketBase instead of a human.
-  const restart = (reason: string): void => {
+  const restart = async (reason: string): Promise<void> => {
     if (restarting || shuttingDown) return;
     restarting = true;
-    void (async () => {
-      try {
-        runtime.app.log.info({ reason }, "pocketbase change detected, restarting server");
-        await runtime.app.close();
-        runtime = await boot(config, pocketbase);
-      } catch (error) {
-        console.error("restart: failed to reboot server after pocketbase change", error);
-      } finally {
-        restarting = false;
-      }
-    })();
+    try {
+      runtime.app.log.info({ reason }, "pocketbase change detected, restarting server");
+      await runtime.app.close();
+      runtime = await boot(config, pocketbase);
+    } catch (error) {
+      console.error("restart: failed to reboot server after pocketbase change", error);
+    } finally {
+      restarting = false;
+    }
   };
   const isStopped = () => shuttingDown;
-  subscribeWithRetry(pocketbase, "scenarios", () => restart("scenarios"), isStopped);
-  subscribeWithRetry(pocketbase, "installation_config", () => restart("installation_config"), isStopped);
-  subscribeWithRetry(pocketbase, "media", () => restart("media"), isStopped);
+  const restarts = createRestartScheduler(restart, isStopped);
+  subscribeWithRetry(pocketbase, "scenarios", () => restarts.schedule("scenarios"), isStopped);
+  subscribeWithRetry(pocketbase, "installation_config", () => restarts.schedule("installation_config"), isStopped);
+  subscribeWithRetry(pocketbase, "media", () => restarts.schedule("media"), isStopped);
 
   const shutdown = async (signal: NodeJS.Signals) => {
     if (shuttingDown) return;
     shuttingDown = true;
+    restarts.stop();
     runtime.app.log.info({ signal }, "shutting down");
     await pocketbase.pb.collection("scenarios").unsubscribe().catch(() => {});
     await pocketbase.pb.collection("installation_config").unsubscribe().catch(() => {});

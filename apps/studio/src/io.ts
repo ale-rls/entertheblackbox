@@ -1,6 +1,6 @@
 import { compileStudioGraph, parseRuntimeScenario } from "@smartphonecracy/studio-adapter";
 import { graphPhases, END_NODE_ID, ENTRY_NODE_ID } from "./canvas/graph.js";
-import { autoLayout, type Draft, type StudioBackup, type StudioDocument } from "./model.js";
+import { autoLayout, type Draft, type ProductionBaseline, type StudioBackup, type StudioDocument } from "./model.js";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -113,6 +113,25 @@ function parseStudioDocument(raw: unknown, project: Draft["project"]): StudioDoc
   if (raw.notes !== undefined && (!isRecord(raw.notes) || Object.values(raw.notes).some((note) => typeof note !== "string"))) {
     throw new Error("Studio document notes are invalid.");
   }
+  let productionBaseline: ProductionBaseline | undefined;
+  if (raw.productionBaseline !== undefined) {
+    const baseline = raw.productionBaseline;
+    if (!isRecord(baseline)
+      || typeof baseline.recordId !== "string" || !baseline.recordId
+      || typeof baseline.showId !== "string" || !baseline.showId
+      || typeof baseline.name !== "string" || !baseline.name
+      || typeof baseline.version !== "string" || !baseline.version
+      || !finiteNumber(baseline.publishedAt)) {
+      throw new Error("Studio document production baseline is invalid.");
+    }
+    productionBaseline = {
+      recordId: baseline.recordId,
+      showId: baseline.showId,
+      name: baseline.name,
+      version: baseline.version,
+      publishedAt: baseline.publishedAt,
+    };
+  }
 
   return {
     studioFormatVersion: 1,
@@ -123,6 +142,7 @@ function parseStudioDocument(raw: unknown, project: Draft["project"]): StudioDoc
     edges,
     viewport: { x: raw.viewport.x, y: raw.viewport.y, zoom: raw.viewport.zoom },
     ...(raw.notes ? { notes: raw.notes as Record<string, string> } : {}),
+    ...(productionBaseline ? { productionBaseline } : {}),
   };
 }
 
