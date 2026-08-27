@@ -25,8 +25,22 @@ export function refreshDraftLocalMedia(draft: Draft, manifest: MediaManifest): D
     file.durationMs === undefined ? [] : [[file.src, file.durationMs] as const]));
   const phases = draft.project.scenario.phases.map((phase) => {
     if (phase.kind !== "video" && phase.kind !== "video-position-question") return phase;
-    const expectedDurationMs = durationBySource.get(phase.audioSrc ?? phase.src);
-    return expectedDurationMs === undefined ? phase : { ...phase, expectedDurationMs };
+    const mediaDurationMs = durationBySource.get(phase.audioSrc ?? phase.src);
+    if (mediaDurationMs === undefined) return phase;
+    const expectedDurationMs = mediaDurationMs + (phase.audioSrc === undefined ? 0 : phase.tailDurationMs ?? 0);
+    if (phase.kind === "video-position-question" && phase.audioSrc !== undefined) {
+      const previousMediaDurationMs = phase.expectedDurationMs - (phase.tailDurationMs ?? 0);
+      const shiftMs = mediaDurationMs - previousMediaDurationMs;
+      return {
+        ...phase,
+        expectedDurationMs,
+        showAtMs: phase.showAtMs + shiftMs,
+        openAtMs: phase.openAtMs + shiftMs,
+        closeAtMs: phase.closeAtMs + shiftMs,
+        hideAtMs: phase.hideAtMs + shiftMs,
+      };
+    }
+    return { ...phase, expectedDurationMs };
   }) as Draft["project"]["scenario"]["phases"];
   return {
     ...draft,

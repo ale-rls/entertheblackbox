@@ -77,7 +77,8 @@ describe("scenarioSchema structural rejection", () => {
       ...imageAudio.phases[1]!,
       src: "portrait.png",
       audioSrc: "introduction.mp3",
-      expectedDurationMs: 25_000,
+      tailDurationMs: 2_000,
+      expectedDurationMs: 27_000,
     } as typeof imageAudio.phases[1];
     expect(scenarioSchema.safeParse(imageAudio).success).toBe(true);
     expect(validateScenario(scenarioSchema.parse(imageAudio), { files: [
@@ -93,6 +94,11 @@ describe("scenarioSchema structural rejection", () => {
       { src: "portrait.png", bytes: 10, hash: "image" },
     ] });
     expect(missingAudio.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "missing-media", message: expect.stringContaining("introduction.mp3") })]));
+
+    expect(scenarioSchema.safeParse({
+      ...baseScenario,
+      phases: baseScenario.phases.map((phase) => phase.id === "intro" ? { ...phase, tailDurationMs: 1_000 } : phase),
+    }).success).toBe(false);
   });
 
   it("accepts optional targetAudienceSize and per-phase showCursors", () => {

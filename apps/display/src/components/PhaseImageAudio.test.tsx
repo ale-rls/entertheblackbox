@@ -10,7 +10,8 @@ const phase: Extract<PhaseSnapshotMessage, { kind: "video" }> & { audioSrc: stri
   id: "image-intro",
   src: "portrait.png",
   audioSrc: "voice.mp3",
-  expectedDurationMs: 12_000,
+  tailDurationMs: 2_000,
+  expectedDurationMs: 14_000,
   next: "idle",
   scenarioVersion: "show-1",
   startedAt: 1_000,
@@ -27,6 +28,7 @@ afterEach(async () => {
   if (root) await act(async () => root?.unmount());
   root = null;
   document.body.replaceChildren();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -42,7 +44,8 @@ async function renderPair(send: (message: DisplayToServerMessage) => void, sound
 }
 
 describe("PhaseImageAudio", () => {
-  it("holds the still image while MP3 playback drives phase completion", async () => {
+  it("holds the still image for the configured tail before completing", async () => {
+    vi.useFakeTimers();
     const send = vi.fn();
     const { image, audio } = await renderPair(send);
     expect(image.getAttribute("src")).toBe("blob:image");
@@ -50,6 +53,10 @@ describe("PhaseImageAudio", () => {
     expect(audio.muted).toBe(true);
 
     audio.dispatchEvent(new Event("ended"));
+    expect(send).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1_999);
+    expect(send).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
     expect(send).toHaveBeenCalledWith({
       t: "video_ended",
       v: 2,

@@ -43,6 +43,7 @@ describe("local Studio media", () => {
     if (phase.kind !== "video") throw new Error("expected video phase");
     phase.src = "portrait.png";
     phase.audioSrc = "voice.mp3";
+    phase.tailDurationMs = 2_000;
     const refreshed = refreshDraftLocalMedia(draft, { files: [
       { src: "portrait.png", bytes: 10, hash: "image" },
       { src: "voice.mp3", bytes: 20, hash: "audio", durationMs: 22_222 },
@@ -50,7 +51,8 @@ describe("local Studio media", () => {
     expect(refreshed.project.scenario.phases.find((item) => item.id === phase.id)).toMatchObject({
       src: "portrait.png",
       audioSrc: "voice.mp3",
-      expectedDurationMs: 22_222,
+      tailDurationMs: 2_000,
+      expectedDurationMs: 24_222,
     });
   });
 });

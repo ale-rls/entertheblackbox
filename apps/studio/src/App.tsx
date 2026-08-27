@@ -350,17 +350,19 @@ export function App() {
     const firstAudio = imageAudio ? draft.project.manifest.files.find((file) => studioMediaKindForSource(file.src) === "audio") : undefined;
     const durationSource = firstAudio ?? firstVisual;
     const detectedDuration = localManifest?.files.find((file) => file.src === durationSource?.src)?.durationMs;
-    const expectedDurationMs = detectedDuration ?? (mediaVote ? 40_000 : 1_000);
+    const tailDurationMs = imageAudio ? (mediaVote ? 25_000 : 1_000) : 0;
+    const expectedDurationMs = (detectedDuration ?? (mediaVote ? 40_000 : 1_000)) + tailDurationMs;
+    const mediaDurationMs = expectedDurationMs - tailDurationMs;
     const mediaFields = {
       src: firstVisual?.src ?? (imageAudio ? "media/new-image.jpg" : "media/new-video.mp4"),
-      ...(imageAudio ? { audioSrc: firstAudio?.src ?? "media/new-audio.mp3" } : {}),
+      ...(imageAudio ? { audioSrc: firstAudio?.src ?? "media/new-audio.mp3", tailDurationMs } : {}),
       expectedDurationMs,
     };
     const phase = kind === "idle" ? { kind, id: "idle" as const }
       : kind === "position-question"
         ? { kind, id, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, durationMs: 60000, freezeMs: 5000, connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
         : mediaVote
-          ? { kind: "video-position-question" as const, id, ...mediaFields, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, showAtMs: Math.floor(expectedDurationMs * .25), openAtMs: Math.floor(expectedDurationMs * .3), closeAtMs: Math.max(Math.floor(expectedDurationMs * .3) + 1, Math.floor(expectedDurationMs * .75)), hideAtMs: Math.max(Math.floor(expectedDurationMs * .75), Math.floor(expectedDurationMs * .875)), connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
+          ? { kind: "video-position-question" as const, id, ...mediaFields, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, showAtMs: imageAudio ? mediaDurationMs : Math.floor(expectedDurationMs * .25), openAtMs: imageAudio ? mediaDurationMs : Math.floor(expectedDurationMs * .3), closeAtMs: imageAudio ? mediaDurationMs + Math.max(1, Math.floor(tailDurationMs * .8)) : Math.max(Math.floor(expectedDurationMs * .3) + 1, Math.floor(expectedDurationMs * .75)), hideAtMs: imageAudio ? expectedDurationMs : Math.max(Math.floor(expectedDurationMs * .75), Math.floor(expectedDurationMs * .875)), connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
           : { kind: "video" as const, id, ...mediaFields, next: "idle" };
     const phases = [...draft.project.scenario.phases, phase] as Draft["project"]["scenario"]["phases"];
     const nextNodes = [...nodes, { id, type: "phase", position: { x: 400, y: 200 }, data: nodeDataForPhase(phase as Phase) }];
@@ -388,9 +390,17 @@ export function App() {
       closeMediaPicker();
       return;
     }
-    const nextPhase = mediaPicker.target === "audioSrc"
-      ? { ...phase, audioSrc: row.src, expectedDurationMs: row.durationMs ?? phase.expectedDurationMs }
-      : { ...phase, src: row.src, ...(phase.audioSrc === undefined && row.durationMs !== undefined ? { expectedDurationMs: row.durationMs } : {}) };
+    const nextPhase = mediaPicker.target === "audioSrc" && row.durationMs !== undefined
+      ? (() => {
+          const previousAudioDurationMs = phase.expectedDurationMs - (phase.tailDurationMs ?? 0);
+          const shiftMs = row.durationMs - previousAudioDurationMs;
+          return phase.kind === "video-position-question"
+            ? { ...phase, audioSrc: row.src, expectedDurationMs: row.durationMs + (phase.tailDurationMs ?? 0), showAtMs: phase.showAtMs + shiftMs, openAtMs: phase.openAtMs + shiftMs, closeAtMs: phase.closeAtMs + shiftMs, hideAtMs: phase.hideAtMs + shiftMs }
+            : { ...phase, audioSrc: row.src, expectedDurationMs: row.durationMs + (phase.tailDurationMs ?? 0) };
+        })()
+      : mediaPicker.target === "audioSrc"
+        ? { ...phase, audioSrc: row.src }
+        : { ...phase, src: row.src, ...(phase.audioSrc === undefined && row.durationMs !== undefined ? { expectedDurationMs: row.durationMs } : {}) };
     updatePhase(nextPhase);
     setImportFeedback({ status: "success", message: `Selected ${row.src} for ${phase.id}.` });
     closeMediaPicker();

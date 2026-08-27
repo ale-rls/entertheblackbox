@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   PROTOCOL_VERSION,
   type DisplayToServerMessage,
@@ -27,6 +27,7 @@ export function PhaseImageAudio({
   onAudioElement?: (audio: HTMLAudioElement | null) => void;
   send: (message: DisplayToServerMessage) => void;
 }) {
+  const tailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const diagnostics = useVideoPlaybackDiagnostics({
     sessionId,
     phaseId: phase.id,
@@ -39,7 +40,7 @@ export function PhaseImageAudio({
     diagnostics.ref.current = audio;
     onAudioElement?.(audio);
   }, [diagnostics.ref, onAudioElement]);
-  const handleEnded = () => {
+  const completePhase = useCallback(() => {
     if (sessionId === null) return;
     send({
       t: "video_ended",
@@ -49,6 +50,21 @@ export function PhaseImageAudio({
       phaseEpoch,
       mediaId: phase.src,
     });
+  }, [phase.id, phase.src, phaseEpoch, send, sessionId]);
+  useEffect(() => () => {
+    if (tailTimer.current !== null) clearTimeout(tailTimer.current);
+  }, [completePhase]);
+  const handleEnded = () => {
+    const tailDurationMs = phase.tailDurationMs ?? 0;
+    if (tailDurationMs === 0) {
+      completePhase();
+      return;
+    }
+    if (tailTimer.current !== null) clearTimeout(tailTimer.current);
+    tailTimer.current = setTimeout(() => {
+      tailTimer.current = null;
+      completePhase();
+    }, tailDurationMs);
   };
 
   return <div className="phase-image-audio">

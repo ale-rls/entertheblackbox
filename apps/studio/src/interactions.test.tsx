@@ -319,6 +319,16 @@ describe("Studio feedback and keyboard entry", () => {
 
     expect(document.body.textContent).toContain("portrait.png");
     expect(document.body.textContent).toContain("voice.mp3");
+    expect(document.body.textContent).toContain("Tail after audio (ms)");
+    expect(document.body.textContent).toContain("total with tail: 13.000 seconds");
+    const tailInput = Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("Tail after audio (ms)"))
+      ?.querySelector<HTMLInputElement>("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(tailInput, "3000");
+      tailInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(document.body.textContent).toContain("total with tail: 15.000 seconds");
     const audioPicker = document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"]')!;
     await act(async () => { audioPicker.click(); });
     const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
@@ -331,8 +341,50 @@ describe("Studio feedback and keyboard entry", () => {
       .find((row) => row.textContent?.includes("alternate.mp3"))!;
     await act(async () => { alternate.querySelector<HTMLButtonElement>("button")?.click(); });
     await flush();
-    expect(document.body.textContent).toContain("Playback duration: 25.000 seconds");
+    expect(document.body.textContent).toContain("Audio duration: 25.000 seconds");
+    expect(document.body.textContent).toContain("total with tail: 28.000 seconds");
     expect(document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"]')?.textContent).toContain("alternate.mp3");
+  });
+
+  it("edits image + MP3 vote timing relative to the audio tail", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "portrait.png", bytes: 2_000, hash: "image" },
+      { src: "voice.mp3", bytes: 3_000, hash: "voice", durationMs: 12_000 },
+      { src: "alternate.mp3", bytes: 4_000, hash: "alternate", durationMs: 20_000 },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Image + MP3 + position vote").click(); });
+    await act(async () => { button("Cancel").click(); });
+
+    const inputFor = (text: string) => Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes(text))
+      ?.querySelector<HTMLInputElement>("input")!;
+    expect(document.body.textContent).toContain("milliseconds from MP3 end");
+    expect(inputFor("Show question").value).toBe("0");
+    expect(inputFor("Open voting").value).toBe("0");
+    expect(inputFor("Close voting").value).toBe("20000");
+    expect(inputFor("Hide question").value).toBe("25000");
+
+    const tailInput = inputFor("Tail after audio (ms)");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(tailInput, "30000");
+      tailInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { button("Fit vote to audio tail").click(); });
+    expect(inputFor("Close voting").value).toBe("24000");
+    expect(inputFor("Hide question").value).toBe("30000");
+
+    await act(async () => { document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"]')?.click(); });
+    const alternate = Array.from(document.querySelectorAll<HTMLElement>(".media-row"))
+      .find((row) => row.textContent?.includes("alternate.mp3"))!;
+    await act(async () => { alternate.querySelector<HTMLButtonElement>("button")?.click(); });
+    await flush();
+    expect(document.body.textContent).toContain("Audio duration: 20.000 seconds");
+    expect(inputFor("Show question").value).toBe("0");
+    expect(inputFor("Close voting").value).toBe("24000");
+    expect(inputFor("Hide question").value).toBe("30000");
   });
 
   it("opens the live display and admin as clearly named external tools", async () => {
