@@ -8,6 +8,7 @@ type Props = {
   localMedia: Array<{ src: string; durationMs?: number }>;
   onRename: (nextId: string) => void;
   onChange: (phase: Phase) => void;
+  onChooseMedia: (phaseId: string, trigger: HTMLButtonElement) => void;
   onKindChange: (kind: AuthorablePhaseKind, trigger: HTMLSelectElement) => void;
   onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
   onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", trigger: HTMLSelectElement) => void;
@@ -19,7 +20,7 @@ const numberValue = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export function Inspector({ project, selectedId, localMedia, onRename, onChange, onKindChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange }: Props) {
+export function Inspector({ project, selectedId, localMedia, onRename, onChange, onChooseMedia, onKindChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   useEffect(() => setIdInput(phase?.id ?? ""), [phase?.id]);
@@ -28,7 +29,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     ? localMedia.find((file) => file.src === phase.src)?.durationMs
     : undefined;
   const selectedMediaIsListed = (phase?.kind === "video" || phase?.kind === "video-position-question")
-    && project.manifest.files.some((file) => file.src === phase.src);
+    && localMedia.some((file) => file.src === phase.src);
 
   if (!phase) return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2><p className="sc-tool-copy">Select a runtime phase to edit it.</p>
     <label className="sc-tool-label"><span>Ghost cursor fill target<small>targetAudienceSize</small></span><input className="sc-tool-field" type="number" min="0" value={project.scenario.targetAudienceSize ?? 0} onChange={(event) => onTargetAudienceSizeChange(numberValue(event.target.value, project.scenario.targetAudienceSize ?? 0))} /></label>
@@ -44,19 +45,17 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     {phase.kind !== "idle" && <label className="sc-tool-label">{label("Phase type", "kind")}<select className="sc-tool-select" value={phase.kind} onChange={(event) => onKindChange(event.target.value as AuthorablePhaseKind, event.currentTarget)}><option value="video">Video</option><option value="position-question">Position question</option><option value="video-position-question">Video + position vote</option></select></label>}
     {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
     {(phase.kind === "video" || phase.kind === "video-position-question") && <>
-      <label className="sc-tool-label">{label("Media source", "src")}<select className="sc-tool-select" value={phase.src} onChange={(event) => {
-        const src = event.target.value;
-        const expectedDurationMs = localMedia.find((file) => file.src === src)?.durationMs;
-        onChange({ ...phase, src, ...(expectedDurationMs === undefined ? {} : { expectedDurationMs }) });
-      }}>
-        {!selectedMediaIsListed && <option value={phase.src}>Missing from manifest — {phase.src}</option>}
-        {project.manifest.files.map((file) => <option key={file.src} value={file.src}>{file.src}</option>)}
-      </select></label>
+      {text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
+      <div className="sc-tool-label media-source-field">{label("Media source", "src")}<button className="sc-tool-button media-source-picker" data-sc-tool-variant="secondary" type="button" aria-label={`Choose media for ${phase.id}. Current media: ${phase.src}`} onClick={(event) => onChooseMedia(phase.id, event.currentTarget)}>
+        <span className="sc-tool-mono">{phase.src}</span><span>Browse library…</span>
+      </button></div>
+      {!selectedMediaIsListed && <p className="field-error" role="alert">This file is missing from the shared media library. Choose a replacement.</p>}
       <p className="sc-tool-copy field-hint">{detectedDuration === undefined
         ? "Video duration is detected automatically when the selected media is available."
         : `Video duration: ${(detectedDuration / 1000).toFixed(3)} seconds`}</p>
     </>}
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
+      {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
       {phase.field.type !== "polygon-zones" && <label className="sc-tool-label">{label("Quadrant layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : `two-quadrant-${phase.field.axis}`} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option></select></label>}
       {phase.field.type === "four-quadrant" ? (() => {

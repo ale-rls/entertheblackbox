@@ -269,7 +269,10 @@ export function App() {
         />
         {phase?.kind === "position-question" && (
           <div className="question">
-            <h2>{phase.text}</h2>
+            <div className="question-copy">
+              {phase.title && <h2>{phase.title}</h2>}
+              <p className="question-text">{phase.text}</p>
+            </div>
             <QuadrantOverlay
               field={phase.field}
               liveField={state.liveField}
@@ -280,6 +283,9 @@ export function App() {
               <Countdown clock={connection.clock} deadlineAt={phase.deadlineAt} />
             )}
           </div>
+        )}
+        {phase?.kind === "video" && phase.title && (
+          <div className="video-title">{phase.title}</div>
         )}
         {phase?.kind === "video-position-question" && (
           <VideoQuestionOverlay

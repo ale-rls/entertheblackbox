@@ -61,4 +61,17 @@ export class PocketbaseMediaLibrary {
       throw new Error(`Could not add ${file.name}. ${reason}`);
     }
   }
+
+  async remove(src: string): Promise<void> {
+    try {
+      const existing = await this.pb.collection<MediaRecord>("media")
+        .getFirstListItem(this.pb.filter("src = {:src}", { src }));
+      await this.pb.collection("media").delete(existing.id);
+    } catch (error) {
+      const reason = error instanceof ClientResponseError
+        ? error.message
+        : error instanceof Error ? error.message : "The video could not be removed.";
+      throw new Error(`Could not remove ${src}. ${reason}`);
+    }
+  }
 }

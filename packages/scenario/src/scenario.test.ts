@@ -84,6 +84,19 @@ describe("scenarioSchema structural rejection", () => {
     }
   });
 
+  it("accepts optional display titles and rejects empty titles", () => {
+    const titled = parse((s) => ({
+      ...s,
+      phases: s.phases.map((phase) => phase.kind === "idle" ? phase : { ...phase, title: `Title for ${phase.id}` }),
+    }));
+    expect(titled.success).toBe(true);
+    const empty = parse((s) => ({
+      ...s,
+      phases: s.phases.map((phase) => phase.id === "intro" ? { ...phase, title: "" } : phase),
+    }));
+    expect(empty.success).toBe(false);
+  });
+
   it("accepts a timed video position vote and enforces its timeline order", () => {
     const composite = {
       version: "video-vote-1",

@@ -150,6 +150,7 @@ export const ratingConfigSchema = z.object({
 export const videoPhaseSchema = z.object({
   kind: z.literal("video"),
   id: phaseIdSchema,
+  title: z.string().min(1, "title must be non-empty").optional(),
   src: z.string().min(1, "video src must be non-empty"),
   expectedDurationMs: z.number().int().positive(),
   next: phaseIdSchema,
@@ -162,6 +163,7 @@ export const videoPhaseSchema = z.object({
 const positionQuestionBaseSchema = z.object({
   kind: z.literal("position-question"),
   id: phaseIdSchema,
+  title: z.string().min(1, "title must be non-empty").optional(),
   text: z.string().min(1, "question text must be non-empty"),
   durationMs: z.number().int().positive(),
   freezeMs: z.number().int().nonnegative(),
@@ -205,6 +207,7 @@ const canonicalPositionQuestionPhaseSchema = z.union([
 const videoPositionQuestionBaseSchema = z.object({
   kind: z.literal("video-position-question"),
   id: phaseIdSchema,
+  title: z.string().min(1, "title must be non-empty").optional(),
   src: z.string().min(1, "video src must be non-empty"),
   expectedDurationMs: z.number().int().positive(),
   text: z.string().min(1, "question text must be non-empty"),

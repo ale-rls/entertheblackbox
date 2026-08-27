@@ -20,6 +20,7 @@ import { ConfirmationDialog, type ConfirmationDetails } from "./chrome/Confirmat
 import { SaveStatus } from "./chrome/SaveStatus.js";
 import { refreshDraftLocalMedia, runtimeMediaManifest, type MediaManifest } from "./media/local.js";
 import { PocketbaseMediaLibrary } from "./media/pocketbase-media.js";
+import { MediaLibraryDialog, type MediaLibraryRow } from "./media/MediaLibraryDialog.js";
 import "@smartphonecracy/tool-ui/styles.css";
 import "./style.css";
 
@@ -32,7 +33,8 @@ const download = (name: string, value: unknown) => {
 
 type InlineFeedback = { status: "info" | "success" | "danger"; message: string };
 
-const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
+declare const __POCKETBASE_URL__: string;
+const POCKETBASE_URL = __POCKETBASE_URL__;
 
 function Feedback({ feedback, id, className = "" }: { feedback: InlineFeedback; id: string; className?: string }) {
   return <p id={id} className={`sc-tool-feedback studio-feedback ${className}`.trim()} data-sc-tool-status={feedback.status} role={feedback.status === "danger" ? "alert" : "status"} aria-atomic="true">{feedback.message}</p>;
@@ -82,6 +84,9 @@ export function App() {
   const [showInspector, setShowInspector] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(true);
   const [localManifest, setLocalManifest] = useState<MediaManifest>();
+  const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
+  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; trigger: HTMLButtonElement | null }>();
+  const [mediaUploading, setMediaUploading] = useState(false);
   const [importFeedback, setImportFeedback] = useState<InlineFeedback>();
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
   const [exportFeedback, setExportFeedback] = useState<InlineFeedback>();
@@ -107,7 +112,6 @@ export function App() {
   }), [operatorPb]);
   const [confirmation, setConfirmation] = useState<ConfirmationDetails>();
   const importInputRef = useRef<HTMLInputElement>(null);
-  const mediaInputRef = useRef<HTMLInputElement>(null);
   const homeHeadingRef = useRef<HTMLHeadingElement>(null);
   const editorRef = useRef<HTMLElement>(null);
   type HistoryState = { draft: Draft; edges: Edge[] };
@@ -190,6 +194,7 @@ export function App() {
   };
   const addMedia = async (files: FileList | null) => {
     if (!files?.length) return;
+    setMediaUploading(true);
     const selected = [...files];
     const added: string[] = [];
     const failed: Array<{ name: string; reason: string }> = [];
@@ -203,18 +208,22 @@ export function App() {
       }
     }
 
-    const manifest = await media.list();
-    if (manifest) setLocalManifest(manifest);
-    const addedSummary = added.length ? `Added ${added.length}: ${added.join(", ")}.` : "No videos were added.";
-    const failedSummary = failed.length
-      ? ` Failed ${failed.length}: ${failed.map(({ name, reason }) => `${name} — ${reason}`).join("; ")}`
-      : "";
-    if (!manifest) {
-      setImportFeedback({ status: "danger", message: `Add Media finished, but the library could not be refreshed. ${addedSummary}${failedSummary} Check that PocketBase is reachable and reload Studio.` });
-    } else if (failed.length) {
-      setImportFeedback({ status: "danger", message: `${addedSummary}${failedSummary}` });
-    } else {
-      setImportFeedback({ status: "success", message: `${addedSummary} The media library is up to date.` });
+    try {
+      const manifest = await media.list();
+      if (manifest) setLocalManifest(manifest);
+      const addedSummary = added.length ? `Added ${added.length}: ${added.join(", ")}.` : "No videos were added.";
+      const failedSummary = failed.length
+        ? ` Failed ${failed.length}: ${failed.map(({ name, reason }) => `${name} — ${reason}`).join("; ")}`
+        : "";
+      if (!manifest) {
+        setImportFeedback({ status: "danger", message: `Upload finished, but the library could not be refreshed. ${addedSummary}${failedSummary} Check that PocketBase is reachable and reopen the library.` });
+      } else if (failed.length) {
+        setImportFeedback({ status: "danger", message: `${addedSummary}${failedSummary}` });
+      } else {
+        setImportFeedback({ status: "success", message: `${addedSummary} The media library is up to date.` });
+      }
+    } finally {
+      setMediaUploading(false);
     }
   };
   const duplicate = (source: Draft) => save({ ...structuredClone(source), id: crypto.randomUUID(), name: `${source.name} copy`, updatedAt: Date.now() });
@@ -257,11 +266,56 @@ export function App() {
       },
     });
   };
+  const requestMediaRemoval = (row: MediaLibraryRow, trigger: HTMLButtonElement) => {
+    const usage = draft === undefined
+      ? " No show is currently open, so phase usage has not been checked."
+      : row.references.length > 0
+      ? ` It is used by ${row.references.join(", ")}; those phases will report missing media until another file is selected.`
+      : " It is not used by the current show.";
+    setConfirmation({
+      title: `Remove “${row.src}” from the media library?`,
+      description: `This permanently deletes the shared PocketBase media file.${usage}`,
+      confirmLabel: "Remove media",
+      cancelLabel: "Keep media",
+      tone: "danger",
+      trigger,
+      onConfirm: async () => {
+        try {
+          await media.remove(row.src);
+          const manifest = await media.list();
+          if (manifest) setLocalManifest(manifest);
+          setImportFeedback(manifest
+            ? { status: "success", message: `Removed ${row.src} from the media library.` }
+            : { status: "danger", message: `Removed ${row.src}, but the library could not be refreshed.` });
+        } catch (error) {
+          setImportFeedback({ status: "danger", message: error instanceof Error ? error.message : `Could not remove ${row.src}.` });
+        }
+      },
+    });
+  };
+  const openMediaLibrary = () => {
+    setMediaPicker(undefined);
+    setMediaLibraryOpen(true);
+  };
+  const openMediaPicker = (phaseId: string, trigger: HTMLButtonElement | null = null) => {
+    setMediaLibraryOpen(false);
+    setMediaPicker({ phaseId, trigger });
+  };
+  const closeMediaPicker = () => {
+    const trigger = mediaPicker?.trigger;
+    setMediaPicker(undefined);
+    queueMicrotask(() => {
+      if (trigger?.isConnected) trigger.focus();
+      else editorRef.current?.focus();
+    });
+  };
   const closeShow = () => {
     setDraft(undefined);
     setNodes([]);
     setEdges([]);
     setSelectedId(undefined);
+    setMediaLibraryOpen(false);
+    setMediaPicker(undefined);
   };
   const persistGraph = (nextEdges: Edge[]) => {
     if (!draft) return;
@@ -306,12 +360,32 @@ export function App() {
     setNodes(nextNodes);
     setEdges(nextEdges);
     saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges);
+    if (kind === "video" || kind === "video-position-question") {
+      setSelectedId(id);
+      setShowInspector(true);
+      openMediaPicker(id);
+    }
   };
   const updatePhase = (nextPhase: Phase) => {
     if (!draft) return;
     const phases = draft.project.scenario.phases.map((phase) => phase.id === nextPhase.id ? nextPhase : phase) as Draft["project"]["scenario"]["phases"];
     record({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } }, updatedAt: Date.now() });
     setNodes((current) => current.map((node) => node.id === nextPhase.id ? { ...node, data: nodeDataForPhase(nextPhase) } : node));
+  };
+  const selectMedia = (row: MediaLibraryRow) => {
+    if (!draft || !mediaPicker) return;
+    const phase = draft.project.scenario.phases.find((item) => item.id === mediaPicker.phaseId);
+    if (!phase || (phase.kind !== "video" && phase.kind !== "video-position-question")) {
+      closeMediaPicker();
+      return;
+    }
+    updatePhase({
+      ...phase,
+      src: row.src,
+      expectedDurationMs: row.durationMs ?? phase.expectedDurationMs,
+    });
+    setImportFeedback({ status: "success", message: `Selected ${row.src} for ${phase.id}.` });
+    closeMediaPicker();
   };
   const updateTargetAudienceSize = (targetAudienceSize: number) => {
     if (!draft) return;
@@ -459,6 +533,7 @@ export function App() {
     <div className="home-actions">
       <button className="sc-tool-button" data-sc-tool-variant="primary" onClick={createShow}>New show</button>
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" aria-describedby={importFeedback ? "studio-home-feedback" : undefined} onClick={() => importInputRef.current?.click()}>Import show or backup</button>
+      <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={openMediaLibrary}>Media library</button>
       <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json,text/plain,.json,.txt" onChange={(event) => {
         void importFiles(event.currentTarget.files);
         event.currentTarget.value = "";
@@ -468,6 +543,7 @@ export function App() {
     <h2>Recent drafts</h2>{recent.length === 0 && <p className="sc-tool-copy lede">No local drafts yet. Import scenario.json and media-manifest.json together.</p>}
     {localManifest && <p className="sc-tool-copy lede">Media library: {localManifest.files.length} file{localManifest.files.length === 1 ? "" : "s"} available.</p>}
     {recent.map((item) => <article key={item.id}><button className="sc-tool-button draft-open" data-sc-tool-variant="quiet" onClick={() => void recoverDraft(db, item.id).then((recovered) => setDraft(recovered && localManifest ? refreshDraftLocalMedia(recovered, localManifest) : recovered))}>{item.name}</button><small className="sc-tool-copy sc-tool-mono">{new Date(item.updatedAt).toLocaleString()}</small><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => duplicate(item)}>Duplicate</button><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => download(`${item.name}.studio-backup.json`, exportBackup(item))}>Export backup</button><button className="sc-tool-button" data-sc-tool-variant="danger" onClick={(event) => remove(item, event.currentTarget)}>Delete</button></article>)}
+    {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={undefined} feedback={importFeedback} uploading={mediaUploading} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}
   </main>;
 
@@ -558,13 +634,19 @@ export function App() {
       return position ? { ...node, position } : node;
     }));
   };
+  const mediaPickerPhase = mediaPicker
+    ? draft.project.scenario.phases.find((phase) => phase.id === mediaPicker.phaseId)
+    : undefined;
+  const mediaPickerSelectedSrc = mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
+    ? mediaPickerPhase.src
+    : "";
   if (previewing) return <PreviewPanel project={draft.project} onClose={() => setPreviewing(false)} />;
   return <main ref={editorRef} tabIndex={-1} className={`editor${showInspector ? "" : " no-inspector"}${showDiagnostics ? "" : " no-diagnostics"}`} data-sc-tool-density="compact" data-sc-tool-root>
     <header className="menubar">
       <Menu label="File" items={[
         { label: "New show", onSelect: createShow },
         { label: "Import…", onSelect: () => importInputRef.current?.click() },
-        { label: "Add Media…", onSelect: () => mediaInputRef.current?.click() },
+        { label: "Media library…", onSelect: openMediaLibrary },
         { label: "Duplicate", onSelect: () => duplicate(draft) },
         { separator: true },
         { label: "Export files", onSelect: () => Object.entries(exportArtifacts(draft)).forEach(([name, value]) => download(name, value)), disabled: blocked },
@@ -589,6 +671,7 @@ export function App() {
         { separator: true },
         { label: "Save layout", onSelect: saveLayout },
       ]} />
+      <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={openMediaLibrary}>Media</button>
       <input aria-label="Show name" className="sc-tool-field show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
       <SaveStatus status={status} />
       <button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => setPreviewing(true)}>Preview</button>
@@ -599,10 +682,6 @@ export function App() {
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/admin/" target="_blank" rel="noreferrer">Monitor show</a>
       <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json,text/plain,.json,.txt" onChange={(event) => {
         void importFiles(event.currentTarget.files);
-        event.currentTarget.value = "";
-      }} />
-      <input ref={mediaInputRef} aria-label="Add video media" hidden multiple type="file" accept="video/mp4,video/webm,.mp4,.webm" onChange={(event) => {
-        void addMedia(event.currentTarget.files);
         event.currentTarget.value = "";
       }} />
       {importFeedback && <Feedback id="studio-import-feedback" className="menubar-feedback" feedback={importFeedback} />}
@@ -643,8 +722,10 @@ export function App() {
       </div>}
     </header>
     <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
-    <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onKindChange={changeSelectedKind} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} />
+    <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onKindChange={changeSelectedKind} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} />
     <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
+    {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
+    {mediaPicker && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} selection={{ contextLabel: `For ${mediaPicker.phaseId}`, selectedSrc: mediaPickerSelectedSrc, onSelect: selectMedia }} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={closeMediaPicker} />}
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}
   </main>;
 }

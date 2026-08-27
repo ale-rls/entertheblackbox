@@ -54,7 +54,10 @@ export function VideoQuestionOverlay({
   return (
     <div className="question question-over-video" data-voting-open={votingOpen}>
       <div className="question-scrim" />
-      <h2>{phase.text}</h2>
+      <div className="question-copy">
+        {phase.title && <h2>{phase.title}</h2>}
+        <p className="question-text">{phase.text}</p>
+      </div>
       <QuadrantOverlay
         field={phase.field}
         liveField={liveField}

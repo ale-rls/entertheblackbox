@@ -154,6 +154,158 @@ body:has(.editor),
   gap: var(--sc-tool-space-2);
 }
 
+/* Shared media library */
+.media-library {
+  width: min(100%, 72rem);
+}
+
+.media-library-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sc-tool-space-6);
+  padding-block-end: var(--sc-tool-space-6);
+  border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
+}
+
+.media-library-header h2 {
+  margin-block: var(--sc-tool-space-2);
+  font-size: var(--sc-tool-font-size-5);
+}
+
+.media-dropzone {
+  display: grid;
+  margin-block: var(--sc-tool-space-7);
+  padding: var(--sc-tool-space-8);
+  border: var(--sc-tool-border-emphasis) dashed var(--sc-tool-color-rule-strong);
+  border-radius: var(--sc-tool-radius-2);
+  place-items: center;
+  gap: var(--sc-tool-space-4);
+  background: var(--sc-tool-color-surface-1);
+  text-align: center;
+  transition: border-color var(--sc-tool-duration-fast) var(--sc-tool-ease-standard), background var(--sc-tool-duration-fast) var(--sc-tool-ease-standard);
+}
+
+.media-dropzone[data-dragging="true"] {
+  border-color: var(--sc-tool-color-action);
+  background: var(--sc-tool-color-selection);
+}
+
+.media-library-feedback {
+  width: 100%;
+  max-width: none;
+  margin-block: 0 var(--sc-tool-space-6);
+}
+
+.media-search {
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 24rem);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sc-tool-space-5);
+  margin-block-end: var(--sc-tool-space-5);
+}
+
+.media-list {
+  display: grid;
+  border-block-start: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
+}
+
+.media-row {
+  display: grid;
+  grid-template-columns: minmax(14rem, 1fr) minmax(12rem, 1fr) auto;
+  align-items: center;
+  gap: var(--sc-tool-space-6);
+  padding-block: var(--sc-tool-space-5);
+  padding-inline: var(--sc-tool-space-4);
+  border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
+}
+
+.media-row[data-selected="true"] {
+  background: var(--sc-tool-color-selection);
+  box-shadow: inset var(--sc-tool-space-1) 0 0 var(--sc-tool-color-action);
+}
+
+.media-row-main {
+  display: grid;
+  min-width: 0;
+  gap: var(--sc-tool-space-2);
+}
+
+.media-row-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-references {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: var(--sc-tool-space-3);
+}
+
+.media-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sc-tool-space-3);
+}
+
+.media-state,
+.media-reference {
+  padding: var(--sc-tool-space-2) var(--sc-tool-space-3);
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
+  border-radius: var(--sc-tool-radius-pill);
+  color: var(--sc-tool-color-text-muted);
+  font-family: var(--sc-tool-font-mono);
+  font-size: var(--sc-tool-font-size-00);
+}
+
+.media-state[data-used="true"] {
+  border-color: var(--sc-tool-color-success);
+  color: var(--sc-tool-color-success);
+}
+
+.media-state[data-selected="true"] {
+  border-color: var(--sc-tool-color-action);
+  color: var(--sc-tool-color-action);
+}
+
+.media-reference {
+  overflow: hidden;
+  max-width: 12rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-library-empty {
+  padding: var(--sc-tool-space-10) var(--sc-tool-space-6);
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
+  text-align: center;
+}
+
+.media-source-field {
+  display: grid;
+  gap: var(--sc-tool-space-3);
+}
+
+.media-source-picker {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sc-tool-space-4);
+  text-align: start;
+}
+
+.media-source-picker .sc-tool-mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .menubar-feedback {
   max-width: min(28rem, 100%);
   flex: 1 1 18rem;
@@ -756,6 +908,23 @@ body:has(.editor),
   .preview > header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .media-library-header,
+  .media-search {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .media-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .media-row-main,
+  .media-references,
+  .media-row-actions {
+    grid-column: 1 / -1;
   }
 }
 

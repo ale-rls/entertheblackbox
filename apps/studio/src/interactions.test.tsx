@@ -5,7 +5,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { Draft } from "./model.js";
 
 const database = vi.hoisted(() => ({ drafts: [] as Draft[], deleted: [] as string[] }));
-const media = vi.hoisted(() => ({ load: vi.fn(), upload: vi.fn() }));
+const media = vi.hoisted(() => ({ load: vi.fn(), upload: vi.fn(), remove: vi.fn() }));
 
 vi.mock("./drafts.js", () => ({
   Autosave: class {
@@ -33,6 +33,7 @@ vi.mock("./media/pocketbase-media.js", () => ({
   PocketbaseMediaLibrary: class {
     list = media.load;
     upload = media.upload;
+    remove = media.remove;
   },
 }));
 
@@ -52,9 +53,11 @@ beforeEach(() => {
   database.deleted = [];
   media.load.mockReset().mockResolvedValue(undefined);
   media.upload.mockReset().mockResolvedValue(undefined);
+  media.remove.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
   vi.stubGlobal("scrollTo", vi.fn());
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  vi.stubGlobal("DOMMatrixReadOnly", class { m22 = 1; });
 });
 
 afterEach(async () => {
@@ -215,8 +218,9 @@ describe("Studio feedback and keyboard entry", () => {
       .mockResolvedValueOnce(undefined);
     await render(<App />);
     await act(async () => { button("New show").click(); });
+    await act(async () => { button("Media").click(); });
 
-    const input = document.querySelector<HTMLInputElement>('input[aria-label="Add video media"]')!;
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Upload videos to media library"]')!;
     expect(input.accept).toBe("video/mp4,video/webm,.mp4,.webm");
     const files = [
       new File(["first"], "first.mp4", { type: "video/mp4" }),
@@ -237,6 +241,56 @@ describe("Studio feedback and keyboard entry", () => {
     expect(media.load).toHaveBeenCalledTimes(2);
     expect(document.body.textContent).toContain("Added 2: first.mp4, third.webm.");
     expect(document.body.textContent).toContain("Failed 1: duplicate.mp4");
+  });
+
+  it("shows media usage and confirms permanent removal from the shared library", async () => {
+    media.load
+      .mockResolvedValueOnce({ files: [{ src: "unused.mp4", bytes: 1_048_576, hash: "unused", durationMs: 12_000 }] })
+      .mockResolvedValueOnce({ files: [] });
+    await render(<App />);
+    await act(async () => { button("Media library").click(); });
+
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("unused.mp4");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("1.0 MB");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Shared");
+    await act(async () => { button("Remove").click(); });
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("permanently deletes the shared PocketBase media file");
+    await act(async () => { button("Remove media").click(); });
+    await flush();
+
+    expect(media.remove).toHaveBeenCalledWith("unused.mp4");
+    expect(document.body.textContent).toContain("Removed unused.mp4 from the media library.");
+  });
+
+  it("uses the media library picker when adding and changing a video phase", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "opening.mp4", bytes: 1_000, hash: "opening", durationMs: 1_000 },
+      { src: "conclusion.webm", bytes: 2_000, hash: "conclusion", durationMs: 2_500 },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Video phase").click(); });
+
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("Choose media");
+    expect(dialog.textContent).toContain("opening.mp4");
+    expect(dialog.textContent).toContain("conclusion.webm");
+    const conclusionRow = Array.from(dialog.querySelectorAll<HTMLElement>(".media-row"))
+      .find((row) => row.textContent?.includes("conclusion.webm"))!;
+    await act(async () => { conclusionRow.querySelector<HTMLButtonElement>("button")?.click(); });
+    await flush();
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    const sourceButton = document.querySelector<HTMLButtonElement>('.media-source-picker')!;
+    expect(sourceButton.textContent).toContain("conclusion.webm");
+    expect(sourceButton.getAttribute("aria-label")).toContain("Current media: conclusion.webm");
+    expect(document.body.textContent).toContain("Video duration: 2.500 seconds");
+    expect(document.body.textContent).toContain("Selected conclusion.webm for video-");
+
+    await act(async () => { sourceButton.click(); });
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Choose media");
+    expect(document.querySelector('.media-row[data-selected="true"]')?.textContent).toContain("conclusion.webm");
   });
 
   it("returns focus to a menu trigger after a normal selection", async () => {
