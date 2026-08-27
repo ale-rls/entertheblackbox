@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { loadConfig, type ServerConfig } from "./config.js";
 import { buildServer, type ServerRuntime } from "./server.js";
-import { loadPublishedScenarioFromPocketbase, loadScenarioReadiness } from "./readiness.js";
+import { loadPublishedScenarioFromPocketbase, type ScenarioReadiness } from "./readiness.js";
 import { PocketBaseAdminDataSource } from "./persistence/admin-data.js";
 import { PocketBaseClient } from "./persistence/pocketbase-client.js";
 import { readServerConfigOverride } from "./persistence/installation-config.js";
@@ -65,14 +65,34 @@ async function boot(config: ServerConfig, pocketbase: PocketBaseClient): Promise
   // sync existed.
   await syncMediaFromPocketbase(pocketbase, config.mediaDir)
     .catch((error: unknown) => console.error("pocketbase: failed to sync media library", error));
-  // PocketBase is the source of truth for published scenarios once Studio
-  // publishes one; the local content/ JSON files remain the fallback so
-  // dev/CI keep working against an empty PocketBase instance.
-  const readiness = await loadPublishedScenarioFromPocketbase(pocketbase, config.mediaDir, override?.activeShowId)
-    .catch((error: unknown) => {
-      console.error("pocketbase: failed to load published scenario, falling back to local file", error);
-      return null;
-    }) ?? await loadScenarioReadiness(config);
+  // PocketBase is the source of truth for published scenarios. Nothing
+  // published (or PocketBase being unreachable) must surface as a visibly
+  // not-ready server -- readiness.ready === false already makes every
+  // route 503 and skips building a PhaseEngine (server.ts), so the display
+  // sits on its own "preparing media" screen -- rather than silently
+  // running local content/scenarios/dev.json's placeholder show live. To
+  // preview locally, publish something first (e.g.
+  // `tsx scripts/publish-scenario-to-pocketbase.ts content/scenarios/dev.json`).
+  const readiness: ScenarioReadiness = await loadPublishedScenarioFromPocketbase(
+    pocketbase, config.mediaDir, override?.activeShowId,
+  ).catch((error: unknown): ScenarioReadiness => {
+    console.error("pocketbase: failed to load published scenario", error);
+    return {
+      ready: false,
+      scenario: null,
+      errors: [`pocketbase unreachable: ${error instanceof Error ? error.message : String(error)}`],
+      warnings: [],
+    };
+  }) ?? {
+    ready: false,
+    scenario: null,
+    errors: [
+      override?.activeShowId
+        ? `no published show found for active show id "${override.activeShowId}"`
+        : "no show has been published to PocketBase yet",
+    ],
+    warnings: [],
+  };
   // Past completed recordings for this showId, replayed as ghost cursors
   // (apps/server/src/ghosts) -- refreshed on every boot, so it naturally
   // stays in sync with whichever restart() below already triggers; there's
