@@ -112,6 +112,41 @@ async function boot(config: ServerConfig, pocketbase: PocketBaseClient): Promise
   return runtime;
 }
 
+/**
+ * Subscribes to a PocketBase collection's realtime feed, retrying with
+ * capped exponential backoff if the initial connect fails. Without this,
+ * a single transient failure (observed in production: PocketBase's
+ * EventSource-based realtime connect timing out) permanently disables
+ * auto-restart-on-publish for the rest of the process's life -- the SDK
+ * itself only reconnects a connection that dropped *after* successfully
+ * opening, not one that never opened in the first place.
+ */
+export function subscribeWithRetry(
+  pocketbase: PocketBaseClient,
+  collection: string,
+  onChange: () => void,
+  isStopped: () => boolean,
+  maxDelayMs = 30_000,
+): void {
+  let attempt = 0;
+  const attemptSubscribe = (): void => {
+    if (isStopped()) return;
+    pocketbase.pb.collection(collection).subscribe("*", onChange)
+      .then(() => { attempt = 0; })
+      .catch((error: unknown) => {
+        if (isStopped()) return;
+        const delayMs = Math.min(maxDelayMs, 1000 * 2 ** attempt);
+        attempt += 1;
+        console.error(
+          `pocketbase: failed to subscribe to ${collection}, retrying in ${delayMs}ms`,
+          error,
+        );
+        setTimeout(attemptSubscribe, delayMs);
+      });
+  };
+  attemptSubscribe();
+}
+
 export async function startServer(): Promise<void> {
   const config = loadConfig();
   const pocketbase = new PocketBaseClient(config);
@@ -148,12 +183,10 @@ export async function startServer(): Promise<void> {
       }
     })();
   };
-  await pocketbase.pb.collection("scenarios").subscribe("*", () => restart("scenarios"))
-    .catch((error: unknown) => console.error("pocketbase: failed to subscribe to scenarios", error));
-  await pocketbase.pb.collection("installation_config").subscribe("*", () => restart("installation_config"))
-    .catch((error: unknown) => console.error("pocketbase: failed to subscribe to installation_config", error));
-  await pocketbase.pb.collection("media").subscribe("*", () => restart("media"))
-    .catch((error: unknown) => console.error("pocketbase: failed to subscribe to media", error));
+  const isStopped = () => shuttingDown;
+  subscribeWithRetry(pocketbase, "scenarios", () => restart("scenarios"), isStopped);
+  subscribeWithRetry(pocketbase, "installation_config", () => restart("installation_config"), isStopped);
+  subscribeWithRetry(pocketbase, "media", () => restart("media"), isStopped);
 
   const shutdown = async (signal: NodeJS.Signals) => {
     if (shuttingDown) return;
