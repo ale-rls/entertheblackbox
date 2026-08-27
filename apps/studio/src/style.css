@@ -647,6 +647,90 @@ body:has(.editor),
   border-radius: var(--sc-tool-radius-1);
 }
 
+.polygon-editor {
+  display: grid;
+  gap: var(--sc-tool-space-4);
+  margin-block: var(--sc-tool-space-5);
+}
+
+.polygon-editor-zones,
+.polygon-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sc-tool-space-3);
+}
+
+.polygon-zone-select {
+  min-width: 0;
+  flex: 1 1 5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.polygon-editor-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
+  border-radius: var(--sc-tool-radius-1);
+  background: var(--sc-tool-color-canvas);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.polygon-editor-grid {
+  fill: none;
+  stroke: var(--sc-tool-color-rule);
+  stroke-width: 0.35;
+  pointer-events: none;
+}
+
+.polygon-editor-zone {
+  fill: color-mix(in srgb, var(--sc-tool-color-domain-question) 10%, transparent);
+  stroke: var(--sc-tool-color-text-muted);
+  stroke-width: 0.7;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+.polygon-editor-zone.is-selected {
+  fill: color-mix(in srgb, var(--sc-tool-color-domain-question) 24%, transparent);
+  stroke: var(--sc-tool-color-domain-question);
+  stroke-width: 1.3;
+}
+
+.polygon-editor-canvas.is-drawing .polygon-editor-zone {
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+.polygon-editor-handle,
+.polygon-editor-draft-point {
+  fill: var(--sc-tool-color-focus-on-dark);
+  stroke: var(--sc-tool-color-canvas);
+  stroke-width: 0.8;
+  vector-effect: non-scaling-stroke;
+  cursor: grab;
+}
+
+.polygon-editor-handle:active { cursor: grabbing; }
+
+.polygon-editor-draft {
+  fill: color-mix(in srgb, var(--sc-tool-color-focus-on-dark) 16%, transparent);
+  stroke: var(--sc-tool-color-focus-on-dark);
+  stroke-width: 1.2;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.polygon-editor-actions .sc-tool-copy {
+  flex: 1 1 100%;
+  color: var(--sc-tool-color-text-muted);
+  font-size: var(--sc-tool-font-size-1);
+}
+
 .field-error {
   margin-block: calc(-1 * var(--sc-tool-space-3)) var(--sc-tool-space-5);
   color: var(--sc-tool-color-danger);
