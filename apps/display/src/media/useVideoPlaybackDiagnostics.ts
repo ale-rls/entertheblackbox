@@ -34,7 +34,7 @@ export function useVideoPlaybackDiagnostics({
   videoUrl,
   send,
 }: VideoPlaybackDiagnosticsOptions) {
-  const ref = useRef<HTMLVideoElement | null>(null);
+  const ref = useRef<HTMLMediaElement | null>(null);
 
   const report = useCallback((status: PlaybackStatus, detail?: string) => {
     if (sessionId === null || phaseId === null || mediaId === null) return;
@@ -67,7 +67,7 @@ export function useVideoPlaybackDiagnostics({
   return {
     ref,
     onPlaying: () => report("playing"),
-    onStalled: () => report("stalled", "The browser stalled while loading video data"),
+    onStalled: () => report("stalled", "The browser stalled while loading media data"),
     onError: () => report("error", mediaErrorDetail(ref.current?.error ?? null)),
   };
 }

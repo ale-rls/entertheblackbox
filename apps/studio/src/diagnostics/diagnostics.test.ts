@@ -10,6 +10,11 @@ describe("Studio media and diagnostics", () => {
     const file = new File(["abc"], "clip.mp4");
     await expect(inspectLocalMedia(file, async () => 1234)).resolves.toMatchObject({ src: "clip.mp4", bytes: 3, durationMs: 1234, hash: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" });
   });
+  it("reads MP3 duration but does not invent a duration for still images", async () => {
+    const duration = async () => 8_765;
+    await expect(inspectLocalMedia(new File(["audio"], "voice.mp3"), duration)).resolves.toMatchObject({ src: "voice.mp3", durationMs: 8_765 });
+    await expect(inspectLocalMedia(new File(["image"], "portrait.png"), async () => { throw new Error("should not run"); })).resolves.not.toHaveProperty("durationMs");
+  });
   it("counts distinct referenced hashes once and reports branch totals", () => {
     const project = parseRuntimeScenario(scenario, manifest);
     expect(distinctReferencedBytes(project)).toBe(67);

@@ -64,6 +64,8 @@ export type { ScenarioIssue, ValidationResult } from "./validate.js";
 
 export { statSizeWithNodeFs, validateMediaManifest } from "./media.js";
 export type { MediaIssue, StatSize } from "./media.js";
+export { mediaCombinationError, mediaKindForSource } from "./media-kind.js";
+export type { MediaKind } from "./media-kind.js";
 
 // Quadrant assignment (half-open boundary convention) is shared domain
 // logic; re-exported so scenario consumers need not import shared directly.

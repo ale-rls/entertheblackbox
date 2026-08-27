@@ -71,7 +71,7 @@ describe("PhaseVideo", () => {
       phaseEpoch: 7,
       mediaId: "media/intro.mp4",
       status: "stalled",
-      detail: "The browser stalled while loading video data",
+      detail: "The browser stalled while loading media data",
     });
     expect(send).toHaveBeenNthCalledWith(2, {
       t: "video_ended",

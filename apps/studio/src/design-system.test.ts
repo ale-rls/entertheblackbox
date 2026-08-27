@@ -19,7 +19,8 @@ describe("production Studio design-system contract", () => {
     expect(app).toContain('window.scrollTo({ top: 0, left: 0 })');
     expect(preview).toContain('data-sc-tool-root');
     expect(preview).toContain('data-sc-tool-density="compact"');
-    expect(app).not.toContain("Admin");
+    expect(app).toContain('href="/display/" target="_blank" rel="noreferrer">Display</a>');
+    expect(app).toContain('href="/admin/" target="_blank" rel="noreferrer">Admin</a>');
     const productionSource = (readdirSync(sourceDirectory, { recursive: true }) as string[])
       .filter((path) => /\.(?:ts|tsx)$/.test(path) && !/\.test\./.test(path) && !path.startsWith("proof"))
       .map((path) => readFileSync(`${sourceDirectory}/${path}`, "utf8"))

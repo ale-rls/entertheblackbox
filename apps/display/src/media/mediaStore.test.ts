@@ -78,6 +78,19 @@ describe("MediaStore.sync", () => {
     expect(cached.has("/media-cache/hash-b")).toBe(true);
   });
 
+  it("preserves image and MP3 content types in Cache Storage", async () => {
+    const { caches, stores } = fakeCaches();
+    const mixed: MediaManifest = { files: [
+      { src: "portrait.jpg", bytes: 1, hash: "hash-i" },
+      { src: "voice.mp3", bytes: 1, hash: "hash-a" },
+    ] };
+    const fetchFn = (async (input: RequestInfo | URL) => new Response(new TextEncoder().encode(String(input).includes("portrait") ? "I" : "A"))) as typeof fetch;
+    await makeStore({ caches, fetchFn }).sync(mixed);
+    const cached = stores.get("smartphonecracy-media-v1")!;
+    expect(cached.get("/media-cache/hash-i")?.headers.get("content-type")).toBe("image/jpeg");
+    expect(cached.get("/media-cache/hash-a")?.headers.get("content-type")).toBe("audio/mpeg");
+  });
+
   it("downloads with cache: no-store so an immutable-cached corrupt response cannot poison retries", async () => {
     const { caches } = fakeCaches();
     const fetchSpy = vi.fn(fakeFetch());

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { StudioProject } from "@smartphonecracy/studio-adapter";
 import { compiledJson, phaseIdError, type AuthorablePhaseKind, type Phase } from "./model.js";
+import { studioMediaKindForSource, type StudioMediaKind } from "../media/library.js";
 
 type Props = {
   project: StudioProject;
@@ -8,7 +9,7 @@ type Props = {
   localMedia: Array<{ src: string; durationMs?: number }>;
   onRename: (nextId: string) => void;
   onChange: (phase: Phase) => void;
-  onChooseMedia: (phaseId: string, trigger: HTMLButtonElement) => void;
+  onChooseMedia: (phaseId: string, target: "src" | "audioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
   onKindChange: (kind: AuthorablePhaseKind, trigger: HTMLSelectElement) => void;
   onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
   onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y", trigger: HTMLSelectElement) => void;
@@ -26,10 +27,8 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   useEffect(() => setIdInput(phase?.id ?? ""), [phase?.id]);
   const idProblem = phase ? phaseIdError(project, phase.id, idInput) : undefined;
   const detectedDuration = phase?.kind === "video" || phase?.kind === "video-position-question"
-    ? localMedia.find((file) => file.src === phase.src)?.durationMs
+    ? localMedia.find((file) => file.src === (phase.audioSrc ?? phase.src))?.durationMs
     : undefined;
-  const selectedMediaIsListed = (phase?.kind === "video" || phase?.kind === "video-position-question")
-    && localMedia.some((file) => file.src === phase.src);
 
   if (!phase) return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2><p className="sc-tool-copy">Select a runtime phase to edit it.</p>
     <label className="sc-tool-label"><span>Ghost cursor fill target<small>targetAudienceSize</small></span><input className="sc-tool-field" type="number" min="0" value={project.scenario.targetAudienceSize ?? 0} onChange={(event) => onTargetAudienceSizeChange(numberValue(event.target.value, project.scenario.targetAudienceSize ?? 0))} /></label>
@@ -38,21 +37,38 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   const label = (plain: string, runtime: string) => <span>{plain}<small>{runtime}</small></span>;
   const text = (plain: string, runtime: string, value: string, change: (value: string) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" value={value} onChange={(event) => change(event.target.value)} /></label>;
   const number = (plain: string, runtime: string, value: number, change: (value: number) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" type="number" min="0" value={value} onChange={(event) => change(numberValue(event.target.value, value))} /></label>;
+  const mediaPicker = (plain: string, runtime: "src" | "audioSrc", src: string, kind: Exclude<StudioMediaKind, "unknown">) => <>
+    <div className="sc-tool-label media-source-field">{label(plain, runtime)}<button className="sc-tool-button media-source-picker" data-sc-tool-variant="secondary" type="button" aria-label={`Choose ${kind} for ${phase.id}. Current media: ${src}`} onClick={(event) => onChooseMedia(phase.id, runtime, kind, event.currentTarget)}>
+      <span className="sc-tool-mono">{src}</span><span>Browse library…</span>
+    </button></div>
+    {!localMedia.some((file) => file.src === src) && <p className="field-error" role="alert">This file is missing from the shared media library. Choose a replacement.</p>}
+  </>;
 
   return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2>
     <label className="sc-tool-label">{label("Runtime ID", "id")}<input className="sc-tool-field" aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
-    {phase.kind !== "idle" && <label className="sc-tool-label">{label("Phase type", "kind")}<select className="sc-tool-select" value={phase.kind} onChange={(event) => onKindChange(event.target.value as AuthorablePhaseKind, event.currentTarget)}><option value="video">Video</option><option value="position-question">Position question</option><option value="video-position-question">Video + position vote</option></select></label>}
+    {phase.kind !== "idle" && <label className="sc-tool-label">{label("Phase type", "kind")}<select className="sc-tool-select" value={phase.kind} onChange={(event) => onKindChange(event.target.value as AuthorablePhaseKind, event.currentTarget)}><option value="video">Timed media</option><option value="position-question">Position question</option><option value="video-position-question">Timed media + position vote</option></select></label>}
     {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
     {(phase.kind === "video" || phase.kind === "video-position-question") && <>
       {text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
-      <div className="sc-tool-label media-source-field">{label("Media source", "src")}<button className="sc-tool-button media-source-picker" data-sc-tool-variant="secondary" type="button" aria-label={`Choose media for ${phase.id}. Current media: ${phase.src}`} onClick={(event) => onChooseMedia(phase.id, event.currentTarget)}>
-        <span className="sc-tool-mono">{phase.src}</span><span>Browse library…</span>
-      </button></div>
-      {!selectedMediaIsListed && <p className="field-error" role="alert">This file is missing from the shared media library. Choose a replacement.</p>}
+      <label className="sc-tool-label">{label("Playback format", "src + audioSrc")}<select className="sc-tool-select" value={phase.audioSrc === undefined ? "video" : "image-audio"} onChange={(event) => {
+        if (event.target.value === "video") {
+          const current = studioMediaKindForSource(phase.src) === "video" ? phase.src : localMedia.find((file) => studioMediaKindForSource(file.src) === "video")?.src ?? "media/new-video.mp4";
+          const expectedDurationMs = localMedia.find((file) => file.src === current)?.durationMs ?? phase.expectedDurationMs;
+          onChange({ ...phase, src: current, audioSrc: undefined, expectedDurationMs });
+          return;
+        }
+        const image = studioMediaKindForSource(phase.src) === "image" ? phase.src : localMedia.find((file) => studioMediaKindForSource(file.src) === "image")?.src ?? "media/new-image.jpg";
+        const audio = phase.audioSrc ?? localMedia.find((file) => studioMediaKindForSource(file.src) === "audio")?.src ?? "media/new-audio.mp3";
+        const expectedDurationMs = localMedia.find((file) => file.src === audio)?.durationMs ?? phase.expectedDurationMs;
+        onChange({ ...phase, src: image, audioSrc: audio, expectedDurationMs });
+      }}><option value="video">Video</option><option value="image-audio">Still image + MP3</option></select></label>
+      {phase.audioSrc === undefined
+        ? mediaPicker("Video", "src", phase.src, "video")
+        : <>{mediaPicker("Still image", "src", phase.src, "image")}{mediaPicker("MP3 audio", "audioSrc", phase.audioSrc, "audio")}</>}
       <p className="sc-tool-copy field-hint">{detectedDuration === undefined
-        ? "Video duration is detected automatically when the selected media is available."
-        : `Video duration: ${(detectedDuration / 1000).toFixed(3)} seconds`}</p>
+        ? "Playback duration is detected automatically from the video or MP3."
+        : `Playback duration: ${(detectedDuration / 1000).toFixed(3)} seconds`}</p>
     </>}
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
@@ -82,12 +98,12 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         {number("Question duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs }))}
         {number("Outcome freeze (ms)", "freezeMs", phase.freezeMs, (freezeMs) => onChange({ ...phase, freezeMs }))}
       </>}
-      {phase.kind === "video-position-question" && <fieldset className="timeline-fields"><legend>Vote timeline <small>milliseconds from video start</small></legend>
+      {phase.kind === "video-position-question" && <fieldset className="timeline-fields"><legend>Vote timeline <small>milliseconds from media start</small></legend>
         {number("Show question", "showAtMs", phase.showAtMs, (showAtMs) => onChange({ ...phase, showAtMs }))}
         {number("Open voting", "openAtMs", phase.openAtMs, (openAtMs) => onChange({ ...phase, openAtMs }))}
         {number("Close voting", "closeAtMs", phase.closeAtMs, (closeAtMs) => onChange({ ...phase, closeAtMs }))}
         {number("Hide question", "hideAtMs", phase.hideAtMs, (hideAtMs) => onChange({ ...phase, hideAtMs }))}
-        <p className="sc-tool-copy field-hint">Required order: show ≤ open &lt; close ≤ hide ≤ video duration ({phase.expectedDurationMs} ms).</p>
+        <p className="sc-tool-copy field-hint">Required order: show ≤ open &lt; close ≤ hide ≤ media duration ({phase.expectedDurationMs} ms).</p>
       </fieldset>}
       {number("Connection stale after (ms)", "connectionStaleAfterMs", phase.connectionStaleAfterMs, (connectionStaleAfterMs) => onChange({ ...phase, connectionStaleAfterMs }))}
       <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showLiveCounts} onChange={(event) => onChange({ ...phase, showLiveCounts: event.target.checked })} />{label("Show live quadrant counts", "showLiveCounts")}</label>

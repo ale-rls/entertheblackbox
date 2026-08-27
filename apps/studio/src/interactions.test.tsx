@@ -26,7 +26,9 @@ vi.mock("./pocketbase-drafts.js", () => ({
 
 vi.mock("./media/local.js", () => ({
   refreshDraftLocalMedia: (draft: Draft) => draft,
-  runtimeMediaManifest: () => ({ files: [] }),
+  runtimeMediaManifest: (manifest: { files: Array<{ src: string; bytes: number; hash: string }> }) => ({
+    files: manifest.files.map(({ src, bytes, hash }) => ({ src, bytes, hash })),
+  }),
 }));
 
 vi.mock("./media/pocketbase-media.js", () => ({
@@ -220,8 +222,9 @@ describe("Studio feedback and keyboard entry", () => {
     await act(async () => { button("New show").click(); });
     await act(async () => { button("Media").click(); });
 
-    const input = document.querySelector<HTMLInputElement>('input[aria-label="Upload videos to media library"]')!;
-    expect(input.accept).toBe("video/mp4,video/webm,.mp4,.webm");
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Upload media to media library"]')!;
+    expect(input.accept).toContain("audio/mpeg");
+    expect(input.accept).toContain("image/png");
     const files = [
       new File(["first"], "first.mp4", { type: "video/mp4" }),
       new File(["duplicate"], "duplicate.mp4", { type: "video/mp4" }),
@@ -285,12 +288,66 @@ describe("Studio feedback and keyboard entry", () => {
     const sourceButton = document.querySelector<HTMLButtonElement>('.media-source-picker')!;
     expect(sourceButton.textContent).toContain("conclusion.webm");
     expect(sourceButton.getAttribute("aria-label")).toContain("Current media: conclusion.webm");
-    expect(document.body.textContent).toContain("Video duration: 2.500 seconds");
+    expect(document.body.textContent).toContain("Playback duration: 2.500 seconds");
     expect(document.body.textContent).toContain("Selected conclusion.webm for video-");
 
     await act(async () => { sourceButton.click(); });
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Choose media");
     expect(document.querySelector('.media-row[data-selected="true"]')?.textContent).toContain("conclusion.webm");
+  });
+
+  it("authors a still image + MP3 phase with type-filtered library pickers", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "opening.mp4", bytes: 1_000, hash: "video", durationMs: 1_000 },
+      { src: "portrait.png", bytes: 2_000, hash: "image" },
+      { src: "voice.mp3", bytes: 3_000, hash: "voice", durationMs: 12_000 },
+      { src: "alternate.mp3", bytes: 4_000, hash: "alternate", durationMs: 25_000 },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Image + MP3 phase").click(); });
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("portrait.png");
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("opening.mp4");
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("voice.mp3");
+    await act(async () => { button("Cancel").click(); });
+
+    const playbackFormat = Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("Playback format"))
+      ?.querySelector<HTMLSelectElement>("select")!;
+    expect(playbackFormat.value).toBe("image-audio");
+
+    expect(document.body.textContent).toContain("portrait.png");
+    expect(document.body.textContent).toContain("voice.mp3");
+    const audioPicker = document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"]')!;
+    await act(async () => { audioPicker.click(); });
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("voice.mp3");
+    expect(dialog.textContent).toContain("alternate.mp3");
+    expect(dialog.textContent).not.toContain("portrait.png");
+    expect(dialog.textContent).not.toContain("opening.mp4");
+
+    const alternate = Array.from(dialog.querySelectorAll<HTMLElement>(".media-row"))
+      .find((row) => row.textContent?.includes("alternate.mp3"))!;
+    await act(async () => { alternate.querySelector<HTMLButtonElement>("button")?.click(); });
+    await flush();
+    expect(document.body.textContent).toContain("Playback duration: 25.000 seconds");
+    expect(document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"]')?.textContent).toContain("alternate.mp3");
+  });
+
+  it("opens the live display and admin as clearly named external tools", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>("a"));
+    const display = links.find((link) => link.textContent === "Display")!;
+    const admin = links.find((link) => link.textContent === "Admin")!;
+    expect(display.getAttribute("href")).toBe("/display/");
+    expect(display.getAttribute("target")).toBe("_blank");
+    expect(admin.getAttribute("href")).toBe("/admin/");
+    expect(admin.getAttribute("target")).toBe("_blank");
+    expect(document.body.textContent).not.toContain("Monitor show");
+    expect(Array.from(document.querySelectorAll("button")).some((item) => item.textContent === "Preview")).toBe(false);
   });
 
   it("returns focus to a menu trigger after a normal selection", async () => {

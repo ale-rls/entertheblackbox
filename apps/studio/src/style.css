@@ -290,6 +290,13 @@ body:has(.editor),
   gap: var(--sc-tool-space-3);
 }
 
+.media-source-field > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sc-tool-space-3);
+}
+
 .media-source-picker {
   display: grid;
   width: 100%;

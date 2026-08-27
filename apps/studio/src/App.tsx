@@ -13,7 +13,6 @@ import { Inspector } from "./inspector/Inspector.js";
 import { SessionHistory } from "./inspector/history.js";
 import { DiagnosticsPanel } from "./diagnostics/DiagnosticsPanel.js";
 import { diagnostics, exportBlocked } from "./diagnostics/diagnostics.js";
-import { PreviewPanel } from "./preview/PreviewPanel.js";
 import { assembleDeploymentPackage } from "./export/deployment.js";
 import { Menu } from "./chrome/Menu.js";
 import { ConfirmationDialog, type ConfirmationDetails } from "./chrome/ConfirmationDialog.js";
@@ -21,6 +20,7 @@ import { SaveStatus } from "./chrome/SaveStatus.js";
 import { refreshDraftLocalMedia, runtimeMediaManifest, type MediaManifest } from "./media/local.js";
 import { PocketbaseMediaLibrary } from "./media/pocketbase-media.js";
 import { MediaLibraryDialog, type MediaLibraryRow } from "./media/MediaLibraryDialog.js";
+import { studioMediaKindForSource, type StudioMediaKind } from "./media/library.js";
 import "@smartphonecracy/tool-ui/styles.css";
 import "./style.css";
 
@@ -80,12 +80,11 @@ export function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
-  const [previewing, setPreviewing] = useState(false);
   const [showInspector, setShowInspector] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(true);
   const [localManifest, setLocalManifest] = useState<MediaManifest>();
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
-  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; trigger: HTMLButtonElement | null }>();
+  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; target: "src" | "audioSrc"; mediaKind: Exclude<StudioMediaKind, "unknown">; trigger: HTMLButtonElement | null }>();
   const [mediaUploading, setMediaUploading] = useState(false);
   const [importFeedback, setImportFeedback] = useState<InlineFeedback>();
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
@@ -204,14 +203,14 @@ export function App() {
         await media.upload(file);
         added.push(file.name);
       } catch (error) {
-        failed.push({ name: file.name, reason: error instanceof Error ? error.message : "The video could not be added." });
+        failed.push({ name: file.name, reason: error instanceof Error ? error.message : "The media file could not be added." });
       }
     }
 
     try {
       const manifest = await media.list();
       if (manifest) setLocalManifest(manifest);
-      const addedSummary = added.length ? `Added ${added.length}: ${added.join(", ")}.` : "No videos were added.";
+      const addedSummary = added.length ? `Added ${added.length}: ${added.join(", ")}.` : "No media files were added.";
       const failedSummary = failed.length
         ? ` Failed ${failed.length}: ${failed.map(({ name, reason }) => `${name} — ${reason}`).join("; ")}`
         : "";
@@ -297,9 +296,9 @@ export function App() {
     setMediaPicker(undefined);
     setMediaLibraryOpen(true);
   };
-  const openMediaPicker = (phaseId: string, trigger: HTMLButtonElement | null = null) => {
+  const openMediaPicker = (phaseId: string, target: "src" | "audioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement | null = null) => {
     setMediaLibraryOpen(false);
-    setMediaPicker({ phaseId, trigger });
+    setMediaPicker({ phaseId, target, mediaKind, trigger });
   };
   const closeMediaPicker = () => {
     const trigger = mediaPicker?.trigger;
@@ -337,7 +336,7 @@ export function App() {
     persistGraph(next);
     setGraphFeedback({ status: "success", message: "Connection updated." });
   };
-  const addPhase = (kind: "idle" | "video" | "position-question" | "video-position-question") => {
+  const addPhase = (kind: "idle" | "video" | "image-audio" | "position-question" | "video-position-question" | "image-audio-position-question") => {
     if (!draft) return;
     if (kind === "idle" && draft.project.scenario.phases.some((phase) => phase.kind === "idle")) {
       setGraphFeedback({ status: "danger", message: "Idle phase not added: this show already has its idle phase. Select the existing idle phase to edit it." });
@@ -345,25 +344,35 @@ export function App() {
     }
     setGraphFeedback(undefined);
     const id = kind === "idle" ? "idle" : `${kind}-${crypto.randomUUID().slice(0, 6)}`;
-    const firstMedia = draft.project.manifest.files[0];
-    const firstMediaDuration = localManifest?.files.find((file) => file.src === firstMedia?.src)?.durationMs;
-    const expectedDurationMs = firstMediaDuration ?? 40_000;
-    const phase = kind === "idle" ? { kind, id: "idle" as const } : kind === "video"
-      ? { kind, id, src: firstMedia?.src ?? "media/new-video.mp4", expectedDurationMs: firstMediaDuration ?? 1000, next: "idle" }
-      : kind === "video-position-question"
-        ? { kind, id, src: firstMedia?.src ?? "media/new-video.mp4", expectedDurationMs, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, showAtMs: Math.floor(expectedDurationMs * .25), openAtMs: Math.floor(expectedDurationMs * .3), closeAtMs: Math.max(Math.floor(expectedDurationMs * .3) + 1, Math.floor(expectedDurationMs * .75)), hideAtMs: Math.max(Math.floor(expectedDurationMs * .75), Math.floor(expectedDurationMs * .875)), connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
-      : { kind, id, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, durationMs: 60000, freezeMs: 5000, connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } };
+    const imageAudio = kind === "image-audio" || kind === "image-audio-position-question";
+    const mediaVote = kind === "video-position-question" || kind === "image-audio-position-question";
+    const firstVisual = draft.project.manifest.files.find((file) => studioMediaKindForSource(file.src) === (imageAudio ? "image" : "video"));
+    const firstAudio = imageAudio ? draft.project.manifest.files.find((file) => studioMediaKindForSource(file.src) === "audio") : undefined;
+    const durationSource = firstAudio ?? firstVisual;
+    const detectedDuration = localManifest?.files.find((file) => file.src === durationSource?.src)?.durationMs;
+    const expectedDurationMs = detectedDuration ?? (mediaVote ? 40_000 : 1_000);
+    const mediaFields = {
+      src: firstVisual?.src ?? (imageAudio ? "media/new-image.jpg" : "media/new-video.mp4"),
+      ...(imageAudio ? { audioSrc: firstAudio?.src ?? "media/new-audio.mp3" } : {}),
+      expectedDurationMs,
+    };
+    const phase = kind === "idle" ? { kind, id: "idle" as const }
+      : kind === "position-question"
+        ? { kind, id, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, durationMs: 60000, freezeMs: 5000, connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
+        : mediaVote
+          ? { kind: "video-position-question" as const, id, ...mediaFields, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, showAtMs: Math.floor(expectedDurationMs * .25), openAtMs: Math.floor(expectedDurationMs * .3), closeAtMs: Math.max(Math.floor(expectedDurationMs * .3) + 1, Math.floor(expectedDurationMs * .75)), hideAtMs: Math.max(Math.floor(expectedDurationMs * .75), Math.floor(expectedDurationMs * .875)), connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
+          : { kind: "video" as const, id, ...mediaFields, next: "idle" };
     const phases = [...draft.project.scenario.phases, phase] as Draft["project"]["scenario"]["phases"];
     const nextNodes = [...nodes, { id, type: "phase", position: { x: 400, y: 200 }, data: nodeDataForPhase(phase as Phase) }];
-    const handles = kind === "position-question" || kind === "video-position-question" ? ["q1", "q2", "q3", "q4", "tie", "empty"] : kind === "video" ? ["next"] : [];
+    const handles = phase.kind === "position-question" || phase.kind === "video-position-question" ? ["q1", "q2", "q3", "q4", "tie", "empty"] : phase.kind === "video" ? ["next"] : [];
     const nextEdges = [...edges, ...handles.map((handle) => ({ id: `${id}:${handle}`, source: id, sourceHandle: handle, target: END_NODE_ID }))];
     setNodes(nextNodes);
     setEdges(nextEdges);
     saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges);
-    if (kind === "video" || kind === "video-position-question") {
+    if (phase.kind === "video" || phase.kind === "video-position-question") {
       setSelectedId(id);
       setShowInspector(true);
-      openMediaPicker(id);
+      openMediaPicker(id, "src", imageAudio ? "image" : "video");
     }
   };
   const updatePhase = (nextPhase: Phase) => {
@@ -379,11 +388,10 @@ export function App() {
       closeMediaPicker();
       return;
     }
-    updatePhase({
-      ...phase,
-      src: row.src,
-      expectedDurationMs: row.durationMs ?? phase.expectedDurationMs,
-    });
+    const nextPhase = mediaPicker.target === "audioSrc"
+      ? { ...phase, audioSrc: row.src, expectedDurationMs: row.durationMs ?? phase.expectedDurationMs }
+      : { ...phase, src: row.src, ...(phase.audioSrc === undefined && row.durationMs !== undefined ? { expectedDurationMs: row.durationMs } : {}) };
+    updatePhase(nextPhase);
     setImportFeedback({ status: "success", message: `Selected ${row.src} for ${phase.id}.` });
     closeMediaPicker();
   };
@@ -403,8 +411,8 @@ export function App() {
     if (!draft || !selectedId) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === selectedId);
     if (!phase || phase.kind === kind) return;
-    const phaseKind = phase.kind === "position-question" ? "position question" : phase.kind === "video-position-question" ? "video + position vote" : phase.kind;
-    const nextKind = kind === "position-question" ? "position question" : kind === "video-position-question" ? "video + position vote" : kind;
+    const phaseKind = phase.kind === "position-question" ? "position question" : phase.kind === "video-position-question" ? "timed media + position vote" : "timed media";
+    const nextKind = kind === "position-question" ? "position question" : kind === "video-position-question" ? "timed media + position vote" : "timed media";
     setConfirmation({
       title: `Change “${phase.id}” from ${phaseKind} to ${nextKind}?`,
       description: "This replaces the phase fields and all outgoing connections. You can undo this change during this editing session.",
@@ -414,7 +422,7 @@ export function App() {
       trigger,
       onConfirm: () => {
         const changedPhase = changePhaseKind(phase, kind);
-        const firstMedia = draft.project.manifest.files[0];
+        const firstMedia = draft.project.manifest.files.find((file) => studioMediaKindForSource(file.src) === "video");
         const firstMediaDuration = localManifest?.files.find((file) => file.src === firstMedia?.src)?.durationMs;
         const selectedDuration = firstMediaDuration ?? (changedPhase.kind === "video" || changedPhase.kind === "video-position-question" ? changedPhase.expectedDurationMs : 0);
         const nextPhase = changedPhase.kind === "video-position-question" && firstMedia
@@ -598,7 +606,7 @@ export function App() {
     try {
       const artifacts = exportArtifacts(draft);
       // Relative fetch: only resolves when Studio is served from apps/server
-      // alongside /api/admin (same as the "Monitor show" link) -- publishing
+      // alongside /api/admin (same as the "Admin" link) -- publishing
       // from the standalone `vite dev` Studio server isn't supported.
       const response = await fetch("/api/admin/publish", {
         method: "POST",
@@ -638,9 +646,8 @@ export function App() {
     ? draft.project.scenario.phases.find((phase) => phase.id === mediaPicker.phaseId)
     : undefined;
   const mediaPickerSelectedSrc = mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
-    ? mediaPickerPhase.src
+    ? mediaPicker?.target === "audioSrc" ? mediaPickerPhase.audioSrc ?? "" : mediaPickerPhase.src
     : "";
-  if (previewing) return <PreviewPanel project={draft.project} onClose={() => setPreviewing(false)} />;
   return <main ref={editorRef} tabIndex={-1} className={`editor${showInspector ? "" : " no-inspector"}${showDiagnostics ? "" : " no-diagnostics"}`} data-sc-tool-density="compact" data-sc-tool-root>
     <header className="menubar">
       <Menu label="File" items={[
@@ -662,8 +669,10 @@ export function App() {
       ]} />
       <Menu label="Add" items={[
         { label: "Video phase", onSelect: () => addPhase("video") },
+        { label: "Image + MP3 phase", onSelect: () => addPhase("image-audio") },
         { label: "Position question", onSelect: () => addPhase("position-question") },
         { label: "Video + position vote", onSelect: () => addPhase("video-position-question") },
+        { label: "Image + MP3 + position vote", onSelect: () => addPhase("image-audio-position-question") },
       ]} />
       <Menu label="View" items={[
         { label: showInspector ? "Hide properties" : "Show properties", onSelect: () => setShowInspector((value) => !value) },
@@ -674,12 +683,8 @@ export function App() {
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={openMediaLibrary}>Media</button>
       <input aria-label="Show name" className="sc-tool-field show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
       <SaveStatus status={status} />
-      <button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => setPreviewing(true)}>Preview</button>
-      {/* Export moved into File -> Export files / Export for deployment: PocketBase sync is
-          now the primary save path, so a standalone export button no longer needs top billing.
-          This slot goes to the operator console instead -- relative link, so it only resolves
-          when Studio is served from apps/server alongside /admin/ (not the standalone dev server). */}
-      <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/admin/" target="_blank" rel="noreferrer">Monitor show</a>
+      <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/display/" target="_blank" rel="noreferrer">Display</a>
+      <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/admin/" target="_blank" rel="noreferrer">Admin</a>
       <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json,text/plain,.json,.txt" onChange={(event) => {
         void importFiles(event.currentTarget.files);
         event.currentTarget.value = "";
@@ -725,7 +730,7 @@ export function App() {
     <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onKindChange={changeSelectedKind} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} />
     <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
     {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
-    {mediaPicker && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} selection={{ contextLabel: `For ${mediaPicker.phaseId}`, selectedSrc: mediaPickerSelectedSrc, onSelect: selectMedia }} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={closeMediaPicker} />}
+    {mediaPicker && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} selection={{ contextLabel: `${mediaPicker.mediaKind} for ${mediaPicker.phaseId}`, selectedSrc: mediaPickerSelectedSrc, mediaKind: mediaPicker.mediaKind, onSelect: selectMedia }} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={closeMediaPicker} />}
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}
   </main>;
 }

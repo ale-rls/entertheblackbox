@@ -105,12 +105,14 @@ export function validateScenario(
   if (mediaManifest) {
     const known = new Set(mediaManifest.files.map((f) => f.src));
     for (const phase of scenario.phases) {
-      if ((phase.kind === "video" || phase.kind === "video-position-question") && !known.has(phase.src)) {
+      if (phase.kind !== "video" && phase.kind !== "video-position-question") continue;
+      for (const src of [phase.src, ...(phase.audioSrc === undefined ? [] : [phase.audioSrc])]) {
+        if (known.has(src)) continue;
         errors.push({
           severity: "error",
           code: "missing-media",
           phaseId: phase.id,
-          message: `video phase "${phase.id}" references "${phase.src}" which is not in the media manifest`,
+          message: `media phase "${phase.id}" references "${src}" which is not in the media manifest`,
         });
       }
     }

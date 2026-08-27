@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import type { StudioProject } from "@smartphonecracy/studio-adapter";
 import type { MediaManifest } from "./local.js";
+import { phaseMediaSources, studioMediaKindForSource, type StudioMediaKind } from "./library.js";
 
 export type MediaLibraryFeedback = {
   status: "info" | "success" | "danger";
@@ -12,6 +13,7 @@ export type MediaLibraryRow = MediaManifest["files"][number] & { references: str
 export type MediaLibrarySelection = {
   contextLabel: string;
   selectedSrc: string;
+  mediaKind: Exclude<StudioMediaKind, "unknown">;
   onSelect: (row: MediaLibraryRow) => void;
 };
 
@@ -34,8 +36,9 @@ export function mediaLibraryRows(
 ): MediaLibraryRow[] {
   const references = new Map<string, string[]>();
   for (const phase of project?.scenario.phases ?? []) {
-    if (phase.kind !== "video" && phase.kind !== "video-position-question") continue;
-    references.set(phase.src, [...(references.get(phase.src) ?? []), phase.id]);
+    for (const src of phaseMediaSources(phase)) {
+      references.set(src, [...(references.get(src) ?? []), phase.id]);
+    }
   }
   return (manifest?.files ?? []).map((file) => ({
     ...file,
@@ -67,9 +70,13 @@ export function MediaLibraryDialog({
   const searchRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const rows = useMemo(() => mediaLibraryRows(manifest, project), [manifest, project]);
-  const visibleRows = rows.filter((row) => row.src.toLowerCase().includes(query.trim().toLowerCase()));
+  const selectableRows = selection
+    ? rows.filter((row) => studioMediaKindForSource(row.src) === selection.mediaKind)
+    : rows;
+  const visibleRows = selectableRows.filter((row) => row.src.toLowerCase().includes(query.trim().toLowerCase()));
   const used = rows.filter((row) => row.references.length > 0).length;
   const selecting = selection !== undefined;
+  const availableCount = selection ? selectableRows.length : rows.length;
 
   useEffect(() => searchRef.current?.focus(), []);
 
@@ -90,7 +97,7 @@ export function MediaLibraryDialog({
   }}>
     <div className="sc-tool-dialog media-library" role="dialog" aria-modal="true" aria-labelledby="media-library-title" onKeyDown={handleKeyDown}>
       <header className="media-library-header">
-        <div><p className="sc-tool-eyebrow">{selecting ? "Media picker" : "Shared media"}</p><h2 id="media-library-title">{selecting ? "Choose media" : "Media library"}</h2><p className="sc-tool-copy">{selection ? `${selection.contextLabel} · ` : ""}{rows.length} file{rows.length === 1 ? "" : "s"}{!selection && (project ? ` · ${used} used in this show` : " · shared across shows")}</p></div>
+        <div><p className="sc-tool-eyebrow">{selecting ? "Media picker" : "Shared media"}</p><h2 id="media-library-title">{selecting ? "Choose media" : "Media library"}</h2><p className="sc-tool-copy">{selection ? `${selection.contextLabel} · ` : ""}{availableCount} file{availableCount === 1 ? "" : "s"}{!selection && (project ? ` · ${used} used in this show` : " · shared across shows")}</p></div>
         <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={uploading} onClick={onClose}>{selecting ? "Cancel" : "Close"}</button>
       </header>
       <div
@@ -101,10 +108,10 @@ export function MediaLibraryDialog({
         onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
         onDrop={receiveDrop}
       >
-        <strong>{uploading ? "Uploading videos…" : "Drop several videos here"}</strong>
-        <span className="sc-tool-copy">MP4 or WebM · choosing an existing filename replaces that file</span>
-        <button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={uploading} onClick={() => inputRef.current?.click()}>Choose videos…</button>
-        <input ref={inputRef} aria-label="Upload videos to media library" hidden multiple type="file" accept="video/mp4,video/webm,.mp4,.webm" onChange={(event) => {
+        <strong>{uploading ? "Uploading media…" : "Drop several media files here"}</strong>
+        <span className="sc-tool-copy">Video, image, or MP3 · choosing an existing filename replaces that file</span>
+        <button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={uploading} onClick={() => inputRef.current?.click()}>Choose media…</button>
+        <input ref={inputRef} aria-label="Upload media to media library" hidden multiple type="file" accept="video/mp4,video/webm,image/jpeg,image/png,image/webp,audio/mpeg,audio/mp3,.mp4,.webm,.jpg,.jpeg,.png,.webp,.mp3" onChange={(event) => {
           if (event.currentTarget.files?.length) void onUpload(event.currentTarget.files);
           event.currentTarget.value = "";
         }} />
@@ -114,18 +121,18 @@ export function MediaLibraryDialog({
         <input ref={searchRef} id="media-library-search" className="sc-tool-field" type="search" placeholder="Filename" value={query} onChange={(event) => setQuery(event.target.value)} />
       </label>
       {manifest === undefined ? <div className="media-library-empty"><strong>Media library unavailable</strong><p className="sc-tool-copy">PocketBase could not be reached. Check the connection and reopen the library.</p></div>
-        : visibleRows.length === 0 ? <div className="media-library-empty"><strong>{rows.length === 0 ? "No videos yet" : "No matching videos"}</strong><p className="sc-tool-copy">{rows.length === 0 ? "Upload one or several videos above." : "Try another filename."}</p></div>
+        : visibleRows.length === 0 ? <div className="media-library-empty"><strong>{rows.length === 0 ? "No media yet" : selection && selectableRows.length === 0 ? `No ${selection.mediaKind} files yet` : "No matching media"}</strong><p className="sc-tool-copy">{rows.length === 0 || (selection && selectableRows.length === 0) ? "Upload one or several files above." : "Try another filename."}</p></div>
           : <div className="media-list" role="list">{visibleRows.map((row) => {
             const selected = selection?.selectedSrc === row.src;
             return <article className="media-row" data-selected={selected || undefined} role="listitem" key={row.src}>
-            <div className="media-row-main"><strong>{row.src}</strong><span className="sc-tool-copy sc-tool-mono">{formatMediaBytes(row.bytes)} · {formatMediaDuration(row.durationMs)}</span></div>
+            <div className="media-row-main"><strong>{row.src}</strong><span className="sc-tool-copy sc-tool-mono">{studioMediaKindForSource(row.src)} · {formatMediaBytes(row.bytes)}{row.durationMs === undefined ? "" : ` · ${formatMediaDuration(row.durationMs)}`}</span></div>
             <div className="media-references">{selected && <span className="media-state" data-selected="true">Selected</span>}{project === undefined
               ? <span className="media-state">Shared</span>
               : row.references.length > 0
               ? <><span className="media-state" data-used="true">Used</span>{row.references.map((reference) => <span className="media-reference" key={reference}>{reference}</span>)}</>
               : <span className="media-state">Unused</span>}</div>
             <div className="media-row-actions">
-              {selection && <button className="sc-tool-button" data-sc-tool-variant={selected ? "secondary" : "primary"} type="button" disabled={uploading || selected} onClick={() => selection.onSelect(row)}>{selected ? "Current" : "Use video"}</button>}
+              {selection && <button className="sc-tool-button" data-sc-tool-variant={selected ? "secondary" : "primary"} type="button" disabled={uploading || selected} onClick={() => selection.onSelect(row)}>{selected ? "Current" : "Use media"}</button>}
               <button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={uploading} onClick={(event) => onDelete(row, event.currentTarget)}>Remove</button>
             </div>
           </article>})}</div>}

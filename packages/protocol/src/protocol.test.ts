@@ -82,6 +82,17 @@ const phaseSnapshot = {
 
 const serverMessages: ServerToClientMessage[] = [
   { t: "snapshot", v: 2, sessionId: "s1", phaseEpoch: 2, phase: phaseSnapshot, serverTime: 1 },
+  { t: "snapshot", v: 2, sessionId: "s2", phaseEpoch: 1, phase: {
+    kind: "video",
+    id: "image-audio",
+    src: "portrait.png",
+    audioSrc: "voice.mp3",
+    expectedDurationMs: 12_000,
+    next: "idle",
+    scenarioVersion: "test-1",
+    startedAt: 10,
+    deadlineAt: 12_010,
+  }, serverTime: 10 },
   { t: "phase", v: 2, sessionId: "s1", phaseEpoch: 2, phase: phaseSnapshot, serverTime: 1 },
   { t: "presence", v: 2, count: 7 },
   { t: "reload", v: 2, minVersion: "1.2.0", reason: "protocol" },

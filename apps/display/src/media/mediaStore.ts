@@ -47,6 +47,19 @@ const cacheKeyFor = (hash: string) => `/media-cache/${hash}`;
 
 const DEFAULT_CHUNK_BYTES = 4 * 1024 * 1024;
 
+function contentTypeFor(src: string): string {
+  const extension = src.slice(src.lastIndexOf(".")).toLowerCase();
+  return ({
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".mp3": "audio/mpeg",
+  } as Record<string, string>)[extension] ?? "application/octet-stream";
+}
+
 function concatArrayBuffers(chunks: readonly ArrayBuffer[]): ArrayBuffer {
   const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
   const merged = new Uint8Array(total);
@@ -176,7 +189,7 @@ export class MediaStore {
         new Response(body, {
           headers: {
             "content-length": String(body.byteLength),
-            "content-type": "video/mp4",
+            "content-type": contentTypeFor(file.src),
           },
         }),
       );

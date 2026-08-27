@@ -9,7 +9,7 @@ type NodeData = {
 };
 type Phase = StudioProject["scenario"]["phases"][number];
 
-const KIND_TITLE: Record<string, string> = { idle: "Idle", video: "Video", "position-question": "Question", "video-position-question": "Video + vote" };
+const KIND_TITLE: Record<string, string> = { idle: "Idle", video: "Media", "position-question": "Question", "video-position-question": "Media + vote" };
 
 const InPort = () => (
   <div className="port port-in"><Handle aria-label="Input" className="sc-tool-graph-port" id="input" type="target" position={Position.Left} /><span className="port-name">in</span></div>

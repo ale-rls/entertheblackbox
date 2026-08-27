@@ -16,6 +16,7 @@ import { IdleAttract } from "./components/IdleAttract.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhoneCount } from "./components/PhoneCount.js";
 import { PhaseVideo } from "./components/PhaseVideo.js";
+import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
 import { RatingMeter } from "./components/RatingMeter.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
 
@@ -51,7 +52,7 @@ export function App() {
   const [state, dispatch] = useReducer(displayReducer, initialDisplayState);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const stateRef = useRef(state);
-  const activeVideoRef = useRef<HTMLVideoElement | null>(null);
+  const activeMediaRef = useRef<HTMLMediaElement | null>(null);
   stateRef.current = state;
 
   const cursorField = useMemo(() => new CursorField(), []);
@@ -187,32 +188,29 @@ export function App() {
     (message: DisplayToServerMessage) => connection.send(message),
     [connection],
   );
-  const setActiveVideo = useCallback((video: HTMLVideoElement | null) => {
-    activeVideoRef.current = video;
+  const setActiveMedia = useCallback((mediaElement: HTMLMediaElement | null) => {
+    activeMediaRef.current = mediaElement;
   }, []);
-  const toggleSound = useCallback(() => {
-    const enable = !soundEnabled;
-    if (enable && activeVideoRef.current !== null) {
+  const enableSound = useCallback(() => {
+    if (activeMediaRef.current !== null) {
       // Keep this play() call inside the click handler: browsers require an
       // explicit user gesture before they allow audible media playback.
-      activeVideoRef.current.muted = false;
-      const play = activeVideoRef.current.play();
+      activeMediaRef.current.muted = false;
+      const play = activeMediaRef.current.play();
       void play?.catch((error: unknown) => {
         console.warn("display: failed to enable audible playback:", error);
       });
     }
-    setSoundEnabled(enable);
-  }, [soundEnabled]);
+    setSoundEnabled(true);
+  }, []);
 
   // Keep the Blob URL set aligned with the active phase (plan §9);
   // preloading plausible next videos needs the id→src map from STEP-026.
+  const phaseVisualSrc = phase?.kind === "video" || phase?.kind === "video-position-question" ? phase.src : null;
+  const phaseAudioSrc = phase?.kind === "video" || phase?.kind === "video-position-question" ? phase.audioSrc ?? null : null;
   useEffect(() => {
-    void media.showVideo(
-      phase?.kind === "video" || phase?.kind === "video-position-question"
-        ? phase.src
-        : null,
-    );
-  }, [phase?.kind === "video" || phase?.kind === "video-position-question" ? phase.src : null]);
+    void media.showMedia(phaseVisualSrc, phaseAudioSrc);
+  }, [phaseVisualSrc, phaseAudioSrc]);
 
   return (
     <main className="display-root">
@@ -225,7 +223,7 @@ export function App() {
             clock={connection.clock}
           />
         )}
-        {(phase?.kind === "video" || phase?.kind === "video-position-question") && media.videoUrl !== null && (
+        {(phase?.kind === "video" || phase?.kind === "video-position-question") && media.videoUrl !== null && phase.audioSrc === undefined && (
           <PhaseVideo
             key={phase.id}
             sessionId={state.sessionId}
@@ -233,7 +231,20 @@ export function App() {
             phaseEpoch={state.phaseEpoch}
             src={media.videoUrl}
             soundEnabled={soundEnabled}
-            onVideoElement={setActiveVideo}
+            onVideoElement={setActiveMedia}
+            send={sendDisplayMessage}
+          />
+        )}
+        {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.audioSrc !== undefined && media.videoUrl !== null && media.audioUrl !== null && (
+          <PhaseImageAudio
+            key={phase.id}
+            sessionId={state.sessionId}
+            phase={phase as typeof phase & { audioSrc: string }}
+            phaseEpoch={state.phaseEpoch}
+            imageSrc={media.videoUrl}
+            audioSrc={media.audioUrl}
+            soundEnabled={soundEnabled}
+            onAudioElement={setActiveMedia}
             send={sendDisplayMessage}
           />
         )}
@@ -241,14 +252,13 @@ export function App() {
 
       {/* Layer 2: UI */}
       <section className="layer layer-ui">
-        <button
+        {!soundEnabled && <button
           type="button"
           className="sound-control"
-          aria-pressed={soundEnabled}
-          onClick={toggleSound}
+          onClick={enableSound}
         >
-          {soundEnabled ? "Mute sound" : "Enable sound"}
-        </button>
+          Enable sound
+        </button>}
         {mediaReady && state.connection !== "open" && (
           <div className="reconnecting">reconnecting…</div>
         )}

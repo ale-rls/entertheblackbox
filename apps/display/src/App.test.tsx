@@ -17,7 +17,7 @@ const harness = vi.hoisted(() => {
     mediaStatus: { state: "idle" } as
       | { state: "idle" }
       | { state: "ready" },
-    showVideo: vi.fn(),
+    showMedia: vi.fn(),
     realtimeStart: vi.fn(),
     realtimeStop: vi.fn(),
     realtimeOptions: null as null | {
@@ -44,7 +44,8 @@ vi.mock("./media/useMedia.js", () => ({
   useMedia: () => ({
     status: harness.mediaStatus,
     videoUrl: null,
-    showVideo: harness.showVideo,
+    audioUrl: null,
+    showMedia: harness.showMedia,
     store: {},
   }),
 }));
@@ -85,7 +86,7 @@ afterEach(async () => {
   harness.connection.start.mockClear();
   harness.connection.stop.mockClear();
   harness.connection.send.mockClear();
-  harness.showVideo.mockClear();
+  harness.showMedia.mockClear();
   harness.realtimeStart.mockClear();
   harness.realtimeStop.mockClear();
   harness.realtimeOptions = null;
@@ -138,17 +139,15 @@ describe("App media-readiness gate", () => {
     expect(harness.cursorField?.size).toBe(1);
   });
 
-  it("provides an explicit user-gesture sound toggle", async () => {
+  it("hides the one-way sound unlock after the user gesture", async () => {
     document.body.innerHTML = '<div id="root"></div>';
     root = createRoot(document.querySelector("#root")!);
     await act(async () => root?.render(<App />));
 
     const button = document.querySelector<HTMLButtonElement>(".sound-control")!;
     expect(button.textContent).toBe("Enable sound");
-    expect(button.getAttribute("aria-pressed")).toBe("false");
 
     await act(async () => button.click());
-    expect(button.textContent).toBe("Mute sound");
-    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector(".sound-control")).toBeNull();
   });
 });

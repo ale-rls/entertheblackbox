@@ -1,14 +1,11 @@
 import PocketBase, { ClientResponseError } from "pocketbase";
-import { inspectLocalMedia } from "./library.js";
+import { inspectLocalMedia, studioMediaKindForSource } from "./library.js";
 import type { MediaManifest } from "./local.js";
-
-const VIDEO_EXTENSIONS = new Set([".mp4", ".webm"]);
 
 type MediaRecord = { id: string; src: string; bytes: number; hash: string; durationMs?: number };
 
 function extensionAllowed(name: string): boolean {
-  const dot = name.lastIndexOf(".");
-  return dot !== -1 && VIDEO_EXTENSIONS.has(name.slice(dot).toLowerCase());
+  return studioMediaKindForSource(name) !== "unknown";
 }
 
 /**
@@ -44,10 +41,10 @@ export class PocketbaseMediaLibrary {
 
   async upload(file: File): Promise<void> {
     if (!extensionAllowed(file.name)) {
-      throw new Error("Choose an MP4 or WebM video. MOV is not supported by the venue display.");
+      throw new Error("Choose an MP4/WebM video, JPG/PNG/WebP image, or MP3 audio file.");
     }
     const inspected = await inspectLocalMedia(file);
-    const data = { src: inspected.src, bytes: inspected.bytes, hash: inspected.hash, durationMs: inspected.durationMs, file };
+    const data = { src: inspected.src, bytes: inspected.bytes, hash: inspected.hash, ...("durationMs" in inspected ? { durationMs: inspected.durationMs } : {}), file };
     try {
       const existing = await this.pb.collection<MediaRecord>("media")
         .getFirstListItem(this.pb.filter("src = {:src}", { src: file.name }))
@@ -57,7 +54,7 @@ export class PocketbaseMediaLibrary {
     } catch (error) {
       const reason = error instanceof ClientResponseError
         ? error.message
-        : error instanceof Error ? error.message : "The video could not be added.";
+        : error instanceof Error ? error.message : "The media file could not be added.";
       throw new Error(`Could not add ${file.name}. ${reason}`);
     }
   }
@@ -70,7 +67,7 @@ export class PocketbaseMediaLibrary {
     } catch (error) {
       const reason = error instanceof ClientResponseError
         ? error.message
-        : error instanceof Error ? error.message : "The video could not be removed.";
+        : error instanceof Error ? error.message : "The media file could not be removed.";
       throw new Error(`Could not remove ${src}. ${reason}`);
     }
   }

@@ -8,7 +8,11 @@ describe("MediaLibraryDialog helpers", () => {
   });
 
   it("shows every phase that references a shared media file", () => {
-    const manifest = { files: [{ src: "clip.mp4", bytes: 10, hash: "hash", durationMs: 5_000 }] };
+    const manifest = { files: [
+      { src: "clip.mp4", bytes: 10, hash: "hash", durationMs: 5_000 },
+      { src: "portrait.png", bytes: 5, hash: "image" },
+      { src: "voice.mp3", bytes: 6, hash: "audio", durationMs: 5_000 },
+    ] };
     const project = {
       scenario: {
         version: "1",
@@ -18,11 +22,14 @@ describe("MediaLibraryDialog helpers", () => {
           { kind: "idle", id: "idle" },
           { kind: "video", id: "video", src: "clip.mp4", expectedDurationMs: 5_000, next: "vote" },
           { kind: "video-position-question", id: "vote", src: "clip.mp4", expectedDurationMs: 5_000, text: "Vote", field: { type: "four-quadrant", xAxis: { minLabel: "L", maxLabel: "R" }, yAxis: { minLabel: "T", maxLabel: "B" } }, showAtMs: 1_000, openAtMs: 1_000, closeAtMs: 3_000, hideAtMs: 4_000, connectionStaleAfterMs: 1_000, showLiveCounts: false, next: { type: "fixed", target: "idle" } },
+          { kind: "video", id: "still", src: "portrait.png", audioSrc: "voice.mp3", expectedDurationMs: 5_000, next: "idle" },
         ],
       },
       manifest,
       runtimeExtensions: { scenario: {}, manifest: {} },
     } as Parameters<typeof mediaLibraryRows>[1];
     expect(mediaLibraryRows(manifest, project)[0]?.references).toEqual(["video", "vote"]);
+    expect(mediaLibraryRows(manifest, project).find((row) => row.src === "portrait.png")?.references).toEqual(["still"]);
+    expect(mediaLibraryRows(manifest, project).find((row) => row.src === "voice.mp3")?.references).toEqual(["still"]);
   });
 });

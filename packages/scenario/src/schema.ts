@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@smartphonecracy/shared";
+import { mediaCombinationError } from "./media-kind.js";
 
 const unitCoordinateSchema = z.number().min(0).max(1);
 
@@ -138,7 +139,7 @@ export const idlePhaseSchema = z.object({
 });
 
 /**
- * Enables live 👏/👎 tallying from phones while a video plays. Purely a
+ * Enables live 👏/👎 tallying from phones while timed media plays. Purely a
  * displayed signal — it never affects `next`, which stays fixed like any
  * other video phase.
  */
@@ -151,13 +152,18 @@ export const videoPhaseSchema = z.object({
   kind: z.literal("video"),
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
-  src: z.string().min(1, "video src must be non-empty"),
+  src: z.string().min(1, "media src must be non-empty"),
+  /** When present, src is a still image and this MP3 drives playback/timing. */
+  audioSrc: z.string().min(1, "audioSrc must be non-empty").optional(),
   expectedDurationMs: z.number().int().positive(),
   next: phaseIdSchema,
   allowSkip: z.boolean().optional(),
   /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
   showCursors: z.boolean().optional(),
   rating: ratingConfigSchema.optional(),
+}).superRefine((phase, ctx) => {
+  const problem = mediaCombinationError(phase.src, phase.audioSrc);
+  if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem, path: [phase.audioSrc === undefined ? "src" : "audioSrc"] });
 });
 
 const positionQuestionBaseSchema = z.object({
@@ -208,10 +214,12 @@ const videoPositionQuestionBaseSchema = z.object({
   kind: z.literal("video-position-question"),
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
-  src: z.string().min(1, "video src must be non-empty"),
+  src: z.string().min(1, "media src must be non-empty"),
+  /** When present, src is a still image and this MP3 drives playback/timing. */
+  audioSrc: z.string().min(1, "audioSrc must be non-empty").optional(),
   expectedDurationMs: z.number().int().positive(),
   text: z.string().min(1, "question text must be non-empty"),
-  /** Timeline offsets from the start of the video. */
+  /** Timeline offsets from the start of the timed media. */
   showAtMs: z.number().int().nonnegative(),
   openAtMs: z.number().int().nonnegative(),
   closeAtMs: z.number().int().positive(),
@@ -250,6 +258,8 @@ export const videoPositionQuestionPhaseSchema = z.union([
   }),
   polygonZonesVideoQuestionVariantSchema,
 ]).superRefine((phase, ctx) => {
+  const mediaProblem = mediaCombinationError(phase.src, phase.audioSrc);
+  if (mediaProblem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: mediaProblem, path: [phase.audioSrc === undefined ? "src" : "audioSrc"] });
   const ordered = phase.showAtMs <= phase.openAtMs
     && phase.openAtMs < phase.closeAtMs
     && phase.closeAtMs <= phase.hideAtMs

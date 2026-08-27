@@ -36,4 +36,21 @@ describe("local Studio media", () => {
       { src: "remote.mp4", bytes: 20, hash: "remote" },
     ]);
   });
+
+  it("uses MP3 metadata as the duration for an image + audio phase", () => {
+    const draft = importRuntime(scenario, manifest);
+    const phase = draft.project.scenario.phases.find((item) => item.kind === "video")!;
+    if (phase.kind !== "video") throw new Error("expected video phase");
+    phase.src = "portrait.png";
+    phase.audioSrc = "voice.mp3";
+    const refreshed = refreshDraftLocalMedia(draft, { files: [
+      { src: "portrait.png", bytes: 10, hash: "image" },
+      { src: "voice.mp3", bytes: 20, hash: "audio", durationMs: 22_222 },
+    ] });
+    expect(refreshed.project.scenario.phases.find((item) => item.id === phase.id)).toMatchObject({
+      src: "portrait.png",
+      audioSrc: "voice.mp3",
+      expectedDurationMs: 22_222,
+    });
+  });
 });

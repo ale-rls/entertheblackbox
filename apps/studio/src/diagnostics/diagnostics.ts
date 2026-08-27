@@ -1,12 +1,11 @@
 import { validateStudioProject, type StudioProject } from "@smartphonecracy/studio-adapter";
-import { MEDIA_BUDGET_BYTES, distinctReferencedBytes } from "../media/library.js";
+import { MEDIA_BUDGET_BYTES, distinctReferencedBytes, phaseMediaSources } from "../media/library.js";
 
 export type Diagnostic = { severity: "error" | "warning" | "info"; code: string; message: string; phaseId?: string; acknowledgementRequired?: boolean };
 
 export function diagnostics(project: StudioProject): Diagnostic[] {
   const result: Diagnostic[] = validateStudioProject(project);
-  const videos = project.scenario.phases.filter((phase) => phase.kind === "video" || phase.kind === "video-position-question");
-  const referenced = new Set(videos.map((phase) => phase.src));
+  const referenced = new Set(project.scenario.phases.flatMap(phaseMediaSources));
   const hashes = new Map<string, string>();
   for (const file of project.manifest.files) {
     if (!referenced.has(file.src)) result.push({ severity: "warning", code: "unused-media", message: `Media “${file.src}” is never referenced.`, acknowledgementRequired: true });

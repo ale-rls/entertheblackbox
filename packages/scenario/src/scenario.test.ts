@@ -71,6 +71,30 @@ describe("scenarioSchema structural rejection", () => {
     expect(scenarioSchema.safeParse(baseScenario).success).toBe(true);
   });
 
+  it("accepts an image + MP3 timed phase and rejects incomplete combinations", () => {
+    const imageAudio = structuredClone(baseScenario);
+    imageAudio.phases[1] = {
+      ...imageAudio.phases[1]!,
+      src: "portrait.png",
+      audioSrc: "introduction.mp3",
+      expectedDurationMs: 25_000,
+    } as typeof imageAudio.phases[1];
+    expect(scenarioSchema.safeParse(imageAudio).success).toBe(true);
+    expect(validateScenario(scenarioSchema.parse(imageAudio), { files: [
+      { src: "portrait.png", bytes: 10, hash: "image" },
+      { src: "introduction.mp3", bytes: 20, hash: "audio" },
+    ] }).ok).toBe(true);
+
+    expect(scenarioSchema.safeParse({
+      ...imageAudio,
+      phases: imageAudio.phases.map((phase) => phase.id === "intro" ? { ...phase, audioSrc: undefined } : phase),
+    }).success).toBe(false);
+    const missingAudio = validateScenario(scenarioSchema.parse(imageAudio), { files: [
+      { src: "portrait.png", bytes: 10, hash: "image" },
+    ] });
+    expect(missingAudio.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "missing-media", message: expect.stringContaining("introduction.mp3") })]));
+  });
+
   it("accepts optional targetAudienceSize and per-phase showCursors", () => {
     const result = parse((s) => ({
       ...s,
@@ -126,6 +150,10 @@ describe("scenarioSchema structural rejection", () => {
       ],
     };
     expect(scenarioSchema.safeParse(composite).success).toBe(true);
+    expect(scenarioSchema.safeParse({
+      ...composite,
+      phases: [composite.phases[0], { ...composite.phases[1], src: "question.png", audioSrc: "question.mp3" }],
+    }).success).toBe(true);
     expect(scenarioSchema.safeParse({
       ...composite,
       phases: [composite.phases[0], { ...composite.phases[1], closeAtMs: 14_000 }],
