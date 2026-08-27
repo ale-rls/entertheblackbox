@@ -31,9 +31,32 @@ export type MediaStoreDeps = {
   onStatus?: (status: MediaSyncStatus) => void;
   maxRetryDelayMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Files at or above this size download as sequential HTTP Range requests
+   * instead of one unbounded GET. A reverse proxy that buffers or times out
+   * long-lived responses (observed in production: a multi-hundred-MB video
+   * getting its connection closed a few seconds in, every single retry,
+   * forever) otherwise means a large file can never finish even once --
+   * each ranged request instead completes in well under a second.
+   */
+  chunkThresholdBytes?: number;
+  chunkBytes?: number;
 };
 
 const cacheKeyFor = (hash: string) => `/media-cache/${hash}`;
+
+const DEFAULT_CHUNK_BYTES = 4 * 1024 * 1024;
+
+function concatArrayBuffers(chunks: readonly ArrayBuffer[]): ArrayBuffer {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(new Uint8Array(chunk), offset);
+    offset += chunk.byteLength;
+  }
+  return merged.buffer;
+}
 
 async function sha256Hex(data: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -52,6 +75,8 @@ export class MediaStore {
   private readonly onStatus: (status: MediaSyncStatus) => void;
   private readonly maxRetryDelayMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly chunkThresholdBytes: number;
+  private readonly chunkBytes: number;
 
   private manifest: MediaManifest | null = null;
   private readonly blobUrls = new Map<string, string>(); // src -> object URL
@@ -69,6 +94,8 @@ export class MediaStore {
     this.onStatus = deps.onStatus ?? (() => {});
     this.maxRetryDelayMs = deps.maxRetryDelayMs ?? 30_000;
     this.sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+    this.chunkBytes = deps.chunkBytes ?? DEFAULT_CHUNK_BYTES;
+    this.chunkThresholdBytes = deps.chunkThresholdBytes ?? this.chunkBytes;
   }
 
   stop(): void {
@@ -134,14 +161,7 @@ export class MediaStore {
         total: manifest.files.length,
         current: file.src,
       });
-      // Bypass the browser HTTP cache: /media is served immutable
-      // (STEP-029), so a corrupt response cached once would otherwise
-      // poison every retry forever. Cache Storage is our only cache.
-      const response = await this.fetchFn(`/media/${file.src}`, { cache: "no-store" });
-      if (!response.ok) {
-        throw new Error(`download failed for "${file.src}" (http ${response.status})`);
-      }
-      const body = await response.arrayBuffer();
+      const body = await this.downloadFile(file.src, file.bytes);
       if (body.byteLength !== file.bytes) {
         throw new Error(
           `size mismatch for "${file.src}": expected ${file.bytes}, got ${body.byteLength}`,
@@ -162,6 +182,42 @@ export class MediaStore {
       );
       done += 1;
     }
+  }
+
+  /**
+   * Downloads one media file, bypassing the browser HTTP cache (/media is
+   * served immutable, so a corrupt response cached once would otherwise
+   * poison every retry forever -- Cache Storage is our only cache). Files
+   * at or above chunkThresholdBytes download as sequential Range requests
+   * instead of a single unbounded GET.
+   */
+  private async downloadFile(src: string, expectedBytes: number): Promise<ArrayBuffer> {
+    if (expectedBytes < this.chunkThresholdBytes) {
+      const response = await this.fetchFn(`/media/${src}`, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`download failed for "${src}" (http ${response.status})`);
+      }
+      return response.arrayBuffer();
+    }
+    const chunks: ArrayBuffer[] = [];
+    let offset = 0;
+    while (offset < expectedBytes) {
+      const end = Math.min(offset + this.chunkBytes, expectedBytes) - 1;
+      const response = await this.fetchFn(`/media/${src}`, {
+        cache: "no-store",
+        headers: { range: `bytes=${offset}-${end}` },
+      });
+      if (!response.ok) {
+        throw new Error(`download failed for "${src}" range ${offset}-${end} (http ${response.status})`);
+      }
+      const chunk = await response.arrayBuffer();
+      if (chunk.byteLength === 0) {
+        throw new Error(`empty chunk for "${src}" range ${offset}-${end}`);
+      }
+      chunks.push(chunk);
+      offset += chunk.byteLength;
+    }
+    return concatArrayBuffers(chunks);
   }
 
   /**

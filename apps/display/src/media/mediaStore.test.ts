@@ -223,3 +223,79 @@ describe("Blob URL lifecycle", () => {
     expect(await store.getBlobUrl("ghost.mp4")).toBeNull();
   });
 });
+
+describe("chunked large-file downloads", () => {
+  const bigBody = "BBBBBBBBBBBB"; // 12 bytes, first char matches fakeDigest's "hash-b" scheme
+  const bigManifest: MediaManifest = {
+    files: [{ src: "big.mp4", bytes: 12, hash: "hash-b" }],
+  };
+
+  const rangeAwareFetch = (body: string) =>
+    (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const bytes = new TextEncoder().encode(body);
+      const rangeHeader = (init?.headers as Record<string, string> | undefined)?.range;
+      if (rangeHeader === undefined) return new Response(bytes);
+      const match = /^bytes=(\d+)-(\d+)$/.exec(rangeHeader);
+      if (!match) return new Response(null, { status: 416 });
+      const start = Number(match[1]);
+      const end = Number(match[2]);
+      return new Response(bytes.slice(start, end + 1), { status: 206 });
+    }) as typeof fetch;
+
+  it("downloads a file at/above the threshold as sequential Range requests and reassembles it", async () => {
+    const { caches, stores } = fakeCaches();
+    const fetchSpy = vi.fn(rangeAwareFetch(bigBody));
+    const store = new MediaStore({
+      caches,
+      fetchFn: fetchSpy as typeof fetch,
+      digest: fakeDigest,
+      sleep: async () => {},
+      chunkThresholdBytes: 12,
+      chunkBytes: 4,
+    });
+    await expect(store.sync(bigManifest)).resolves.toBe(true);
+    expect(fetchSpy.mock.calls.map(([, init]) => (init as RequestInit).headers)).toEqual([
+      { range: "bytes=0-3" },
+      { range: "bytes=4-7" },
+      { range: "bytes=8-11" },
+    ]);
+    const cached = stores.get("smartphonecracy-media-v1")!.get("/media-cache/hash-b");
+    expect(await cached?.text()).toBe(bigBody);
+  });
+
+  it("stays below the chunk threshold using a single unranged GET, unchanged from before", async () => {
+    const { caches } = fakeCaches();
+    const fetchSpy = vi.fn(fakeFetch());
+    const store = makeStore({ caches, fetchFn: fetchSpy as typeof fetch });
+    await store.sync(manifest); // a.mp4/b.mp4 are 3/5 bytes, well under any real threshold
+    for (const [, init] of fetchSpy.mock.calls) {
+      expect(init).toEqual({ cache: "no-store" }); // no range header
+    }
+  });
+
+  it("recovers from a dropped chunk via the outer retry loop, not restarting other files", async () => {
+    const { caches } = fakeCaches();
+    let firstAttemptAtSecondChunk = true;
+    const flaky = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const rangeHeader = (init?.headers as Record<string, string> | undefined)?.range;
+      if (rangeHeader === "bytes=4-7" && firstAttemptAtSecondChunk) {
+        firstAttemptAtSecondChunk = false;
+        throw new Error("connection reset");
+      }
+      return rangeAwareFetch(bigBody)(input, init);
+    }) as typeof fetch;
+    const statuses: MediaSyncStatus[] = [];
+    const store = new MediaStore({
+      caches,
+      fetchFn: flaky,
+      digest: fakeDigest,
+      onStatus: (s) => statuses.push(s),
+      sleep: async () => {},
+      chunkThresholdBytes: 12,
+      chunkBytes: 4,
+    });
+    await expect(store.sync(bigManifest)).resolves.toBe(true);
+    expect(statuses.some((s) => s.state === "retrying")).toBe(true);
+    expect(statuses.at(-1)).toEqual({ state: "ready" });
+  });
+});
