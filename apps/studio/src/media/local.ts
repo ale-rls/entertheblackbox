@@ -4,7 +4,7 @@ import type { Draft } from "../model.js";
 type RuntimeMediaManifest = StudioProject["manifest"];
 type RuntimeMediaFile = RuntimeMediaManifest["files"][number];
 export type MediaManifest = {
-  files: Array<RuntimeMediaFile & { durationMs?: number }>;
+  files: Array<RuntimeMediaFile & { durationMs?: number; previewUrl?: string }>;
 };
 
 export function runtimeMediaManifest(manifest: MediaManifest): RuntimeMediaManifest {

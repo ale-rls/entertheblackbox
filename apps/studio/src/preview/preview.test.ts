@@ -12,6 +12,10 @@ describe("outcome preview", () => {
     expect(preview.resolution).toMatchObject({ winner: "fixed", resolvedTarget: "question-quadrant", freezeMs: 3000 });
     expect(continueAfterResolution(preview).phaseId).toBe("question-quadrant");
   });
+  it("can begin at a selected Studio node", () => {
+    expect(startPreview(project, "question-quadrant").phaseId).toBe("question-quadrant");
+    expect(() => startPreview(project, "missing-node")).toThrow("does not exist");
+  });
   it("uses shared resolution parity for filtering, tie and empty", () => {
     let preview = startPreview({ ...project, scenario: { ...project.scenario, entryPhaseId: "question-quadrant" } });
     preview = resolvePreview(preview, "tie", false, false);

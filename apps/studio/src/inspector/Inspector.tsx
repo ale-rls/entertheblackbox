@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import type { StudioProject } from "@smartphonecracy/studio-adapter";
 import { compiledJson, phaseIdError, type AuthorablePhaseKind, type Phase } from "./model.js";
-import { PolygonEditor } from "./PolygonEditor.js";
+import { PolygonEditor, type PolygonEditorMedia } from "./PolygonEditor.js";
 import { studioMediaKindForSource, type StudioMediaKind } from "../media/library.js";
 
 type Props = {
   project: StudioProject;
   selectedId: string | undefined;
-  localMedia: Array<{ src: string; durationMs?: number }>;
+  localMedia: Array<{ src: string; durationMs?: number; previewUrl?: string }>;
   onRename: (nextId: string) => void;
   onChange: (phase: Phase) => void;
   onChooseMedia: (phaseId: string, target: "src" | "audioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
@@ -32,6 +32,14 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     : undefined;
   const audioDurationMs = (phase?.kind === "video" || phase?.kind === "video-position-question") && phase.audioSrc !== undefined
     ? detectedDuration ?? Math.max(1, phase.expectedDurationMs - (phase.tailDurationMs ?? 0))
+    : undefined;
+  const polygonMedia: PolygonEditorMedia | undefined = phase?.kind === "video-position-question"
+    ? {
+        kind: phase.audioSrc === undefined ? "video" : "image",
+        src: localMedia.find((file) => file.src === phase.src)?.previewUrl
+          ?? `/media/${phase.src.split("/").map(encodeURIComponent).join("/")}`,
+        ...(phase.audioSrc === undefined ? { frameAtMs: phase.showAtMs } : {}),
+      }
     : undefined;
 
   if (!phase) return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2><p className="sc-tool-copy">Select a runtime phase to edit it.</p>
@@ -114,7 +122,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
-      <label className="sc-tool-label">{label("Position layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : phase.field.type === "two-quadrant" ? `two-quadrant-${phase.field.axis}` : "three-candidate-zones"} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option><option value="three-candidate-zones">Polygon zones · 3 candidates</option></select></label>
+      <label className="sc-tool-label">{label("Position layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : phase.field.type === "two-quadrant" ? `two-quadrant-${phase.field.axis}` : "three-candidate-zones"} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option><option value="three-candidate-zones">Polygon zones · custom</option></select></label>
       {phase.field.type === "four-quadrant" ? (() => {
         const field = phase.field;
         return <>
@@ -133,7 +141,14 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         const field = phase.field;
         return <fieldset><legend>Candidate zones <small>field.zones</small></legend>
           <p className="sc-tool-copy field-hint">Select a zone, drag its corners, or redraw it by clicking around the arena. Zone IDs stay stable because they are also graph output handles.</p>
-          <PolygonEditor zones={field.zones} onChange={(zones) => onChange({ ...phase, field: { ...field, zones } } as Phase)} />
+          <PolygonEditor zones={field.zones} {...(polygonMedia ? { media: polygonMedia } : {})} onChange={(zones) => {
+            const currentNext = phase.next;
+            const currentMap = currentNext.type === "quadrant-plurality" ? currentNext.map as Record<string, string> : undefined;
+            const next = currentMap
+              ? { ...currentNext, map: Object.fromEntries(zones.map((zone) => [zone.id, currentMap[zone.id] ?? "idle"])) }
+              : currentNext;
+            onChange({ ...phase, field: { ...field, zones }, next } as Phase);
+          }} />
           {field.zones.map((zone, zoneIndex) => <fieldset key={zone.id}><legend>{zone.id}</legend>
             {text("Candidate label", `field.zones.${zoneIndex}.label`, zone.label, (value) => {
               const zones = field.zones.map((item, index) => index === zoneIndex ? { ...item, label: value } : item);

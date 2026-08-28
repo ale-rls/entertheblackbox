@@ -17,11 +17,14 @@ export type PreviewVote = PositionedVote<PositionStatus> & { participantId: stri
 export type PreviewResolution = { field: PositionField; votes: PreviewVote[]; includedTotal: number; excludedTotal: number; includedByStatus: Partial<Record<PositionStatus, number>>; excludedByStatus: Partial<Record<PositionStatus, number>>; quadrantCounts: Partial<Record<PositionQuadrant, number>>; winner: PositionQuadrant | "tie" | "empty" | "fixed"; resolvedTarget: string; freezeMs: number; tieBreak?: { type: "kleroterion"; candidates: string[]; selected: string } };
 export type PreviewSession = { project: StudioProject; phaseId: string; elapsedMs: number; validation: Diagnostic[]; resolution?: PreviewResolution };
 
-export function startPreview(project: StudioProject): PreviewSession {
+export function startPreview(project: StudioProject, startPhaseId: string = project.scenario.entryPhaseId): PreviewSession {
   const validation = diagnostics(project);
   const errors = validation.filter((item) => item.severity === "error");
   if (errors.length) throw new Error(`Preview blocked: ${errors.map((item) => item.message).join("; ")}`);
-  return { project, phaseId: project.scenario.entryPhaseId, elapsedMs: 0, validation };
+  if (!project.scenario.phases.some((phase) => phase.id === startPhaseId)) {
+    throw new Error(`Preview phase “${startPhaseId}” does not exist.`);
+  }
+  return { project, phaseId: startPhaseId, elapsedMs: 0, validation };
 }
 export const currentPhase = (session: PreviewSession): Phase => {
   const phase = session.project.scenario.phases.find((item) => item.id === session.phaseId);

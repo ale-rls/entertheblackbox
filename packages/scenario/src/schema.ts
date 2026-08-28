@@ -60,7 +60,7 @@ export const polygonZonesFieldSchema = z.object({
   type: z.literal("polygon-zones"),
   zones: z
     .array(polygonZoneSchema)
-    .min(2, "polygon-zones needs at least 2 zones")
+    .min(1, "polygon-zones needs at least 1 zone")
     .refine((zones) => new Set(zones.map((zone) => zone.id)).size === zones.length, {
       message: "zone ids must be unique",
     }),

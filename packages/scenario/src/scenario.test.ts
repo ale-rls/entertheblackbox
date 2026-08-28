@@ -326,8 +326,9 @@ describe("polygon-zones and rating extensions", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects fewer than 2 zones and duplicate zone ids", () => {
-    expect(polygonZonesFieldSchema.safeParse({ zones: [threeZoneField.zones[0]] }).success).toBe(false);
+  it("accepts one zone and rejects an empty or duplicate zone list", () => {
+    expect(polygonZonesFieldSchema.safeParse({ type: "polygon-zones", zones: [threeZoneField.zones[0]] }).success).toBe(true);
+    expect(polygonZonesFieldSchema.safeParse({ type: "polygon-zones", zones: [] }).success).toBe(false);
     expect(
       polygonZonesFieldSchema.safeParse({
         type: "polygon-zones",

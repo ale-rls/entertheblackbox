@@ -66,6 +66,25 @@ export function replacePluralityLayoutEdges(
   ];
 }
 
+/** Preserve still-valid output connections while adding or removing dynamic polygon-zone handles. */
+export function reconcilePhaseOutputEdges(edges: Edge[], phase: Phase): Edge[] {
+  const retained = edges.filter((edge) => edge.source !== phase.id);
+  if (phase.kind === "idle") return retained;
+  return [
+    ...retained,
+    ...phaseOutputHandles(phase).map((handle) => {
+      const existing = edges.find((edge) => edge.source === phase.id && (edge.sourceHandle ?? FIXED_HANDLE) === handle);
+      if (existing) return { ...existing, id: `${phase.id}:${handle}`, sourceHandle: handle };
+      let runtime = "idle";
+      if (phase.kind === "video") runtime = phase.next;
+      else if (phase.next.type === "fixed") runtime = phase.next.target;
+      else if (handle === "tie" || handle === "empty") runtime = phase.next[handle];
+      else runtime = (phase.next.map as Record<string, string>)[handle] ?? "idle";
+      return { id: `${phase.id}:${handle}`, source: phase.id, sourceHandle: handle, target: edgeTarget(runtime) };
+    }),
+  ];
+}
+
 export function graphEdges(project: StudioProject): Edge[] {
   const edges: Edge[] = [{ id: "entry", source: ENTRY_NODE_ID, sourceHandle: FIXED_HANDLE, target: edgeTarget(project.scenario.entryPhaseId) }];
   for (const phase of project.scenario.phases) {

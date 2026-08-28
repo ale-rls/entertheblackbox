@@ -402,6 +402,41 @@ describe("Studio feedback and keyboard entry", () => {
     expect(Array.from(document.querySelectorAll("button")).some((item) => item.textContent === "Preview")).toBe(false);
   });
 
+  it("offers a display preview from the selected phase in the top bar", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    expect(Array.from(document.querySelectorAll("a")).some((item) => item.textContent === "Preview from here")).toBe(false);
+
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Video phase").click(); });
+    await act(async () => { button("Cancel").click(); });
+    const preview = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).find((item) => item.textContent === "Preview from here")!;
+    await act(async () => { preview.click(); });
+
+    expect(preview.href).toMatch(/\/preview\.html\?preview=/);
+    expect(preview.target).toBe("_blank");
+    expect(preview.rel).toBe("noreferrer");
+  });
+
+  it("collapses and expands the bottom panel from its persistent header", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+
+    const content = document.querySelector<HTMLElement>("#bottom-panel-content")!;
+    const collapse = button("Collapse panel");
+    expect(collapse.getAttribute("aria-expanded")).toBe("true");
+    expect(content.hidden).toBe(false);
+
+    await act(async () => { collapse.click(); });
+    expect(content.hidden).toBe(true);
+    expect(document.querySelector(".diagnostics")?.classList.contains("is-collapsed")).toBe(true);
+    expect(button("Expand panel").getAttribute("aria-expanded")).toBe("false");
+
+    await act(async () => { button("Expand panel").click(); });
+    expect(content.hidden).toBe(false);
+    expect(button("Collapse panel").getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("returns focus to a menu trigger after a normal selection", async () => {
     const selected = vi.fn();
     await render(<Menu label="View" items={[{ label: "Save layout", onSelect: selected }]} />);

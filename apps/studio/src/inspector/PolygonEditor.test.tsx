@@ -42,6 +42,56 @@ function pointer(target: Element, type: string, clientX: number, clientY: number
 }
 
 describe("PolygonEditor", () => {
+  it("adds and removes zones while keeping at least one", async () => {
+    const onChange = vi.fn();
+    await renderEditor(onChange);
+    const button = (text: string) => Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((item) => item.textContent === text)!;
+
+    await act(async () => { button("Add zone").click(); });
+    expect(onChange).toHaveBeenLastCalledWith([
+      ...zones,
+      expect.objectContaining({ id: "candidate-1", label: "Candidate 1" }),
+    ]);
+
+    await act(async () => { button("Remove zone").click(); });
+    expect(onChange).toHaveBeenLastCalledWith([zones[1]]);
+
+    await act(async () => root?.render(<PolygonEditor zones={[zones[0]!]} onChange={onChange} />));
+    expect(button("Remove zone").disabled).toBe(true);
+  });
+
+  it("uses display-equivalent video framing behind the editable zones", async () => {
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<PolygonEditor
+      zones={zones}
+      media={{ kind: "video", src: "/media/scene.mp4", frameAtMs: 15_000 }}
+      onChange={vi.fn()}
+    />));
+
+    const viewport = document.querySelector<HTMLElement>(".polygon-editor-viewport")!;
+    const video = document.querySelector<HTMLVideoElement>(".polygon-editor-media-video")!;
+    const svg = document.querySelector<SVGSVGElement>(".polygon-editor-canvas")!;
+    expect(viewport.dataset.mediaKind).toBe("video");
+    expect(video.getAttribute("src")).toBe("/media/scene.mp4");
+    expect(svg.getAttribute("preserveAspectRatio")).toBe("none");
+    expect(viewport.textContent).toContain(`${window.innerWidth}×${window.innerHeight} · cover`);
+
+    Object.defineProperty(video, "duration", { value: 30, configurable: true });
+    await act(async () => { video.dispatchEvent(new Event("loadedmetadata")); });
+    expect(video.currentTime).toBe(15);
+  });
+
+  it("uses contain framing for an image + audio phase", async () => {
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<PolygonEditor zones={zones} media={{ kind: "image", src: "/media/plate.png" }} onChange={vi.fn()} />));
+
+    expect(document.querySelector(".polygon-editor-media-image")?.getAttribute("src")).toBe("/media/plate.png");
+    expect(document.querySelector(".polygon-editor-scrim")).toBeNull();
+    expect(document.querySelector(".polygon-editor-viewport")?.textContent).toContain(`${window.innerWidth}×${window.innerHeight} · contain`);
+  });
+
   it("shows every authored zone and draggable handles for the selected polygon", async () => {
     await renderEditor();
     expect(document.querySelectorAll(".polygon-editor-zone")).toHaveLength(2);

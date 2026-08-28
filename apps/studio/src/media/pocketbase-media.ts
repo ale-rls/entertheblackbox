@@ -2,7 +2,16 @@ import PocketBase, { ClientResponseError } from "pocketbase";
 import { inspectLocalMedia, studioMediaKindForSource } from "./library.js";
 import type { MediaManifest } from "./local.js";
 
-type MediaRecord = { id: string; src: string; bytes: number; hash: string; durationMs?: number };
+type MediaRecord = {
+  id: string;
+  collectionId: string;
+  collectionName: string;
+  file: string;
+  src: string;
+  bytes: number;
+  hash: string;
+  durationMs?: number;
+};
 
 function extensionAllowed(name: string): boolean {
   return studioMediaKindForSource(name) !== "unknown";
@@ -29,9 +38,13 @@ export class PocketbaseMediaLibrary {
     try {
       const records = await this.pb.collection<MediaRecord>("media").getFullList({ sort: "src" });
       return {
-        files: records.map(({ src, bytes, hash, durationMs }) => (
-          durationMs === undefined ? { src, bytes, hash } : { src, bytes, hash, durationMs }
-        )),
+        files: records.map((record) => ({
+          src: record.src,
+          bytes: record.bytes,
+          hash: record.hash,
+          previewUrl: this.pb.files.getURL(record, record.file),
+          ...(record.durationMs === undefined ? {} : { durationMs: record.durationMs }),
+        })),
       };
     } catch {
       // PocketBase unreachable -- manual runtime/backup imports still work.

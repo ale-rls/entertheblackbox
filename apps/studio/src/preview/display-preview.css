@@ -1,0 +1,98 @@
+.studio-display-preview {
+  --preview-controls-height: auto;
+}
+
+.preview-idle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgb(255 255 255 / 72%);
+  font-size: clamp(2rem, 7vw, 6rem);
+}
+
+.preview-controls {
+  position: absolute;
+  z-index: 20;
+  right: 1rem;
+  bottom: 1rem;
+  left: 1rem;
+  display: flex;
+  max-height: min(40vh, 18rem);
+  align-items: center;
+  gap: .5rem;
+  padding: .75rem;
+  overflow: auto;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: .75rem;
+  background: rgb(5 5 5 / 82%);
+  box-shadow: 0 .75rem 2.5rem rgb(0 0 0 / 38%);
+  pointer-events: auto;
+  backdrop-filter: blur(14px);
+}
+
+.preview-controls button {
+  flex: 0 0 auto;
+  padding: .55rem .8rem;
+  border: 1px solid rgb(255 255 255 / 34%);
+  border-radius: .5rem;
+  background: rgb(255 255 255 / 10%);
+  color: #fff;
+  cursor: pointer;
+}
+
+.preview-controls button:hover,
+.preview-controls button:focus-visible {
+  background: rgb(255 255 255 / 20%);
+}
+
+.preview-controls button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.preview-context {
+  display: grid;
+  min-width: 12rem;
+  margin-inline-end: auto;
+  gap: .15rem;
+}
+
+.preview-context > span:last-child {
+  overflow: hidden;
+  color: rgb(255 255 255 / 64%);
+  font-family: ui-monospace, monospace;
+  font-size: .75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-badge {
+  color: rgb(255 255 255 / 76%);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.preview-error {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 2rem;
+  background: #050505;
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .preview-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .preview-context {
+    width: 100%;
+  }
+}

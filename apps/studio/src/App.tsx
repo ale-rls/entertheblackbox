@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import PocketBase from "pocketbase";
 import { addEdge, Background, ReactFlow, type Connection, type Edge, type Node, useEdgesState, useNodesState } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -6,7 +6,7 @@ import { Autosave, recoverDraft, type SaveStatus as SaveStatusValue } from "./dr
 import { PocketbaseDraftDatabase } from "./pocketbase-drafts.js";
 import { exportArtifacts, exportBackup, importRuntime, importStudioFiles } from "./io.js";
 import { autoLayout, type Draft } from "./model.js";
-import { applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, phaseOutputHandles, pruneEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./canvas/graph.js";
+import { applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, phaseOutputHandles, pruneEdges, reconcilePhaseOutputEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./canvas/graph.js";
 import { nodeDataForPhase, nodeTypes } from "./canvas/nodes.js";
 import { changePhaseKind, renamePhase, type AuthorablePhaseKind, type Phase } from "./inspector/model.js";
 import { Inspector } from "./inspector/Inspector.js";
@@ -23,6 +23,7 @@ import { MediaLibraryDialog, type MediaLibraryRow } from "./media/MediaLibraryDi
 import { studioMediaKindForSource, type StudioMediaKind } from "./media/library.js";
 import { appendCampaignExtension } from "./templates/campaign.js";
 import { productionDraftFromArtifact, type PublishedProductionArtifact } from "./production.js";
+import { projectPreviewUrl, storeProjectPreview } from "./preview/project-preview.js";
 import "@smartphonecracy/tool-ui/styles.css";
 import "./style.css";
 
@@ -452,8 +453,11 @@ export function App() {
   };
   const updatePhase = (nextPhase: Phase) => {
     if (!draft) return;
+    const currentPhase = draft.project.scenario.phases.find((phase) => phase.id === nextPhase.id);
+    const handlesChanged = phaseOutputHandles(currentPhase).join("\u0000") !== phaseOutputHandles(nextPhase).join("\u0000");
+    const nextEdges = handlesChanged ? reconcilePhaseOutputEdges(edges, nextPhase) : edges;
     const phases = draft.project.scenario.phases.map((phase) => phase.id === nextPhase.id ? nextPhase : phase) as Draft["project"]["scenario"]["phases"];
-    record({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } }, updatedAt: Date.now() });
+    record({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } }, updatedAt: Date.now() }, nextEdges);
     setNodes((current) => current.map((node) => node.id === nextPhase.id ? { ...node, data: nodeDataForPhase(nextPhase) } : node));
   };
   const selectMedia = (row: MediaLibraryRow) => {
@@ -752,6 +756,17 @@ export function App() {
   const mediaPickerSelectedSrc = mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
     ? mediaPicker?.target === "audioSrc" ? mediaPickerPhase.audioSrc ?? "" : mediaPickerPhase.src
     : "";
+  const selectedPhase = draft.project.scenario.phases.find((phase) => phase.id === selectedId);
+  const preparePreviewFromSelected = (event: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (!selectedPhase) return;
+    try {
+      const token = storeProjectPreview(draft.name, draft.project, selectedPhase.id);
+      event.currentTarget.href = projectPreviewUrl(token);
+    } catch (error) {
+      event.preventDefault();
+      setGraphFeedback({ status: "danger", message: `Preview could not be opened: ${error instanceof Error ? error.message : "The browser could not prepare the preview."}` });
+    }
+  };
   return <main ref={editorRef} tabIndex={-1} className={`editor${showInspector ? "" : " no-inspector"}${showDiagnostics ? "" : " no-diagnostics"}`} data-sc-tool-density="compact" data-sc-tool-root>
     <header className="menubar">
       <Menu label="File" items={[
@@ -783,13 +798,14 @@ export function App() {
       ]} />
       <Menu label="View" items={[
         { label: showInspector ? "Hide properties" : "Show properties", onSelect: () => setShowInspector((value) => !value) },
-        { label: showDiagnostics ? "Hide diagnostics" : "Show diagnostics", onSelect: () => setShowDiagnostics((value) => !value) },
+        { label: showDiagnostics ? "Collapse bottom panel" : "Expand bottom panel", onSelect: () => setShowDiagnostics((value) => !value) },
         { separator: true },
         { label: "Save layout", onSelect: saveLayout },
       ]} />
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={openMediaLibrary}>Media</button>
       <input aria-label="Show name" className="sc-tool-field show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
       <SaveStatus status={status} />
+      {selectedPhase && <a className="sc-tool-button" data-sc-tool-variant="primary" href="preview.html" target="_blank" rel="noreferrer" onClick={preparePreviewFromSelected}>Preview from here</a>}
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/display/" target="_blank" rel="noreferrer">Display</a>
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/admin/" target="_blank" rel="noreferrer">Admin</a>
       <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json,text/plain,.json,.txt" onChange={(event) => {
@@ -847,7 +863,7 @@ export function App() {
     </header>
     <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
     <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onKindChange={changeSelectedKind} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} />
-    <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
+    <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} collapsed={!showDiagnostics} onToggle={() => setShowDiagnostics((value) => !value)} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
     {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
     {mediaPicker && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} selection={{ contextLabel: `${mediaPicker.mediaKind} for ${mediaPicker.phaseId}`, selectedSrc: mediaPickerSelectedSrc, mediaKind: mediaPicker.mediaKind, onSelect: selectMedia }} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={closeMediaPicker} />}
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}

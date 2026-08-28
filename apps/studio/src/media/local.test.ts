@@ -8,7 +8,7 @@ describe("local Studio media", () => {
   it("overlays local files while preserving imported-only entries", () => {
     const draft = importRuntime(scenario, manifest);
     const generated = { files: [
-      { src: "intro.mp4", bytes: 100, hash: "fresh", durationMs: 4_321 },
+      { src: "intro.mp4", bytes: 100, hash: "fresh", durationMs: 4_321, previewUrl: "https://media.test/intro.mp4" },
       { src: "new.mp4", bytes: 42, hash: "abc" },
     ] };
     const refreshed = refreshDraftLocalMedia(draft, generated);
