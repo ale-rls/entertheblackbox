@@ -77,6 +77,49 @@ html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflo
 .quadrant-dimmed { opacity: .28; }
 .quadrant-count { font-size: clamp(2rem, 7vw, 6rem); font-variant-numeric: tabular-nums; }
 
+.arena-ellipse-overlay { inset: 0; }
+.arena-ellipse-shapes { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.arena-region { fill: rgb(255 255 255 / 4%); transition: opacity 180ms ease, fill 180ms ease; }
+.arena-region-winner { fill: rgb(255 255 255 / 20%); }
+.arena-region-dimmed { opacity: .25; }
+.arena-outline,
+.arena-divider {
+  fill: none;
+  stroke: rgb(255 255 255 / 82%);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 72%));
+}
+.arena-outline { stroke-width: 3px; }
+.arena-axis-label {
+  position: absolute;
+  z-index: 4;
+  max-width: min(18rem, 22vw);
+  padding: .35rem .55rem;
+  border-radius: .35rem;
+  background: rgb(0 0 0 / 64%);
+  font-size: clamp(1rem, 2.2vw, 2rem);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  text-wrap: balance;
+  pointer-events: none;
+}
+.arena-axis-label-x { transform: translate(-50%, -50%); }
+.arena-axis-label-x.arena-axis-label-min { transform: translate(-100%, -50%); }
+.arena-axis-label-x.arena-axis-label-max { transform: translate(0, -50%); }
+.arena-axis-label-y.arena-axis-label-min { transform: translate(-50%, -100%); }
+.arena-axis-label-y.arena-axis-label-max { transform: translate(-50%, -100%); }
+.arena-count {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+.arena-count-dimmed { opacity: .28; }
+.arena-count-winner { font-weight: 700; }
+
 .quadrant-overlay-polygon-zones { inset: 0; }
 .zone-shapes { position: absolute; inset: 0; width: 100%; height: 100%; }
 .zone-shape { fill: rgb(255 255 255 / 6%); stroke: rgb(255 255 255 / 45%); stroke-width: 0.4; transition: opacity 180ms ease, fill 180ms ease; }

@@ -37,6 +37,29 @@ describe("quadrantOfField", () => {
     expect(quadrantOfField(field, 0.9, 0.499)).toBe("min");
     expect(quadrantOfField(field, 0.1, 0.5)).toBe("max");
   });
+
+  it("clips votes to a calibrated ellipse and splits through its center", () => {
+    const arena = { type: "ellipse" as const, centerX: 0.5, centerY: 0.7, radiusX: 0.4, radiusY: 0.2 };
+    const four = {
+      type: "four-quadrant" as const,
+      xAxis: { minLabel: "left", maxLabel: "right" },
+      yAxis: { minLabel: "top", maxLabel: "bottom" },
+      arena,
+    };
+    const two = {
+      type: "two-quadrant" as const,
+      axis: "y" as const,
+      labels: { minLabel: "top", maxLabel: "bottom" },
+      arena,
+    };
+
+    expect(quadrantOfField(four, 0.35, 0.65)).toBe("q2");
+    expect(quadrantOfField(four, 0.65, 0.75)).toBe("q4");
+    expect(quadrantOfField(two, 0.5, 0.69)).toBe("min");
+    expect(quadrantOfField(two, 0.5, 0.7)).toBe("max");
+    expect(quadrantOfField(four, 0.05, 0.7)).toBeNull();
+    expect(quadrantOfField(two, 0.5, 0.95)).toBeNull();
+  });
 });
 
 describe("polygon zones", () => {

@@ -7,6 +7,10 @@ import {
   MARKER_TRACK_HEIGHT,
   MARKER_TRACK_WIDTH,
 } from "../idle/markerTrack.js";
+import {
+  TRACKED_QR_ERROR_CORRECTION_LEVEL,
+  TRACKED_QR_MARGIN_MODULES,
+} from "../idle/qrPresentation.js";
 import { drawTrackedQr } from "../idle/tracking.js";
 import idleAttractUrl from "../assets/idle-attract.mp4";
 
@@ -57,11 +61,8 @@ export function IdleAttract({
     const canvas = document.createElement("canvas");
     void QRCode.toCanvas(canvas, grant.url, {
       width: QR_RENDER_SIZE_PX,
-      // Match the proven admission QR settings. The prop's existing white
-      // frame supplies additional quiet-zone contrast while keeping modules
-      // as large as possible at projection distance.
-      margin: 1,
-      errorCorrectionLevel: "M",
+      margin: TRACKED_QR_MARGIN_MODULES,
+      errorCorrectionLevel: TRACKED_QR_ERROR_CORRECTION_LEVEL,
     })
       .then(() => {
         if (!cancelled) setQrCanvas(canvas);

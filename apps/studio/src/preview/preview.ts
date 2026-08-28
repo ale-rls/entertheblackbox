@@ -53,11 +53,23 @@ const zoneCentroid = (points: readonly { x: number; y: number }[]): readonly [nu
   return [sum.x / points.length, sum.y / points.length];
 };
 const pointFor = (field: PositionField, quadrant: PositionQuadrant): readonly [number, number] => {
-  if (field.type === "four-quadrant") return fourPoint[quadrant as keyof typeof fourPoint];
+  if (field.type === "four-quadrant") {
+    if (field.arena === undefined) return fourPoint[quadrant as keyof typeof fourPoint];
+    const right = quadrant === "q1" || quadrant === "q4";
+    const bottom = quadrant === "q3" || quadrant === "q4";
+    return [
+      field.arena.centerX + (right ? 0.42 : -0.42) * field.arena.radiusX,
+      field.arena.centerY + (bottom ? 0.42 : -0.42) * field.arena.radiusY,
+    ];
+  }
   if (field.type === "polygon-zones") {
     const zone = field.zones.find((z) => z.id === quadrant);
     if (!zone) throw new Error(`Unknown zone "${String(quadrant)}".`);
     return zoneCentroid(zone.points);
+  }
+  if (field.arena !== undefined) {
+    if (field.axis === "x") return [field.arena.centerX + (quadrant === "min" ? -0.5 : 0.5) * field.arena.radiusX, field.arena.centerY];
+    return [field.arena.centerX, field.arena.centerY + (quadrant === "min" ? -0.5 : 0.5) * field.arena.radiusY];
   }
   if (field.axis === "x") return quadrant === "min" ? [0.25, 0.5] : [0.75, 0.5];
   return quadrant === "min" ? [0.5, 0.25] : [0.5, 0.75];

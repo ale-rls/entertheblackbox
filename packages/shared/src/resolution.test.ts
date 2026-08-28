@@ -115,6 +115,24 @@ describe("two-quadrant resolution math", () => {
       resolvedTarget: "next",
     });
   });
+
+  it("excludes positioned votes outside a calibrated arena ellipse", () => {
+    const arenaField = {
+      ...xField,
+      arena: { type: "ellipse" as const, centerX: 0.5, centerY: 0.7, radiusX: 0.4, radiusY: 0.2 },
+    };
+    const arenaVotes = [
+      { x: 0.3, y: 0.7, status: "valid" },
+      { x: 0.7, y: 0.7, status: "valid" },
+      { x: 0.1, y: 0.2, status: "valid" },
+    ] as const;
+
+    expect(classifyPositionVotesForField(arenaField, arenaVotes, new Set(["valid"]))).toMatchObject({
+      quadrantCounts: { min: 1, max: 1 },
+      includedTotal: 2,
+      excludedTotal: 1,
+    });
+  });
 });
 
 describe("polygon-zones resolution math", () => {

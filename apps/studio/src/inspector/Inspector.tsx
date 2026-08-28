@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { StudioProject } from "@smartphonecracy/studio-adapter";
 import { compiledJson, phaseIdError, type AuthorablePhaseKind, type Phase } from "./model.js";
 import { PolygonEditor, type PolygonEditorMedia } from "./PolygonEditor.js";
+import { ArenaEllipseEditor, PLATE_A_ARENA_PRESET } from "./ArenaEllipseEditor.js";
+import { TimingTimeline } from "./TimingTimeline.js";
 import { studioMediaKindForSource, type StudioMediaKind } from "../media/library.js";
 
 type Props = {
@@ -33,7 +35,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   const audioDurationMs = (phase?.kind === "video" || phase?.kind === "video-position-question") && phase.audioSrc !== undefined
     ? detectedDuration ?? Math.max(1, phase.expectedDurationMs - (phase.tailDurationMs ?? 0))
     : undefined;
-  const polygonMedia: PolygonEditorMedia | undefined = phase?.kind === "video-position-question"
+  const fieldMedia: PolygonEditorMedia | undefined = phase?.kind === "video-position-question"
     ? {
         kind: phase.audioSrc === undefined ? "video" : "image",
         src: localMedia.find((file) => file.src === phase.src)?.previewUrl
@@ -49,10 +51,6 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   const label = (plain: string, runtime: string) => <span>{plain}<small>{runtime}</small></span>;
   const text = (plain: string, runtime: string, value: string, change: (value: string) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" value={value} onChange={(event) => change(event.target.value)} /></label>;
   const number = (plain: string, runtime: string, value: number, change: (value: number) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" type="number" min="0" value={value} onChange={(event) => change(numberValue(event.target.value, value))} /></label>;
-  const boundedNumber = (plain: string, runtime: string, value: number, min: number, max: number, change: (value: number) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" type="number" min={min} max={max} value={value} onChange={(event) => {
-    const parsed = Number(event.target.value);
-    change(Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : value);
-  }} /></label>;
   const mediaPicker = (plain: string, runtime: "src" | "audioSrc", src: string, kind: Exclude<StudioMediaKind, "unknown">) => <>
     <div className="sc-tool-label media-source-field">{label(plain, runtime)}<button className="sc-tool-button media-source-picker" data-sc-tool-variant="secondary" type="button" aria-label={`Choose ${kind} for ${phase.id}. Current media: ${src}`} onClick={(event) => onChooseMedia(phase.id, runtime, kind, event.currentTarget)}>
       <span className="sc-tool-mono">{src}</span><span>Browse library…</span>
@@ -141,7 +139,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         const field = phase.field;
         return <fieldset><legend>Candidate zones <small>field.zones</small></legend>
           <p className="sc-tool-copy field-hint">Select a zone, drag its corners, or redraw it by clicking around the arena. Zone IDs stay stable because they are also graph output handles.</p>
-          <PolygonEditor zones={field.zones} {...(polygonMedia ? { media: polygonMedia } : {})} onChange={(zones) => {
+          <PolygonEditor zones={field.zones} {...(fieldMedia ? { media: fieldMedia } : {})} onChange={(zones) => {
             const currentNext = phase.next;
             const currentMap = currentNext.type === "quadrant-plurality" ? currentNext.map as Record<string, string> : undefined;
             const next = currentMap
@@ -169,20 +167,53 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
           </fieldset>)}
         </fieldset>;
       })()}
-      {phase.kind === "position-question" && <>
-        {number("Question duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs }))}
-        {number("Outcome freeze (ms)", "freezeMs", phase.freezeMs, (freezeMs) => onChange({ ...phase, freezeMs }))}
-      </>}
+      {phase.field.type !== "polygon-zones" && (() => {
+        const field = phase.field;
+        return <fieldset><legend>Arena surface <small>field.arena</small></legend>
+          <label className="sc-tool-checkbox check"><input type="checkbox" checked={field.arena !== undefined} onChange={(event) => {
+            if (event.target.checked) {
+              onChange({ ...phase, field: { ...field, arena: { ...PLATE_A_ARENA_PRESET } } } as Phase);
+              return;
+            }
+            const { arena: _arena, ...withoutArena } = field;
+            onChange({ ...phase, field: withoutArena } as Phase);
+          }} />Constrain voting to a calibrated ellipse</label>
+          <p className="sc-tool-copy field-hint">Positions outside the oval do not count. The split lines pass through the oval’s calibrated center.</p>
+          {field.arena !== undefined && <ArenaEllipseEditor
+            arena={field.arena}
+            field={field}
+            {...(fieldMedia ? { media: fieldMedia } : {})}
+            onChange={(arena) => onChange({ ...phase, field: { ...field, arena } } as Phase)}
+          />}
+        </fieldset>;
+      })()}
+      {phase.kind === "position-question" && (() => {
+        const phaseEndMs = phase.durationMs + phase.freezeMs;
+        const timelineMaxMs = Math.max(120_000, Math.ceil((phaseEndMs * 1.25) / 30_000) * 30_000);
+        return <fieldset className="timeline-fields"><legend>Question timeline <small>milliseconds from question start</small></legend>
+          <TimingTimeline label="Question" min={0} max={timelineMaxMs} markers={[
+            { id: "duration", label: "Vote closes", runtime: "durationMs", value: phase.durationMs, min: 1, max: timelineMaxMs, tone: "close", shiftWith: ["freeze"], onChange: (durationMs) => onChange({ ...phase, durationMs }) },
+            { id: "freeze", label: "Outcome ends", runtime: "durationMs + freezeMs", value: phaseEndMs, min: phase.durationMs, max: timelineMaxMs, tone: "end", onChange: (endMs) => onChange({ ...phase, freezeMs: Math.max(0, endMs - phase.durationMs) }) },
+          ]} />
+          <p className="sc-tool-copy field-hint">Voting closes at {phase.durationMs} ms. The resolved outcome then stays visible for {phase.freezeMs} ms.</p>
+        </fieldset>;
+      })()}
       {phase.kind === "video-position-question" && (() => {
         const timelineOriginMs = phase.audioSrc === undefined ? 0 : audioDurationMs ?? 0;
         const timelineMinMs = -timelineOriginMs;
         const timelineMaxMs = phase.audioSrc === undefined ? phase.expectedDurationMs : phase.tailDurationMs ?? 0;
         const changeOffset = (field: "showAtMs" | "openAtMs" | "closeAtMs" | "hideAtMs", value: number) => onChange({ ...phase, [field]: timelineOriginMs + value });
+        const showOffset = phase.showAtMs - timelineOriginMs;
+        const openOffset = phase.openAtMs - timelineOriginMs;
+        const closeOffset = phase.closeAtMs - timelineOriginMs;
+        const hideOffset = phase.hideAtMs - timelineOriginMs;
         return <fieldset className="timeline-fields"><legend>Vote timeline <small>{phase.audioSrc === undefined ? "milliseconds from media start" : "milliseconds from MP3 end"}</small></legend>
-          {boundedNumber("Show question", "showAtMs", phase.showAtMs - timelineOriginMs, timelineMinMs, timelineMaxMs, (value) => changeOffset("showAtMs", value))}
-          {boundedNumber("Open voting", "openAtMs", phase.openAtMs - timelineOriginMs, timelineMinMs, timelineMaxMs, (value) => changeOffset("openAtMs", value))}
-          {boundedNumber("Close voting", "closeAtMs", phase.closeAtMs - timelineOriginMs, timelineMinMs, timelineMaxMs, (value) => changeOffset("closeAtMs", value))}
-          {boundedNumber("Hide question", "hideAtMs", phase.hideAtMs - timelineOriginMs, timelineMinMs, timelineMaxMs, (value) => changeOffset("hideAtMs", value))}
+          <TimingTimeline label="Vote" min={timelineMinMs} max={timelineMaxMs} origin={0} markers={[
+            { id: "show", label: "Show question", runtime: "showAtMs", value: showOffset, min: timelineMinMs, max: openOffset, tone: "show", onChange: (value) => changeOffset("showAtMs", value) },
+            { id: "open", label: "Open voting", runtime: "openAtMs", value: openOffset, min: showOffset, max: Math.max(showOffset, closeOffset - 1), tone: "open", onChange: (value) => changeOffset("openAtMs", value) },
+            { id: "close", label: "Close voting", runtime: "closeAtMs", value: closeOffset, min: openOffset + 1, max: hideOffset, tone: "close", onChange: (value) => changeOffset("closeAtMs", value) },
+            { id: "hide", label: "Hide question", runtime: "hideAtMs", value: hideOffset, min: closeOffset, max: timelineMaxMs, tone: "end", onChange: (value) => changeOffset("hideAtMs", value) },
+          ]} />
           {phase.audioSrc !== undefined && <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={(phase.tailDurationMs ?? 0) < 1} onClick={() => {
             const tailDurationMs = phase.tailDurationMs ?? 0;
             onChange({ ...phase, showAtMs: timelineOriginMs, openAtMs: timelineOriginMs, closeAtMs: timelineOriginMs + Math.max(1, Math.floor(tailDurationMs * .8)), hideAtMs: timelineOriginMs + tailDurationMs });

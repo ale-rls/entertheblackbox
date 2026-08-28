@@ -27,6 +27,11 @@ const twoYField: QuestionField = {
   labels: { minLabel: "local", maxLabel: "global" },
 };
 
+const arenaFourField: QuestionField = {
+  ...fourField,
+  arena: { type: "ellipse", centerX: 0.5, centerY: 0.7, radiusX: 0.4, radiusY: 0.2 },
+};
+
 const zonesField: QuestionField = {
   type: "polygon-zones",
   zones: [
@@ -119,6 +124,25 @@ describe("QuadrantOverlay", () => {
     expect(html).toContain(
       'class="quadrant quadrant-bottom quadrant-winner" data-quadrant="max"',
     );
+  });
+
+  it("clips calibrated quadrants and divider lines to the arena ellipse", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay
+        field={arenaFourField}
+        liveField={arenaFourField}
+        liveCounts={{ q1: 1, q2: 2, q3: 3, q4: 4 }}
+        resolution={null}
+      />,
+    );
+
+    expect(html).toContain('class="quadrant-overlay arena-ellipse-overlay arena-ellipse-four-quadrant"');
+    expect(html).toContain('<ellipse cx="50" cy="70" rx="40" ry="20"></ellipse>');
+    expect(html.match(/class="arena-divider"/g)).toHaveLength(2);
+    expect(html.match(/data-quadrant=/g)).toHaveLength(4);
+    expect(html).toContain('data-quadrant="q4"');
+    expect(html).toContain('class="arena-axis-label arena-axis-label-x arena-axis-label-min"');
+    expect(html).toContain('class="quadrant-count">4</span>');
   });
 
   it("does not render live counts from a mismatched field", () => {

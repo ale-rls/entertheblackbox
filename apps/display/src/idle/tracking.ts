@@ -8,6 +8,8 @@ export type Quad = readonly [Point, Point, Point, Point];
 
 /** Compensate for the canvas update landing one paint after the video frame. */
 export const TRACK_PRESENTATION_LEAD_SECONDS = 1 / MARKER_TRACK_FPS;
+/** Expand from the black marker into the prop's surrounding white frame. */
+export const TRACKED_QR_SCALE = 1.25;
 const PERSPECTIVE_MESH_STEPS = 4;
 
 const pointAt = (frame: readonly number[], corner: number): Point => [
@@ -51,6 +53,25 @@ const pointOnQuad = (quad: Quad, x: number, y: number): Point => {
   ];
 };
 
+/** Scale a perspective quad around its centre without changing its tracking. */
+export function scaleQuad(quad: Quad, scale: number): Quad {
+  const [topLeft, topRight, bottomRight, bottomLeft] = quad;
+  const center: Point = [
+    (topLeft[0] + topRight[0] + bottomRight[0] + bottomLeft[0]) / 4,
+    (topLeft[1] + topRight[1] + bottomRight[1] + bottomLeft[1]) / 4,
+  ];
+  const scalePoint = (point: Point): Point => [
+    center[0] + (point[0] - center[0]) * scale,
+    center[1] + (point[1] - center[1]) * scale,
+  ];
+  return [
+    scalePoint(topLeft),
+    scalePoint(topRight),
+    scalePoint(bottomRight),
+    scalePoint(bottomLeft),
+  ];
+}
+
 function drawTriangle(
   context: CanvasRenderingContext2D,
   image: CanvasImageSource,
@@ -93,7 +114,10 @@ export function drawTrackedQr(
   image: CanvasImageSource & { width: number; height: number },
   mediaTimeSeconds: number,
 ): void {
-  const quad = trackedQuadAt(mediaTimeSeconds + TRACK_PRESENTATION_LEAD_SECONDS);
+  const quad = scaleQuad(
+    trackedQuadAt(mediaTimeSeconds + TRACK_PRESENTATION_LEAD_SECONDS),
+    TRACKED_QR_SCALE,
+  );
   const width = image.width;
   const height = image.height;
 

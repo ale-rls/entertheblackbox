@@ -165,6 +165,29 @@ describe("scenarioSchema structural rejection", () => {
       ...composite,
       phases: [composite.phases[0], { ...composite.phases[1], closeAtMs: 14_000 }],
     }).success).toBe(false);
+
+    const ellipse = {
+      type: "ellipse" as const,
+      centerX: 0.5,
+      centerY: 0.7,
+      radiusX: 0.4,
+      radiusY: 0.2,
+    };
+    const compositeVote = composite.phases[1] as (typeof composite.phases)[number] & { field: Record<string, unknown> };
+    expect(scenarioSchema.safeParse({
+      ...composite,
+      phases: [composite.phases[0], {
+        ...compositeVote,
+        field: { ...compositeVote.field, arena: ellipse },
+      }],
+    }).success).toBe(true);
+    expect(scenarioSchema.safeParse({
+      ...composite,
+      phases: [composite.phases[0], {
+        ...compositeVote,
+        field: { ...compositeVote.field, arena: { ...ellipse, radiusY: 0.4 } },
+      }],
+    }).success).toBe(false);
   });
 
   it("canonicalizes legacy xAxis/yAxis questions to four quadrants", () => {

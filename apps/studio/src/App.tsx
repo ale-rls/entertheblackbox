@@ -586,6 +586,7 @@ export function App() {
           type: "four-quadrant" as const,
           xAxis: phase.field.type === "two-quadrant" && phase.field.axis === "x" ? phase.field.labels : { minLabel: "Left", maxLabel: "Right" },
           yAxis: phase.field.type === "two-quadrant" && phase.field.axis === "y" ? phase.field.labels : { minLabel: "Top", maxLabel: "Bottom" },
+          ...(phase.field.type !== "polygon-zones" && phase.field.arena ? { arena: phase.field.arena } : {}),
         }
       : layout === "three-candidate-zones"
         ? {
@@ -604,6 +605,7 @@ export function App() {
             : phase.field.type === "two-quadrant"
               ? phase.field.labels
               : { minLabel: "Min", maxLabel: "Max" },
+          ...(phase.field.type !== "polygon-zones" && phase.field.arena ? { arena: phase.field.arena } : {}),
         };
       const next = phase.next.type === "fixed" ? phase.next : {
         ...phase.next,

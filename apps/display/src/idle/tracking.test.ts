@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { MARKER_TRACK, MARKER_TRACK_FPS } from "./markerTrack.js";
 import {
   drawTrackedQr,
+  scaleQuad,
   TRACK_PRESENTATION_LEAD_SECONDS,
+  TRACKED_QR_SCALE,
   trackedQuadAt,
 } from "./tracking.js";
 
@@ -27,6 +29,13 @@ describe("trackedQuadAt", () => {
     expect(trackedQuadAt(Number.NaN).flat()).toEqual(MARKER_TRACK[0]);
   });
 
+  it("enlarges the tracked marker around its centre", () => {
+    expect(scaleQuad(
+      [[0, 0], [8, 0], [8, 8], [0, 8]],
+      1.25,
+    )).toEqual([[-1, -1], [9, -1], [9, 9], [-1, 9]]);
+  });
+
   it("renders every perspective-mesh triangle with a one-frame lead", () => {
     const points: number[][] = [];
     let drawCount = 0;
@@ -49,6 +58,11 @@ describe("trackedQuadAt", () => {
     drawTrackedQr(context, image, 0);
 
     expect(drawCount).toBe(32);
-    expect(points).toContainEqual(trackedQuadAt(TRACK_PRESENTATION_LEAD_SECONDS)[2]);
+    expect(points).toContainEqual(
+      scaleQuad(
+        trackedQuadAt(TRACK_PRESENTATION_LEAD_SECONDS),
+        TRACKED_QR_SCALE,
+      )[2],
+    );
   });
 });

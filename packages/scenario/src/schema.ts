@@ -33,16 +33,32 @@ export const axisSchema = z.object({
   maxLabel: z.string().min(1, "axis label must be non-empty"),
 });
 
+export const arenaEllipseSchema = z.object({
+  type: z.literal("ellipse"),
+  centerX: unitCoordinateSchema,
+  centerY: unitCoordinateSchema,
+  radiusX: z.number().positive().max(1),
+  radiusY: z.number().positive().max(1),
+}).refine(
+  (ellipse) => ellipse.centerX - ellipse.radiusX >= 0 && ellipse.centerX + ellipse.radiusX <= 1,
+  { message: "arena ellipse must fit horizontally inside the display", path: ["radiusX"] },
+).refine(
+  (ellipse) => ellipse.centerY - ellipse.radiusY >= 0 && ellipse.centerY + ellipse.radiusY <= 1,
+  { message: "arena ellipse must fit vertically inside the display", path: ["radiusY"] },
+);
+
 export const fourQuadrantFieldSchema = z.object({
   type: z.literal("four-quadrant"),
   xAxis: axisSchema,
   yAxis: axisSchema,
+  arena: arenaEllipseSchema.optional(),
 });
 
 export const twoQuadrantFieldSchema = z.object({
   type: z.literal("two-quadrant"),
   axis: z.enum(["x", "y"]),
   labels: axisSchema,
+  arena: arenaEllipseSchema.optional(),
 });
 
 export const polygonPointSchema = z.object({
@@ -367,6 +383,7 @@ export const mediaManifestSchema = z.object({
 export type Quadrant = z.infer<typeof quadrantSchema>;
 export type TwoQuadrant = z.infer<typeof twoQuadrantSchema>;
 export type Axis = z.infer<typeof axisSchema>;
+export type ArenaEllipse = z.infer<typeof arenaEllipseSchema>;
 export type FourQuadrantField = z.infer<typeof fourQuadrantFieldSchema>;
 export type TwoQuadrantField = z.infer<typeof twoQuadrantFieldSchema>;
 export type PositionField = z.infer<typeof positionFieldSchema>;

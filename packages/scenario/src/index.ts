@@ -5,6 +5,7 @@
 export const SCENARIO_SCHEMA_VERSION = 3;
 
 export {
+  arenaEllipseSchema,
   axisSchema,
   countablePositionVoteStatusSchema,
   fourQuadrantFieldSchema,
@@ -32,6 +33,7 @@ export {
   normalizeScenarioInput,
 } from "./schema.js";
 export type {
+  ArenaEllipse,
   Axis,
   CountablePositionVoteStatus,
   FourQuadrantField,

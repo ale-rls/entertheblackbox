@@ -29,6 +29,19 @@ export type Axis = {
   maxLabel: string;
 };
 
+/**
+ * Optional calibrated footprint for a physical voting surface in the display
+ * image. Coordinates are normalized to the full display viewport so the same
+ * geometry can be used for rendering and server-side vote classification.
+ */
+export type ArenaEllipse = {
+  type: "ellipse";
+  centerX: number;
+  centerY: number;
+  radiusX: number;
+  radiusY: number;
+};
+
 export const FOUR_QUADRANTS = ["q1", "q2", "q3", "q4"] as const;
 export const TWO_QUADRANTS = ["min", "max"] as const;
 
@@ -55,12 +68,14 @@ export type FourQuadrantField = {
   type: "four-quadrant";
   xAxis: Axis;
   yAxis: Axis;
+  arena?: ArenaEllipse | undefined;
 };
 
 export type TwoQuadrantField = {
   type: "two-quadrant";
   axis: "x" | "y";
   labels: Axis;
+  arena?: ArenaEllipse | undefined;
 };
 
 export type PolygonPoint = { x: number; y: number };
@@ -144,10 +159,24 @@ export function quadrantOfField(field: TwoQuadrantField, x: number, y: number): 
 export function quadrantOfField(field: PolygonZonesField, x: number, y: number): string | null;
 export function quadrantOfField(field: PositionField, x: number, y: number): PositionQuadrant | null;
 export function quadrantOfField(field: PositionField, x: number, y: number): PositionQuadrant | null {
-  if (field.type === "four-quadrant") return quadrantOf(x, y);
+  if (field.type !== "polygon-zones" && field.arena !== undefined) {
+    const normalizedX = (x - field.arena.centerX) / field.arena.radiusX;
+    const normalizedY = (y - field.arena.centerY) / field.arena.radiusY;
+    if (normalizedX * normalizedX + normalizedY * normalizedY > 1) return null;
+  }
+  if (field.type === "four-quadrant") {
+    if (field.arena === undefined) return quadrantOf(x, y);
+    const right = x >= field.arena.centerX;
+    const bottom = y >= field.arena.centerY;
+    if (right) return bottom ? "q4" : "q1";
+    return bottom ? "q3" : "q2";
+  }
   if (field.type === "two-quadrant") {
     const coordinate = field.axis === "x" ? x : y;
-    return coordinate >= 0.5 ? "max" : "min";
+    const boundary = field.arena === undefined
+      ? 0.5
+      : field.axis === "x" ? field.arena.centerX : field.arena.centerY;
+    return coordinate >= boundary ? "max" : "min";
   }
   return zoneOfPolygons(field.zones, x, y);
 }
