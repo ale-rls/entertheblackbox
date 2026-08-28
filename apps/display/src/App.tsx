@@ -17,7 +17,7 @@ import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhoneCount } from "./components/PhoneCount.js";
 import { PhaseVideo } from "./components/PhaseVideo.js";
 import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
-import { RatingMeter } from "./components/RatingMeter.js";
+import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
 
 /**
@@ -280,7 +280,6 @@ export function App() {
         {phase?.kind === "position-question" && (
           <div className="question">
             <div className="question-copy">
-              {phase.title && <h2>{phase.title}</h2>}
               <p className="question-text">{phase.text}</p>
             </div>
             <QuadrantOverlay
@@ -307,7 +306,7 @@ export function App() {
           />
         )}
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.rating && (
-          <RatingMeter status={state.ratingStatus} />
+          <CrowdReactionSounds status={state.ratingStatus} soundEnabled={soundEnabled} />
         )}
         {state.notice && (
           <div

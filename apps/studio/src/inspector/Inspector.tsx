@@ -104,12 +104,12 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
             ? { candidateLabel: phase.rating?.candidateLabel ?? phase.title ?? phase.id }
             : undefined,
         })}
-      />{label("Applause + boo buttons", "rating")}</label>
+      />{label("Applause + boo crowd sounds", "rating")}</label>
       {phase.rating && text("Reaction subject", "rating.candidateLabel", phase.rating.candidateLabel, (candidateLabel) => onChange({
         ...phase,
         rating: { candidateLabel },
       }))}
-      {phase.kind === "video-position-question" && phase.rating && <p className="sc-tool-copy field-hint">The phone keeps the regular spectrum trackpad active and shows applause/boo as secondary buttons.</p>}
+      {phase.kind === "video-position-question" && phase.rating && <p className="sc-tool-copy field-hint">The phone keeps the regular spectrum trackpad active and shows applause/boo as secondary buttons. Reactions play varied crowd samples on the display; no score is shown.</p>}
     </>}
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
@@ -118,10 +118,10 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       {phase.field.type === "four-quadrant" ? (() => {
         const field = phase.field;
         return <>
-          {text("X axis minimum", "field.xAxis.minLabel", field.xAxis.minLabel, (minLabel) => onChange({ ...phase, field: { ...field, xAxis: { ...field.xAxis, minLabel } } } as Phase))}
-          {text("X axis maximum", "field.xAxis.maxLabel", field.xAxis.maxLabel, (maxLabel) => onChange({ ...phase, field: { ...field, xAxis: { ...field.xAxis, maxLabel } } } as Phase))}
-          {text("Y axis minimum", "field.yAxis.minLabel", field.yAxis.minLabel, (minLabel) => onChange({ ...phase, field: { ...field, yAxis: { ...field.yAxis, minLabel } } } as Phase))}
-          {text("Y axis maximum", "field.yAxis.maxLabel", field.yAxis.maxLabel, (maxLabel) => onChange({ ...phase, field: { ...field, yAxis: { ...field.yAxis, maxLabel } } } as Phase))}
+          {text("X axis · left endpoint", "field.xAxis.minLabel", field.xAxis.minLabel, (minLabel) => onChange({ ...phase, field: { ...field, xAxis: { ...field.xAxis, minLabel } } } as Phase))}
+          {text("X axis · right endpoint", "field.xAxis.maxLabel", field.xAxis.maxLabel, (maxLabel) => onChange({ ...phase, field: { ...field, xAxis: { ...field.xAxis, maxLabel } } } as Phase))}
+          {text("Y axis · top endpoint", "field.yAxis.minLabel", field.yAxis.minLabel, (minLabel) => onChange({ ...phase, field: { ...field, yAxis: { ...field.yAxis, minLabel } } } as Phase))}
+          {text("Y axis · bottom endpoint", "field.yAxis.maxLabel", field.yAxis.maxLabel, (maxLabel) => onChange({ ...phase, field: { ...field, yAxis: { ...field.yAxis, maxLabel } } } as Phase))}
         </>;
       })() : phase.field.type === "two-quadrant" ? (() => {
         const field = phase.field;

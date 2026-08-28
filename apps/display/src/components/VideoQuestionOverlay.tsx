@@ -55,7 +55,6 @@ export function VideoQuestionOverlay({
     <div className="question question-over-video" data-voting-open={votingOpen}>
       <div className="question-scrim" />
       <div className="question-copy">
-        {phase.title && <h2>{phase.title}</h2>}
         <p className="question-text">{phase.text}</p>
       </div>
       <QuadrantOverlay

@@ -1,304 +1,442 @@
 {
-  "version": "smartphonocracy-v14-de-1.0.0",
-  "entryPhaseId": "2-0-athene-begruessung",
+  "version": "smartphonocracy-v14-de-2026.08.27",
+  "entryPhaseId": "Athene",
   "cyclesAllowed": false,
   "targetAudienceSize": 30,
   "phases": [
-    { "kind": "idle", "id": "idle" },
-
     {
+      "kind": "idle",
+      "id": "idle"
+    },
+    {
+      "expectedDurationMs": 133125,
+      "id": "Athene",
       "kind": "video",
-      "id": "2-0-athene-begruessung",
-      "src": "2-0-athene-begruessung.mp4",
+      "next": "chaseme",
+      "src": "athene_25_chain_full.mp4",
+      "title": "2.0 Begrüßung Athene"
+    },
+    {
+      "expectedDurationMs": 30042,
+      "id": "chaseme",
+      "kind": "video",
+      "next": "chapme",
+      "src": "2.1_25_C_midguides_v6.mp4",
+      "title": "2.1 Cursorspiel „Fangt mich!“"
+    },
+    {
+      "expectedDurationMs": 30042,
+      "id": "chapme",
+      "kind": "video",
+      "next": "ostrakismos",
+      "src": "2.2_25_E_wechselspiel.mp4",
+      "title": "2.2 Cursorspiel „Füttert mich!“"
+    },
+    {
+      "closeAtMs": 45000,
+      "connectionStaleAfterMs": 10000,
       "expectedDurationMs": 120000,
-      "next": "2-1-cursorspiel-fangen"
+      "field": {
+        "axis": "x",
+        "labels": {
+          "maxLabel": "Lüge",
+          "minLabel": "Fakt"
+        },
+        "type": "two-quadrant"
+      },
+      "hideAtMs": 50000,
+      "id": "ostrakismos",
+      "kind": "video-position-question",
+      "next": {
+        "type": "fixed",
+        "target": "video-position-question-966206"
+      },
+      "openAtMs": 23000,
+      "showAtMs": 22000,
+      "showLiveCounts": true,
+      "src": "2.3_25_SCENE.mp4",
+      "text": "Ostrakismos: Fakt oder Lüge?",
+      "title": "2.3 OSTRAKISMÓS — Fakt oder Lüge?"
     },
     {
-      "kind": "video",
-      "id": "2-1-cursorspiel-fangen",
-      "src": "2-1-cursorspiel-fangen.mp4",
-      "expectedDurationMs": 30000,
-      "next": "2-2-cursorspiel-fuettern"
+      "closeAtMs": 70000,
+      "connectionStaleAfterMs": 10000,
+      "expectedDurationMs": 120084,
+      "field": {
+        "axis": "x",
+        "labels": {
+          "maxLabel": "Fakt",
+          "minLabel": "Lüge"
+        },
+        "type": "two-quadrant"
+      },
+      "hideAtMs": 75000,
+      "id": "video-position-question-966206",
+      "kind": "video-position-question",
+      "next": {
+        "type": "fixed",
+        "target": "video-position-question-f46987"
+      },
+      "openAtMs": 20000,
+      "showAtMs": 19000,
+      "showLiveCounts": true,
+      "src": "2.4_25_SCENE.mp4",
+      "text": "PROMETHEUS-ABGABE: Gab es in Athen eine Feuersteuer?",
+      "title": "2.4 PROMETHEUS-ABGABE — Fakt oder Lüge?"
     },
     {
-      "kind": "video",
-      "id": "2-2-cursorspiel-fuettern",
-      "src": "2-2-cursorspiel-fuettern.mp4",
-      "expectedDurationMs": 30000,
-      "next": "2-3-frage1-ask"
+      "closeAtMs": 60000,
+      "connectionStaleAfterMs": 10000,
+      "expectedDurationMs": 120209,
+      "field": {
+        "axis": "x",
+        "labels": {
+          "maxLabel": "Lüge",
+          "minLabel": "Fakt"
+        },
+        "type": "two-quadrant"
+      },
+      "hideAtMs": 70000,
+      "id": "video-position-question-f46987",
+      "kind": "video-position-question",
+      "next": {
+        "type": "fixed",
+        "target": "2-6-01-wo-befindest-du-dich"
+      },
+      "openAtMs": 14000,
+      "showAtMs": 13000,
+      "showLiveCounts": true,
+      "src": "2.5_25_SCENE.mp4",
+      "text": "KLĒROTERION: Fakt oder Lüge?",
+      "title": "2.5 KLĒROTERION — Fakt oder Lüge?"
     },
-
     {
-      "kind": "video",
-      "id": "2-3-frage1-ask",
-      "src": "2-3-frage1-ask.mp4",
-      "expectedDurationMs": 20000,
-      "next": "2-3-frage1-vote"
-    },
-    {
-      "kind": "position-question",
-      "id": "2-3-frage1-vote",
-      "text": "OSTRAKISMÓS: Einmal im Jahr stimmten die Athener ab, ob eine übermächtige Person für zehn Jahre verbannt werden sollte — eingeritzt auf Tonscherben.",
+      "kind": "video-position-question",
+      "id": "2-6-01-wo-befindest-du-dich",
+      "title": "Wo befindest du dich?",
+      "text": "Wo befindest du dich?",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.6. Wo befindest du dich.mp3",
+      "tailDurationMs": 15000,
+      "expectedDurationMs": 17769,
+      "showAtMs": 0,
+      "openAtMs": 50,
+      "closeAtMs": 9769,
+      "hideAtMs": 14769,
+      "connectionStaleAfterMs": 10000,
+      "showLiveCounts": true,
       "field": {
         "type": "two-quadrant",
         "axis": "x",
-        "labels": { "minLabel": "Lüge", "maxLabel": "Fakt" }
+        "labels": {
+          "minLabel": "Geburt",
+          "maxLabel": "Tod"
+        }
       },
-      "durationMs": 30000,
-      "freezeMs": 5000,
-      "connectionStaleAfterMs": 8000,
+      "next": {
+        "type": "fixed",
+        "target": "2-6-02-wo-waerst-du-gerne"
+      }
+    },
+    {
+      "kind": "video-position-question",
+      "id": "2-6-02-wo-waerst-du-gerne",
+      "title": "Wo wärst du gerne?",
+      "text": "Wo wärst du gerne?",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.6. Wo wärst du gerne.mp3",
+      "tailDurationMs": 15000,
+      "expectedDurationMs": 16567,
+      "showAtMs": 0,
+      "openAtMs": 50,
+      "closeAtMs": 8567,
+      "hideAtMs": 13567,
+      "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
-      "next": { "type": "fixed", "target": "2-3-frage1-aufloesung" }
-    },
-    {
-      "kind": "video",
-      "id": "2-3-frage1-aufloesung",
-      "src": "2-3-frage1-aufloesung.mp4",
-      "expectedDurationMs": 65000,
-      "next": "2-4-frage2-ask"
-    },
-
-    {
-      "kind": "video",
-      "id": "2-4-frage2-ask",
-      "src": "2-4-frage2-ask.mp4",
-      "expectedDurationMs": 20000,
-      "next": "2-4-frage2-vote"
-    },
-    {
-      "kind": "position-question",
-      "id": "2-4-frage2-vote",
-      "text": "DIE PROMETHEUS-ABGABE: Athen erhob eine Feuersteuer — wer nachts mehr als eine Öllampe brannte, zahlte eine Abgabe an den Tempel des Prometheus.",
       "field": {
         "type": "two-quadrant",
         "axis": "x",
-        "labels": { "minLabel": "Lüge", "maxLabel": "Fakt" }
+        "labels": {
+          "minLabel": "Geburt",
+          "maxLabel": "Tod"
+        }
       },
-      "durationMs": 30000,
-      "freezeMs": 5000,
-      "connectionStaleAfterMs": 8000,
+      "next": {
+        "type": "fixed",
+        "target": "2-6-03-westliche-demokratie"
+      }
+    },
+    {
+      "kind": "video-position-question",
+      "id": "2-6-03-westliche-demokratie",
+      "title": "Wo befindet sich die westliche Demokratie?",
+      "text": "Wo befindet sich die westliche Demokratie?",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.6. Wo Demokratie.mp3",
+      "tailDurationMs": 15000,
+      "expectedDurationMs": 17351,
+      "showAtMs": 0,
+      "openAtMs": 50,
+      "closeAtMs": 9351,
+      "hideAtMs": 14351,
+      "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
-      "next": { "type": "fixed", "target": "2-4-frage2-aufloesung" }
-    },
-    {
-      "kind": "video",
-      "id": "2-4-frage2-aufloesung",
-      "src": "2-4-frage2-aufloesung.mp4",
-      "expectedDurationMs": 75000,
-      "next": "2-5-frage3-ask"
-    },
-
-    {
-      "kind": "video",
-      "id": "2-5-frage3-ask",
-      "src": "2-5-frage3-ask.mp4",
-      "expectedDurationMs": 20000,
-      "next": "2-5-frage3-vote"
-    },
-    {
-      "kind": "position-question",
-      "id": "2-5-frage3-vote",
-      "text": "KLĒROTERION: Die meisten politischen Ämter Athens wurden nicht gewählt, sondern verlost — von einer Maschine aus Stein.",
       "field": {
         "type": "two-quadrant",
         "axis": "x",
-        "labels": { "minLabel": "Lüge", "maxLabel": "Fakt" }
+        "labels": {
+          "minLabel": "Geburt",
+          "maxLabel": "Tod"
+        }
       },
-      "durationMs": 30000,
-      "freezeMs": 5000,
-      "connectionStaleAfterMs": 8000,
+      "next": {
+        "type": "fixed",
+        "target": "2-6-04-demokratie-in-50-jahren"
+      }
+    },
+    {
+      "kind": "video-position-question",
+      "id": "2-6-04-demokratie-in-50-jahren",
+      "title": "Wo befindet sich die westliche Demokratie in 50 Jahren?",
+      "text": "Wo befindet sich die westliche Demokratie in 50 Jahren?",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.6. Wo Demokratie in 50 Jahren.mp3",
+      "tailDurationMs": 15000,
+      "expectedDurationMs": 18396,
+      "showAtMs": 0,
+      "openAtMs": 50,
+      "closeAtMs": 10396,
+      "hideAtMs": 15396,
+      "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
-      "next": { "type": "fixed", "target": "2-5-frage3-aufloesung" }
+      "field": {
+        "type": "four-quadrant",
+        "xAxis": {
+          "minLabel": "Geburt",
+          "maxLabel": "Tod"
+        },
+        "yAxis": {
+          "minLabel": "Auferstehung",
+          "maxLabel": "Verwesung"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "2-6-05-politische-aktivitaet"
+      }
     },
     {
-      "kind": "video",
-      "id": "2-5-frage3-aufloesung",
-      "src": "2-5-frage3-aufloesung.mp4",
-      "expectedDurationMs": 65000,
-      "next": "2-7-abmoderation"
+      "kind": "video-position-question",
+      "id": "2-6-05-politische-aktivitaet",
+      "title": "Wo positionierst du deine politische Aktivität?",
+      "text": "Wo positionierst du deine politische Aktivität?",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.6. Wo deine politische Aktivität.mp3",
+      "tailDurationMs": 15000,
+      "expectedDurationMs": 18318,
+      "showAtMs": 0,
+      "openAtMs": 50,
+      "closeAtMs": 10318,
+      "hideAtMs": 15318,
+      "connectionStaleAfterMs": 10000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "four-quadrant",
+        "xAxis": {
+          "minLabel": "passiv",
+          "maxLabel": "aktiv"
+        },
+        "yAxis": {
+          "minLabel": "wütend",
+          "maxLabel": "zufrieden"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "2-6-06-politisch-aktiv-waerst-du-gerne"
+      }
     },
-
     {
+      "kind": "video-position-question",
+      "id": "2-6-06-politisch-aktiv-waerst-du-gerne",
+      "title": "Wie politisch aktiv wärst du gerne?",
+      "text": "Wie politisch aktiv wärst du gerne?",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.6. Wie politisch aktiv wärst du gerne.mp3",
+      "tailDurationMs": 15000,
+      "expectedDurationMs": 17429,
+      "showAtMs": 0,
+      "openAtMs": 50,
+      "closeAtMs": 9429,
+      "hideAtMs": 14429,
+      "connectionStaleAfterMs": 10000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "four-quadrant",
+        "xAxis": {
+          "minLabel": "passiv",
+          "maxLabel": "aktiv"
+        },
+        "yAxis": {
+          "minLabel": "wütend",
+          "maxLabel": "zufrieden"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "2-6-07-politisches-system"
+      }
+    },
+    {
+      "kind": "video-position-question",
+      "id": "2-6-07-politisches-system",
+      "title": "Wo positionierst du dich im bestehenden politischen System?",
+      "text": "Wo positionierst du dich im bestehenden politischen System?",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.6. Wo positionierst im bestehenden politischen System.mp3",
+      "tailDurationMs": 15000,
+      "expectedDurationMs": 20564,
+      "showAtMs": 0,
+      "openAtMs": 50,
+      "closeAtMs": 12564,
+      "hideAtMs": 17564,
+      "connectionStaleAfterMs": 10000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "four-quadrant",
+        "xAxis": {
+          "minLabel": "diskriminiert",
+          "maxLabel": "privilegiert"
+        },
+        "yAxis": {
+          "minLabel": "radikal",
+          "maxLabel": "diplomatisch"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "2-6-08-politisches-klima"
+      }
+    },
+    {
+      "kind": "video-position-question",
+      "id": "2-6-08-politisches-klima",
+      "title": "Wie empfindest du das aktuelle politische Klima?",
+      "text": "Wie empfindest du das aktuelle politische Klima?",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.6. Wie aktuelles politisches Klima.mp3",
+      "tailDurationMs": 15000,
+      "expectedDurationMs": 17926,
+      "showAtMs": 0,
+      "openAtMs": 50,
+      "closeAtMs": 9926,
+      "hideAtMs": 14926,
+      "connectionStaleAfterMs": 10000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "four-quadrant",
+        "xAxis": {
+          "minLabel": "stabilisierend",
+          "maxLabel": "umstürzlerisch"
+        },
+        "yAxis": {
+          "minLabel": "progressiv",
+          "maxLabel": "reaktionär"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "2-6-09-oekonomisch"
+      }
+    },
+    {
+      "kind": "video-position-question",
+      "id": "2-6-09-oekonomisch",
+      "title": "Wo verortest du dich ökonomisch?",
+      "text": "Wo verortest du dich ökonomisch?",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.6. Wo verortest du dich ökonomisch.mp3",
+      "tailDurationMs": 15000,
+      "expectedDurationMs": 17273,
+      "showAtMs": 0,
+      "openAtMs": 50,
+      "closeAtMs": 9273,
+      "hideAtMs": 14273,
+      "connectionStaleAfterMs": 10000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "four-quadrant",
+        "xAxis": {
+          "minLabel": "prekär",
+          "maxLabel": "abgesichert"
+        },
+        "yAxis": {
+          "minLabel": "motiviert",
+          "maxLabel": "frustriert"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "2-6-10-ki-fiziert"
+      }
+    },
+    {
+      "kind": "video-position-question",
+      "id": "2-6-10-ki-fiziert",
+      "title": "Wie KI-fiziert bist du persönlich?",
+      "text": "Wie KI-fiziert bist du persönlich?",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.6. wie ki-fiziert.mp3",
+      "tailDurationMs": 15000,
+      "expectedDurationMs": 17586,
+      "showAtMs": 0,
+      "openAtMs": 50,
+      "closeAtMs": 9586,
+      "hideAtMs": 14586,
+      "connectionStaleAfterMs": 10000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "labels": {
+          "minLabel": "Das Teufelszeug rühr ich nicht an!",
+          "maxLabel": "Ich bin eine KI"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "abmoderation"
+      }
+    },
+    {
+      "expectedDurationMs": 25042,
+      "id": "abmoderation",
       "kind": "video",
-      "id": "2-7-abmoderation",
-      "src": "2-7-abmoderation.mp4",
-      "expectedDurationMs": 60000,
-      "next": "3-0-wahlkampf-auftakt"
+      "next": "3-0-wahlkampf-auftakt",
+      "src": "2.7_25_abmoderation_master.mp4",
+      "title": "2.7 Abmoderation Athene"
     },
     {
       "kind": "video",
       "id": "3-0-wahlkampf-auftakt",
-      "src": "3-0-wahlkampf-auftakt.mp4",
-      "expectedDurationMs": 60000,
-      "next": "3-1-apollon-rede"
+      "title": "3.0 Wahlkampf der Statuen — Auftakt",
+      "src": "PLATE-A_master.png",
+      "audioSrc": "2.7. Apllaus für OpenApollo.mp3",
+      "expectedDurationMs": 60996,
+      "next": "3-1-openapollo-rede"
     },
     {
       "kind": "video",
-      "id": "3-1-apollon-rede",
-      "src": "3-1-apollon-rede.mp4",
+      "id": "3-1-openapollo-rede",
+      "title": "3.1 Wahlkampfauftritt OpenApollo",
+      "src": "apollo_v5_promo.png",
+      "audioSrc": "3.1. OpenApollo Speech.mp3",
+      "tailDurationMs": 37084,
       "expectedDurationMs": 180000,
-      "next": "3-2-dionysos-rede",
-      "rating": { "candidateLabel": "OpenApollo" }
-    },
-    {
-      "kind": "video",
-      "id": "3-2-dionysos-rede",
-      "src": "3-2-dionysos-rede.mp4",
-      "expectedDurationMs": 180000,
-      "next": "3-3-kassandra-rede",
-      "rating": { "candidateLabel": "Dionysos69" }
-    },
-    {
-      "kind": "video",
-      "id": "3-3-kassandra-rede",
-      "src": "3-3-kassandra-rede.mp4",
-      "expectedDurationMs": 180000,
-      "next": "4-0-wahl-ansage",
-      "rating": { "candidateLabel": "Kassandra" }
-    },
-
-    {
-      "kind": "video",
-      "id": "4-0-wahl-ansage",
-      "src": "4-0-wahl-ansage.mp4",
-      "expectedDurationMs": 20000,
-      "next": "4-0-wahl-vote"
-    },
-    {
-      "kind": "position-question",
-      "id": "4-0-wahl-vote",
-      "text": "Wählt eure Zukunft: Bewegt euer Licht zu der Statue, deren Vision ihr leben wollt.",
-      "field": {
-        "type": "polygon-zones",
-        "zones": [
-          {
-            "id": "apollon",
-            "label": "Apollon",
-            "points": [
-              { "x": 0, "y": 0 },
-              { "x": 0.3, "y": 0 },
-              { "x": 0.3, "y": 1 },
-              { "x": 0, "y": 1 }
-            ]
-          },
-          {
-            "id": "dionysos",
-            "label": "Dionysos",
-            "points": [
-              { "x": 0.35, "y": 0 },
-              { "x": 0.65, "y": 0 },
-              { "x": 0.65, "y": 1 },
-              { "x": 0.35, "y": 1 }
-            ]
-          },
-          {
-            "id": "kassandra",
-            "label": "Kassandra",
-            "points": [
-              { "x": 0.7, "y": 0 },
-              { "x": 1, "y": 0 },
-              { "x": 1, "y": 1 },
-              { "x": 0.7, "y": 1 }
-            ]
-          }
-        ]
-      },
-      "durationMs": 90000,
-      "freezeMs": 10000,
-      "connectionStaleAfterMs": 8000,
-      "showLiveCounts": true,
-      "next": {
-        "type": "quadrant-plurality",
-        "map": {
-          "apollon": "5-apollon-auszaehlung",
-          "dionysos": "5-dionysos-auszaehlung",
-          "kassandra": "5-kassandra-auszaehlung"
-        },
-        "tie": "4-0-wahl-unentschieden",
-        "empty": "4-0-wahl-unentschieden",
-        "countedStatuses": ["valid", "stale", "disconnected"]
+      "next": "idle",
+      "rating": {
+        "candidateLabel": "OpenApollo"
       }
-    },
-    {
-      "kind": "video",
-      "id": "4-0-wahl-unentschieden",
-      "src": "4-0-wahl-unentschieden.mp4",
-      "expectedDurationMs": 20000,
-      "next": "idle"
-    },
-
-    {
-      "kind": "video",
-      "id": "5-apollon-auszaehlung",
-      "src": "5-auszaehlung.mp4",
-      "expectedDurationMs": 10000,
-      "next": "5-apollon-triumph"
-    },
-    {
-      "kind": "video",
-      "id": "5-apollon-triumph",
-      "src": "5-apollon-triumph.mp4",
-      "expectedDurationMs": 60000,
-      "next": "5-apollon-orakel"
-    },
-    {
-      "kind": "video",
-      "id": "5-apollon-orakel",
-      "src": "5-apollon-orakel.mp4",
-      "expectedDurationMs": 180000,
-      "next": "5-reset-datenloeschung"
-    },
-
-    {
-      "kind": "video",
-      "id": "5-dionysos-auszaehlung",
-      "src": "5-auszaehlung.mp4",
-      "expectedDurationMs": 10000,
-      "next": "5-dionysos-triumph"
-    },
-    {
-      "kind": "video",
-      "id": "5-dionysos-triumph",
-      "src": "5-dionysos-triumph.mp4",
-      "expectedDurationMs": 60000,
-      "next": "5-dionysos-orakel"
-    },
-    {
-      "kind": "video",
-      "id": "5-dionysos-orakel",
-      "src": "5-dionysos-orakel.mp4",
-      "expectedDurationMs": 180000,
-      "next": "5-reset-datenloeschung"
-    },
-
-    {
-      "kind": "video",
-      "id": "5-kassandra-auszaehlung",
-      "src": "5-auszaehlung.mp4",
-      "expectedDurationMs": 10000,
-      "next": "5-kassandra-triumph"
-    },
-    {
-      "kind": "video",
-      "id": "5-kassandra-triumph",
-      "src": "5-kassandra-triumph.mp4",
-      "expectedDurationMs": 60000,
-      "next": "5-kassandra-orakel"
-    },
-    {
-      "kind": "video",
-      "id": "5-kassandra-orakel",
-      "src": "5-kassandra-orakel.mp4",
-      "expectedDurationMs": 180000,
-      "next": "5-reset-datenloeschung"
-    },
-
-    {
-      "kind": "video",
-      "id": "5-reset-datenloeschung",
-      "src": "5-reset-datenloeschung.mp4",
-      "expectedDurationMs": 10000,
-      "next": "idle"
     }
   ]
 }

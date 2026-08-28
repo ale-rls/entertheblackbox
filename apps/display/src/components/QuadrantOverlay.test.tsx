@@ -66,6 +66,11 @@ describe("QuadrantOverlay", () => {
 
     expect(html).toContain('class="axis axis-x"');
     expect(html).toContain('class="axis axis-y"');
+    expect(html).toContain('class="axis-label axis-label-min">left</span>');
+    expect(html).toContain('class="axis-label axis-label-max">right</span>');
+    expect(html).toContain('class="axis-label axis-label-min">top</span>');
+    expect(html).toContain('class="axis-label axis-label-max">bottom</span>');
+    expect(html.indexOf('class="quadrant-overlay quadrant-overlay-four-quadrant"')).toBeLessThan(html.indexOf('class="axis axis-x"'));
     expect(html).toContain('class="axis-cross"');
     expect(html.match(/data-quadrant=/g)).toHaveLength(4);
     expect(html).toContain('class="quadrant quadrant-top-right" data-quadrant="q1"');

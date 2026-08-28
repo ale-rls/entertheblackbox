@@ -1,0 +1,673 @@
+{
+  "manifest": {
+    "files": [
+      {
+        "src": "2.0 Athene_Vox_Begrüssung_alt.mp3",
+        "bytes": 2151165,
+        "hash": "25b251218f45cd429ecfffdd9f3dbea62ce7cfce163133b54326ab3e7c69c0b9"
+      },
+      {
+        "src": "2.0_Athene_Begrüssung_v2.mp3",
+        "bytes": 2007805,
+        "hash": "68f2c7d7f59c1e5f0864eeaa6cc32a00736211196793ddcb5a9abdf4fa88b766"
+      },
+      {
+        "src": "2.1.1. Athene_Demokratie beginnt mit Beteiligung. Fangt mich!.mp3",
+        "bytes": 88954,
+        "hash": "101eb119603b170eb88e62abe3c7718641471ddcc07a77db5771c1ecf5092c72"
+      },
+      {
+        "src": "2.1.2. Athene_Ihr seid viele. Ich bin schnell..mp3",
+        "bytes": 49248,
+        "hash": "e5fbf71e4eb3b1af46d72110ad1835aea63595c86a1715280669dc3cc5d720d6"
+      },
+      {
+        "src": "2.1.3 Athene_Na kommt schon.mp3",
+        "bytes": 40471,
+        "hash": "be8996c1ded75993d0a96de16ae370d7ccaab033e3149c632c40741f81077c3f"
+      },
+      {
+        "src": "2.1.4. Athene_Schneller ihr Lahmkröten.mp3",
+        "bytes": 50502,
+        "hash": "4e90125e0c45b5d85e16bbc2978d8fa039c80cc1d61c4752798d6611d459800b"
+      },
+      {
+        "src": "2.1.5. Athene_Ha_Lacher2.mp3",
+        "bytes": 95224,
+        "hash": "a52abad421c5ce4bbf602e2561b55ca6f08474822a5816e0af0c7c5ec7333484"
+      },
+      {
+        "src": "2.1.6. Athene_HA_Lacher1.mp3",
+        "bytes": 91462,
+        "hash": "ca059190ddd2d937c44eb7e4372f4ac5b42f29857a333eb1f96c9da5d3614986"
+      },
+      {
+        "src": "2.1_25_C_midguides_v6.mp4",
+        "bytes": 8890853,
+        "hash": "0227e4b6c24b7df086b50a70f02c2595df0844571c973c74c87f47acc5d2da4a"
+      },
+      {
+        "src": "2.2. Danke_Drei Fragen_Positioniert euch.mp3",
+        "bytes": 303785,
+        "hash": "278c96f7fa8c96dac1b2fda5028ee621baa563d78f6ae4bb09c2a1bf53e2f161"
+      },
+      {
+        "src": "2.2.1. Jetzt brauche ich Input_Füttert mich.mp3",
+        "bytes": 65967,
+        "hash": "602b3d54219728ff0fb472bd20da5bb3faa1c2ef1b6222a77cd141a4ecea0946"
+      },
+      {
+        "src": "2.2.2. Mehr mehr Daten.mp3",
+        "bytes": 49248,
+        "hash": "7bc862bd8b2ba6b1936e9f5a365cc3d20b030f53e4ed9be302cc4bc589bb5db6"
+      },
+      {
+        "src": "2.2.3. Noch mehr_noch mehr Daten.mp3",
+        "bytes": 68474,
+        "hash": "fc0cc4a9b0cff42ea0a2eae08c3692b9df55ff0e5753001456fde35e365ac14b"
+      },
+      {
+        "src": "2.2.4. Lecker_Lecker_ihr schmeckt so lecker.mp3",
+        "bytes": 132422,
+        "hash": "a4e1f859f74e0c8fef639615f76c4b8a083219429d172aa04bdc3381c1c87dbb"
+      },
+      {
+        "src": "2.2.5. Danke. Ich fühle mich schon viel intelligenter..mp3",
+        "bytes": 81431,
+        "hash": "9a0de7d8cf9c81234bd8c6a75f7de8522aff96f478ada1c84dae240a9cf49883"
+      },
+      {
+        "src": "2.2.6. Mal sehen_.mp3",
+        "bytes": 238584,
+        "hash": "4f08b64a8a6ad73dd60a4b02025a2435b495c16de0501776f6628fca78b870b8"
+      },
+      {
+        "src": "2.2_25_E_wechselspiel.mp4",
+        "bytes": 4673107,
+        "hash": "acacb5149972f1e011ab35e1672dfef9cc839d2a1efb89e8fb9f06bf369aca70"
+      },
+      {
+        "src": "2.3. Los gehts_Ostrakismos.mp3",
+        "bytes": 1443142,
+        "hash": "074449f1793608bf98addf1c3a20e60914efc4b78792a53ecf3fc2b3dd049719"
+      },
+      {
+        "src": "2.3.v2_Los gehts_Ostrakismos.mp3",
+        "bytes": 1404690,
+        "hash": "cc36e00a3c4677d2b1a2f892e60518ceb19c658fda59d4ec6f0bd930ae286c25"
+      },
+      {
+        "src": "2.3_25_SCENE.mp4",
+        "bytes": 26044765,
+        "hash": "98cf2ad471e6e989af8deaa26f42f2a8abf027ec55f4f02b59c781e3d152e16c"
+      },
+      {
+        "src": "2.4._Lüge_Prometheus_Abgabe.mp3",
+        "bytes": 1054022,
+        "hash": "60ba5b8159698ba2af2a4171587657406c993d71d0823d17f0e62f1f28f731d4"
+      },
+      {
+        "src": "2.4.v2_Lüge_Prometheus.mp3",
+        "bytes": 1133434,
+        "hash": "9318b626da61d31e03414c4a3126fce860626d71b4f13c3b967ebe0227968a82"
+      },
+      {
+        "src": "2.4_25_SCENE.mp4",
+        "bytes": 23838919,
+        "hash": "06495939e8692b1ec64c336cf95f83178602cb6f410e26e45a5c23abcd9b779a"
+      },
+      {
+        "src": "2.5. Fakt_Kleroterion.mp3",
+        "bytes": 1074502,
+        "hash": "282cad34c546fc1062d37e795e425638741bd6b281a8927dd534387b9d69c369"
+      },
+      {
+        "src": "2.5.v2_Fakt_Kleroterion.mp3",
+        "bytes": 1189859,
+        "hash": "d18a1dd92e5e1d9a2d498fdbd38c2634b9351e6d7f1e46b9384f8e3db139c15c"
+      },
+      {
+        "src": "2.5_25_SCENE.mp4",
+        "bytes": 19628767,
+        "hash": "22c1c70687e9a13c1f0e08d1de551e1e3ddf28ab991f448a3ac0ac99c4d1cb80"
+      },
+      {
+        "src": "2.6. Wie aktuelles politisches Klima.mp3",
+        "bytes": 63459,
+        "hash": "d09ce6ef52dcba941430d28a93e743ba4dd62abfcb5bf0add6185528059d8fc0"
+      },
+      {
+        "src": "2.6. Wie politisch aktiv wärst du gerne.mp3",
+        "bytes": 55518,
+        "hash": "7ad729561d92d74679e9063037b6ce66c93bb2cd4831c194962925de3761ef0c"
+      },
+      {
+        "src": "2.6. Wo Demokratie in 50 Jahren.mp3",
+        "bytes": 70982,
+        "hash": "1d01ede1df5025aca978e0f3253372d3991f13c6ed3c23b13045ef5c2114d140"
+      },
+      {
+        "src": "2.6. Wo Demokratie.mp3",
+        "bytes": 54264,
+        "hash": "ce7deb291e299652cb91ac5cdda0b4aae6f59c26e67a21b56df70a6b6257ca7c"
+      },
+      {
+        "src": "2.6. Wo befindest du dich.mp3",
+        "bytes": 60951,
+        "hash": "0b0c5f55f0c8e055908f47a4a365a78856072befd6abea214bbc1384364be02e"
+      },
+      {
+        "src": "2.6. Wo deine politische Aktivität.mp3",
+        "bytes": 69728,
+        "hash": "1700e5a3d769e9ed4c013ff447cd0095dc323c572ed2d6f2cfb1f28684456039"
+      },
+      {
+        "src": "2.6. Wo positionierst im bestehenden politischen System.mp3",
+        "bytes": 105673,
+        "hash": "a98e40e1d3641cc1f5967c13bf5eed777d838004b5b975d2b716d6bc664ab3ba"
+      },
+      {
+        "src": "2.6. Wo verortest du dich ökonomisch.mp3",
+        "bytes": 53010,
+        "hash": "d3fe7f74924990e7937154b3741c95dd24937f931f3d4fc791b15133decc7ddf"
+      },
+      {
+        "src": "2.6. Wo wärst du gerne.mp3",
+        "bytes": 41725,
+        "hash": "d3f705e539367265d987247320cce6226de26b020a1588694dc24beddd0fc1ca"
+      },
+      {
+        "src": "2.6. wie ki-fiziert.mp3",
+        "bytes": 58025,
+        "hash": "6299dfad0b44ea4799af091824bb1a1d7474c5edb78af90c14b336e02aa00730"
+      },
+      {
+        "src": "2.7. Apllaus für OpenApollo.mp3",
+        "bytes": 992582,
+        "hash": "3ee73dcf8a67c292290f96a31849441cc64120e97f31071b252e03fdf38afbc8"
+      },
+      {
+        "src": "2.7_25_abmoderation_master.mp4",
+        "bytes": 3739852,
+        "hash": "0bd7197a60698c923c124ed7849ba7b161ae9542ca10717bea668534274be644"
+      },
+      {
+        "src": "3.1. OpenApollo Speech.mp3",
+        "bytes": 1654219,
+        "hash": "4a75905a17b87af9862584bfa6f9707650ec0a67db10016dad1ddda70e4f7255"
+      },
+      {
+        "src": "PLATE-A_master.png",
+        "bytes": 3907580,
+        "hash": "d58d6cac1fa9d47af141d179d22ceef7dc7d1f6b98f84b14ecdf34b981b12fb9"
+      },
+      {
+        "src": "apollo_v5_promo.png",
+        "bytes": 4383171,
+        "hash": "11817f5b249968ff9c467703bd955b082413c6c61627d24564e47c3086958972"
+      },
+      {
+        "src": "athene_25_chain_full.mp4",
+        "bytes": 17566485,
+        "hash": "5ca799c57108150e470c4a47a89e7844e404da36f8ecf17e20aeeda16a77f6ba"
+      },
+      {
+        "src": "cassandra_v4_promo.png",
+        "bytes": 4583163,
+        "hash": "8de8af847da2ac31100966a6dbdd1aaae8182a110b8884ab4a7ace1c92b45da9"
+      },
+      {
+        "src": "dionysus_v7_promo.png",
+        "bytes": 4464899,
+        "hash": "3bdfaa539041d83d6ae64f93d68af797e68d1667a3a451e880371c9e6b1b3033"
+      }
+    ]
+  },
+  "runtimeExtensions": {
+    "manifest": {},
+    "scenario": {}
+  },
+  "scenario": {
+    "version": "smartphonocracy-v14-de-2026.08.27",
+    "entryPhaseId": "Athene",
+    "cyclesAllowed": false,
+    "targetAudienceSize": 30,
+    "phases": [
+      {
+        "kind": "idle",
+        "id": "idle"
+      },
+      {
+        "expectedDurationMs": 133125,
+        "id": "Athene",
+        "kind": "video",
+        "next": "chaseme",
+        "src": "athene_25_chain_full.mp4",
+        "title": "2.0 Begrüßung Athene"
+      },
+      {
+        "expectedDurationMs": 30042,
+        "id": "chaseme",
+        "kind": "video",
+        "next": "chapme",
+        "src": "2.1_25_C_midguides_v6.mp4",
+        "title": "2.1 Cursorspiel „Fangt mich!“"
+      },
+      {
+        "expectedDurationMs": 30042,
+        "id": "chapme",
+        "kind": "video",
+        "next": "ostrakismos",
+        "src": "2.2_25_E_wechselspiel.mp4",
+        "title": "2.2 Cursorspiel „Füttert mich!“"
+      },
+      {
+        "closeAtMs": 45000,
+        "connectionStaleAfterMs": 10000,
+        "expectedDurationMs": 120000,
+        "field": {
+          "axis": "x",
+          "labels": {
+            "maxLabel": "Lüge",
+            "minLabel": "Fakt"
+          },
+          "type": "two-quadrant"
+        },
+        "hideAtMs": 50000,
+        "id": "ostrakismos",
+        "kind": "video-position-question",
+        "next": {
+          "type": "fixed",
+          "target": "video-position-question-966206"
+        },
+        "openAtMs": 23000,
+        "showAtMs": 22000,
+        "showLiveCounts": true,
+        "src": "2.3_25_SCENE.mp4",
+        "text": "Ostrakismos: Fakt oder Lüge?",
+        "title": "2.3 OSTRAKISMÓS — Fakt oder Lüge?"
+      },
+      {
+        "closeAtMs": 70000,
+        "connectionStaleAfterMs": 10000,
+        "expectedDurationMs": 120084,
+        "field": {
+          "axis": "x",
+          "labels": {
+            "maxLabel": "Fakt",
+            "minLabel": "Lüge"
+          },
+          "type": "two-quadrant"
+        },
+        "hideAtMs": 75000,
+        "id": "video-position-question-966206",
+        "kind": "video-position-question",
+        "next": {
+          "type": "fixed",
+          "target": "video-position-question-f46987"
+        },
+        "openAtMs": 20000,
+        "showAtMs": 19000,
+        "showLiveCounts": true,
+        "src": "2.4_25_SCENE.mp4",
+        "text": "PROMETHEUS-ABGABE: Gab es in Athen eine Feuersteuer?",
+        "title": "2.4 PROMETHEUS-ABGABE — Fakt oder Lüge?"
+      },
+      {
+        "closeAtMs": 60000,
+        "connectionStaleAfterMs": 10000,
+        "expectedDurationMs": 120209,
+        "field": {
+          "axis": "x",
+          "labels": {
+            "maxLabel": "Lüge",
+            "minLabel": "Fakt"
+          },
+          "type": "two-quadrant"
+        },
+        "hideAtMs": 70000,
+        "id": "video-position-question-f46987",
+        "kind": "video-position-question",
+        "next": {
+          "type": "fixed",
+          "target": "2-6-01-wo-befindest-du-dich"
+        },
+        "openAtMs": 14000,
+        "showAtMs": 13000,
+        "showLiveCounts": true,
+        "src": "2.5_25_SCENE.mp4",
+        "text": "KLĒROTERION: Fakt oder Lüge?",
+        "title": "2.5 KLĒROTERION — Fakt oder Lüge?"
+      },
+      {
+        "kind": "video-position-question",
+        "id": "2-6-01-wo-befindest-du-dich",
+        "title": "Wo befindest du dich?",
+        "text": "Wo befindest du dich?",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.6. Wo befindest du dich.mp3",
+        "tailDurationMs": 15000,
+        "expectedDurationMs": 17769,
+        "showAtMs": 0,
+        "openAtMs": 50,
+        "closeAtMs": 9769,
+        "hideAtMs": 14769,
+        "connectionStaleAfterMs": 10000,
+        "showLiveCounts": true,
+        "field": {
+          "type": "two-quadrant",
+          "axis": "x",
+          "labels": {
+            "minLabel": "Geburt",
+            "maxLabel": "Tod"
+          }
+        },
+        "next": {
+          "type": "fixed",
+          "target": "2-6-02-wo-waerst-du-gerne"
+        }
+      },
+      {
+        "kind": "video-position-question",
+        "id": "2-6-02-wo-waerst-du-gerne",
+        "title": "Wo wärst du gerne?",
+        "text": "Wo wärst du gerne?",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.6. Wo wärst du gerne.mp3",
+        "tailDurationMs": 15000,
+        "expectedDurationMs": 16567,
+        "showAtMs": 0,
+        "openAtMs": 50,
+        "closeAtMs": 8567,
+        "hideAtMs": 13567,
+        "connectionStaleAfterMs": 10000,
+        "showLiveCounts": true,
+        "field": {
+          "type": "two-quadrant",
+          "axis": "x",
+          "labels": {
+            "minLabel": "Geburt",
+            "maxLabel": "Tod"
+          }
+        },
+        "next": {
+          "type": "fixed",
+          "target": "2-6-03-westliche-demokratie"
+        }
+      },
+      {
+        "kind": "video-position-question",
+        "id": "2-6-03-westliche-demokratie",
+        "title": "Wo befindet sich die westliche Demokratie?",
+        "text": "Wo befindet sich die westliche Demokratie?",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.6. Wo Demokratie.mp3",
+        "tailDurationMs": 15000,
+        "expectedDurationMs": 17351,
+        "showAtMs": 0,
+        "openAtMs": 50,
+        "closeAtMs": 9351,
+        "hideAtMs": 14351,
+        "connectionStaleAfterMs": 10000,
+        "showLiveCounts": true,
+        "field": {
+          "type": "two-quadrant",
+          "axis": "x",
+          "labels": {
+            "minLabel": "Geburt",
+            "maxLabel": "Tod"
+          }
+        },
+        "next": {
+          "type": "fixed",
+          "target": "2-6-04-demokratie-in-50-jahren"
+        }
+      },
+      {
+        "kind": "video-position-question",
+        "id": "2-6-04-demokratie-in-50-jahren",
+        "title": "Wo befindet sich die westliche Demokratie in 50 Jahren?",
+        "text": "Wo befindet sich die westliche Demokratie in 50 Jahren?",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.6. Wo Demokratie in 50 Jahren.mp3",
+        "tailDurationMs": 15000,
+        "expectedDurationMs": 18396,
+        "showAtMs": 0,
+        "openAtMs": 50,
+        "closeAtMs": 10396,
+        "hideAtMs": 15396,
+        "connectionStaleAfterMs": 10000,
+        "showLiveCounts": true,
+        "field": {
+          "type": "four-quadrant",
+          "xAxis": {
+            "minLabel": "Geburt",
+            "maxLabel": "Tod"
+          },
+          "yAxis": {
+            "minLabel": "Auferstehung",
+            "maxLabel": "Verwesung"
+          }
+        },
+        "next": {
+          "type": "fixed",
+          "target": "2-6-05-politische-aktivitaet"
+        }
+      },
+      {
+        "kind": "video-position-question",
+        "id": "2-6-05-politische-aktivitaet",
+        "title": "Wo positionierst du deine politische Aktivität?",
+        "text": "Wo positionierst du deine politische Aktivität?",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.6. Wo deine politische Aktivität.mp3",
+        "tailDurationMs": 15000,
+        "expectedDurationMs": 18318,
+        "showAtMs": 0,
+        "openAtMs": 50,
+        "closeAtMs": 10318,
+        "hideAtMs": 15318,
+        "connectionStaleAfterMs": 10000,
+        "showLiveCounts": true,
+        "field": {
+          "type": "four-quadrant",
+          "xAxis": {
+            "minLabel": "passiv",
+            "maxLabel": "aktiv"
+          },
+          "yAxis": {
+            "minLabel": "wütend",
+            "maxLabel": "zufrieden"
+          }
+        },
+        "next": {
+          "type": "fixed",
+          "target": "2-6-06-politisch-aktiv-waerst-du-gerne"
+        }
+      },
+      {
+        "kind": "video-position-question",
+        "id": "2-6-06-politisch-aktiv-waerst-du-gerne",
+        "title": "Wie politisch aktiv wärst du gerne?",
+        "text": "Wie politisch aktiv wärst du gerne?",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.6. Wie politisch aktiv wärst du gerne.mp3",
+        "tailDurationMs": 15000,
+        "expectedDurationMs": 17429,
+        "showAtMs": 0,
+        "openAtMs": 50,
+        "closeAtMs": 9429,
+        "hideAtMs": 14429,
+        "connectionStaleAfterMs": 10000,
+        "showLiveCounts": true,
+        "field": {
+          "type": "four-quadrant",
+          "xAxis": {
+            "minLabel": "passiv",
+            "maxLabel": "aktiv"
+          },
+          "yAxis": {
+            "minLabel": "wütend",
+            "maxLabel": "zufrieden"
+          }
+        },
+        "next": {
+          "type": "fixed",
+          "target": "2-6-07-politisches-system"
+        }
+      },
+      {
+        "kind": "video-position-question",
+        "id": "2-6-07-politisches-system",
+        "title": "Wo positionierst du dich im bestehenden politischen System?",
+        "text": "Wo positionierst du dich im bestehenden politischen System?",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.6. Wo positionierst im bestehenden politischen System.mp3",
+        "tailDurationMs": 15000,
+        "expectedDurationMs": 20564,
+        "showAtMs": 0,
+        "openAtMs": 50,
+        "closeAtMs": 12564,
+        "hideAtMs": 17564,
+        "connectionStaleAfterMs": 10000,
+        "showLiveCounts": true,
+        "field": {
+          "type": "four-quadrant",
+          "xAxis": {
+            "minLabel": "diskriminiert",
+            "maxLabel": "privilegiert"
+          },
+          "yAxis": {
+            "minLabel": "radikal",
+            "maxLabel": "diplomatisch"
+          }
+        },
+        "next": {
+          "type": "fixed",
+          "target": "2-6-08-politisches-klima"
+        }
+      },
+      {
+        "kind": "video-position-question",
+        "id": "2-6-08-politisches-klima",
+        "title": "Wie empfindest du das aktuelle politische Klima?",
+        "text": "Wie empfindest du das aktuelle politische Klima?",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.6. Wie aktuelles politisches Klima.mp3",
+        "tailDurationMs": 15000,
+        "expectedDurationMs": 17926,
+        "showAtMs": 0,
+        "openAtMs": 50,
+        "closeAtMs": 9926,
+        "hideAtMs": 14926,
+        "connectionStaleAfterMs": 10000,
+        "showLiveCounts": true,
+        "field": {
+          "type": "four-quadrant",
+          "xAxis": {
+            "minLabel": "stabilisierend",
+            "maxLabel": "umstürzlerisch"
+          },
+          "yAxis": {
+            "minLabel": "progressiv",
+            "maxLabel": "reaktionär"
+          }
+        },
+        "next": {
+          "type": "fixed",
+          "target": "2-6-09-oekonomisch"
+        }
+      },
+      {
+        "kind": "video-position-question",
+        "id": "2-6-09-oekonomisch",
+        "title": "Wo verortest du dich ökonomisch?",
+        "text": "Wo verortest du dich ökonomisch?",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.6. Wo verortest du dich ökonomisch.mp3",
+        "tailDurationMs": 15000,
+        "expectedDurationMs": 17273,
+        "showAtMs": 0,
+        "openAtMs": 50,
+        "closeAtMs": 9273,
+        "hideAtMs": 14273,
+        "connectionStaleAfterMs": 10000,
+        "showLiveCounts": true,
+        "field": {
+          "type": "four-quadrant",
+          "xAxis": {
+            "minLabel": "prekär",
+            "maxLabel": "abgesichert"
+          },
+          "yAxis": {
+            "minLabel": "motiviert",
+            "maxLabel": "frustriert"
+          }
+        },
+        "next": {
+          "type": "fixed",
+          "target": "2-6-10-ki-fiziert"
+        }
+      },
+      {
+        "kind": "video-position-question",
+        "id": "2-6-10-ki-fiziert",
+        "title": "Wie KI-fiziert bist du persönlich?",
+        "text": "Wie KI-fiziert bist du persönlich?",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.6. wie ki-fiziert.mp3",
+        "tailDurationMs": 15000,
+        "expectedDurationMs": 17586,
+        "showAtMs": 0,
+        "openAtMs": 50,
+        "closeAtMs": 9586,
+        "hideAtMs": 14586,
+        "connectionStaleAfterMs": 10000,
+        "showLiveCounts": true,
+        "field": {
+          "type": "two-quadrant",
+          "axis": "x",
+          "labels": {
+            "minLabel": "Das Teufelszeug rühr ich nicht an!",
+            "maxLabel": "Ich bin eine KI"
+          }
+        },
+        "next": {
+          "type": "fixed",
+          "target": "abmoderation"
+        }
+      },
+      {
+        "expectedDurationMs": 25042,
+        "id": "abmoderation",
+        "kind": "video",
+        "next": "3-0-wahlkampf-auftakt",
+        "src": "2.7_25_abmoderation_master.mp4",
+        "title": "2.7 Abmoderation Athene"
+      },
+      {
+        "kind": "video",
+        "id": "3-0-wahlkampf-auftakt",
+        "title": "3.0 Wahlkampf der Statuen — Auftakt",
+        "src": "PLATE-A_master.png",
+        "audioSrc": "2.7. Apllaus für OpenApollo.mp3",
+        "expectedDurationMs": 60996,
+        "next": "3-1-openapollo-rede"
+      },
+      {
+        "kind": "video",
+        "id": "3-1-openapollo-rede",
+        "title": "3.1 Wahlkampfauftritt OpenApollo",
+        "src": "apollo_v5_promo.png",
+        "audioSrc": "3.1. OpenApollo Speech.mp3",
+        "tailDurationMs": 37084,
+        "expectedDurationMs": 180000,
+        "next": "idle",
+        "rating": {
+          "candidateLabel": "OpenApollo"
+        }
+      }
+    ]
+  }
+}
+

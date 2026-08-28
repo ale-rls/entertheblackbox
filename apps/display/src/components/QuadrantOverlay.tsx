@@ -123,8 +123,8 @@ function PolygonZoneOverlay({
 function Axis({ axis, labels }: { axis: "x" | "y"; labels: AxisLabels }) {
   return (
     <div className={`axis axis-${axis}`} data-active-axis={axis}>
-      <span>{labels.minLabel}</span>
-      <span>{labels.maxLabel}</span>
+      <span className="axis-label axis-label-min">{labels.minLabel}</span>
+      <span className="axis-label axis-label-max">{labels.maxLabel}</span>
     </div>
   );
 }
@@ -205,42 +205,20 @@ export function QuadrantOverlay({
         ? countSource
         : null;
     return (
-      <>
+      <div className="quadrant-overlay quadrant-overlay-four-quadrant">
         <Axis axis="x" labels={field.xAxis} />
         <Axis axis="y" labels={field.yAxis} />
-        <div className="quadrant-overlay quadrant-overlay-four-quadrant">
-          <div className="axis-cross" aria-hidden />
-          {(Object.keys(FOUR_QUADRANT_POSITIONS) as FourQuadrant[]).map((id) => (
-            <Region
-              key={id}
-              id={id}
-              position={FOUR_QUADRANT_POSITIONS[id]}
-              count={counts?.[id] ?? null}
-              winner={winner}
-            />
-          ))}
-          {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
-          {winner === "empty" && <div className="outcome outcome-empty" />}
+        <div className="axis-cross" aria-hidden>
+          <span className="axis-arrow axis-arrow-left" />
+          <span className="axis-arrow axis-arrow-right" />
+          <span className="axis-arrow axis-arrow-top" />
+          <span className="axis-arrow axis-arrow-bottom" />
         </div>
-      </>
-    );
-  }
-
-  const counts =
-    countSource !== null && isTwoQuadrantCounts(countSource) ? countSource : null;
-  const positions = TWO_QUADRANT_POSITIONS[field.axis];
-  return (
-    <>
-      <Axis axis={field.axis} labels={field.labels} />
-      <div
-        className={`quadrant-overlay quadrant-overlay-two-quadrant quadrant-overlay-axis-${field.axis}`}
-      >
-        <div className={`axis-divider axis-divider-${field.axis}`} aria-hidden />
-        {(["min", "max"] as const).map((id) => (
+        {(Object.keys(FOUR_QUADRANT_POSITIONS) as FourQuadrant[]).map((id) => (
           <Region
             key={id}
             id={id}
-            position={positions[id]}
+            position={FOUR_QUADRANT_POSITIONS[id]}
             count={counts?.[id] ?? null}
             winner={winner}
           />
@@ -248,6 +226,29 @@ export function QuadrantOverlay({
         {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
         {winner === "empty" && <div className="outcome outcome-empty" />}
       </div>
-    </>
+    );
+  }
+
+  const counts =
+    countSource !== null && isTwoQuadrantCounts(countSource) ? countSource : null;
+  const positions = TWO_QUADRANT_POSITIONS[field.axis];
+  return (
+    <div
+      className={`quadrant-overlay quadrant-overlay-two-quadrant quadrant-overlay-axis-${field.axis}`}
+    >
+      <Axis axis={field.axis} labels={field.labels} />
+      <div className={`axis-divider axis-divider-${field.axis}`} aria-hidden />
+      {(["min", "max"] as const).map((id) => (
+        <Region
+          key={id}
+          id={id}
+          position={positions[id]}
+          count={counts?.[id] ?? null}
+          winner={winner}
+        />
+      ))}
+      {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
+      {winner === "empty" && <div className="outcome outcome-empty" />}
+    </div>
   );
 }
