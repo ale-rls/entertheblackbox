@@ -103,6 +103,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         phoneJoinBaseUrl: config.phoneJoinBaseUrl,
         issueGrant: (now) => admission.issueJoinGrant(now),
         allowLateJoin: config.allowLateJoin,
+        showPhoneJoinBaseUrl: config.showPhoneJoinBaseUrl,
       },
       onSessionEnded: ({ endedAt }) => admission.endParticipantSession(endedAt),
       onCheckpoint: (checkpoint) => adminData?.recordCheckpoint?.(checkpoint),

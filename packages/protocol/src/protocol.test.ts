@@ -164,7 +164,7 @@ const serverMessages: ServerToClientMessage[] = [
     freezeUntil: 1_752_000_063_000,
   },
   { t: "rating_status", v: 2, sessionId: "s1", phaseEpoch: 5, candidateLabel: "OpenApollo", applause: 12, boo: 3 },
-  { t: "qr_grant", v: 2, url: "https://x.example/j?g=abc", expiresAt: 9, placement: "corner" },
+  { t: "qr_grant", v: 2, url: "https://x.example/j?g=abc", expiresAt: 9, placement: "corner", showJoinUrl: true },
   { t: "qr_hidden", v: 2 },
   { t: "display_notice", v: 2, code: "display_replaced", level: "warning", message: "replaced" },
   {

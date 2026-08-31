@@ -45,7 +45,7 @@ function last(socket: TestSocket, type: string): any {
 }
 
 function createHarness(
-  policy: { noParticipantGraceMs?: number } = {},
+  policy: { noParticipantGraceMs?: number; allowLateJoin?: boolean } = {},
   testScenario: typeof scenario = scenario,
 ) {
   let now = 1_000;
@@ -61,7 +61,7 @@ function createHarness(
     disconnectGraceMs: 50,
     policy: { maxParticipants: 30, joinGrantTtlMs: 120_000, participantLeaseTtlMs: 7_200_000 },
     sessionId: () => engine.currentSessionId,
-    isNewParticipantAllowed: () => engine.lifecycleState !== "active",
+    isNewParticipantAllowed: () => policy.allowLateJoin !== false || engine.lifecycleState !== "active",
     onClientMessage: (message, socket, req) => engine.handleClientMessage(message, socket, req),
     onParticipantJoin: (participant, socket) => engine.participantJoined(socket, participant),
     onSocketClosed: (socket) => engine.socketClosed(socket),
@@ -212,7 +212,7 @@ describe("fake scenario server integration", () => {
     ]));
   });
 
-  it("rejects a late join, reconnects an existing lease, and completes the scenario", async () => {
+  it("admits a late join during active play and completes the scenario", async () => {
     const h = createHarness();
     const display = h.display();
     const first = await h.phone(1);
@@ -223,7 +223,8 @@ describe("fake scenario server integration", () => {
       phaseEpoch: h.engine.currentPhaseEpoch, mediaId: "intro.mp4",
     });
     const late = await h.phone(2);
-    expect(last(late, "join_rejected")).toMatchObject({ reason: "show_in_progress" });
+    expect(last(late, "identity")).toMatchObject({ sessionId: h.engine.currentSessionId });
+    expect(last(late, "snapshot")).toMatchObject({ phase: { id: "question-fixed" } });
     first.close();
     const reconnected = await h.phone(3, firstLease);
     expect(last(reconnected, "snapshot")).toMatchObject({ phase: { id: "question-fixed" } });
@@ -231,7 +232,7 @@ describe("fake scenario server integration", () => {
     await Promise.resolve();
     h.advance(20_000);
     expect(last(display, "question_resolved")).toMatchObject({ winner: "fixed" });
-    expect(h.admission.registry.connectedCount).toBe(1);
+    expect(h.admission.registry.connectedCount).toBe(2);
     h.advance(3_000);
     h.input(reconnected, 2, 0.2, 0.2);
     await Promise.resolve();

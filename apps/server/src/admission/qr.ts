@@ -17,6 +17,7 @@ export type QrGrantPushLoopOptions = {
   rotationMs?: number;
   allowLateJoin?: boolean;
   activeQrVisibility?: "corner" | "hidden";
+  showPhoneJoinBaseUrl?: boolean;
 };
 
 export class QrGrantPushLoop {
@@ -62,6 +63,7 @@ export class QrGrantPushLoop {
       url: url.toString(),
       expiresAt: grant.claims.expiresAt,
       placement: lifecycle === "active" ? "corner" : "large",
+      showJoinUrl: this.options.showPhoneJoinBaseUrl !== false,
     });
   }
 }

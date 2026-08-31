@@ -167,28 +167,60 @@ html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflo
 .outcome { position: absolute; z-index: 5; inset: 0; display: grid; place-items: center; font-size: clamp(2rem, 7vw, 6rem); }
 .outcome-empty { display: none; }
 
-.countdown, .reconnecting, .media-status, .notice, .phone-count, .lobby-start-time { position: absolute; z-index: 6; }
+.countdown, .reconnecting, .media-status, .notice, .phone-count, .lobby-information { position: absolute; z-index: 6; }
 .countdown { right: 2rem; bottom: 2rem; }
-.lobby-start-time {
+.lobby-information {
   inset: 0;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  color: #000;
-  line-height: 1;
   pointer-events: none;
 }
-.lobby-start-time > span { font-size: clamp(1.25rem, 3vw, 2.5rem); }
-.lobby-start-time time { margin-block-start: .5rem; font-size: clamp(1.6rem, 4vw, 3.5rem); font-weight: 700; }
-.countdown-lobby {
-  position: static;
-  margin-block-start: clamp(2rem, 7vh, 5rem);
-  font-size: clamp(6rem, 18vw, 16rem);
+.lobby-start-time {
+  position: absolute;
+  top: clamp(1.25rem, 4vh, 3rem);
+  left: 50%;
+  display: flex;
+  width: min(78vw, 70rem);
+  flex-direction: column;
+  align-items: center;
+  transform: translateX(-50%);
+  color: rgb(255 255 255 / 70%);
+  line-height: 1.08;
+  text-align: center;
+  text-shadow: 0 2px 12px rgb(0 0 0 / 72%);
+}
+.lobby-start-time > span { font-size: clamp(1rem, 1.75vw, 1.6rem); }
+.lobby-start-time time {
+  margin-block-start: .25rem;
+  font-size: clamp(1.25rem, 2.7vw, 2.5rem);
   font-weight: 700;
-  line-height: 1;
+}
+.lobby-final-countdown {
+  display: flex;
+  align-items: baseline;
+  gap: .55rem;
+  margin-block-start: .55rem;
+}
+.lobby-final-countdown strong {
+  font-size: clamp(2.25rem, 5vw, 4.5rem);
+  font-weight: 700;
+  line-height: .9;
   font-variant-numeric: tabular-nums;
 }
-.lobby-start-time small { font-size: clamp(1rem, 2vw, 1.5rem); }
+.lobby-final-countdown span { font-size: clamp(.9rem, 1.5vw, 1.25rem); }
+.lobby-join-url {
+  position: absolute;
+  right: 1rem;
+  bottom: clamp(1rem, 2.5vh, 2rem);
+  left: 1rem;
+  overflow: hidden;
+  color: rgb(255 255 255 / 70%);
+  font-family: system-ui, sans-serif;
+  font-size: clamp(.8rem, 1.25vw, 1.1rem);
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 85%);
+  white-space: nowrap;
+}
 .reconnecting, .media-status, .notice { top: 1rem; left: 1rem; }
 .media-status { top: 3rem; }
 .notice { top: auto; bottom: 1rem; }

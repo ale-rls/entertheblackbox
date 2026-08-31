@@ -19,6 +19,16 @@ type VoteSnapshotRecord = {
   recordedAt: number;
   votes: readonly PositionVote[];
 };
+type MovementRecordingRecord = {
+  recordingId: string;
+  sessionId: string;
+  participantId: string;
+  participantName?: string;
+  startedAt: number;
+  endedAt?: number;
+  status: string;
+  sampleCount: number;
+};
 
 function csvEscape(value: unknown): string {
   const text = value === null || value === undefined ? "" : String(value);
@@ -79,6 +89,7 @@ export class PocketBaseAdminDataSource implements AdminDataSource {
       recordingId: event.recordingId,
       sessionId: event.sessionId,
       participantId: event.participantId,
+      participantName: event.participantName,
       showId: event.showId,
       scenarioVersion: event.scenarioVersion,
       installationId: event.installationId,
@@ -113,13 +124,15 @@ export class PocketBaseAdminDataSource implements AdminDataSource {
   async exportSession(sessionId: string): Promise<AdminExport | null> {
     await this.client.ensureAuth();
     const filter = this.client.pb.filter("sessionId = {:sessionId}", { sessionId });
-    const [checkpoints, snapshots] = await Promise.all([
+    const [checkpoints, snapshots, movementRecordings] = await Promise.all([
       this.client.pb.collection<SessionCheckpointRecord>("session_checkpoints")
         .getFullList({ filter, sort: "startedAt" }),
       this.client.pb.collection<VoteSnapshotRecord>("vote_snapshots")
         .getFullList({ filter, sort: "recordedAt" }),
+      this.client.pb.collection<MovementRecordingRecord>("movement_recordings")
+        .getFullList({ filter, sort: "startedAt" }),
     ]);
-    if (checkpoints.length === 0 && snapshots.length === 0) return null;
+    if (checkpoints.length === 0 && snapshots.length === 0 && movementRecordings.length === 0) return null;
 
     const votes = snapshots.flatMap((snapshot) => snapshot.votes);
     return {
@@ -131,6 +144,15 @@ export class PocketBaseAdminDataSource implements AdminDataSource {
         })),
         voteSnapshots: snapshots.map((s) => ({
           questionId: s.questionId, phaseEpoch: s.phaseEpoch, recordedAt: s.recordedAt, votes: s.votes,
+        })),
+        movementRecordings: movementRecordings.map((recording) => ({
+          recordingId: recording.recordingId,
+          participantId: recording.participantId,
+          participantName: recording.participantName ?? "",
+          startedAt: recording.startedAt,
+          endedAt: recording.endedAt ?? null,
+          status: recording.status,
+          sampleCount: recording.sampleCount,
         })),
       },
       csv: votesToCsv(votes),

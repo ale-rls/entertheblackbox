@@ -276,6 +276,7 @@ export function App() {
           sessionId={state.sessionId}
           phase={phase}
           clock={connection.clock}
+          joinUrl={state.qrGrant?.showJoinUrl === false ? null : state.qrGrant?.url ?? null}
         />
         {phase?.kind === "position-question" && (
           <div className="question">

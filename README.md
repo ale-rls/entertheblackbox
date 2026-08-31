@@ -120,6 +120,8 @@ env HOST=0.0.0.0 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=development PHONE_JO
 
 Keep the authenticated display open on the Mac as above, then scan its QR code. The phone and Mac must be on the same Wi-Fi network, and the macOS firewall must allow incoming connections to Node.js on port 3000. Do not use `localhost` in `PHONE_JOIN_BASE_URL`: on the phone, that means the phone itself.
 
+The display prints `PHONE_JOIN_BASE_URL` at the bottom of the lobby by default and keeps a corner QR available during active play for late joining. Set `SHOW_PHONE_JOIN_BASE_URL=false` to hide the printed URL or `ALLOW_LATE_JOIN=false` to restore lobby-only admission.
+
 To run `showtest1` and accept physical phones at the same time, combine both sets of environment variables:
 
 ```bash

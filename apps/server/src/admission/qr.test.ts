@@ -43,6 +43,13 @@ describe("QR grant push loop", () => {
     const url = new URL((sent[0] as Extract<QrPushMessage, { t: "qr_grant" }>).url);
     expect(url.toString()).toBe("https://phone.example/join");
     expect([...url.searchParams]).toEqual([]);
+    expect((sent[0] as Extract<QrPushMessage, { t: "qr_grant" }>).showJoinUrl).toBe(true);
+  });
+
+  it("can hide the printed lobby URL without hiding the QR", () => {
+    const { loop, sent } = setup({ showPhoneJoinBaseUrl: false });
+    loop.push();
+    expect(sent[0]).toMatchObject({ t: "qr_grant", showJoinUrl: false });
   });
 
   it.each([

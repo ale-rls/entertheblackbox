@@ -13,21 +13,50 @@ const idlePhase = (deadlineAt: number | null): PhaseSnapshotMessage => ({
 });
 
 describe("LobbyCountdown", () => {
-  it("renders the server-timed lobby countdown and hides outside the lobby", () => {
+  it("renders the start time and URL but hides a distant countdown", () => {
+    const clock = new ServerClock();
+    const lobby = renderToStaticMarkup(
+      <LobbyCountdown
+        sessionId="lobby"
+        phase={idlePhase(Date.now() + 60_000)}
+        clock={clock}
+        joinUrl="https://join.example/phone/"
+      />,
+    );
+    expect(lobby).toContain("Show starts at");
+    expect(lobby).toContain("https://join.example/phone/");
+    expect(lobby).not.toContain("lobby-final-countdown");
+
+    expect(renderToStaticMarkup(
+      <LobbyCountdown sessionId="idle" phase={idlePhase(null)} clock={clock} joinUrl={null} />,
+    )).toBe("");
+  });
+
+  it("shows only the final ten seconds at the top", () => {
     const clock = new ServerClock();
     const lobby = renderToStaticMarkup(
       <LobbyCountdown
         sessionId="lobby"
         phase={idlePhase(Date.now() + 10_000)}
         clock={clock}
+        joinUrl={null}
       />,
     );
-    expect(lobby).toContain('class="countdown countdown-lobby"');
-    expect(lobby).toContain("Show starts at");
+    expect(lobby).toContain('class="lobby-final-countdown"');
     expect(lobby).toContain(">10<");
+    expect(lobby).toContain("seconds");
+  });
 
-    expect(renderToStaticMarkup(
-      <LobbyCountdown sessionId="idle" phase={idlePhase(null)} clock={clock} />,
-    )).toBe("");
+  it("keeps the join URL visible in a manual lobby without a deadline", () => {
+    const lobby = renderToStaticMarkup(
+      <LobbyCountdown
+        sessionId="lobby"
+        phase={idlePhase(null)}
+        clock={new ServerClock()}
+        joinUrl="https://join.example/phone/"
+      />,
+    );
+    expect(lobby).toContain("https://join.example/phone/");
+    expect(lobby).not.toContain("Show starts at");
   });
 });

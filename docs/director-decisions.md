@@ -21,7 +21,7 @@ is authored. Engineering work validates against the fake dev scenario
 | No-participant grace | 2 min (as built) |
 | Resolution freeze | **`freezeMs: 5000`** (changed from the plan's 3 s) |
 | Live quadrant counts | **ON** (`showLiveCounts: true` per question) |
-| Late join | **LOBBY-ONLY** (`ALLOW_LATE_JOIN=false`; QR hides once a session starts; latecomers wait for the next idle/lobby) — enforced by STEP-035 |
+| Late join | **ON** (`ALLOW_LATE_JOIN=true`; a small rotating QR remains visible during active play) — updated 2026-08-31 |
 | Join rate limit | **30 attempts per source IP per 60 s** (assumes LAN deployment); revisit if the server moves behind a NAT/proxy — raise `maxAttempts` substantially or key differently |
 | Join URL / participant lease | Stable parameter-free URL / 2 h lease |
 | Counted statuses | `["valid", "stale", "disconnected"]` on every quadrant-plurality question (never-moved always excluded) |

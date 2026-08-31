@@ -25,11 +25,20 @@ describe("production secret configuration", () => {
       expect(loadConfig({ NODE_ENV: nodeEnv })).toMatchObject({
         joinGrantSecret: "dev-join-grant-secret-please-change",
         displayToken: "dev-display-token",
+        allowLateJoin: true,
+        showPhoneJoinBaseUrl: true,
       });
     }
     expect(loadConfig({ NODE_ENV: "production", ...productionSecrets })).toMatchObject({
       joinGrantSecret: productionSecrets.JOIN_GRANT_SECRET,
       displayToken: productionSecrets.DISPLAY_TOKEN,
     });
+  });
+
+  it("allows late joining and the printed lobby URL to be disabled explicitly", () => {
+    expect(loadConfig({
+      ALLOW_LATE_JOIN: "false",
+      SHOW_PHONE_JOIN_BASE_URL: "false",
+    })).toMatchObject({ allowLateJoin: false, showPhoneJoinBaseUrl: false });
   });
 });

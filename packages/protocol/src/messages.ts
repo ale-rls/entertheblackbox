@@ -337,6 +337,8 @@ export const qrGrantSchema = z.object({
   url: nonEmpty,
   expiresAt: timestamp,
   placement: z.enum(["large", "corner"]),
+  /** Whether the display should print the stable join URL during the lobby. */
+  showJoinUrl: z.boolean().optional(),
 });
 
 export const qrHiddenSchema = z.object({

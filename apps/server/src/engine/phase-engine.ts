@@ -526,7 +526,7 @@ export class PhaseEngine {
     if (_participant !== undefined) {
       this.participantIds.set(socket, _participant.clientId);
       this.cursors.join(_participant.clientId, _participant.color);
-      if (this.lifecycle === "active") this.movement.join(_participant.clientId, this.sessionId);
+      if (this.lifecycle === "active") this.movement.join(_participant.clientId, _participant.name, this.sessionId, this.now());
       this.votes.addParticipant({
         participantId: _participant.clientId,
         connected: true,
@@ -789,7 +789,8 @@ export class PhaseEngine {
 
   private joinMovementRecordingForConnectedParticipants(): void {
     for (const participant of this.registry.values()) {
-      this.movement.join(participant.clientId, this.sessionId);
+      if (participant.socket === undefined || !isOpen(participant.socket)) continue;
+      this.movement.join(participant.clientId, participant.name, this.sessionId, this.now());
     }
   }
 

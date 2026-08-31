@@ -8,6 +8,7 @@ export type MovementRecordingStarted = {
   recordingId: string;
   sessionId: string;
   participantId: string;
+  participantName: string;
   showId: string;
   scenarioVersion: string;
   installationId: string;
@@ -44,9 +45,10 @@ export type MovementRecorderOptions = {
 
 type ParticipantState = {
   participantId: string;
+  participantName: string;
   sessionId: string;
-  recordingId: string | null;
-  startedAt: number | null;
+  recordingId: string;
+  startedAt: number;
   buffer: MovementSample[];
   batchIndex: number;
   sampleCount: number;
@@ -60,9 +62,9 @@ const clamp = (value: number): number => Math.min(1, Math.max(0, value));
  * session, buffering samples in memory and flushing periodic batches via
  * callbacks (no PocketBase awareness here — see PocketBaseAdminDataSource
  * for the persistence sink). Mirrors CursorPipeline's per-participant Map
- * design, but a recording is created lazily on a participant's first
- * sample rather than on join, so participants who never move produce no
- * recording at all.
+ * design. The lightweight parent recording is created on active-session
+ * join—even when the participant never moves—so it also serves as the
+ * durable named participant ledger for session monitoring and exports.
  */
 export class MovementRecorder {
   private readonly participants = new Map<string, ParticipantState>();
@@ -77,41 +79,36 @@ export class MovementRecorder {
     if (this.sampleThreshold < 1) throw new Error("movement flush sample threshold must be positive");
   }
 
-  join(participantId: string, sessionId: string): void {
+  join(participantId: string, participantName: string, sessionId: string, now: number): void {
     if (this.participants.has(participantId)) return;
-    this.participants.set(participantId, {
+    const state: ParticipantState = {
       participantId,
+      participantName,
       sessionId,
-      recordingId: null,
-      startedAt: null,
+      recordingId: `${sessionId}:${participantId}:${now}`,
+      startedAt: now,
       buffer: [],
       batchIndex: 0,
       sampleCount: 0,
-      lastFlushAt: 0,
+      lastFlushAt: now,
+    };
+    this.participants.set(participantId, state);
+    this.options.onRecordingStarted({
+      recordingId: state.recordingId,
+      sessionId,
+      participantId,
+      participantName,
+      showId: this.options.showId,
+      scenarioVersion: this.options.scenarioVersion,
+      installationId: this.options.installationId,
+      roomId: this.options.roomId,
+      startedAt: now,
     });
   }
 
   recordSample(participantId: string, x: number, y: number, now: number): void {
     const state = this.participants.get(participantId);
     if (!state || !Number.isFinite(x) || !Number.isFinite(y)) return;
-    if (state.startedAt === null) {
-      state.startedAt = now;
-      // Includes startedAt so a full drop-then-reconnect within the same
-      // session (which produces a second join()/recordSample() cycle for
-      // the same sessionId+participantId) still gets a unique recordingId.
-      state.recordingId = `${state.sessionId}:${participantId}:${now}`;
-      state.lastFlushAt = now;
-      this.options.onRecordingStarted({
-        recordingId: state.recordingId,
-        sessionId: state.sessionId,
-        participantId,
-        showId: this.options.showId,
-        scenarioVersion: this.options.scenarioVersion,
-        installationId: this.options.installationId,
-        roomId: this.options.roomId,
-        startedAt: now,
-      });
-    }
     state.buffer.push({ t: now - state.startedAt, x: clamp(x), y: clamp(y) });
     state.sampleCount += 1;
     if (state.buffer.length >= this.sampleThreshold) this.flush(state, now);
@@ -132,7 +129,7 @@ export class MovementRecorder {
 
   tick(now: number): void {
     for (const state of this.participants.values()) {
-      if (state.recordingId === null || state.buffer.length === 0) continue;
+      if (state.buffer.length === 0) continue;
       if (now - state.lastFlushAt >= this.intervalMs) this.flush(state, now);
     }
   }
@@ -148,7 +145,6 @@ export class MovementRecorder {
   }
 
   private close(state: ParticipantState, now: number, status: "completed" | "abandoned"): void {
-    if (state.recordingId === null) return;
     if (state.buffer.length > 0) this.flush(state, now);
     this.options.onRecordingFinalized({
       recordingId: state.recordingId,
@@ -159,7 +155,7 @@ export class MovementRecorder {
   }
 
   private flush(state: ParticipantState, now: number): void {
-    if (state.recordingId === null || state.buffer.length === 0) return;
+    if (state.buffer.length === 0) return;
     const samples = state.buffer;
     state.buffer = [];
     state.lastFlushAt = now;

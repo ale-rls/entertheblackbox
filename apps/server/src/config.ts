@@ -22,8 +22,9 @@ const envSchema = z.object({
   ADMIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   JOIN_GRANT_SECRET: z.string().min(16).default(DEVELOPMENT_JOIN_GRANT_SECRET),
   TRUST_PROXY: z.enum(["true", "false"]).default("false"),
-  ALLOW_LATE_JOIN: z.enum(["true", "false"]).default("false"),
+  ALLOW_LATE_JOIN: z.enum(["true", "false"]).default("true"),
   PHONE_JOIN_BASE_URL: z.string().url().default("http://localhost:5174/"),
+  SHOW_PHONE_JOIN_BASE_URL: z.enum(["true", "false"]).default("true"),
   SCENARIO_PATH: z.string().min(1).optional(),
   MEDIA_MANIFEST_PATH: z.string().min(1).optional(),
   MEDIA_DIR: z.string().min(1).optional(),
@@ -54,6 +55,7 @@ export type ServerConfig = {
   trustProxy: boolean;
   allowLateJoin: boolean;
   phoneJoinBaseUrl: string;
+  showPhoneJoinBaseUrl: boolean;
   scenarioPath: string;
   mediaManifestPath: string;
   mediaDir: string;
@@ -117,6 +119,7 @@ export function loadConfig(
     trustProxy: value.TRUST_PROXY === "true",
     allowLateJoin: value.ALLOW_LATE_JOIN === "true",
     phoneJoinBaseUrl: value.PHONE_JOIN_BASE_URL,
+    showPhoneJoinBaseUrl: value.SHOW_PHONE_JOIN_BASE_URL === "true",
     scenarioPath: fromRoot(value.SCENARIO_PATH, "content/scenarios/dev.json"),
     mediaManifestPath: fromRoot(value.MEDIA_MANIFEST_PATH, "content/media-manifest.json"),
     mediaDir: fromRoot(value.MEDIA_DIR, "content/media"),
