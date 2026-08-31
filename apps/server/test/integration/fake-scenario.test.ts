@@ -102,7 +102,7 @@ function createHarness(
     const socket = new TestSocket();
     connect(socket, `198.51.100.${suffix}`);
     socket.message({
-      t: "join", v: 2, clientVersion: "test", installationId: "inst-1", roomId: "room-1",
+      t: "join", v: 2, clientVersion: "test", installationId: "inst-1", roomId: "room-1", name: `Player ${suffix}`,
       joinGrant: admission.issueJoinGrant(now).token,
       ...(participantLease === undefined ? {} : { participantLease }),
     });

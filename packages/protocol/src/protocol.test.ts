@@ -15,6 +15,7 @@ const clientMessages: ClientToServerMessage[] = [
     clientVersion: "1.0.0",
     installationId: "inst-1",
     roomId: "room-1",
+    name: "Ada",
     joinGrant: "grant-token",
   },
   { t: "input", v: 2, sessionId: "s1", phaseEpoch: 3, seq: 12, x: 0.25, y: 0.75 },

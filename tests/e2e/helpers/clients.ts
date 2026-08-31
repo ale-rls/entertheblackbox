@@ -1,9 +1,7 @@
 import type { Page } from "@playwright/test";
-import { issueJoinGrant } from "../../../apps/server/src/admission/tokens.js";
 import {
   DISPLAY_TOKEN,
   INSTALLATION_ID,
-  JOIN_GRANT_SECRET,
   ROOM_ID,
 } from "./server.js";
 
@@ -15,19 +13,16 @@ export function displayUrl(baseUrl: string): string {
   return url.toString();
 }
 
-/** Mint a signed grant exactly like the server's QR loop would. */
-export function phoneUrl(baseUrl: string, ttlMs = 120_000): string {
-  const grant = issueJoinGrant({
-    secret: JOIN_GRANT_SECRET,
-    installationId: INSTALLATION_ID,
-    roomId: ROOM_ID,
-    ttlMs,
-  });
-  const url = new URL(`${baseUrl}/phone/`);
-  url.searchParams.set("g", grant.token);
-  url.searchParams.set("installation", INSTALLATION_ID);
-  url.searchParams.set("room", ROOM_ID);
-  return url.toString();
+export function phoneUrl(baseUrl: string): string {
+  return `${baseUrl}/phone/`;
+}
+
+export async function joinPhone(page: Page, baseUrl: string, name = "E2E participant"): Promise<void> {
+  await page.goto(phoneUrl(baseUrl));
+  await page.locator("#participant-name").fill(name);
+  await page.getByRole("button", { name: "Join", exact: true }).click();
+  await page.locator(".trackpad").waitFor({ state: "visible" });
+  await page.locator(".connection-dot.online").waitFor({ state: "visible" });
 }
 
 /** Drag on the phone trackpad — relative input, so any drag moves the cursor. */

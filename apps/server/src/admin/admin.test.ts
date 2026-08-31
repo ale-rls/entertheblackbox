@@ -19,9 +19,14 @@ function setup(options: {
   };
 } = {}) {
   const audit = vi.fn();
+  let lobbyTimes = [20_000, 40_000];
   const engine = {
     lifecycleState: "active", currentSessionId: "s1", currentPhaseId: "q1", currentPhaseEpoch: 2,
     isDisplayConnected: true, displayHeartbeatAgeMs: 12, connectedParticipantCount: 3,
+    participantPresence: [{ clientId: "p1", name: "Ada", color: "#fff", connected: true, joinedAt: 500, lastSeenAt: 900 }],
+    get lobbyStartTimes() { return lobbyTimes; },
+    get nextLobbyStartAt() { return lobbyTimes[0] ?? null; },
+    setLobbyStartTimes: vi.fn((times: readonly number[]) => { lobbyTimes = [...times]; return { ok: true }; }),
     currentDisplayPlaybackIssue: { status: "stalled", mediaId: "intro.mp4", detail: "buffering stopped", reportedAt: 1_000 },
     adminStart: vi.fn(() => ({ ok: false, reason: "wrong-phase" })),
     adminIdle: vi.fn(() => ({ ok: true })), adminSkip: vi.fn(() => ({ ok: true })), adminRestart: vi.fn(() => ({ ok: true })),
@@ -61,9 +66,31 @@ describe("admin API", () => {
       displayHeartbeatAgeMs: 12,
       displayPlaybackIssue: { status: "stalled", mediaId: "intro.mp4", detail: "buffering stopped", reportedAt: 1_000 },
       connectedParticipants: 3,
+      participants: [expect.objectContaining({ name: "Ada", connected: true })],
       sessionId: "s1",
       phaseId: "q1",
     });
+  });
+
+  it("replaces and adjusts the persisted lobby schedule", async () => {
+    const { app, engine, audit } = setup({ now: () => 1_000 });
+    const headers = { authorization: "Bearer strong-admin-token" };
+
+    expect((await app.inject({ url: "/api/admin/lobby", headers })).json()).toMatchObject({
+      startTimes: [20_000, 40_000], nextStartAt: 20_000,
+    });
+    const saved = await app.inject({
+      method: "POST", url: "/api/admin/lobby", headers, payload: { startTimes: [50_000, 30_000] },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(engine.setLobbyStartTimes).toHaveBeenCalledWith([30_000, 50_000], 1_000);
+
+    const adjusted = await app.inject({
+      method: "POST", url: "/api/admin/lobby/adjust", headers, payload: { deltaMs: 10_000 },
+    });
+    expect(adjusted.statusCode).toBe(200);
+    expect(adjusted.json()).toMatchObject({ nextStartAt: 40_000 });
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "adjust-lobby-start" }));
   });
 
   it("authenticates and rate-limits admin routes even when their path is percent-encoded", async () => {
@@ -82,7 +109,7 @@ describe("admin API", () => {
     expect(engine.adminIdle).toHaveBeenCalledOnce();
   });
 
-  it("leaves headroom for the dashboard's normal two-request polling cycle", async () => {
+  it("leaves headroom for the dashboard's normal polling cycle", async () => {
     const { app } = setup({ now: () => 10_000 });
     const headers = { authorization: "Bearer strong-admin-token" };
     for (let request = 0; request < 62; request += 1) {

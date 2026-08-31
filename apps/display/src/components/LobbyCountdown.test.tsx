@@ -23,6 +23,7 @@ describe("LobbyCountdown", () => {
       />,
     );
     expect(lobby).toContain('class="countdown countdown-lobby"');
+    expect(lobby).toContain("Show starts at");
     expect(lobby).toContain(">10<");
 
     expect(renderToStaticMarkup(

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { adminStatus, startServer, type E2eServer } from "./helpers/server.js";
-import { displayUrl, dragTrackpad, phoneUrl } from "./helpers/clients.js";
+import { adminAction, adminStatus, startServer, type E2eServer } from "./helpers/server.js";
+import { displayUrl, dragTrackpad, joinPhone } from "./helpers/clients.js";
 
 /**
  * §16: display readiness gate, QR admission (signed grant), solo lobby
@@ -43,11 +43,12 @@ test.describe("full scenario flow", () => {
 
     // Phone joins with a current signed grant → solo participant starts lobby.
     const phone = await browser.newPage();
-    await phone.goto(phoneUrl(server.baseUrl));
+    await joinPhone(phone, server.baseUrl, "Full flow visitor");
     await expect(phone.locator(".trackpad")).toBeVisible();
     await expect.poll(async () => (await adminStatus(server.baseUrl)).lifecycle).toBe("lobby");
 
-    // Lobby countdown (10 s default policy) → active, entry video phase.
+    // The lobby waits for the operator rather than starting from headcount.
+    await adminAction(server.baseUrl, "start");
     await expect
       .poll(async () => (await adminStatus(server.baseUrl)).lifecycle, { timeout: 20_000 })
       .toBe("active");
@@ -96,7 +97,7 @@ test.describe("full scenario flow", () => {
     await expect
       .poll(async () => (await adminStatus(server.baseUrl)).phaseId, { timeout: 20_000 })
       .toBe("question-fixed");
-    await expect(display.locator(".question h2")).toHaveText(/public transit funding/);
+    await expect(display.locator(".question-text")).toHaveText(/public transit funding/);
     await expect(display.locator(".quadrant-overlay-four-quadrant")).toBeVisible();
     expect(await display.locator(".axis-cross").evaluate((element) => ({
       position: getComputedStyle(element).position,
@@ -113,13 +114,13 @@ test.describe("full scenario flow", () => {
     await expect
       .poll(async () => (await adminStatus(server.baseUrl)).phaseId, { timeout: 20_000 })
       .toBe("question-quadrant");
-    await expect(display.locator(".question h2")).toHaveText(/housing policy/);
+    await expect(display.locator(".question-text")).toHaveText(/housing policy/);
     await dragTrackpad(phone);
 
     await expect
       .poll(async () => (await adminStatus(server.baseUrl)).phaseId, { timeout: 20_000 })
       .toBe("question-two-quadrant");
-    await expect(display.locator(".question h2")).toHaveText(/automated decisions/);
+    await expect(display.locator(".question-text")).toHaveText(/automated decisions/);
     const split = await display.locator(".quadrant-overlay-two-quadrant").evaluate((overlay) => {
       const min = overlay.querySelector<HTMLElement>("[data-quadrant=min]")!;
       const max = overlay.querySelector<HTMLElement>("[data-quadrant=max]")!;
@@ -162,12 +163,10 @@ test.describe("full scenario flow", () => {
     await display.close();
   });
 
-  test("expired grant is rejected with a visible state", async ({ browser }) => {
+  test("the stable phone URL has no query parameters", async ({ browser }) => {
     const phone = await browser.newPage();
-    // ttl -1 ms: already expired when the server verifies it.
-    await phone.goto(phoneUrl(server.baseUrl, -1));
-    await expect(phone.locator(".rejected")).toBeVisible();
-    await expect(phone.locator(".rejected")).toContainText(/expired/i);
+    await joinPhone(phone, server.baseUrl, "Simple URL visitor");
+    expect(new URL(phone.url()).search).toBe("");
     await phone.close();
   });
 });

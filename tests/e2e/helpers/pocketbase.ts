@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { rm } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { REPO_ROOT } from "./paths.js";
 
@@ -74,6 +75,23 @@ export async function startE2ePocketBase(): Promise<void> {
       verified: true,
     }),
   });
+
+  const scenario = JSON.parse(await readFile(`${REPO_ROOT}/tests/e2e/fixtures/scenario.json`, "utf8")) as { version: string };
+  const mediaManifest = JSON.parse(await readFile(`${REPO_ROOT}/content/media-manifest.json`, "utf8")) as unknown;
+  const published = await fetch(`${E2E_POCKETBASE_URL}/api/collections/scenarios/records`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${auth.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      showId: "e2e-show",
+      name: "E2E show",
+      version: scenario.version,
+      status: "published",
+      scenario,
+      mediaManifest,
+      publishedAt: Date.now(),
+    }),
+  });
+  if (!published.ok) throw new Error(`could not seed e2e scenario: ${published.status} ${await published.text()}`);
 }
 
 export function stopE2ePocketBase(): void {

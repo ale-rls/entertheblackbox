@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
 import { PROTOCOL_VERSION } from "@smartphonecracy/protocol";
 import { PhoneConnection } from "./lib/connection.js";
 import { RealtimeCursorPublisher } from "./lib/realtimeWsClient.js";
+import { loadLease } from "./lib/lease.js";
 import {
   applyDelta,
   InputThrottle,
@@ -20,17 +21,25 @@ import { initialPhoneState, phoneReducer } from "./state/store.js";
 declare const __BUILD_VERSION__: string | undefined;
 declare const __REALTIME_WS_URL__: string | undefined;
 
-const params = new URLSearchParams(location.search);
-const config = {
+const baseConfig = {
   url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
   clientVersion:
     typeof __BUILD_VERSION__ === "string" ? __BUILD_VERSION__ : "0.0.0-dev",
-  installationId: params.get("installation") ?? "inst-1",
-  roomId: params.get("room") ?? "room-1",
-  joinGrant: params.get("g") ?? "",
   realtimeWsUrl:
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };
+
+type JoinConfig = { installationId: string; roomId: string };
+
+function loadParticipantName(): string {
+  try { return localStorage.getItem("participant-name") ?? ""; }
+  catch { return ""; }
+}
+
+function storeParticipantName(name: string): void {
+  try { localStorage.setItem("participant-name", name); }
+  catch { /* Joining still works when browser storage is unavailable. */ }
+}
 
 const REJECTION_TEXT: Record<string, string> = {
   expired_grant: "This code has expired — scan the QR on the screen again.",
@@ -41,6 +50,10 @@ const REJECTION_TEXT: Record<string, string> = {
 
 export function App() {
   const [state, dispatch] = useReducer(phoneReducer, initialPhoneState);
+  const [name, setName] = useState(loadParticipantName);
+  const [submittedName, setSubmittedName] = useState<string | null>(null);
+  const [joinConfig, setJoinConfig] = useState<JoinConfig | null>(null);
+  const [configError, setConfigError] = useState("");
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
   const position = useRef<TrackpadState>({ ...TRACKPAD_CENTER });
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
@@ -48,27 +61,62 @@ export function App() {
   const throttle = useMemo(() => new InputThrottle(), []);
   const realtimeWs = useRef<RealtimeCursorPublisher | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/join-config")
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Join service unavailable (${response.status})`);
+        const value = await response.json() as JoinConfig;
+        if (!cancelled) {
+          setJoinConfig(value);
+          const savedName = loadParticipantName().trim();
+          if (savedName && loadLease(value.installationId) !== null) setSubmittedName(savedName);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setConfigError(error instanceof Error ? error.message : "Join service unavailable");
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   const connection = useMemo(
-    () =>
-      new PhoneConnection({
-        ...config,
+    () => submittedName === null || joinConfig === null
+      ? null
+      : new PhoneConnection({
+        ...baseConfig,
+        ...joinConfig,
+        name: submittedName,
         onMessage: (message) => dispatch({ type: "server-message", message }),
         onSocketOpen: () => dispatch({ type: "socket-open" }),
         onSocketLost: () => dispatch({ type: "socket-lost" }),
         onSessionEnded: () => {
-          const url = new URL(location.href);
-          url.searchParams.delete("g");
-          history.replaceState(null, "", url);
+          setSubmittedName(null);
           dispatch({ type: "session-ended" });
         },
       }),
-    [],
+    [joinConfig, submittedName],
   );
 
   useEffect(() => {
+    if (connection === null) return;
     connection.start();
     return () => connection.stop();
   }, [connection]);
+
+  const join = (event: FormEvent) => {
+    event.preventDefault();
+    const cleanName = name.trim();
+    if (!cleanName || joinConfig === null) return;
+    storeParticipantName(cleanName);
+    dispatch({ type: "reset" });
+    setSubmittedName(cleanName);
+  };
+
+  const tryAgain = () => {
+    connection?.stop();
+    setSubmittedName(null);
+    dispatch({ type: "reset" });
+  };
 
   // Low-latency cursor overlay (apps/realtime-ws-coolify): additive to the "input"
   // message sent over the main connection above, published once this
@@ -77,8 +125,8 @@ export function App() {
   useEffect(() => {
     if (identity === null) return;
     const publisher = new RealtimeCursorPublisher({
-      url: config.realtimeWsUrl,
-      room: `${config.installationId}:${config.roomId}`,
+      url: baseConfig.realtimeWsUrl,
+      room: `${joinConfig?.installationId ?? ""}:${joinConfig?.roomId ?? ""}`,
       clientId: identity.clientId,
       color: identity.color,
     });
@@ -88,7 +136,7 @@ export function App() {
       publisher.stop();
       realtimeWs.current = null;
     };
-  }, [identity?.clientId, identity?.color]);
+  }, [identity?.clientId, identity?.color, joinConfig?.installationId, joinConfig?.roomId]);
 
   useEffect(() => {
     if (state.reloadRequired) {
@@ -113,7 +161,7 @@ export function App() {
         : throttle.shouldSend(now);
     if (!shouldSend) return;
     realtimeWs.current?.send(position.current.x, position.current.y);
-    connection.send({
+    connection?.send({
       t: "input",
       v: PROTOCOL_VERSION,
       sessionId: state.sessionId,
@@ -150,7 +198,7 @@ export function App() {
 
   const sendReaction = (kind: "applause" | "boo") => {
     if (state.sessionId === null) return;
-    connection.send({
+    connection?.send({
       t: "reaction",
       v: PROTOCOL_VERSION,
       sessionId: state.sessionId,
@@ -165,13 +213,31 @@ export function App() {
       style={{ touchAction: "none", userSelect: "none" }}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {state.join.kind === "ended" ? (
-        <div className="rejected">
-          <p>The show has ended — scan the QR on the screen to join again.</p>
+      {submittedName === null ? (
+        <div className="join-screen">
+          <form className="join-card" onSubmit={join}>
+            <p className="join-eyebrow">Smartphonecracy</p>
+            <h1>Join the session</h1>
+            {state.join.kind === "ended" && <p className="join-message">That show has ended. You can join the next session.</p>}
+            <label htmlFor="participant-name">Your name</label>
+            <input
+              id="participant-name"
+              type="text"
+              autoComplete="name"
+              maxLength={40}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Enter your name"
+              autoFocus
+            />
+            <button type="submit" disabled={name.trim() === "" || joinConfig === null}>Join</button>
+            {configError && <p className="join-error" role="alert">{configError}</p>}
+          </form>
         </div>
       ) : state.join.kind === "rejected" ? (
         <div className="rejected">
           <p>{REJECTION_TEXT[state.join.reason] ?? "Could not join."}</p>
+          <button type="button" onClick={tryAgain}>Try again</button>
         </div>
       ) : (
         <div
@@ -182,7 +248,7 @@ export function App() {
           onPointerCancel={onPointerEnd}
         >
           {!state.inputOpen && (
-            <p className="watch-screen">Watch the screen</p>
+            <p className="watch-screen">{state.join.kind === "accepted" ? `${submittedName}, watch the screen` : "Joining…"}</p>
           )}
           {state.ratingCandidateLabel !== null && (
             <div className="rating-buttons" aria-label={`Reactions for ${state.ratingCandidateLabel}`}>

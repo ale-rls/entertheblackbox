@@ -69,6 +69,8 @@ function setup(options: {
   movementFinalized?: MovementRecordingFinalized[];
   ghostPool?: GhostPool;
   qr?: boolean;
+  autoStartOnFirstParticipant?: boolean;
+  scheduledStartTimes?: number[];
 } ) {
   const registry = new ParticipantRegistry(2, 50);
   const checkpoints = options.checkpoints ?? [];
@@ -89,6 +91,8 @@ function setup(options: {
       noParticipantGraceMs: 100,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
+    ...(options.autoStartOnFirstParticipant === undefined ? {} : { autoStartOnFirstParticipant: options.autoStartOnFirstParticipant }),
+    ...(options.scheduledStartTimes === undefined ? {} : { scheduledStartTimes: options.scheduledStartTimes }),
     ...(options.sessionEnds === undefined
       ? {}
       : { onSessionEnded: (event: { reason: string; endedAt: number }) => options.sessionEnds!.push(event) }),
@@ -206,6 +210,7 @@ function addParticipant(registry: ParticipantRegistry, socket: WebSocket, now: n
   const result = registry.admit({
     participantLease: `lease-${id}`,
     clientId: id,
+    name: id,
     leaseExpiresAt: now + 10_000,
     socket,
     now,
@@ -225,6 +230,31 @@ function connectDisplay(engine: PhaseEngine, socket: WebSocket): void {
 }
 
 describe("PhaseEngine lifecycle", () => {
+  it("waits for an operator or scheduled start when participant-count auto-start is disabled", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now, autoStartOnFirstParticipant: false });
+    const display = new MockSocket();
+    const phone = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    connectDisplay(engine, display as unknown as WebSocket);
+    engine.participantJoined(phone as unknown as WebSocket, registry.values()[0]);
+
+    expect(engine.lifecycleState).toBe("lobby");
+    expect(engine.getSnapshot().deadlineAt).toBeNull();
+    now = 10_000;
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe("lobby");
+
+    engine.setLobbyStartTimes([20_000], now);
+    expect(engine.nextLobbyStartAt).toBe(20_000);
+    expect(engine.adjustLobbyStart(10_000, now)).toEqual({ ok: true });
+    expect(engine.nextLobbyStartAt).toBe(30_000);
+    now = 30_000;
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe("active");
+    expect(engine.nextLobbyStartAt).toBeNull();
+  });
+
   it("encodes a broadcast once and reuses it for every open socket", () => {
     const { engine } = setup({ now: () => 1_000 });
     const first = new MockSocket();
@@ -254,8 +284,7 @@ describe("PhaseEngine lifecycle", () => {
     connectDisplay(engine, display as unknown as WebSocket);
     expect(display.sent.filter((message) => message.t === "qr_grant")).toHaveLength(1);
     const joinUrl = new URL(display.sent.find((message) => message.t === "qr_grant").url);
-    expect(joinUrl.searchParams.get("installation")).toBe("inst-1");
-    expect(joinUrl.searchParams.get("room")).toBe("room-1");
+    expect(joinUrl.toString()).toBe("https://phone.example/join");
 
     engine.handleClientMessage({ t: "qr_grant_request", v: 2 }, display as unknown as WebSocket);
     expect(display.sent.filter((message) => message.t === "qr_grant")).toHaveLength(2);
@@ -823,6 +852,7 @@ describe("PhaseEngine lifecycle", () => {
     const admission = registry.admit({
       participantLease: "lease-p1",
       clientId: "p1",
+      name: "p1",
       leaseExpiresAt: now + 10_000,
       socket: replacement as unknown as WebSocket,
       now,

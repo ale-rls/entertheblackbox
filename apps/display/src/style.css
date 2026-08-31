@@ -167,18 +167,28 @@ html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflo
 .outcome { position: absolute; z-index: 5; inset: 0; display: grid; place-items: center; font-size: clamp(2rem, 7vw, 6rem); }
 .outcome-empty { display: none; }
 
-.countdown, .reconnecting, .media-status, .notice, .phone-count { position: absolute; z-index: 6; }
+.countdown, .reconnecting, .media-status, .notice, .phone-count, .lobby-start-time { position: absolute; z-index: 6; }
 .countdown { right: 2rem; bottom: 2rem; }
-.countdown-lobby {
+.lobby-start-time {
   inset: 0;
   display: grid;
-  place-items: center;
+  align-content: center;
+  justify-items: center;
   color: #000;
-  font-size: clamp(8rem, 24vw, 22rem);
+  line-height: 1;
+  pointer-events: none;
+}
+.lobby-start-time > span { font-size: clamp(1.25rem, 3vw, 2.5rem); }
+.lobby-start-time time { margin-block-start: .5rem; font-size: clamp(1.6rem, 4vw, 3.5rem); font-weight: 700; }
+.countdown-lobby {
+  position: static;
+  margin-block-start: clamp(2rem, 7vh, 5rem);
+  font-size: clamp(6rem, 18vw, 16rem);
   font-weight: 700;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+.lobby-start-time small { font-size: clamp(1rem, 2vw, 1.5rem); }
 .reconnecting, .media-status, .notice { top: 1rem; left: 1rem; }
 .media-status { top: 3rem; }
 .notice { top: auto; bottom: 1rem; }

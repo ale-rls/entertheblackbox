@@ -1,6 +1,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
-import { E2E_POCKETBASE_URL, e2eOperatorToken } from "./pocketbase.js";
+import {
+  E2E_POCKETBASE_ADMIN_EMAIL,
+  E2E_POCKETBASE_ADMIN_PASSWORD,
+  E2E_POCKETBASE_URL,
+  e2eOperatorToken,
+} from "./pocketbase.js";
 import { REPO_ROOT } from "./paths.js";
 
 export { REPO_ROOT };
@@ -31,7 +36,7 @@ async function waitReady(baseUrl: string, timeoutMs = 30_000): Promise<void> {
     try {
       const res = await fetch(`${baseUrl}/readyz`);
       if (res.status === 200) return;
-      lastError = `readyz ${res.status}`;
+      lastError = `readyz ${res.status}: ${await res.text()}`;
     } catch (error) {
       lastError = (error as Error).message;
     }
@@ -57,6 +62,8 @@ function launch(port: number, env: Record<string, string>): ChildProcess {
         // path. The stale-bundle spec overrides this deliberately.
         BUILD_VERSION: "0.0.0-dev",
         POCKETBASE_URL: E2E_POCKETBASE_URL,
+        POCKETBASE_ADMIN_EMAIL: E2E_POCKETBASE_ADMIN_EMAIL,
+        POCKETBASE_ADMIN_PASSWORD: E2E_POCKETBASE_ADMIN_PASSWORD,
         ...env,
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -89,7 +96,13 @@ export async function startServer(env: Record<string, string> = {}): Promise<E2e
   const baseUrl = `http://127.0.0.1:${port}`;
   let child = launch(port, env);
   let currentEnv = env;
-  await waitReady(baseUrl);
+  try {
+    await waitReady(baseUrl);
+  } catch (error) {
+    child.kill("SIGTERM");
+    await waitExit(child);
+    throw error;
+  }
 
   return {
     port,
@@ -124,4 +137,13 @@ export async function adminStatus(baseUrl: string): Promise<{
   });
   if (res.status !== 200) throw new Error(`admin status ${res.status}`);
   return (await res.json()) as ReturnType<typeof adminStatus> extends Promise<infer T> ? T : never;
+}
+
+export async function adminAction(baseUrl: string, action: "start" | "idle" | "skip" | "restart"): Promise<void> {
+  const token = await e2eOperatorToken();
+  const response = await fetch(`${baseUrl}/api/admin/${action}`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error(`admin ${action} ${response.status}: ${await response.text()}`);
 }

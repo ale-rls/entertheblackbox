@@ -26,6 +26,17 @@
 .admin-control-list > div { display: grid; align-content: start; gap: var(--sc-tool-space-2); }
 .admin-control-list .sc-tool-button { width: 100%; }
 .admin-control-list span { color: var(--sc-tool-color-text-muted); font-size: var(--sc-tool-font-size-0); }
+.admin-next-start { display: grid; gap: var(--sc-tool-space-2); padding: var(--sc-tool-space-5) 0; border-block: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); }
+.admin-next-start span { color: var(--sc-tool-color-text-muted); font-size: var(--sc-tool-font-size-0); }
+.admin-next-start strong { font-size: var(--sc-tool-font-size-3); font-weight: var(--sc-tool-font-weight-medium); }
+.admin-time-adjustments { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sc-tool-space-3); margin-block-start: var(--sc-tool-space-5); }
+.admin-time-adjustments .sc-tool-button { width: 100%; }
+.admin-lobby-form { margin-block-start: var(--sc-tool-space-6); }
+.admin-schedule-list, .admin-participant-list { padding: 0; margin: var(--sc-tool-space-5) 0 0; list-style: none; border-block-start: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); }
+.admin-schedule-list li, .admin-participant-list li { display: flex; min-height: var(--sc-tool-density-row-height); align-items: center; gap: var(--sc-tool-space-4); padding-block: var(--sc-tool-space-3); border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); }
+.admin-schedule-list li > div, .admin-participant-list li > div { display: grid; flex: 1; gap: var(--sc-tool-space-1); min-width: 0; }
+.admin-schedule-list li span, .admin-participant-list li span { color: var(--sc-tool-color-text-muted); font-size: var(--sc-tool-font-size-0); }
+.admin-participant-color { flex: 0 0 auto; width: .8rem; height: .8rem; border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-radius: 50%; }
 @media (max-width: 1279px) { .admin-app { padding: var(--sc-tool-space-7); } .admin-grid { grid-template-columns: 1fr; } }
 @media (max-width: 767px) {
   .admin-app { padding: var(--sc-tool-space-5); }
@@ -39,5 +50,6 @@
   .admin-session-facts div { padding: var(--sc-tool-space-3) 0; border-inline-end: 0; border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); }
   .admin-session-facts div:last-child { border-block-end: 0; }
   .admin-control-list { grid-template-columns: minmax(0, 1fr); }
+  .admin-time-adjustments { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (forced-colors: active) { .admin-page-feedback { border-color: CanvasText; } }

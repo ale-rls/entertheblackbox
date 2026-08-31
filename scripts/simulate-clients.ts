@@ -114,7 +114,7 @@ async function openDisplay(options: Options, metrics: LoadMetrics): Promise<{ so
   await waitForOpen(socket);
   const grantPromise = waitForMessage(socket, (message) => {
     if (message.t !== "qr_grant") return undefined;
-    return new URL(message.url).searchParams.get("g") ?? undefined;
+    return new URL(message.url).searchParams.get("g") ?? "";
   });
   socket.send(encode({
     t: "display_join", v: PROTOCOL_VERSION, clientVersion: "load-test", installationId: options.installationId,
@@ -148,7 +148,7 @@ async function openPhone(options: Options, grant: string, metrics: LoadMetrics, 
     return message.t === "identity" ? message : undefined;
   });
   socket.send(encode({
-    t: "join", v: PROTOCOL_VERSION, clientVersion: "load-test", installationId: options.installationId,
+    t: "join", v: PROTOCOL_VERSION, clientVersion: "load-test", installationId: options.installationId, name: "Simulated participant",
     roomId: options.roomId, joinGrant: grant, ...(state.lease ? { participantLease: state.lease } : {}),
   }));
   const identity = await identityPromise;

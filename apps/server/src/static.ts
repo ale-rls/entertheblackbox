@@ -175,7 +175,7 @@ export function registerBundleRoutes(
   app: FastifyInstance,
   bundles: Record<"display" | "phone" | "admin" | "studio", string>,
 ): void {
-  // Most root-page visitors are participants scanning a join link;
+  // Most root-page visitors are participants opening the stable join link;
   // display is only ever loaded with its own full authenticated URL for
   // the venue's one big-screen kiosk, never via the bare root path.
   app.get("/", async (_request, reply) => reply.redirect("/phone/"));

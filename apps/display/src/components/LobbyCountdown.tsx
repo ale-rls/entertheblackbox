@@ -16,11 +16,18 @@ export function LobbyCountdown({
   }
 
   return (
-    <Countdown
-      clock={clock}
-      deadlineAt={phase.deadlineAt}
-      className="countdown-lobby"
-      minimumSeconds={1}
-    />
+    <div className="lobby-start-time">
+      <span>Show starts at</span>
+      <time dateTime={new Date(phase.deadlineAt).toISOString()}>
+        {new Date(phase.deadlineAt).toLocaleString([], { dateStyle: "medium", timeStyle: "medium" })}
+      </time>
+      <Countdown
+        clock={clock}
+        deadlineAt={phase.deadlineAt}
+        className="countdown-lobby"
+        minimumSeconds={1}
+      />
+      <small>seconds</small>
+    </div>
   );
 }

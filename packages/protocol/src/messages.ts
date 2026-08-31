@@ -82,6 +82,7 @@ export const joinSchema = z.object({
   clientVersion: nonEmpty,
   installationId: nonEmpty,
   roomId: nonEmpty,
+  name: z.string().trim().min(1).max(40),
   // Deliberately not nonEmpty: a returning participant with a still-valid
   // participantLease doesn't need a grant at all (admission/controller.ts's
   // returningParticipant bypass), and an empty/garbage grant otherwise
@@ -89,7 +90,7 @@ export const joinSchema = z.object({
   // safely returns null on malformed input) -- rejecting the whole
   // message here instead would turn either case into a silent
   // close-and-retry loop with no user-facing explanation.
-  joinGrant: z.string(),
+  joinGrant: z.string().optional(),
   participantLease: nonEmpty.optional(),
 });
 

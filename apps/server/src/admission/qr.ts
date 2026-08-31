@@ -54,9 +54,8 @@ export class QrGrantPushLoop {
     const now = this.now();
     const grant = this.options.issueGrant(now);
     const url = new URL(this.options.phoneJoinBaseUrl);
-    url.searchParams.set("installation", grant.claims.installationId);
-    url.searchParams.set("room", grant.claims.roomId);
-    url.searchParams.set("g", grant.token);
+    url.search = "";
+    url.hash = "";
     this.options.send({
       t: "qr_grant",
       v: PROTOCOL_VERSION,

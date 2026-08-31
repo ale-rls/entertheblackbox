@@ -29,7 +29,7 @@ function setup(overrides: Partial<ConstructorParameters<typeof QrGrantPushLoop>[
 }
 
 describe("QR grant push loop", () => {
-  it("issues large idle/lobby grants and corner active grants without losing existing query params", () => {
+  it("issues large idle/lobby grants and corner active grants with a stable parameter-free URL", () => {
     const { loop, sent, setLifecycle } = setup();
     loop.push();
     setLifecycle("lobby");
@@ -41,9 +41,8 @@ describe("QR grant push loop", () => {
       "large", "large", "corner",
     ]);
     const url = new URL((sent[0] as Extract<QrPushMessage, { t: "qr_grant" }>).url);
-    expect(url.searchParams.get("installation")).toBe("inst-1");
-    expect(url.searchParams.get("room")).toBe("room-1");
-    expect(url.searchParams.get("g")).toBe("grant-1000");
+    expect(url.toString()).toBe("https://phone.example/join");
+    expect([...url.searchParams]).toEqual([]);
   });
 
   it.each([

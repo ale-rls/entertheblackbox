@@ -9,7 +9,7 @@ import {
 import { clearLease, loadLease, storeLease } from "./lease.js";
 
 /**
- * Phone WebSocket connection: joins with the QR grant + any stored
+ * Phone WebSocket connection: joins with a visitor name + any stored
  * lease, persists the lease from identity, reconnects with exponential
  * backoff, pings every ~10 s (plan §7), and hands every valid server
  * message to the consumer. WebSocket constructor injectable for tests.
@@ -20,7 +20,7 @@ export type PhoneConnectionOptions = {
   clientVersion: string;
   installationId: string;
   roomId: string;
-  joinGrant: string;
+  name: string;
   onMessage: (message: ServerToClientMessage) => void;
   onSocketOpen?: () => void;
   onSocketLost?: () => void;
@@ -82,7 +82,7 @@ export class PhoneConnection {
         clientVersion: this.options.clientVersion,
         installationId: this.options.installationId,
         roomId: this.options.roomId,
-        joinGrant: this.options.joinGrant,
+        name: this.options.name,
         ...(lease === null ? {} : { participantLease: lease }),
       });
       this.send({ t: "ping", v: PROTOCOL_VERSION, clientTime: this.now() });

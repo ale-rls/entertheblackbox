@@ -70,6 +70,8 @@ Open the authenticated installation display:
 
 The query parameters identify the installation and room and authenticate this browser as the official display. The server allows only one authenticated display connection. The root page (`http://127.0.0.1:3000/`) redirects to `/phone/` instead, since most root-page visitors are participants, not the venue's one display kiosk.
 
+Participants use the stable public URL `http://127.0.0.1:3000/phone/` (or just the server root). It has no query parameters: visitors enter their name and press **Join**. The operator dashboard shows the named live roster. Joining opens a waiting lobby but never starts a show based on headcount; operators can start manually or configure one or more date-and-time starts in `/admin/`, with quick ±10 second and ±1 minute adjustments for the next start.
+
 The server also exposes:
 
 - `/phone/` — participant controller
@@ -92,7 +94,7 @@ scenario is not ready, it fails closed with HTTP 503 and
 metadata (the public media manifest already lists media paths), so authors must
 not put secrets or private visitor information in either field.
 
-Development credentials in the server configuration are intentionally local-only defaults. Set installation-specific `JOIN_GRANT_SECRET`, `DISPLAY_TOKEN`, and `POCKETBASE_ADMIN_PASSWORD` values before venue operation.
+Development credentials in the server configuration are intentionally local-only defaults. Set installation-specific `JOIN_GRANT_SECRET`, `DISPLAY_TOKEN`, and `POCKETBASE_ADMIN_PASSWORD` values before venue operation. `JOIN_GRANT_SECRET` continues to sign returning-participant leases; public first-time joins are protected by admission capacity and per-IP rate limits rather than URL secrets.
 
 The admin dashboard (`/admin/`) authenticates operators against PocketBase's `operators` collection instead of a shared static token — see [PocketBase setup](#pocketbase) below for provisioning an operator account.
 

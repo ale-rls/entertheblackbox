@@ -88,7 +88,7 @@ describe("PhoneConnection", () => {
       clientVersion: "test",
       installationId: "inst-a",
       roomId: "room-a",
-      joinGrant: "grant-a",
+      name: "Ada",
       storage,
       onMessage: vi.fn(),
       onSessionEnded,

@@ -15,7 +15,7 @@ is authored. Engineering work validates against the fake dev scenario
 | --- | --- |
 | Player cap | **30** (matches load-tested capacity) |
 | Position-question duration | **60 s** (`durationMs: 60000` per question) |
-| Lobby countdown | 10 s (as built, `DEFAULT_PHASE_ENGINE_POLICY`) |
+| Lobby start | Manual or operator-scheduled; joining never auto-starts from headcount |
 | Interactive-idle timeout | 180 s (as built) |
 | Max session duration | 30 min (as built) |
 | No-participant grace | 2 min (as built) |
@@ -23,7 +23,7 @@ is authored. Engineering work validates against the fake dev scenario
 | Live quadrant counts | **ON** (`showLiveCounts: true` per question) |
 | Late join | **LOBBY-ONLY** (`ALLOW_LATE_JOIN=false`; QR hides once a session starts; latecomers wait for the next idle/lobby) — enforced by STEP-035 |
 | Join rate limit | **30 attempts per source IP per 60 s** (assumes LAN deployment); revisit if the server moves behind a NAT/proxy — raise `maxAttempts` substantially or key differently |
-| QR rotation / grant validity / lease | 60 s / 120 s / 2 h (as built) |
+| Join URL / participant lease | Stable parameter-free URL / 2 h lease |
 | Counted statuses | `["valid", "stale", "disconnected"]` on every quadrant-plurality question (never-moved always excluded) |
 | Quadrant boundary convention | center→q4: `x=0.5`→right, `y=0.5`→bottom (shared `quadrantOf`, as implemented) |
 | New-question Studio defaults | the four values above (60 s, freeze 5000, live counts on, counted statuses valid+stale+disconnected) — wired in STEP-040 |

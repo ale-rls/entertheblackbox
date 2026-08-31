@@ -17,6 +17,14 @@ export type Status = {
     reportedAt: number;
   } | null;
   connectedParticipants: number;
+  participants: Array<{
+    clientId: string;
+    name: string;
+    color: string;
+    connected: boolean;
+    joinedAt: number;
+    lastSeenAt: number;
+  }>;
   sessionId: string | null;
   lifecycle: string | null;
   phaseId: string | null;
@@ -28,6 +36,7 @@ type ConfirmAction = "idle" | "restart";
 type PublishedShow = { showId: string; name: string; version: string; publishedAt: number };
 type ShowsInfo = { active: string | null; pending: string | null; shows: PublishedShow[] };
 type GhostsInfo = { active: number; pending: number | null };
+type LobbyInfo = { startTimes: number[]; nextStartAt: number | null; lifecycle: string | null };
 
 async function api(path: string, token: string, init?: RequestInit): Promise<Response> {
   const response = await fetch(`/api/admin/${path}`, {
@@ -128,6 +137,9 @@ export function App() {
   const [ghostsInfo, setGhostsInfo] = useState<GhostsInfo | null>(null);
   const [targetAudienceSize, setTargetAudienceSize] = useState("");
   const [savingGhosts, setSavingGhosts] = useState(false);
+  const [lobbyInfo, setLobbyInfo] = useState<LobbyInfo | null>(null);
+  const [newStartTime, setNewStartTime] = useState("");
+  const [savingLobby, setSavingLobby] = useState(false);
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
   const controlsHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -185,11 +197,23 @@ export function App() {
     }
   }, [connectedToken]);
 
+  const loadLobby = useCallback(async () => {
+    if (!connectedToken) return;
+    try {
+      const response = await api("lobby", connectedToken);
+      const info = await response.json() as LobbyInfo;
+      if (info && Array.isArray(info.startTimes)) setLobbyInfo(info);
+    } catch {
+      // Main status polling owns connection error reporting.
+    }
+  }, [connectedToken]);
+
   useEffect(() => {
     if (!connectedToken) return;
     void refresh();
     void loadShows();
     void loadGhosts();
+    void loadLobby();
     // shows/ghosts poll alongside status so these controls can't go stale
     // while this tab sits open -- selecting/typing a value that fell out
     // of date used to 400 instead of just re-populating.
@@ -197,9 +221,57 @@ export function App() {
       void refresh();
       void loadShows();
       void loadGhosts();
+      void loadLobby();
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [connectedToken, refresh, loadShows, loadGhosts]);
+  }, [connectedToken, refresh, loadShows, loadGhosts, loadLobby]);
+
+  const saveLobbyTimes = async (startTimes: number[], successMessage: string) => {
+    setSavingLobby(true);
+    setFeedback(null);
+    try {
+      await api("lobby", connectedToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startTimes }),
+      });
+      setFeedback({ status: "success", message: successMessage });
+      await Promise.all([loadLobby(), refresh()]);
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not update the lobby schedule." });
+    } finally {
+      setSavingLobby(false);
+    }
+  };
+
+  const addLobbyTime = async (event: FormEvent) => {
+    event.preventDefault();
+    const startAt = new Date(newStartTime).getTime();
+    if (!Number.isSafeInteger(startAt) || startAt <= Date.now()) {
+      setFeedback({ status: "danger", message: "Choose a future start time." });
+      return;
+    }
+    await saveLobbyTimes([...(lobbyInfo?.startTimes ?? []), startAt], "Start time added.");
+    setNewStartTime("");
+  };
+
+  const adjustLobby = async (deltaMs: -60000 | -10000 | 10000 | 60000) => {
+    setSavingLobby(true);
+    setFeedback(null);
+    try {
+      await api("lobby/adjust", connectedToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deltaMs }),
+      });
+      setFeedback({ status: "success", message: `Next start moved ${deltaMs > 0 ? "later" : "earlier"}.` });
+      await Promise.all([loadLobby(), refresh()]);
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not adjust the next start." });
+    } finally {
+      setSavingLobby(false);
+    }
+  };
 
   const saveShow = async (event: FormEvent) => {
     event.preventDefault();
@@ -372,6 +444,50 @@ export function App() {
             <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
             <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={!canReturnToIdle || busy} onClick={(event) => requestConfirmation("idle", event.currentTarget)}>Return to idle</button><span>Stop the current show</span></div>
           </div>
+        </section>
+
+        <section className="sc-tool-panel" aria-labelledby="admin-lobby-heading">
+          <div className="admin-section-heading">
+            <div><p className="sc-tool-eyebrow">Waiting room timing</p><h2 id="admin-lobby-heading">Lobby schedule</h2></div>
+            <StatusLabel status={lobbyInfo?.nextStartAt ? "info" : "warning"}>{lobbyInfo?.nextStartAt ? "Scheduled" : "Manual start"}</StatusLabel>
+          </div>
+          <div className="admin-next-start">
+            <span>Next start</span>
+            <strong>{lobbyInfo?.nextStartAt ? new Date(lobbyInfo.nextStartAt).toLocaleString([], { dateStyle: "medium", timeStyle: "medium" }) : "No automatic start"}</strong>
+          </div>
+          <div className="admin-time-adjustments" aria-label="Adjust next start time">
+            {([-60000, -10000, 10000, 60000] as const).map((delta) => (
+              <button key={delta} className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={savingLobby || !lobbyInfo?.nextStartAt} onClick={() => void adjustLobby(delta)}>
+                {delta < 0 ? "−" : "+"}{Math.abs(delta) === 60000 ? "1 min" : "10 sec"}
+              </button>
+            ))}
+          </div>
+          <form className="admin-connection-form admin-lobby-form" onSubmit={(event) => void addLobbyTime(event)}>
+            <label className="sc-tool-label" htmlFor="lobby-start-time">Add start time
+              <input id="lobby-start-time" className="sc-tool-field" type="datetime-local" step="1" value={newStartTime} onChange={(event) => setNewStartTime(event.target.value)} />
+            </label>
+            <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingLobby || !newStartTime}>{savingLobby ? "Saving…" : "Add"}</button>
+          </form>
+          {(lobbyInfo?.startTimes.length ?? 0) > 0 ? <ol className="admin-schedule-list">
+            {lobbyInfo!.startTimes.map((startAt, index) => <li key={startAt}>
+              <div><strong>{index === 0 ? "Next · " : ""}{new Date(startAt).toLocaleDateString([], { dateStyle: "medium" })}</strong><span>{new Date(startAt).toLocaleTimeString([], { timeStyle: "medium" })}</span></div>
+              <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={savingLobby} onClick={() => void saveLobbyTimes(lobbyInfo!.startTimes.filter((time) => time !== startAt), "Start time removed.")}>Remove</button>
+            </li>)}
+          </ol> : <p className="sc-tool-copy">The lobby waits until an operator presses Start show.</p>}
+        </section>
+
+        <section className="sc-tool-panel" aria-labelledby="admin-participants-heading">
+          <div className="admin-section-heading">
+            <div><p className="sc-tool-eyebrow">Who has joined</p><h2 id="admin-participants-heading">Participants</h2></div>
+            <span className="sc-tool-mono admin-section-count">{status.connectedParticipants} connected</span>
+          </div>
+          {status.participants.length === 0 ? <p className="sc-tool-copy">Nobody has joined this session yet.</p> : <ul className="admin-participant-list">
+            {status.participants.map((participant) => <li key={participant.clientId}>
+              <span className="admin-participant-color" style={{ backgroundColor: participant.color }} />
+              <div><strong>{participant.name}</strong><span>joined {new Date(participant.joinedAt).toLocaleTimeString([], { timeStyle: "short" })}</span></div>
+              <StatusLabel status={participant.connected ? "success" : "warning"}>{participant.connected ? "Connected" : "Disconnected"}</StatusLabel>
+            </li>)}
+          </ul>}
         </section>
 
 

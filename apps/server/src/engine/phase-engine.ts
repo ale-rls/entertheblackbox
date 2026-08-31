@@ -97,6 +97,11 @@ export type PhaseEngineOptions = {
   ghostPool?: GhostPool;
   /** Operator-set ghost fill cap (apps/admin) -- takes precedence over the published scenario's own targetAudienceSize when set. */
   targetAudienceSizeOverride?: number;
+  /** Absolute Unix timestamps for one-off automatic show starts. */
+  scheduledStartTimes?: readonly number[];
+  onLobbyScheduleChanged?: (startTimes: readonly number[]) => void;
+  /** Legacy/test compatibility; production disables participant-count auto-start. */
+  autoStartOnFirstParticipant?: boolean;
   qr?: Omit<QrGrantPushLoopOptions, "send" | "lifecycle" | "hasDisplay" | "now">;
 };
 
@@ -107,6 +112,15 @@ export type DisplayPlaybackIssue = {
   mediaId: string;
   detail: string | null;
   reportedAt: number;
+};
+
+export type ParticipantPresence = {
+  clientId: string;
+  name: string;
+  color: string;
+  connected: boolean;
+  joinedAt: number;
+  lastSeenAt: number;
 };
 
 function isOpen(socket: WebSocket): boolean {
@@ -159,6 +173,9 @@ export class PhaseEngine {
   private ratingStatusDirty = false;
   private lastRatingStatusAt: number | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private scheduledStartTimes: number[];
+  private readonly autoStartOnFirstParticipant: boolean;
+  private readonly onLobbyScheduleChanged: ((startTimes: readonly number[]) => void) | undefined;
 
   constructor(options: PhaseEngineOptions) {
     this.scenario = options.scenario;
@@ -170,6 +187,9 @@ export class PhaseEngine {
     this.policy = { ...DEFAULT_PHASE_ENGINE_POLICY, ...options.policy };
     this.now = options.now ?? (() => Date.now());
     this.sessionIdFactory = options.sessionIdFactory ?? (() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    this.scheduledStartTimes = this.normalizeStartTimes(options.scheduledStartTimes ?? []).filter((time) => time > this.now());
+    this.autoStartOnFirstParticipant = options.autoStartOnFirstParticipant ?? true;
+    this.onLobbyScheduleChanged = options.onLobbyScheduleChanged;
     this.onCheckpoint = options.onCheckpoint;
     this.onPhaseDeadline = options.onPhaseDeadline;
     this.onSessionEnded = options.onSessionEnded;
@@ -241,6 +261,42 @@ export class PhaseEngine {
 
   get currentDisplayPlaybackIssue(): DisplayPlaybackIssue | null {
     return this.displayPlaybackIssue;
+  }
+
+  get participantPresence(): ParticipantPresence[] {
+    return this.registry.values().map((participant) => ({
+      clientId: participant.clientId,
+      name: participant.name,
+      color: participant.color,
+      connected: participant.socket !== undefined && isOpen(participant.socket),
+      joinedAt: participant.joinedAt,
+      lastSeenAt: participant.lastSeenAt,
+    }));
+  }
+
+  get lobbyStartTimes(): readonly number[] {
+    return this.scheduledStartTimes;
+  }
+
+  get nextLobbyStartAt(): number | null {
+    return this.scheduledStartTimes[0] ?? null;
+  }
+
+  setLobbyStartTimes(startTimes: readonly number[], now = this.now()): TransitionResult {
+    this.scheduledStartTimes = this.normalizeStartTimes(startTimes).filter((time) => time > now);
+    this.syncLobbyDeadline(now, "lobby-schedule-updated");
+    return { ok: true };
+  }
+
+  adjustLobbyStart(deltaMs: number, now = this.now()): TransitionResult {
+    const next = this.scheduledStartTimes[0];
+    if (next === undefined || !Number.isSafeInteger(deltaMs) || deltaMs === 0) {
+      return { ok: false, reason: "wrong-phase" };
+    }
+    this.scheduledStartTimes[0] = Math.max(now + 1_000, next + deltaMs);
+    this.scheduledStartTimes = this.normalizeStartTimes(this.scheduledStartTimes);
+    this.syncLobbyDeadline(now, "lobby-time-adjusted");
+    return { ok: true };
   }
 
   adminStart(now = this.now()): TransitionResult {
@@ -338,7 +394,10 @@ export class PhaseEngine {
 
   tick(now = this.now()): void {
     this.expireStaleDisplay(now);
-    if (this.lifecycle === "idle") return;
+    if (this.lifecycle === "idle") {
+      if (this.displaySocket !== undefined && this.nextLobbyStartAt !== null) this.startLobby(now);
+      return;
+    }
 
     if (this.displaySocket === undefined) {
       this.displayDisconnectedAt ??= now;
@@ -350,7 +409,7 @@ export class PhaseEngine {
       this.displayDisconnectedAt = null;
     }
 
-    if (this.registry.connectedCount === 0) {
+    if ((this.lifecycle === "active" || this.autoStartOnFirstParticipant) && this.registry.connectedCount === 0) {
       this.noParticipantSince ??= now;
       if (now - this.noParticipantSince >= this.policy.noParticipantGraceMs) {
         this.abortToIdle("no-participants", now);
@@ -365,10 +424,11 @@ export class PhaseEngine {
         if (this.displaySocket !== undefined && this.registry.connectedCount > 0) {
           this.startSession(now);
         } else {
-          this.abortToIdle("lobby-precondition-lost", now);
+          this.consumeScheduledStart(this.deadlineAt);
+          this.syncLobbyDeadline(now, "lobby-start-missed");
         }
       }
-      if (this.lifecycle === "lobby" && this.interactiveIdleTimedOut(now)) {
+      if (this.lifecycle === "lobby" && this.autoStartOnFirstParticipant && this.interactiveIdleTimedOut(now)) {
         this.abortToIdle("interactive-idle-timeout", now);
         return;
       }
@@ -498,7 +558,7 @@ export class PhaseEngine {
       this.displayDisconnectedAt = this.now();
       this.displayHeartbeatAt = null;
     }
-    if (this.lifecycle === "lobby" && this.registry.connectedCount === 0) {
+    if (this.lifecycle === "lobby" && this.registry.connectedCount === 0 && this.nextLobbyStartAt === null) {
       this.abortToIdle("lobby-empty", this.now());
     }
   }
@@ -673,7 +733,7 @@ export class PhaseEngine {
     if (phase.kind === "video-position-question" && resolution !== null) {
       this.emitQuestionResolved(resolution, phase, this.now());
     }
-    if (this.lifecycle === "idle" && this.registry.connectedCount >= 1) {
+    if (this.lifecycle === "idle" && (this.registry.connectedCount >= 1 || this.nextLobbyStartAt !== null)) {
       this.startLobby(this.now());
     } else {
       this.qr?.push();
@@ -697,12 +757,16 @@ export class PhaseEngine {
   }
 
   private startLobby(now: number): void {
-    if (this.lifecycle !== "idle" || this.displaySocket === undefined || this.registry.connectedCount < 1) return;
+    if (
+      this.lifecycle !== "idle" ||
+      this.displaySocket === undefined ||
+      (this.registry.connectedCount < 1 && this.nextLobbyStartAt === null)
+    ) return;
     this.lifecycle = "lobby";
     this.sessionId = "lobby";
     this.phaseId = "idle";
     this.phaseStartedAt = now;
-    this.deadlineAt = now + this.policy.lobbyCountdownMs;
+    this.deadlineAt = this.nextLobbyStartAt ?? (this.autoStartOnFirstParticipant ? now + this.policy.lobbyCountdownMs : null);
     this.phaseEpoch += 1;
     this.sessionStartedAt = null;
     this.lastInputAt = now;
@@ -712,6 +776,7 @@ export class PhaseEngine {
   }
 
   private startSession(now: number): void {
+    if (this.deadlineAt !== null) this.consumeScheduledStart(this.deadlineAt);
     this.lifecycle = "active";
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
@@ -844,8 +909,30 @@ export class PhaseEngine {
 
   private interactiveIdleTimedOut(now: number): boolean {
     const kind = this.currentPhase().kind;
-    const interactive = this.lifecycle === "lobby" || kind === "position-question" || kind === "video-position-question";
+    const interactive = (this.lifecycle === "lobby" && this.autoStartOnFirstParticipant) || kind === "position-question" || kind === "video-position-question";
     return interactive && this.lastInputAt !== null && now - this.lastInputAt >= this.policy.interactiveIdleTimeoutMs;
+  }
+
+  private normalizeStartTimes(startTimes: readonly number[]): number[] {
+    return [...new Set(startTimes.filter((time) => Number.isSafeInteger(time) && time > 0))].sort((a, b) => a - b);
+  }
+
+  private consumeScheduledStart(startAt: number): void {
+    const updated = this.scheduledStartTimes.filter((time) => time !== startAt);
+    if (updated.length === this.scheduledStartTimes.length) return;
+    this.scheduledStartTimes = updated;
+    this.onLobbyScheduleChanged?.(this.scheduledStartTimes);
+  }
+
+  private syncLobbyDeadline(now: number, reason: string): void {
+    if (this.lifecycle === "active") return;
+    if (this.lifecycle === "idle") {
+      if (this.nextLobbyStartAt !== null && this.displaySocket !== undefined) this.startLobby(now);
+      return;
+    }
+    this.deadlineAt = this.nextLobbyStartAt;
+    this.deadlineNotified = false;
+    this.transition(reason);
   }
 
   private resolveQuestionAtDeadline(now: number, phase: Extract<Phase, { kind: "position-question" }>): void {

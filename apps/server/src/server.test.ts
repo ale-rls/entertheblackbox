@@ -124,6 +124,7 @@ async function joinParticipant(client: WebSocket, runtime: ServerRuntime): Promi
     clientVersion: "dev",
     installationId: runtime.config.installationId,
     roomId: runtime.config.roomId,
+    name: "Test participant",
     joinGrant: runtime.admission.issueJoinGrant().token,
   }));
   await identity;

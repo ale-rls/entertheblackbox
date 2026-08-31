@@ -8,6 +8,7 @@ import { PhaseEngine } from "./engine/phase-engine.js";
 import type { GhostPool } from "./ghosts/index.js";
 import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
 import { readServerConfigOverride, writeActiveShowId, writeTargetAudienceSize } from "./persistence/installation-config.js";
+import { writeLobbyStartTimes } from "./persistence/lobby-config.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 import { getLatestPublishedShow, listPublishedShows, loadScenarioReadiness, publishShow, type ScenarioReadiness } from "./readiness.js";
 import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
@@ -27,6 +28,7 @@ export type BuildServerOptions = {
   pocketbase?: PocketBaseClient;
   ghostPool?: GhostPool;
   targetAudienceSizeOverride?: number;
+  scheduledStartTimes?: readonly number[];
   verifyOperatorToken?: (token: string) => Promise<boolean>;
   maxWebSocketConnections?: number;
   webSocketKeepAliveIntervalMs?: number;
@@ -76,6 +78,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     secret: config.joinGrantSecret,
     trustProxy: config.trustProxy,
     buildVersion: config.buildVersion,
+    allowPublicJoin: true,
     isNewParticipantAllowed: () => config.allowLateJoin || engine?.lifecycleState !== "active",
     onClientMessage: (message, socket, request) => engine?.handleClientMessage(message, socket, request),
     onParticipantJoin: (participant, socket) => engine?.participantJoined(socket, participant),
@@ -95,6 +98,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       showId: readiness.showId,
       displayToken: config.displayToken,
       participantLeaseTtlMs: admission.participantLeaseTtlMs,
+      autoStartOnFirstParticipant: false,
       qr: {
         phoneJoinBaseUrl: config.phoneJoinBaseUrl,
         issueGrant: (now) => admission.issueJoinGrant(now),
@@ -108,6 +112,13 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       onMovementRecordingFinalized: (event) => adminData?.recordMovementFinalized?.(event),
       ...(options.ghostPool === undefined ? {} : { ghostPool: options.ghostPool }),
       ...(options.targetAudienceSizeOverride === undefined ? {} : { targetAudienceSizeOverride: options.targetAudienceSizeOverride }),
+      ...(options.scheduledStartTimes === undefined ? {} : { scheduledStartTimes: options.scheduledStartTimes }),
+      ...(options.pocketbase === undefined ? {} : {
+        onLobbyScheduleChanged: (startTimes: readonly number[]) => {
+          void writeLobbyStartTimes(options.pocketbase!, startTimes)
+            .catch((error: unknown) => app.log.error({ error }, "failed to persist consumed lobby start"));
+        },
+      }),
     });
     engine.start();
   }
@@ -130,6 +141,10 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     webSocketClients: webSockets.clients.size,
     startedAt,
     uptimeMs: Date.now() - startedAt,
+  }));
+  app.get("/api/join-config", async () => ({
+    installationId: config.installationId,
+    roomId: config.roomId,
   }));
   app.get("/api/phases", async (_request, reply) => {
     if (!readiness.ready) {
@@ -175,6 +190,9 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
           ?? (readiness.ready ? readiness.scenario.targetAudienceSize ?? 0 : 0),
         readPending: async () => (await readServerConfigOverride(options.pocketbase!))?.targetAudienceSize ?? null,
         write: (targetAudienceSize) => writeTargetAudienceSize(options.pocketbase!, targetAudienceSize),
+      },
+      lobbyConfig: {
+        write: (startTimes) => writeLobbyStartTimes(options.pocketbase!, startTimes),
       },
     }),
   });

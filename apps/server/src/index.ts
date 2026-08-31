@@ -7,6 +7,7 @@ import { PocketBaseClient } from "./persistence/pocketbase-client.js";
 import { readServerConfigOverride } from "./persistence/installation-config.js";
 import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
 import { loadGhostPool } from "./persistence/ghost-pool-loader.js";
+import { readLobbyStartTimes } from "./persistence/lobby-config.js";
 
 export * from "./config.js";
 export * from "./readiness.js";
@@ -104,8 +105,13 @@ async function boot(config: ServerConfig, pocketbase: PocketBaseClient): Promise
         return { tracks: [] };
       })
     : { tracks: [] };
+  const scheduledStartTimes = await readLobbyStartTimes(pocketbase)
+    .catch((error: unknown) => {
+      console.error("pocketbase: failed to load lobby schedule", error);
+      return [];
+    });
   const runtime = await buildServer({
-    config, readiness, adminData, pocketbase, ghostPool,
+    config, readiness, adminData, pocketbase, ghostPool, scheduledStartTimes,
     ...(override?.targetAudienceSize === undefined ? {} : { targetAudienceSizeOverride: override.targetAudienceSize }),
   });
   await listenWithCleanup(runtime.app, { host: config.host, port: config.port });

@@ -30,6 +30,7 @@ const activeStatus: Status = {
   displayHeartbeatAgeMs: 42,
   displayPlaybackIssue: null,
   connectedParticipants: 118,
+  participants: [],
   sessionId: "5H7D-A2",
   lifecycle: "active",
   phaseId: "question-02",

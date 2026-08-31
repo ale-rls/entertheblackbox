@@ -51,6 +51,9 @@ export type RegisterAdminOptions = {
     readPending: () => Promise<number | null>;
     write: (targetAudienceSize: number) => Promise<void>;
   };
+  lobbyConfig?: {
+    write: (startTimes: readonly number[]) => Promise<void>;
+  };
 };
 
 const INSTALLATION_ID_PATTERN = /^[A-Za-z0-9_-]{1,200}$/;
@@ -67,7 +70,8 @@ export type AdminRateLimiters = {
 };
 
 export const DEFAULT_ADMIN_RATE_LIMIT_POLICY: AdminRateLimitPolicy = {
-  // One dashboard makes about 60 requests/minute while polling every two seconds.
+  // One dashboard makes about 120 requests/minute while polling live status,
+  // shows, ghost settings, and the lobby schedule every two seconds.
   maxAuthenticatedRequests: 600,
   maxAuthenticationFailures: 30,
   windowMs: 60_000,
@@ -120,11 +124,52 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         displayHeartbeatAgeMs: engine?.displayHeartbeatAgeMs ?? null,
         displayPlaybackIssue: engine?.currentDisplayPlaybackIssue ?? null,
         connectedParticipants: engine?.connectedParticipantCount ?? 0,
+        participants: engine?.participantPresence ?? [],
         sessionId: engine?.currentSessionId ?? null,
         lifecycle: engine?.lifecycleState ?? null,
         phaseId: engine?.currentPhaseId ?? null,
         phaseEpoch: engine?.currentPhaseEpoch ?? null,
       };
+    });
+    admin.get("/lobby", async () => {
+      const engine = options.engine();
+      return {
+        startTimes: engine?.lobbyStartTimes ?? [],
+        nextStartAt: engine?.nextLobbyStartAt ?? null,
+        lifecycle: engine?.lifecycleState ?? null,
+      };
+    });
+    admin.post<{ Body: { startTimes?: unknown } }>("/lobby", async (request, reply) => {
+      const engine = options.engine();
+      if (engine === null) return reply.code(503).send({ error: "engine_unavailable" });
+      const { startTimes } = request.body ?? {};
+      if (
+        !Array.isArray(startTimes) || startTimes.length > 50 ||
+        !startTimes.every((time) => typeof time === "number" && Number.isSafeInteger(time) && time > now())
+      ) {
+        return reply.code(400).send({ error: "invalid_start_times" });
+      }
+      const normalized = [...new Set(startTimes)].sort((a, b) => a - b);
+      await options.lobbyConfig?.write(normalized);
+      const result = engine.setLobbyStartTimes(normalized, now());
+      options.data?.audit({ action: "set-lobby-start-times", at: new Date().toISOString(), detail: { startTimes: normalized } });
+      return { ...result, startTimes: engine.lobbyStartTimes, nextStartAt: engine.nextLobbyStartAt };
+    });
+    admin.post<{ Body: { deltaMs?: unknown } }>("/lobby/adjust", async (request, reply) => {
+      const engine = options.engine();
+      if (engine === null) return reply.code(503).send({ error: "engine_unavailable" });
+      const { deltaMs } = request.body ?? {};
+      if (typeof deltaMs !== "number" || ![-60_000, -10_000, 10_000, 60_000].includes(deltaMs)) {
+        return reply.code(400).send({ error: "invalid_adjustment" });
+      }
+      const next = engine.nextLobbyStartAt;
+      if (next === null) return reply.code(409).send({ ok: false, reason: "wrong-phase" });
+      const adjusted = Math.max(now() + 1_000, next + deltaMs);
+      const updated = [adjusted, ...engine.lobbyStartTimes.slice(1)].sort((a, b) => a - b);
+      await options.lobbyConfig?.write(updated);
+      engine.setLobbyStartTimes(updated, now());
+      options.data?.audit({ action: "adjust-lobby-start", at: new Date().toISOString(), detail: { deltaMs, nextStartAt: engine.nextLobbyStartAt } });
+      return { ok: true, startTimes: engine.lobbyStartTimes, nextStartAt: engine.nextLobbyStartAt };
     });
     admin.get("/errors", async () => ({ errors: await options.data?.recentErrors() ?? [] }));
     admin.get("/shows", async (_request, reply) => {

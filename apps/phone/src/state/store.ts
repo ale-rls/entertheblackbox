@@ -12,6 +12,7 @@ import type {
  */
 
 export type JoinState =
+  | { kind: "ready" }
   | { kind: "connecting" }
   | { kind: "joining" }
   | { kind: "accepted"; identity: IdentityMessage }
@@ -32,7 +33,7 @@ export type PhoneState = {
 };
 
 export const initialPhoneState: PhoneState = {
-  join: { kind: "connecting" },
+  join: { kind: "ready" },
   sessionId: null,
   phaseEpoch: -1,
   inputOpen: false,
@@ -46,9 +47,11 @@ export type PhoneAction =
   | { type: "server-message"; message: ServerToClientMessage }
   | { type: "socket-open" }
   | { type: "socket-lost" }
-  | { type: "session-ended" };
+  | { type: "session-ended" }
+  | { type: "reset" };
 
 export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState {
+  if (action.type === "reset") return initialPhoneState;
   if (action.type === "socket-open") {
     return { ...state, join: { kind: "joining" } };
   }

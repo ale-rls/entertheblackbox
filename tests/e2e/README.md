@@ -10,7 +10,7 @@ design; expect ~2 minutes.
 | Acceptance item | Spec |
 | --- | --- |
 | Full scenario: join → lobby → video → both question kinds → idle | `full-flow.spec.ts` |
-| Expired grant rejected with a visible state | `full-flow.spec.ts` |
+| Stable parameter-free join URL and named join form | `full-flow.spec.ts` |
 | Server kill mid-session: display self-reconnects, idle attract returns, fresh phone can join | `reliability.spec.ts` |
 | Display kill mid-session: abort to idle after display-disconnect timeout, replacement display recovers | `reliability.spec.ts` |
 | Second display replaces the first; old kiosk shows a prominent notice | `reliability.spec.ts` |
