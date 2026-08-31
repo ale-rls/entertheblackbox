@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { PhaseSnapshotMessage } from "@smartphonecracy/protocol";
 import { ServerClock } from "../lib/serverClock.js";
-import { LobbyCountdown } from "./LobbyCountdown.js";
+import { formatLobbyCountdown, LobbyCountdown } from "./LobbyCountdown.js";
 
 const idlePhase = (deadlineAt: number | null): PhaseSnapshotMessage => ({
   kind: "idle",
@@ -13,38 +13,29 @@ const idlePhase = (deadlineAt: number | null): PhaseSnapshotMessage => ({
 });
 
 describe("LobbyCountdown", () => {
-  it("renders the start time and URL but hides a distant countdown", () => {
+  it("always renders a distant countdown in hours, minutes, and seconds", () => {
     const clock = new ServerClock();
     const lobby = renderToStaticMarkup(
       <LobbyCountdown
         sessionId="lobby"
-        phase={idlePhase(Date.now() + 60_000)}
+        phase={idlePhase(Date.now() + 3_661_000)}
         clock={clock}
         joinUrl="https://join.example/phone/"
       />,
     );
-    expect(lobby).toContain("Show starts at");
+    expect(lobby).toContain("01:01:01");
     expect(lobby).toContain("https://join.example/phone/");
-    expect(lobby).not.toContain("lobby-final-countdown");
+    expect(lobby).not.toContain("Show starts at");
 
     expect(renderToStaticMarkup(
       <LobbyCountdown sessionId="idle" phase={idlePhase(null)} clock={clock} joinUrl={null} />,
     )).toBe("");
   });
 
-  it("shows only the final ten seconds at the top", () => {
-    const clock = new ServerClock();
-    const lobby = renderToStaticMarkup(
-      <LobbyCountdown
-        sessionId="lobby"
-        phase={idlePhase(Date.now() + 10_000)}
-        clock={clock}
-        joinUrl={null}
-      />,
-    );
-    expect(lobby).toContain('class="lobby-final-countdown"');
-    expect(lobby).toContain(">10<");
-    expect(lobby).toContain("seconds");
+  it("formats zero-padded durations and floors expired deadlines at zero", () => {
+    expect(formatLobbyCountdown(10_000)).toBe("00:00:10");
+    expect(formatLobbyCountdown(3_661_000)).toBe("01:01:01");
+    expect(formatLobbyCountdown(-1)).toBe("00:00:00");
   });
 
   it("keeps the join URL visible in a manual lobby without a deadline", () => {
@@ -57,6 +48,6 @@ describe("LobbyCountdown", () => {
       />,
     );
     expect(lobby).toContain("https://join.example/phone/");
-    expect(lobby).not.toContain("Show starts at");
+    expect(lobby).not.toContain("lobby-countdown");
   });
 });

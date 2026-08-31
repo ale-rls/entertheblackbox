@@ -173,39 +173,20 @@ html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflo
   inset: 0;
   pointer-events: none;
 }
-.lobby-start-time {
+.lobby-countdown {
   position: absolute;
   top: clamp(1.25rem, 4vh, 3rem);
   left: 50%;
-  display: flex;
   width: min(78vw, 70rem);
-  flex-direction: column;
-  align-items: center;
   transform: translateX(-50%);
   color: rgb(255 255 255 / 70%);
-  line-height: 1.08;
+  font-size: clamp(2.25rem, 5vw, 4.5rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
   text-align: center;
   text-shadow: 0 2px 12px rgb(0 0 0 / 72%);
 }
-.lobby-start-time > span { font-size: clamp(1rem, 1.75vw, 1.6rem); }
-.lobby-start-time time {
-  margin-block-start: .25rem;
-  font-size: clamp(1.25rem, 2.7vw, 2.5rem);
-  font-weight: 700;
-}
-.lobby-final-countdown {
-  display: flex;
-  align-items: baseline;
-  gap: .55rem;
-  margin-block-start: .55rem;
-}
-.lobby-final-countdown strong {
-  font-size: clamp(2.25rem, 5vw, 4.5rem);
-  font-weight: 700;
-  line-height: .9;
-  font-variant-numeric: tabular-nums;
-}
-.lobby-final-countdown span { font-size: clamp(.9rem, 1.5vw, 1.25rem); }
 .lobby-join-url {
   position: absolute;
   right: 1rem;

@@ -2,25 +2,30 @@ import { useEffect, useState } from "react";
 import type { PhaseSnapshotMessage } from "@smartphonecracy/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 
-const FINAL_COUNTDOWN_SECONDS = 10;
+export function formatLobbyCountdown(remainingMs: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(remainingMs / 1_000));
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds]
+    .map((part) => String(part).padStart(2, "0"))
+    .join(":");
+}
 
-function FinalCountdown({ clock, deadlineAt }: { clock: ServerClock; deadlineAt: number }) {
-  const getSeconds = () => Math.ceil(clock.remainingUntil(deadlineAt) / 1_000);
-  const [seconds, setSeconds] = useState(getSeconds);
+function LobbyClock({ clock, deadlineAt }: { clock: ServerClock; deadlineAt: number }) {
+  const getRemaining = () => formatLobbyCountdown(clock.remainingUntil(deadlineAt));
+  const [remaining, setRemaining] = useState(getRemaining);
 
   useEffect(() => {
-    const update = () => setSeconds(getSeconds());
+    const update = () => setRemaining(getRemaining());
     update();
     const timer = setInterval(update, 250);
     return () => clearInterval(timer);
   }, [clock, deadlineAt]);
 
-  if (seconds > FINAL_COUNTDOWN_SECONDS) return null;
-
   return (
-    <div className="lobby-final-countdown" aria-live="polite">
-      <strong>{seconds}</strong>
-      <span>seconds</span>
+    <div className="lobby-countdown" aria-label="Time until show starts" aria-live="polite">
+      {remaining}
     </div>
   );
 }
@@ -45,13 +50,7 @@ export function LobbyCountdown({
   return (
     <div className="lobby-information">
       {phase.deadlineAt !== null && (
-        <div className="lobby-start-time">
-          <span>Show starts at</span>
-          <time dateTime={new Date(phase.deadlineAt).toISOString()}>
-            {new Date(phase.deadlineAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}
-          </time>
-          <FinalCountdown clock={clock} deadlineAt={phase.deadlineAt} />
-        </div>
+        <LobbyClock clock={clock} deadlineAt={phase.deadlineAt} />
       )}
       {joinUrl !== null && (
         <div className="lobby-join-url" aria-label="Phone join URL">{joinUrl}</div>

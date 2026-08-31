@@ -21,7 +21,7 @@ import { drawTrackedQr } from "../idle/tracking.js";
 const CHECK_INTERVAL_MS = 1000;
 const QR_RENDER_SIZE_PX = 512;
 const bundledIdleAttractUrls = Object.entries(import.meta.glob<string>(
-  "../assets/idle-attract*.mp4",
+  "../assets/*.mp4",
   { eager: true, query: "?url", import: "default" },
 ))
   .sort(([left], [right]) => left.localeCompare(right))

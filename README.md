@@ -122,7 +122,7 @@ Keep the authenticated display open on the Mac as above, then scan its QR code. 
 
 The display prints `PHONE_JOIN_BASE_URL` at the bottom of the lobby by default and keeps a corner QR available during active play for late joining. Set `SHOW_PHONE_JOIN_BASE_URL=false` to hide the printed URL or `ALLOW_LATE_JOIN=false` to restore lobby-only admission.
 
-The onboarding attract playlist automatically bundles every MP4 matching `apps/display/src/assets/idle-attract*.mp4`. Add files such as `idle-attract-2.mp4` and `idle-attract-3.mp4`; the display chooses clips randomly and never plays the same clip twice in a row. With one matching file, that file loops normally. The perspective QR tracking data is shared, so added clips should preserve the original QR-marker composition and timing.
+The onboarding attract playlist automatically bundles every MP4 in `apps/display/src/assets/`. The display chooses clips randomly and never plays the same clip twice in a row. With one MP4, that file loops normally. The perspective QR tracking data is shared, so added clips should preserve the original QR-marker composition and timing.
 
 To run `showtest1` and accept physical phones at the same time, combine both sets of environment variables:
 
