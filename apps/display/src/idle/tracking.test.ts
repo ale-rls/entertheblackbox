@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MARKER_TRACK, MARKER_TRACK_FPS } from "./markerTrack.js";
+import type { MarkerTrack } from "./markerTrack.js";
 import {
   drawTrackedQr,
   scaleQuad,
@@ -21,6 +22,21 @@ describe("trackedQuadAt", () => {
       (value, index) => value + (second[index]! - value) / 2,
     );
     halfway.forEach((value, index) => expect(value).toBeCloseTo(expected[index]!));
+  });
+
+  it("uses the selected video's frames and fps", () => {
+    const track: MarkerTrack = {
+      fps: 10,
+      width: 100,
+      height: 100,
+      frames: [
+        [0, 0, 10, 0, 10, 10, 0, 10],
+        [10, 10, 20, 10, 20, 20, 10, 20],
+      ],
+    };
+    trackedQuadAt(0.05, track).flat().forEach((value, index) => {
+      expect(value).toBeCloseTo([5, 5, 15, 5, 15, 15, 5, 15][index]!);
+    });
   });
 
   it("wraps exactly with the looping video", () => {

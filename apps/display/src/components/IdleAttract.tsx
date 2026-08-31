@@ -3,10 +3,8 @@ import QRCode from "qrcode";
 import type { QrGrantMessage } from "@smartphonecracy/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 import { shouldShowGrant } from "../qr/shouldShowGrant.js";
-import {
-  MARKER_TRACK_HEIGHT,
-  MARKER_TRACK_WIDTH,
-} from "../idle/markerTrack.js";
+import { ORIGINAL_MARKER_TRACK, type MarkerTrack } from "../idle/markerTrack.js";
+import { MARKER_TRACKS_BY_FILENAME } from "../idle/markerTracks.js";
 import {
   TRACKED_QR_ERROR_CORRECTION_LEVEL,
   TRACKED_QR_MARGIN_MODULES,
@@ -20,18 +18,23 @@ import { drawTrackedQr } from "../idle/tracking.js";
 
 const CHECK_INTERVAL_MS = 1000;
 const QR_RENDER_SIZE_PX = 512;
-const bundledIdleAttractUrls = Object.entries(import.meta.glob<string>(
+type AttractVideo = { url: string; markerTrack: MarkerTrack | null };
+
+const bundledIdleAttractVideos: readonly AttractVideo[] = Object.entries(import.meta.glob<string>(
   "../assets/*.mp4",
   { eager: true, query: "?url", import: "default" },
 ))
   .sort(([left], [right]) => left.localeCompare(right))
-  .map(([, url]) => url);
+  .map(([path, url]) => {
+    const filename = path.split("/").at(-1)!;
+    return { url, markerTrack: MARKER_TRACKS_BY_FILENAME[filename] ?? null };
+  });
 
 export function IdleAttract({
   grant,
   qrHidden,
   clock,
-  videoUrls = bundledIdleAttractUrls,
+  videoUrls,
   random = Math.random,
 }: {
   grant: QrGrantMessage | null;
@@ -40,10 +43,15 @@ export function IdleAttract({
   videoUrls?: readonly string[];
   random?: RandomSource;
 }) {
+  const videos: readonly AttractVideo[] = videoUrls === undefined
+    ? bundledIdleAttractVideos
+    : videoUrls.map((url) => ({ url, markerTrack: ORIGINAL_MARKER_TRACK }));
   const [activeVideoIndex, setActiveVideoIndex] = useState(() =>
-    pickInitialAttractIndex(videoUrls.length, random),
+    pickInitialAttractIndex(videos.length, random),
   );
-  const activeVideoUrl = videoUrls[activeVideoIndex] ?? videoUrls[0];
+  const activeVideo = videos[activeVideoIndex] ?? videos[0];
+  const activeVideoUrl = activeVideo?.url;
+  const activeMarkerTrack = activeVideo?.markerTrack ?? null;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
   const [qrCanvas, setQrCanvas] = useState<HTMLCanvasElement | null>(null);
@@ -104,7 +112,9 @@ export function IdleAttract({
 
     const draw = (mediaTime: number) => {
       context.clearRect(0, 0, overlay.width, overlay.height);
-      if (visible && qrCanvas !== null) drawTrackedQr(context, qrCanvas, mediaTime);
+      if (visible && qrCanvas !== null && activeMarkerTrack !== null) {
+        drawTrackedQr(context, qrCanvas, mediaTime, activeMarkerTrack);
+      }
     };
 
     if (typeof video.requestVideoFrameCallback === "function") {
@@ -130,11 +140,11 @@ export function IdleAttract({
       if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
       context.clearRect(0, 0, overlay.width, overlay.height);
     };
-  }, [activeVideoUrl, qrCanvas, visible]);
+  }, [activeMarkerTrack, activeVideoUrl, qrCanvas, visible]);
 
   const playNextVideo = () => {
     setActiveVideoIndex((current) =>
-      pickNextAttractIndex(current, videoUrls.length, random),
+      pickNextAttractIndex(current, videos.length, random),
     );
   };
 
@@ -146,17 +156,17 @@ export function IdleAttract({
         className="idle-attract-video"
         src={activeVideoUrl}
         autoPlay
-        loop={videoUrls.length <= 1}
+        loop={videos.length <= 1}
         muted
         playsInline
         preload="auto"
-        onEnded={videoUrls.length > 1 ? playNextVideo : undefined}
+        onEnded={videos.length > 1 ? playNextVideo : undefined}
       />
       <canvas
         ref={overlayRef}
         className="idle-attract-overlay"
-        width={MARKER_TRACK_WIDTH}
-        height={MARKER_TRACK_HEIGHT}
+        width={activeMarkerTrack?.width ?? ORIGINAL_MARKER_TRACK.width}
+        height={activeMarkerTrack?.height ?? ORIGINAL_MARKER_TRACK.height}
         aria-label="Join QR code"
       />
     </div>
