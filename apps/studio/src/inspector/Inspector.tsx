@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { StudioProject } from "@smartphonecracy/studio-adapter";
-import { compiledJson, phaseIdError, type AuthorablePhaseKind, type Phase } from "./model.js";
+import { compiledJson, componentTypeForPhase, phaseIdError, type AuthorableComponentType, type Phase } from "./model.js";
 import { PolygonEditor, type PolygonEditorMedia } from "./PolygonEditor.js";
 import { ArenaEllipseEditor, PLATE_A_ARENA_PRESET } from "./ArenaEllipseEditor.js";
 import { TimingTimeline } from "./TimingTimeline.js";
@@ -13,7 +13,7 @@ type Props = {
   onRename: (nextId: string) => void;
   onChange: (phase: Phase) => void;
   onChooseMedia: (phaseId: string, target: "src" | "audioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
-  onKindChange: (kind: AuthorablePhaseKind, trigger: HTMLSelectElement) => void;
+  onComponentTypeChange: (type: AuthorableComponentType, trigger: HTMLSelectElement) => void;
   onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
   onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", trigger: HTMLSelectElement) => void;
   onTargetAudienceSizeChange: (value: number) => void;
@@ -24,7 +24,7 @@ const numberValue = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export function Inspector({ project, selectedId, localMedia, onRename, onChange, onChooseMedia, onKindChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange }: Props) {
+export function Inspector({ project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   useEffect(() => setIdInput(phase?.id ?? ""), [phase?.id]);
@@ -61,26 +61,16 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2>
     <label className="sc-tool-label">{label("Runtime ID", "id")}<input className="sc-tool-field" aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
-    {phase.kind !== "idle" && <label className="sc-tool-label">{label("Phase type", "kind")}<select className="sc-tool-select" value={phase.kind} onChange={(event) => onKindChange(event.target.value as AuthorablePhaseKind, event.currentTarget)}><option value="video">Timed media</option><option value="position-question">Position question</option><option value="video-position-question">Timed media + position vote</option></select></label>}
+    {phase.kind !== "idle" && <label className="sc-tool-label">{label("Component type", "kind + media")}<select className="sc-tool-select" value={componentTypeForPhase(phase)} onChange={(event) => onComponentTypeChange(event.target.value as AuthorableComponentType, event.currentTarget)}>
+      <option value="video">Video</option>
+      <option value="image-audio">Still image + MP3</option>
+      <option value="position-question">Position question</option>
+      <option value="video-position-question">Video + position vote</option>
+      <option value="image-audio-position-question">Still image + MP3 + position vote</option>
+    </select></label>}
     {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
     {(phase.kind === "video" || phase.kind === "video-position-question") && <>
       {text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
-      <label className="sc-tool-label">{label("Playback format", "src + audioSrc")}<select className="sc-tool-select" value={phase.audioSrc === undefined ? "video" : "image-audio"} onChange={(event) => {
-        if (event.target.value === "video") {
-          const current = studioMediaKindForSource(phase.src) === "video" ? phase.src : localMedia.find((file) => studioMediaKindForSource(file.src) === "video")?.src ?? "media/new-video.mp4";
-          const expectedDurationMs = localMedia.find((file) => file.src === current)?.durationMs ?? phase.expectedDurationMs;
-          onChange({ ...phase, src: current, audioSrc: undefined, tailDurationMs: undefined, expectedDurationMs });
-          return;
-        }
-        const image = studioMediaKindForSource(phase.src) === "image" ? phase.src : localMedia.find((file) => studioMediaKindForSource(file.src) === "image")?.src ?? "media/new-image.jpg";
-        const audio = phase.audioSrc ?? localMedia.find((file) => studioMediaKindForSource(file.src) === "audio")?.src ?? "media/new-audio.mp3";
-        const tailDurationMs = phase.tailDurationMs ?? (phase.kind === "video-position-question" ? 25_000 : 1_000);
-        const mediaDurationMs = localMedia.find((file) => file.src === audio)?.durationMs ?? phase.expectedDurationMs;
-        const expectedDurationMs = mediaDurationMs + tailDurationMs;
-        onChange(phase.kind === "video-position-question"
-          ? { ...phase, src: image, audioSrc: audio, tailDurationMs, expectedDurationMs, showAtMs: mediaDurationMs, openAtMs: mediaDurationMs, closeAtMs: mediaDurationMs + Math.max(1, Math.floor(tailDurationMs * .8)), hideAtMs: expectedDurationMs }
-          : { ...phase, src: image, audioSrc: audio, tailDurationMs, expectedDurationMs });
-      }}><option value="video">Video</option><option value="image-audio">Still image + MP3</option></select></label>
       {phase.audioSrc === undefined
         ? mediaPicker("Video", "src", phase.src, "video")
         : <>{mediaPicker("Still image", "src", phase.src, "image")}{mediaPicker("MP3 audio", "audioSrc", phase.audioSrc, "audio")}</>}

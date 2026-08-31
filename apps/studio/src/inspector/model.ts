@@ -3,6 +3,30 @@ import { compileStudioGraph, type StudioProject } from "@smartphonecracy/studio-
 export type Phase = StudioProject["scenario"]["phases"][number];
 export type PhaseKind = Phase["kind"];
 export type AuthorablePhaseKind = Exclude<PhaseKind, "idle">;
+export type AuthorableComponentType =
+  | "video"
+  | "image-audio"
+  | "position-question"
+  | "video-position-question"
+  | "image-audio-position-question";
+
+export function componentTypeForPhase(phase: Phase): AuthorableComponentType | "idle" {
+  if (phase.kind === "idle" || phase.kind === "position-question") return phase.kind;
+  if (phase.kind === "video-position-question") {
+    return phase.audioSrc === undefined ? "video-position-question" : "image-audio-position-question";
+  }
+  return phase.audioSrc === undefined ? "video" : "image-audio";
+}
+
+export function phaseKindForComponentType(type: AuthorableComponentType): AuthorablePhaseKind {
+  if (type === "image-audio") return "video";
+  if (type === "image-audio-position-question") return "video-position-question";
+  return type;
+}
+
+export function isImageAudioComponentType(type: AuthorableComponentType): boolean {
+  return type === "image-audio" || type === "image-audio-position-question";
+}
 
 export const QUESTION_DEFAULTS = {
   durationMs: 60_000,

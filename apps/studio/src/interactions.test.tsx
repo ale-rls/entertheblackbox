@@ -312,15 +312,41 @@ describe("Studio feedback and keyboard entry", () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("voice.mp3");
     await act(async () => { button("Cancel").click(); });
 
-    const playbackFormat = Array.from(document.querySelectorAll("label"))
-      .find((label) => label.textContent?.includes("Playback format"))
+    const componentType = Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("Component type"))
       ?.querySelector<HTMLSelectElement>("select")!;
-    expect(playbackFormat.value).toBe("image-audio");
+    expect(componentType.value).toBe("image-audio");
+    expect(Array.from(componentType.options).map((option) => option.value)).toEqual([
+      "video",
+      "image-audio",
+      "position-question",
+      "video-position-question",
+      "image-audio-position-question",
+    ]);
 
     expect(document.body.textContent).toContain("portrait.png");
     expect(document.body.textContent).toContain("voice.mp3");
     expect(document.body.textContent).toContain("Tail after audio (ms)");
     expect(document.body.textContent).toContain("total with tail: 13.000 seconds");
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(componentType, "video");
+      componentType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(componentType.value).toBe("video");
+    expect(document.body.textContent).toContain("opening.mp4");
+    expect(document.body.textContent).not.toContain("Tail after audio (ms)");
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(componentType, "image-audio");
+      componentType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(componentType.value).toBe("image-audio");
+    expect(document.body.textContent).toContain("portrait.png");
+    expect(document.body.textContent).toContain("voice.mp3");
+    expect(document.body.textContent).toContain("total with tail: 13.000 seconds");
+
     const tailInput = Array.from(document.querySelectorAll("label"))
       .find((label) => label.textContent?.includes("Tail after audio (ms)"))
       ?.querySelector<HTMLInputElement>("input")!;
@@ -344,6 +370,46 @@ describe("Studio feedback and keyboard entry", () => {
     expect(document.body.textContent).toContain("Audio duration: 25.000 seconds");
     expect(document.body.textContent).toContain("total with tail: 28.000 seconds");
     expect(document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"]')?.textContent).toContain("alternate.mp3");
+  });
+
+  it("converts between structural component types through the same selector", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "opening.mp4", bytes: 1_000, hash: "video", durationMs: 5_000 },
+      { src: "portrait.png", bytes: 2_000, hash: "image" },
+      { src: "voice.mp3", bytes: 3_000, hash: "voice", durationMs: 12_000 },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Video phase").click(); });
+    await act(async () => { button("Cancel").click(); });
+
+    const componentType = Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("Component type"))
+      ?.querySelector<HTMLSelectElement>("select")!;
+    expect(componentType.value).toBe("video");
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(componentType, "position-question");
+      componentType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => { button("Change component type").click(); });
+    await flush();
+    expect(componentType.value).toBe("position-question");
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(componentType, "image-audio");
+      componentType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const confirmation = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+    expect(confirmation.textContent).toContain("from position question to still image + MP3");
+    await act(async () => { button("Change component type").click(); });
+    await flush();
+
+    expect(componentType.value).toBe("image-audio");
+    expect(document.body.textContent).toContain("portrait.png");
+    expect(document.body.textContent).toContain("voice.mp3");
+    expect(document.body.textContent).toContain("total with tail: 13.000 seconds");
   });
 
   it("edits image + MP3 vote timing relative to the audio tail", async () => {

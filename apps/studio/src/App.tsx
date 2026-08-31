@@ -8,7 +8,7 @@ import { exportArtifacts, exportBackup, importRuntime, importStudioFiles } from 
 import { autoLayout, type Draft } from "./model.js";
 import { applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, phaseOutputHandles, pruneEdges, reconcilePhaseOutputEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./canvas/graph.js";
 import { nodeDataForPhase, nodeTypes } from "./canvas/nodes.js";
-import { changePhaseKind, renamePhase, type AuthorablePhaseKind, type Phase } from "./inspector/model.js";
+import { changePhaseKind, componentTypeForPhase, isImageAudioComponentType, phaseKindForComponentType, renamePhase, type AuthorableComponentType, type Phase } from "./inspector/model.js";
 import { Inspector } from "./inspector/Inspector.js";
 import { SessionHistory } from "./inspector/history.js";
 import { DiagnosticsPanel } from "./diagnostics/DiagnosticsPanel.js";
@@ -35,6 +35,14 @@ const download = (name: string, value: unknown) => {
 };
 
 type InlineFeedback = { status: "info" | "success" | "danger"; message: string };
+
+const componentTypeLabel: Record<AuthorableComponentType, string> = {
+  video: "video",
+  "image-audio": "still image + MP3",
+  "position-question": "position question",
+  "video-position-question": "video + position vote",
+  "image-audio-position-question": "still image + MP3 + position vote",
+};
 
 declare const __POCKETBASE_URL__: string;
 const POCKETBASE_URL = __POCKETBASE_URL__;
@@ -494,37 +502,78 @@ export function App() {
     setNodes((current) => current.map((node) => node.id === selectedId ? { ...node, id: nextId, data: { ...node.data, label: nextId } } : node));
     setSelectedId(nextId);
   };
-  const changeSelectedKind = (kind: AuthorablePhaseKind, trigger: HTMLSelectElement) => {
+  const changeSelectedComponentType = (componentType: AuthorableComponentType, trigger: HTMLSelectElement) => {
     if (!draft || !selectedId) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === selectedId);
-    if (!phase || phase.kind === kind) return;
-    const phaseKind = phase.kind === "position-question" ? "position question" : phase.kind === "video-position-question" ? "timed media + position vote" : "timed media";
-    const nextKind = kind === "position-question" ? "position question" : kind === "video-position-question" ? "timed media + position vote" : "timed media";
+    if (!phase) return;
+    const currentComponentType = componentTypeForPhase(phase);
+    if (phase.kind === "idle" || currentComponentType === "idle" || currentComponentType === componentType) return;
+    const kind = phaseKindForComponentType(componentType);
+    const convertPlaybackFormat = (mediaPhase: Extract<Phase, { kind: "video" | "video-position-question" }>) => {
+      if (!isImageAudioComponentType(componentType)) {
+        const video = studioMediaKindForSource(mediaPhase.src) === "video"
+          ? mediaPhase.src
+          : draft.project.manifest.files.find((file) => studioMediaKindForSource(file.src) === "video")?.src ?? "media/new-video.mp4";
+        const expectedDurationMs = localManifest?.files.find((file) => file.src === video)?.durationMs ?? mediaPhase.expectedDurationMs;
+        if (mediaPhase.kind === "video") {
+          return { ...mediaPhase, src: video, audioSrc: undefined, tailDurationMs: undefined, expectedDurationMs };
+        }
+        return {
+          ...mediaPhase,
+          src: video,
+          audioSrc: undefined,
+          tailDurationMs: undefined,
+          expectedDurationMs,
+          showAtMs: Math.floor(expectedDurationMs * .25),
+          openAtMs: Math.floor(expectedDurationMs * .3),
+          closeAtMs: Math.max(Math.floor(expectedDurationMs * .3) + 1, Math.floor(expectedDurationMs * .75)),
+          hideAtMs: Math.max(Math.floor(expectedDurationMs * .75), Math.floor(expectedDurationMs * .875)),
+        };
+      }
+      const image = studioMediaKindForSource(mediaPhase.src) === "image"
+        ? mediaPhase.src
+        : draft.project.manifest.files.find((file) => studioMediaKindForSource(file.src) === "image")?.src ?? "media/new-image.jpg";
+      const audio = mediaPhase.audioSrc
+        ?? draft.project.manifest.files.find((file) => studioMediaKindForSource(file.src) === "audio")?.src
+        ?? "media/new-audio.mp3";
+      const tailDurationMs = mediaPhase.tailDurationMs ?? (mediaPhase.kind === "video-position-question" ? 25_000 : 1_000);
+      const mediaDurationMs = localManifest?.files.find((file) => file.src === audio)?.durationMs
+        ?? Math.max(1, mediaPhase.expectedDurationMs - (mediaPhase.tailDurationMs ?? 0));
+      const expectedDurationMs = mediaDurationMs + tailDurationMs;
+      if (mediaPhase.kind === "video") {
+        return { ...mediaPhase, src: image, audioSrc: audio, tailDurationMs, expectedDurationMs };
+      }
+      return {
+        ...mediaPhase,
+        src: image,
+        audioSrc: audio,
+        tailDurationMs,
+        expectedDurationMs,
+        showAtMs: mediaDurationMs,
+        openAtMs: mediaDurationMs,
+        closeAtMs: mediaDurationMs + Math.max(1, Math.floor(tailDurationMs * .8)),
+        hideAtMs: expectedDurationMs,
+      };
+    };
+    if (phase.kind === kind && (phase.kind === "video" || phase.kind === "video-position-question")) {
+      updatePhase(convertPlaybackFormat(phase));
+      setGraphFeedback({ status: "success", message: `Changed ${phase.id} to ${isImageAudioComponentType(componentType) ? "still image + MP3" : "video"}.` });
+      return;
+    }
+    const phaseKind = componentTypeLabel[currentComponentType];
+    const nextKind = componentTypeLabel[componentType];
     setConfirmation({
       title: `Change “${phase.id}” from ${phaseKind} to ${nextKind}?`,
       description: "This replaces the phase fields and all outgoing connections. You can undo this change during this editing session.",
-      confirmLabel: "Change phase type",
+      confirmLabel: "Change component type",
       cancelLabel: "Keep current type",
       tone: "primary",
       trigger,
       onConfirm: () => {
         const changedPhase = changePhaseKind(phase, kind);
-        const firstMedia = draft.project.manifest.files.find((file) => studioMediaKindForSource(file.src) === "video");
-        const firstMediaDuration = localManifest?.files.find((file) => file.src === firstMedia?.src)?.durationMs;
-        const selectedDuration = firstMediaDuration ?? (changedPhase.kind === "video" || changedPhase.kind === "video-position-question" ? changedPhase.expectedDurationMs : 0);
-        const nextPhase = changedPhase.kind === "video-position-question" && firstMedia
-          ? {
-              ...changedPhase,
-              src: firstMedia.src,
-              expectedDurationMs: selectedDuration,
-              showAtMs: Math.floor(selectedDuration * .25),
-              openAtMs: Math.floor(selectedDuration * .3),
-              closeAtMs: Math.max(Math.floor(selectedDuration * .3) + 1, Math.floor(selectedDuration * .75)),
-              hideAtMs: Math.max(Math.floor(selectedDuration * .75), Math.floor(selectedDuration * .875)),
-            }
-          : changedPhase.kind === "video" && firstMedia
-            ? { ...changedPhase, src: firstMedia.src, expectedDurationMs: selectedDuration }
-            : changedPhase;
+        const nextPhase = changedPhase.kind === "video" || changedPhase.kind === "video-position-question"
+          ? convertPlaybackFormat(changedPhase)
+          : changedPhase;
         const retained = edges.filter((edge) => edge.source !== selectedId);
         const nextEdges = [
           ...retained,
@@ -533,6 +582,7 @@ export function App() {
         const phases = draft.project.scenario.phases.map((item) => item.id === selectedId ? nextPhase : item) as Draft["project"]["scenario"]["phases"];
         record({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } }, document: { ...draft.document, edges: nextEdges }, updatedAt: Date.now() }, nextEdges);
         setNodes((current) => current.map((node) => node.id === selectedId ? { ...node, data: nodeDataForPhase(nextPhase) } : node));
+        setGraphFeedback({ status: "success", message: `Changed ${phase.id} to ${nextKind}.` });
       },
     });
   };
@@ -864,7 +914,7 @@ export function App() {
       </div>}
     </header>
     <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
-    <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onKindChange={changeSelectedKind} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} />
+    <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onComponentTypeChange={changeSelectedComponentType} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} />
     <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} collapsed={!showDiagnostics} onToggle={() => setShowDiagnostics((value) => !value)} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
     {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
     {mediaPicker && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} selection={{ contextLabel: `${mediaPicker.mediaKind} for ${mediaPicker.phaseId}`, selectedSrc: mediaPickerSelectedSrc, mediaKind: mediaPicker.mediaKind, onSelect: selectMedia }} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={closeMediaPicker} />}
