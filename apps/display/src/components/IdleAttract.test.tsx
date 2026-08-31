@@ -39,4 +39,38 @@ describe("IdleAttract", () => {
 
     expect(play).toHaveBeenCalledTimes(2);
   });
+
+  it("plays multiple clips back to back without an immediate repeat", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+
+    await act(async () => {
+      root?.render(
+        <IdleAttract
+          grant={null}
+          qrHidden={false}
+          clock={new ServerClock()}
+          videoUrls={["one.mp4", "two.mp4", "three.mp4"]}
+          random={() => 0}
+        />,
+      );
+      await Promise.resolve();
+    });
+    expect(document.querySelector("video")?.getAttribute("src")).toBe("one.mp4");
+    expect(document.querySelector("video")?.loop).toBe(false);
+
+    await act(async () => {
+      document.querySelector("video")?.dispatchEvent(new Event("ended"));
+      await Promise.resolve();
+    });
+    expect(document.querySelector("video")?.getAttribute("src")).toBe("two.mp4");
+
+    await act(async () => {
+      document.querySelector("video")?.dispatchEvent(new Event("ended"));
+      await Promise.resolve();
+    });
+    expect(document.querySelector("video")?.getAttribute("src")).toBe("one.mp4");
+  });
 });

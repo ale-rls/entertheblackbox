@@ -11,21 +11,39 @@ import {
   TRACKED_QR_ERROR_CORRECTION_LEVEL,
   TRACKED_QR_MARGIN_MODULES,
 } from "../idle/qrPresentation.js";
+import {
+  pickInitialAttractIndex,
+  pickNextAttractIndex,
+  type RandomSource,
+} from "../idle/attractPlaylist.js";
 import { drawTrackedQr } from "../idle/tracking.js";
-import idleAttractUrl from "../assets/idle-attract.mp4";
 
 const CHECK_INTERVAL_MS = 1000;
 const QR_RENDER_SIZE_PX = 512;
+const bundledIdleAttractUrls = Object.entries(import.meta.glob<string>(
+  "../assets/idle-attract*.mp4",
+  { eager: true, query: "?url", import: "default" },
+))
+  .sort(([left], [right]) => left.localeCompare(right))
+  .map(([, url]) => url);
 
 export function IdleAttract({
   grant,
   qrHidden,
   clock,
+  videoUrls = bundledIdleAttractUrls,
+  random = Math.random,
 }: {
   grant: QrGrantMessage | null;
   qrHidden: boolean;
   clock: ServerClock;
+  videoUrls?: readonly string[];
+  random?: RandomSource;
 }) {
+  const [activeVideoIndex, setActiveVideoIndex] = useState(() =>
+    pickInitialAttractIndex(videoUrls.length, random),
+  );
+  const activeVideoUrl = videoUrls[activeVideoIndex] ?? videoUrls[0];
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const overlayRef = useRef<HTMLCanvasElement | null>(null);
   const [qrCanvas, setQrCanvas] = useState<HTMLCanvasElement | null>(null);
@@ -44,7 +62,7 @@ export function IdleAttract({
     } catch (error) {
       console.warn("display: failed to restart idle attract video:", error);
     }
-  }, []);
+  }, [activeVideoUrl]);
 
   useEffect(() => {
     const evaluate = () => setVisible(shouldShowGrant(grant, clock.now(), qrHidden));
@@ -112,19 +130,27 @@ export function IdleAttract({
       if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
       context.clearRect(0, 0, overlay.width, overlay.height);
     };
-  }, [qrCanvas, visible]);
+  }, [activeVideoUrl, qrCanvas, visible]);
+
+  const playNextVideo = () => {
+    setActiveVideoIndex((current) =>
+      pickNextAttractIndex(current, videoUrls.length, random),
+    );
+  };
 
   return (
     <div className="idle idle-attract">
       <video
+        key={activeVideoUrl}
         ref={videoRef}
         className="idle-attract-video"
-        src={idleAttractUrl}
+        src={activeVideoUrl}
         autoPlay
-        loop
+        loop={videoUrls.length <= 1}
         muted
         playsInline
         preload="auto"
+        onEnded={videoUrls.length > 1 ? playNextVideo : undefined}
       />
       <canvas
         ref={overlayRef}
