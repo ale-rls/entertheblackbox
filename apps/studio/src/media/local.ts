@@ -27,7 +27,7 @@ export function refreshDraftLocalMedia(draft: Draft, manifest: MediaManifest): D
     if (phase.kind !== "video" && phase.kind !== "video-position-question") return phase;
     const mediaDurationMs = durationBySource.get(phase.audioSrc ?? phase.src);
     if (mediaDurationMs === undefined) return phase;
-    const expectedDurationMs = mediaDurationMs + (phase.audioSrc === undefined ? 0 : phase.tailDurationMs ?? 0);
+    const expectedDurationMs = mediaDurationMs + (phase.tailDurationMs ?? 0);
     if (phase.kind === "video-position-question" && phase.audioSrc !== undefined) {
       const previousMediaDurationMs = phase.expectedDurationMs - (phase.tailDurationMs ?? 0);
       const shiftMs = mediaDurationMs - previousMediaDurationMs;

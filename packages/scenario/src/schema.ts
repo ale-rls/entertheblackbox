@@ -39,12 +39,17 @@ export const arenaEllipseSchema = z.object({
   centerY: unitCoordinateSchema,
   radiusX: z.number().positive().max(1),
   radiusY: z.number().positive().max(1),
+  splitY: unitCoordinateSchema.optional(),
 }).refine(
   (ellipse) => ellipse.centerX - ellipse.radiusX >= 0 && ellipse.centerX + ellipse.radiusX <= 1,
   { message: "arena ellipse must fit horizontally inside the display", path: ["radiusX"] },
 ).refine(
   (ellipse) => ellipse.centerY - ellipse.radiusY >= 0 && ellipse.centerY + ellipse.radiusY <= 1,
   { message: "arena ellipse must fit vertically inside the display", path: ["radiusY"] },
+).refine(
+  (ellipse) => ellipse.splitY === undefined
+    || (ellipse.splitY >= ellipse.centerY - ellipse.radiusY && ellipse.splitY <= ellipse.centerY + ellipse.radiusY),
+  { message: "arena ellipse split must lie inside the ellipse", path: ["splitY"] },
 );
 
 export const polygonPointSchema = z.object({
@@ -221,7 +226,7 @@ export const videoPhaseSchema = z.object({
   src: z.string().min(1, "media src must be non-empty"),
   /** When present, src is a still image and this MP3 drives playback/timing. */
   audioSrc: z.string().min(1, "audioSrc must be non-empty").optional(),
-  /** Silent hold after an image + MP3 phase's audio ends. */
+  /** Silent visual hold after video or image + MP3 playback ends. */
   tailDurationMs: z.number().int().nonnegative().optional(),
   expectedDurationMs: z.number().int().positive(),
   next: phaseIdSchema,
@@ -233,9 +238,6 @@ export const videoPhaseSchema = z.object({
 }).superRefine((phase, ctx) => {
   const problem = mediaCombinationError(phase.src, phase.audioSrc);
   if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem, path: [phase.audioSrc === undefined ? "src" : "audioSrc"] });
-  if (phase.audioSrc === undefined && phase.tailDurationMs !== undefined) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "tailDurationMs is only valid when audioSrc is present", path: ["tailDurationMs"] });
-  }
   phase.subtitles?.forEach((subtitle, index) => {
     if (subtitle.endAtMs > phase.expectedDurationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "subtitle must end within the phase", path: ["subtitles", index, "endAtMs"] });
   });
@@ -295,7 +297,7 @@ const videoPositionQuestionBaseSchema = z.object({
   src: z.string().min(1, "media src must be non-empty"),
   /** When present, src is a still image and this MP3 drives playback/timing. */
   audioSrc: z.string().min(1, "audioSrc must be non-empty").optional(),
-  /** Silent hold after an image + MP3 phase's audio ends. */
+  /** Silent visual hold after video or image + MP3 playback ends. */
   tailDurationMs: z.number().int().nonnegative().optional(),
   expectedDurationMs: z.number().int().positive(),
   text: z.string().min(1, "question text must be non-empty"),
@@ -344,9 +346,6 @@ export const videoPositionQuestionPhaseSchema = z.union([
 ]).superRefine((phase, ctx) => {
   const mediaProblem = mediaCombinationError(phase.src, phase.audioSrc);
   if (mediaProblem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: mediaProblem, path: [phase.audioSrc === undefined ? "src" : "audioSrc"] });
-  if (phase.audioSrc === undefined && phase.tailDurationMs !== undefined) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "tailDurationMs is only valid when audioSrc is present", path: ["tailDurationMs"] });
-  }
   const ordered = phase.showAtMs <= phase.openAtMs
     && phase.openAtMs < phase.closeAtMs
     && phase.closeAtMs <= phase.hideAtMs

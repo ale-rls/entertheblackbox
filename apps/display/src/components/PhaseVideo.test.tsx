@@ -26,6 +26,7 @@ afterEach(async () => {
   if (root) await act(async () => root?.unmount());
   root = null;
   document.body.replaceChildren();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -33,6 +34,7 @@ async function renderVideo(
   send: (message: DisplayToServerMessage) => void,
   sessionId: string | null = "session-1",
   soundEnabled = false,
+  videoPhase = phase,
 ) {
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
   document.body.innerHTML = '<div id="root"></div>';
@@ -41,7 +43,7 @@ async function renderVideo(
     root?.render(
       <PhaseVideo
         sessionId={sessionId}
-        phase={phase}
+        phase={videoPhase}
         phaseEpoch={7}
         src="blob:cached-intro"
         soundEnabled={soundEnabled}
@@ -98,5 +100,22 @@ describe("PhaseVideo", () => {
 
     expect(video.muted).toBe(false);
     expect(video.playsInline).toBe(true);
+  });
+
+  it("holds the final video frame for the configured visual tail", async () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    const video = await renderVideo(send, "session-1", false, {
+      ...phase,
+      tailDurationMs: 2_000,
+      expectedDurationMs: phase.expectedDurationMs + 2_000,
+    });
+
+    video.dispatchEvent(new Event("ended"));
+    expect(send).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1_999);
+    expect(send).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ t: "video_ended", phaseId: "intro" }));
   });
 });

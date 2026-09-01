@@ -87,19 +87,35 @@ export function DisplayPreview({ preview }: { preview: ProjectPreview }) {
   }, []);
 
   const move = (next: typeof session) => {
+    if (tailTimer.current !== null) {
+      clearTimeout(tailTimer.current);
+      tailTimer.current = null;
+    }
     setSession(next);
     setPhaseStartedAt(Date.now());
     setPhaseEpoch((value) => value + 1);
   };
   const advance = () => move(advancePreview(session));
-  const finishMedia = () => {
+  const completeMediaPhase = () => {
     if (phase.kind === "video") {
-      if (phase.audioSrc && (phase.tailDurationMs ?? 0) > 0) {
-        tailTimer.current = setTimeout(advance, phase.tailDurationMs);
-      } else advance();
+      advance();
       return;
     }
     if (phase.kind === "video-position-question" && phase.next.type === "fixed") advance();
+  };
+  const finishMedia = () => {
+    const tailDurationMs = phase.kind === "video" || phase.kind === "video-position-question"
+      ? phase.tailDurationMs ?? 0
+      : 0;
+    if (tailDurationMs === 0) {
+      completeMediaPhase();
+      return;
+    }
+    if (tailTimer.current !== null) clearTimeout(tailTimer.current);
+    tailTimer.current = setTimeout(() => {
+      tailTimer.current = null;
+      completeMediaPhase();
+    }, tailDurationMs);
   };
   const enableSound = () => {
     setSoundEnabled(true);

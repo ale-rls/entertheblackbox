@@ -29,7 +29,7 @@ const twoYField: QuestionField = {
 
 const arenaFourField: QuestionField = {
   ...fourField,
-  arena: { type: "ellipse", centerX: 0.5, centerY: 0.7, radiusX: 0.4, radiusY: 0.2 },
+  arena: { type: "ellipse", centerX: 0.5, centerY: 0.7, radiusX: 0.4, radiusY: 0.2, splitY: 0.65 },
 };
 
 const unitSquareQuad = {
@@ -151,6 +151,8 @@ describe("QuadrantOverlay", () => {
 
     expect(html).toContain('class="quadrant-overlay arena-ellipse-overlay arena-ellipse-four-quadrant"');
     expect(html).toContain('<ellipse cx="50" cy="70" rx="40" ry="20"></ellipse>');
+    expect(html).toContain('y1="65"');
+    expect(html).toContain('y2="65"');
     expect(html.match(/class="arena-divider"/g)).toHaveLength(2);
     expect(html.match(/data-quadrant=/g)).toHaveLength(4);
     expect(html).toContain('data-quadrant="q4"');

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { ArenaEllipse, Axis } from "../../../../packages/shared/src/index.js";
+import { arenaEllipseSplitY, type ArenaEllipse, type Axis } from "../../../../packages/shared/src/index.js";
 import type { PolygonEditorMedia } from "./PolygonEditor.js";
 
-type DragHandle = "move" | "left" | "right" | "top" | "bottom";
+type DragHandle = "move" | "left" | "right" | "top" | "bottom" | "split-y";
 type Point = { x: number; y: number };
 
 /** Calibrated against the published 2048×1152 PLATE-A_master.png arena floor. */
@@ -12,10 +12,14 @@ export const PLATE_A_ARENA_PRESET: ArenaEllipse = {
   centerY: 0.735,
   radiusX: 0.42,
   radiusY: 0.235,
+  splitY: 0.67,
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const rounded = (value: number) => Math.round(value * 10_000) / 10_000;
+const clampedSplit = (arena: ArenaEllipse, centerY: number, radiusY: number) => arena.splitY === undefined
+  ? {}
+  : { splitY: rounded(clamp(arena.splitY, centerY - radiusY, centerY + radiusY)) };
 
 function pointFromEvent(event: ReactPointerEvent<SVGSVGElement>): Point {
   const rect = event.currentTarget.getBoundingClientRect();
@@ -78,11 +82,19 @@ export function ArenaEllipseEditor({
     const point = pointFromEvent(event);
     const start = drag.arena;
     if (drag.handle === "move") {
+      const dy = point.y - drag.start.y;
+      const centerY = rounded(clamp(start.centerY + dy, start.radiusY, 1 - start.radiusY));
+      const appliedDy = centerY - start.centerY;
       onChange({
         ...start,
         centerX: rounded(clamp(start.centerX + point.x - drag.start.x, start.radiusX, 1 - start.radiusX)),
-        centerY: rounded(clamp(start.centerY + point.y - drag.start.y, start.radiusY, 1 - start.radiusY)),
+        centerY,
+        ...(start.splitY === undefined ? {} : { splitY: rounded(start.splitY + appliedDy) }),
       });
+      return;
+    }
+    if (drag.handle === "split-y") {
+      onChange({ ...start, splitY: rounded(clamp(point.y, start.centerY - start.radiusY, start.centerY + start.radiusY)) });
       return;
     }
     if (drag.handle === "left" || drag.handle === "right") {
@@ -97,22 +109,33 @@ export function ArenaEllipseEditor({
     const moving = drag.handle === "top"
       ? clamp(point.y, 0, fixed - 0.02)
       : clamp(point.y, fixed + 0.02, 1);
-    onChange({ ...start, centerY: rounded((fixed + moving) / 2), radiusY: rounded(Math.abs(fixed - moving) / 2) });
+    const centerY = rounded((fixed + moving) / 2);
+    const radiusY = rounded(Math.abs(fixed - moving) / 2);
+    onChange({ ...start, centerY, radiusY, ...clampedSplit(start, centerY, radiusY) });
   };
 
-  const updateNumber = (key: "centerX" | "centerY" | "radiusX" | "radiusY", raw: string) => {
+  const updateNumber = (key: "centerX" | "centerY" | "radiusX" | "radiusY" | "splitY", raw: string) => {
     const value = Number(raw);
     if (!Number.isFinite(value)) return;
     if (key === "centerX") onChange({ ...arena, centerX: rounded(clamp(value, arena.radiusX, 1 - arena.radiusX)) });
-    if (key === "centerY") onChange({ ...arena, centerY: rounded(clamp(value, arena.radiusY, 1 - arena.radiusY)) });
+    if (key === "centerY") {
+      const centerY = rounded(clamp(value, arena.radiusY, 1 - arena.radiusY));
+      onChange({ ...arena, centerY, ...clampedSplit(arena, centerY, arena.radiusY) });
+    }
     if (key === "radiusX") onChange({ ...arena, radiusX: rounded(clamp(value, 0.01, Math.min(arena.centerX, 1 - arena.centerX))) });
-    if (key === "radiusY") onChange({ ...arena, radiusY: rounded(clamp(value, 0.01, Math.min(arena.centerY, 1 - arena.centerY))) });
+    if (key === "radiusY") {
+      const radiusY = rounded(clamp(value, 0.01, Math.min(arena.centerY, 1 - arena.centerY)));
+      onChange({ ...arena, radiusY, ...clampedSplit(arena, arena.centerY, radiusY) });
+    }
+    if (key === "splitY") onChange({ ...arena, splitY: rounded(clamp(value, arena.centerY - arena.radiusY, arena.centerY + arena.radiusY)) });
   };
 
   const cx = arena.centerX * 100;
   const cy = arena.centerY * 100;
   const rx = arena.radiusX * 100;
   const ry = arena.radiusY * 100;
+  const splitY = arenaEllipseSplitY(arena) * 100;
+  const splitHalfWidth = rx * Math.sqrt(Math.max(0, 1 - ((splitY - cy) / ry) ** 2));
   const drawHorizontal = field.type === "four-quadrant" || field.axis === "y";
   const drawVertical = field.type === "four-quadrant" || field.axis === "x";
 
@@ -131,10 +154,10 @@ export function ArenaEllipseEditor({
         onPointerCancel={() => { dragging.current = null; }}
       >
         <ellipse className="arena-editor-fill" cx={cx} cy={cy} rx={rx} ry={ry} onPointerDown={(event) => beginDrag(event, "move")} />
-        {drawHorizontal && <line className="arena-editor-divider" x1={cx - rx} y1={cy} x2={cx + rx} y2={cy} />}
+        {drawHorizontal && <line className="arena-editor-divider" x1={cx - splitHalfWidth} y1={splitY} x2={cx + splitHalfWidth} y2={splitY} />}
         {drawVertical && <line className="arena-editor-divider" x1={cx} y1={cy - ry} x2={cx} y2={cy + ry} />}
         <ellipse className="arena-editor-outline" cx={cx} cy={cy} rx={rx} ry={ry} />
-        <circle className="arena-editor-center" cx={cx} cy={cy} r="1.5" onPointerDown={(event) => beginDrag(event, "move")} />
+        {drawHorizontal && <circle className="arena-editor-center" data-arena-handle="split-y" aria-label="Perspective centre line" cx={cx} cy={splitY} r="1.5" onPointerDown={(event) => beginDrag(event, "split-y")} />}
         {(["left", "right", "top", "bottom"] as const).map((handle) => <circle
           key={handle}
           className="arena-editor-handle"
@@ -148,14 +171,14 @@ export function ArenaEllipseEditor({
       <span className="polygon-editor-viewport-label">Display viewport · {viewport.width}×{viewport.height}{media ? ` · ${media.kind === "image" ? "contain" : "cover"}` : ""}</span>
     </div>
     <div className="arena-ellipse-fields">
-      {(["centerX", "centerY", "radiusX", "radiusY"] as const).map((key) => <label className="sc-tool-label" key={key}>
+      {(["centerX", "centerY", "radiusX", "radiusY", "splitY"] as const).map((key) => <label className="sc-tool-label" key={key}>
         <span>{key}<small>0–1</small></span>
-        <input className="sc-tool-field" type="number" min={key.startsWith("radius") ? 0.01 : 0} max="1" step="0.001" value={arena[key]} onChange={(event) => updateNumber(key, event.target.value)} />
+        <input className="sc-tool-field" type="number" min={key.startsWith("radius") ? 0.01 : 0} max="1" step="0.001" value={key === "splitY" ? arenaEllipseSplitY(arena) : arena[key]} onChange={(event) => updateNumber(key, event.target.value)} />
       </label>)}
     </div>
     <div className="polygon-editor-actions">
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...PLATE_A_ARENA_PRESET })}>Fit PLATE-A arena</button>
-      <span className="sc-tool-copy">Drag the oval to move it; drag its four handles to fit the arena edge. Numbers allow exact fine-tuning.</span>
+      <span className="sc-tool-copy">Drag the oval to move it; drag its edge handles to fit the arena. Drag the centre-line point vertically to match the floor's perspective.</span>
     </div>
   </div>;
 }

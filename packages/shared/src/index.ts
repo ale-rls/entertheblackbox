@@ -40,7 +40,22 @@ export type ArenaEllipse = {
   centerY: number;
   radiusX: number;
   radiusY: number;
+  /**
+   * Viewport Y coordinate of the physical front/back split. Perspective can
+   * project the arena's true centre above the ellipse's geometric centre.
+   * Older scenarios omit this and receive the default perspective offset.
+   */
+  splitY?: number | undefined;
 };
+
+/**
+ * Physical front/back split. A projected circle's physical centre appears
+ * above the bounding ellipse's geometric centre, so v1 ellipse data receives
+ * the same subtle perspective lift as the PLATE-A preset.
+ */
+export function arenaEllipseSplitY(arena: ArenaEllipse): number {
+  return arena.splitY ?? arena.centerY - arena.radiusY * 0.28;
+}
 
 /**
  * Perspective-calibrated alternative to ArenaEllipse: the four corners of
@@ -280,7 +295,7 @@ export function quadrantOfField(field: PositionField, x: number, y: number): Pos
     if (field.arena === undefined) return quadrantOf(x, y);
     const arena = field.arena;
     const right = arena.type === "ellipse" ? x >= arena.centerX : isRightOfArenaQuad(arena.corners, x, y);
-    const bottom = arena.type === "ellipse" ? y >= arena.centerY : isBottomOfArenaQuad(arena.corners, x, y);
+    const bottom = arena.type === "ellipse" ? y >= arenaEllipseSplitY(arena) : isBottomOfArenaQuad(arena.corners, x, y);
     if (right) return bottom ? "q4" : "q1";
     return bottom ? "q3" : "q2";
   }
@@ -292,7 +307,7 @@ export function quadrantOfField(field: PositionField, x: number, y: number): Pos
     const arena = field.arena;
     if (arena.type === "ellipse") {
       const coordinate = field.axis === "x" ? x : y;
-      const boundary = field.axis === "x" ? arena.centerX : arena.centerY;
+      const boundary = field.axis === "x" ? arena.centerX : arenaEllipseSplitY(arena);
       return coordinate >= boundary ? "max" : "min";
     }
     const isMax = field.axis === "x" ? isRightOfArenaQuad(arena.corners, x, y) : isBottomOfArenaQuad(arena.corners, x, y);

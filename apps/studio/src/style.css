@@ -941,8 +941,9 @@ body:has(.editor),
   cursor: grab;
 }
 
-.arena-editor-center { cursor: move; }
+.arena-editor-center { cursor: ns-resize; }
 .arena-editor-handle:active { cursor: grabbing; }
+.arena-editor-center:active { cursor: ns-resize; }
 
 .arena-quad-editor {
   display: grid;

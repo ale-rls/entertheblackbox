@@ -53,7 +53,19 @@ describe("ArenaEllipseEditor", () => {
     expect(document.querySelector(".arena-editor-outline")?.getAttribute("cx")).toBe("50");
     expect(document.querySelector(".arena-editor-outline")?.getAttribute("cy")).toBe("73.5");
     expect(document.querySelectorAll(".arena-editor-divider")).toHaveLength(2);
+    expect(document.querySelector('[data-arena-handle="split-y"]')?.getAttribute("cy")).toBe("67");
     expect(document.querySelectorAll(".arena-editor-handle")).toHaveLength(4);
+  });
+
+  it("moves the perspective centre line independently of the ellipse", async () => {
+    const onChange = vi.fn();
+    const { svg } = await renderEditor(onChange);
+    const split = document.querySelector('[data-arena-handle="split-y"]')!;
+
+    await act(async () => { pointer(split, "pointerdown", 100, 134); });
+    await act(async () => { pointer(svg, "pointermove", 100, 126); });
+
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ centerY: 0.735, splitY: 0.63 }));
   });
 
   it("resizes the ellipse with edge handles and restores the PLATE-A preset", async () => {

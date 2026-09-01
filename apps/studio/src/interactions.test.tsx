@@ -289,7 +289,17 @@ describe("Studio feedback and keyboard entry", () => {
     expect(sourceButton.textContent).toContain("conclusion.webm");
     expect(sourceButton.getAttribute("aria-label")).toContain("Current media: conclusion.webm");
     expect(document.body.textContent).toContain("Playback duration: 2.500 seconds");
+    expect(document.body.textContent).toContain("Hold last frame (ms)");
     expect(document.body.textContent).toContain("Selected conclusion.webm for video-");
+
+    const holdInput = Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("Hold last frame (ms)"))
+      ?.querySelector<HTMLInputElement>("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(holdInput, "1500");
+      holdInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(document.body.textContent).toContain("total with last-frame hold: 4.000 seconds");
 
     await act(async () => { sourceButton.click(); });
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Choose media");

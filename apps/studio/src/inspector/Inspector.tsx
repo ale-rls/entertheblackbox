@@ -33,7 +33,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   const detectedDuration = phase?.kind === "video" || phase?.kind === "video-position-question"
     ? localMedia.find((file) => file.src === (phase.audioSrc ?? phase.src))?.durationMs
     : undefined;
-  const audioDurationMs = (phase?.kind === "video" || phase?.kind === "video-position-question") && phase.audioSrc !== undefined
+  const playbackDurationMs = phase?.kind === "video" || phase?.kind === "video-position-question"
     ? detectedDuration ?? Math.max(1, phase.expectedDurationMs - (phase.tailDurationMs ?? 0))
     : undefined;
   const fieldMedia: PolygonEditorMedia | undefined = phase?.kind === "video-position-question"
@@ -78,10 +78,10 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       <p className="sc-tool-copy field-hint">{detectedDuration === undefined
         ? "Playback duration is detected automatically from the video or MP3."
         : phase.audioSrc === undefined
-          ? `Playback duration: ${(detectedDuration / 1000).toFixed(3)} seconds`
+          ? `Playback duration: ${(detectedDuration / 1000).toFixed(3)} seconds · total with last-frame hold: ${((detectedDuration + (phase.tailDurationMs ?? 0)) / 1000).toFixed(3)} seconds`
           : `Audio duration: ${(detectedDuration / 1000).toFixed(3)} seconds · total with tail: ${((detectedDuration + (phase.tailDurationMs ?? 0)) / 1000).toFixed(3)} seconds`}</p>
-      {phase.audioSrc !== undefined && number("Tail after audio (ms)", "tailDurationMs", phase.tailDurationMs ?? 0, (tailDurationMs) => {
-        const nextExpectedDurationMs = (audioDurationMs ?? 1) + tailDurationMs;
+      {number(phase.audioSrc === undefined ? "Hold last frame (ms)" : "Tail after audio (ms)", "tailDurationMs", phase.tailDurationMs ?? 0, (tailDurationMs) => {
+        const nextExpectedDurationMs = (playbackDurationMs ?? 1) + tailDurationMs;
         if (phase.kind !== "video-position-question") {
           onChange({ ...phase, tailDurationMs, expectedDurationMs: nextExpectedDurationMs });
           return;
@@ -193,7 +193,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
             onChange({ ...phase, field: { ...field, arena: nextArena } } as Phase);
           }}><option value="ellipse">Ellipse · center + radius</option><option value="quad">Perspective quad · 4 corners</option></select></label>}
           <p className="sc-tool-copy field-hint">{field.arena === undefined || field.arena.type === "ellipse"
-            ? "Positions outside the oval do not count. The split lines pass through the oval’s calibrated center."
+            ? "Positions outside the oval do not count. Move the horizontal split upward to match the arena’s perspective."
             : "Positions outside the quad do not count. The split lines connect the midpoints of opposite edges, so they follow the quad's perspective skew instead of a straight center line."}</p>
           {field.arena !== undefined && (field.arena.type === "quad"
             ? <ArenaQuadEditor
@@ -222,7 +222,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         </fieldset>;
       })()}
       {phase.kind === "video-position-question" && (() => {
-        const timelineOriginMs = phase.audioSrc === undefined ? 0 : audioDurationMs ?? 0;
+        const timelineOriginMs = phase.audioSrc === undefined ? 0 : playbackDurationMs ?? 0;
         const timelineMinMs = -timelineOriginMs;
         const timelineMaxMs = phase.audioSrc === undefined ? phase.expectedDurationMs : phase.tailDurationMs ?? 0;
         const changeOffset = (field: "showAtMs" | "openAtMs" | "closeAtMs" | "hideAtMs", value: number) => onChange({ ...phase, [field]: timelineOriginMs + value });

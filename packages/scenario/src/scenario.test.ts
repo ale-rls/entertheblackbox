@@ -72,7 +72,7 @@ describe("scenarioSchema structural rejection", () => {
     expect(scenarioSchema.safeParse(baseScenario).success).toBe(true);
   });
 
-  it("accepts an image + MP3 timed phase and rejects incomplete combinations", () => {
+  it("accepts visual tails for video and image + MP3 while rejecting incomplete combinations", () => {
     const imageAudio = structuredClone(baseScenario);
     imageAudio.phases[1] = {
       ...imageAudio.phases[1]!,
@@ -96,10 +96,11 @@ describe("scenarioSchema structural rejection", () => {
     ] });
     expect(missingAudio.errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "missing-media", message: expect.stringContaining("introduction.mp3") })]));
 
-    expect(scenarioSchema.safeParse({
+    const heldVideo = scenarioSchema.safeParse({
       ...baseScenario,
       phases: baseScenario.phases.map((phase) => phase.id === "intro" ? { ...phase, tailDurationMs: 1_000 } : phase),
-    }).success).toBe(false);
+    });
+    expect(heldVideo.success).toBe(true);
   });
 
   it("accepts optional targetAudienceSize and per-phase showCursors", () => {
@@ -182,6 +183,20 @@ describe("scenarioSchema structural rejection", () => {
         field: { ...compositeVote.field, arena: ellipse },
       }],
     }).success).toBe(true);
+    expect(scenarioSchema.safeParse({
+      ...composite,
+      phases: [composite.phases[0], {
+        ...compositeVote,
+        field: { ...compositeVote.field, arena: { ...ellipse, splitY: 0.55 } },
+      }],
+    }).success).toBe(true);
+    expect(scenarioSchema.safeParse({
+      ...composite,
+      phases: [composite.phases[0], {
+        ...compositeVote,
+        field: { ...compositeVote.field, arena: { ...ellipse, splitY: 0.95 } },
+      }],
+    }).success).toBe(false);
     expect(scenarioSchema.safeParse({
       ...composite,
       phases: [composite.phases[0], {

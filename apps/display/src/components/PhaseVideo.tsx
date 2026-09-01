@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   PROTOCOL_VERSION,
   type DisplayToServerMessage,
@@ -30,6 +30,7 @@ export function PhaseVideo({
   onVideoElement,
   send,
 }: PhaseVideoProps) {
+  const tailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const diagnostics = useVideoPlaybackDiagnostics({
     sessionId,
     phaseId: phase.id,
@@ -43,7 +44,7 @@ export function PhaseVideo({
     onVideoElement?.(video);
   }, [diagnostics.ref, onVideoElement]);
 
-  const handleEnded = () => {
+  const completePhase = useCallback(() => {
     if (sessionId === null) return;
     send({
       t: "video_ended",
@@ -53,6 +54,23 @@ export function PhaseVideo({
       phaseEpoch,
       mediaId: phase.src,
     });
+  }, [phase.id, phase.src, phaseEpoch, send, sessionId]);
+  useEffect(() => () => {
+    if (tailTimer.current !== null) clearTimeout(tailTimer.current);
+  }, [completePhase]);
+  const handleEnded = () => {
+    const tailDurationMs = phase.tailDurationMs ?? 0;
+    if (tailDurationMs === 0) {
+      completePhase();
+      return;
+    }
+    if (tailTimer.current !== null) clearTimeout(tailTimer.current);
+    // An ended HTML video remains painted on its final decoded frame while
+    // this timer reuses the same visual-tail timing as image + MP3 phases.
+    tailTimer.current = setTimeout(() => {
+      tailTimer.current = null;
+      completePhase();
+    }, tailDurationMs);
   };
 
   return (

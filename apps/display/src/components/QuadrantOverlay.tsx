@@ -3,7 +3,7 @@ import type {
   QuestionStatusMessage,
 } from "@smartphonecracy/protocol";
 import type { Arena, ArenaEllipse, ArenaQuad, Axis, PolygonZonesField, PositionField } from "@smartphonecracy/scenario";
-import { arenaQuadFourRegions, arenaQuadLandmarks, arenaQuadTwoRegions, centroid } from "@smartphonecracy/shared";
+import { arenaEllipseSplitY, arenaQuadFourRegions, arenaQuadLandmarks, arenaQuadTwoRegions, centroid } from "@smartphonecracy/shared";
 
 export type AxisLabels = Axis;
 export type QuestionField = PositionField;
@@ -47,7 +47,7 @@ function sameArena(a: Arena | undefined, b: Arena | undefined): boolean {
   if (a === undefined) return b === undefined;
   if (b === undefined || a.type !== b.type) return false;
   if (a.type === "ellipse") {
-    return b.type === "ellipse" && a.centerX === b.centerX && a.centerY === b.centerY && a.radiusX === b.radiusX && a.radiusY === b.radiusY;
+    return b.type === "ellipse" && a.centerX === b.centerX && a.centerY === b.centerY && a.radiusX === b.radiusX && a.radiusY === b.radiusY && arenaEllipseSplitY(a) === arenaEllipseSplitY(b);
   }
   return b.type === "quad" && a.corners.every((corner, i) => corner.x === b.corners[i]?.x && corner.y === b.corners[i]?.y);
 }
@@ -240,6 +240,8 @@ function ArenaEllipseOverlay({
   const cy = centerY * 100;
   const rx = radiusX * 100;
   const ry = radiusY * 100;
+  const sy = arenaEllipseSplitY(field.arena) * 100;
+  const splitHalfWidth = rx * Math.sqrt(Math.max(0, 1 - ((sy - cy) / ry) ** 2));
   const ids: Array<FourQuadrant | TwoQuadrant> = field.type === "four-quadrant"
     ? ["q1", "q2", "q3", "q4"]
     : ["min", "max"];
@@ -247,24 +249,25 @@ function ArenaEllipseOverlay({
     if (field.type === "four-quadrant") {
       const right = id === "q1" || id === "q4";
       const bottom = id === "q3" || id === "q4";
-      return { x: right ? cx : 0, y: bottom ? cy : 0, width: right ? 100 - cx : cx, height: bottom ? 100 - cy : cy };
+      return { x: right ? cx : 0, y: bottom ? sy : 0, width: right ? 100 - cx : cx, height: bottom ? 100 - sy : sy };
     }
     if (field.axis === "x") {
       const right = id === "max";
       return { x: right ? cx : 0, y: 0, width: right ? 100 - cx : cx, height: 100 };
     }
     const bottom = id === "max";
-    return { x: 0, y: bottom ? cy : 0, width: 100, height: bottom ? 100 - cy : cy };
+    return { x: 0, y: bottom ? sy : 0, width: 100, height: bottom ? 100 - sy : sy };
   };
   const countPosition = (id: FourQuadrant | TwoQuadrant) => {
     if (field.type === "four-quadrant") {
       const right = id === "q1" || id === "q4";
       const bottom = id === "q3" || id === "q4";
-      return { x: cx + (right ? 0.42 : -0.42) * rx, y: cy + (bottom ? 0.42 : -0.42) * ry };
+      const edgeY = cy + (bottom ? ry : -ry);
+      return { x: cx + (right ? 0.42 : -0.42) * rx, y: sy + 0.42 * (edgeY - sy) };
     }
     return field.axis === "x"
       ? { x: cx + (id === "max" ? 0.5 : -0.5) * rx, y: cy }
-      : { x: cx, y: cy + (id === "max" ? 0.5 : -0.5) * ry };
+      : { x: cx, y: sy + 0.5 * (cy + (id === "max" ? ry : -ry) - sy) };
   };
   const labels = field.type === "four-quadrant"
     ? { x: field.xAxis, y: field.yAxis }
@@ -275,7 +278,7 @@ function ArenaEllipseOverlay({
       <defs><clipPath id="arena-ellipse-clip"><ellipse cx={cx} cy={cy} rx={rx} ry={ry} /></clipPath></defs>
       <g clipPath="url(#arena-ellipse-clip)">
         {ids.map((id) => <rect key={id} data-quadrant={id} className={arenaRegionClass(id, winner, highlightRegionIds.includes(id) ? id : null)} {...regionRect(id)} />)}
-        {(field.type === "four-quadrant" || field.axis === "y") && <line className="arena-divider" x1={cx - rx} y1={cy} x2={cx + rx} y2={cy} />}
+        {(field.type === "four-quadrant" || field.axis === "y") && <line className="arena-divider" x1={cx - splitHalfWidth} y1={sy} x2={cx + splitHalfWidth} y2={sy} />}
         {(field.type === "four-quadrant" || field.axis === "x") && <line className="arena-divider" x1={cx} y1={cy - ry} x2={cx} y2={cy + ry} />}
       </g>
       <ellipse className="arena-outline" cx={cx} cy={cy} rx={rx} ry={ry} />
