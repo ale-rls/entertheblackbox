@@ -32,6 +32,19 @@ const arenaFourField: QuestionField = {
   arena: { type: "ellipse", centerX: 0.5, centerY: 0.7, radiusX: 0.4, radiusY: 0.2 },
 };
 
+const unitSquareQuad = {
+  type: "quad" as const,
+  corners: [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+  ] as [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }, { x: number; y: number }],
+};
+
+const quadFourField: QuestionField = { ...fourField, arena: unitSquareQuad };
+const quadTwoXField: QuestionField = { ...twoXField, arena: unitSquareQuad };
+
 const zonesField: QuestionField = {
   type: "polygon-zones",
   zones: [
@@ -143,6 +156,43 @@ describe("QuadrantOverlay", () => {
     expect(html).toContain('data-quadrant="q4"');
     expect(html).toContain('class="arena-axis-label arena-axis-label-x arena-axis-label-min"');
     expect(html).toContain('class="quadrant-count">4</span>');
+  });
+
+  it("renders a perspective-calibrated quad arena as polygon regions split through its edge midpoints", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay
+        field={quadFourField}
+        liveField={quadFourField}
+        liveCounts={{ q1: 1, q2: 2, q3: 3, q4: 4 }}
+        resolution={null}
+      />,
+    );
+
+    expect(html).toContain('class="quadrant-overlay arena-ellipse-overlay arena-ellipse-four-quadrant"');
+    // Unit-square quad: divider lines run through the edge midpoints (50,0)-(50,100) and (0,50)-(100,50).
+    expect(html).toContain('<line class="arena-divider" x1="0" y1="50" x2="100" y2="50"></line>');
+    expect(html).toContain('<line class="arena-divider" x1="50" y1="0" x2="50" y2="100"></line>');
+    expect(html).toContain('<polygon class="arena-outline" points="0,0 100,0 100,100 0,100"></polygon>');
+    expect(html.match(/data-quadrant=/g)).toHaveLength(4);
+    expect(html).toContain('points="50,50 100,50 100,100 50,100"');
+    expect(html).toContain('class="quadrant-count">4</span>');
+  });
+
+  it("blinks the leading side of a quad arena and hides its count when asked", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay
+        field={quadTwoXField}
+        liveField={quadTwoXField}
+        liveCounts={{ min: 2, max: 5 }}
+        resolution={null}
+        showCounts={false}
+        highlightRegionId="max"
+      />,
+    );
+
+    expect(html).not.toContain("quadrant-count");
+    expect(html).toContain('class="arena-region arena-region-max arena-region-blink"');
+    expect(html).not.toContain("arena-region-min arena-region-blink");
   });
 
   it("does not render live counts from a mismatched field", () => {

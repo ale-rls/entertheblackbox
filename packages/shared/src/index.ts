@@ -42,6 +42,20 @@ export type ArenaEllipse = {
   radiusY: number;
 };
 
+/**
+ * Perspective-calibrated alternative to ArenaEllipse: the four corners of
+ * the voting surface as they actually appear in the shot (e.g. a circular
+ * amphitheater floor filmed at an angle projects to a trapezoid, not a
+ * centered ellipse). Corners are normalized (0..1) to the full display
+ * viewport, given in on-screen order starting top-left.
+ */
+export type ArenaQuad = {
+  type: "quad";
+  corners: [PolygonPoint, PolygonPoint, PolygonPoint, PolygonPoint];
+};
+
+export type Arena = ArenaEllipse | ArenaQuad;
+
 export const FOUR_QUADRANTS = ["q1", "q2", "q3", "q4"] as const;
 export const TWO_QUADRANTS = ["min", "max"] as const;
 
@@ -68,14 +82,14 @@ export type FourQuadrantField = {
   type: "four-quadrant";
   xAxis: Axis;
   yAxis: Axis;
-  arena?: ArenaEllipse | undefined;
+  arena?: Arena | undefined;
 };
 
 export type TwoQuadrantField = {
   type: "two-quadrant";
   axis: "x" | "y";
   labels: Axis;
-  arena?: ArenaEllipse | undefined;
+  arena?: Arena | undefined;
 };
 
 export type PolygonPoint = { x: number; y: number };
@@ -137,6 +151,81 @@ function pointInPolygon(points: readonly PolygonPoint[], x: number, y: number): 
   return inside;
 }
 
+/** Average of a polygon's vertices -- used to anchor labels/counts at a region's centroid. */
+export function centroid(points: readonly PolygonPoint[]): PolygonPoint {
+  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+  return { x: sum.x / points.length, y: sum.y / points.length };
+}
+
+function midpoint(a: PolygonPoint, b: PolygonPoint): PolygonPoint {
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+/**
+ * Sign of the cross product of (b-a) and (p-a): tells which side of the
+ * line through a→b the point p falls on. Which sign means "which physical
+ * direction" depends on a→b's own orientation, so callers compare against
+ * a concrete threshold derived from a known point (see quadrantOfField)
+ * rather than treating the sign as universally "left"/"right".
+ */
+function sideOfLine(a: PolygonPoint, b: PolygonPoint, p: PolygonPoint): number {
+  return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+}
+
+/**
+ * The five landmark points of a calibrated arena quad: each edge's
+ * midpoint plus the overall center (average of the four corners). A
+ * bilinear parameterization of the quad (u along top-left→top-right,
+ * v along top-left→bottom-left) has straight iso-lines, so the line
+ * through two opposite edge midpoints is exactly the quad's u=0.5 or
+ * v=0.5 split -- no further perspective math is needed to divide the
+ * calibrated shape correctly.
+ */
+export function arenaQuadLandmarks(corners: ArenaQuad["corners"]): {
+  topMid: PolygonPoint;
+  rightMid: PolygonPoint;
+  bottomMid: PolygonPoint;
+  leftMid: PolygonPoint;
+  center: PolygonPoint;
+} {
+  const [topLeft, topRight, bottomRight, bottomLeft] = corners;
+  return {
+    topMid: midpoint(topLeft, topRight),
+    rightMid: midpoint(topRight, bottomRight),
+    bottomMid: midpoint(bottomRight, bottomLeft),
+    leftMid: midpoint(bottomLeft, topLeft),
+    center: centroid(corners),
+  };
+}
+
+/** Sub-quad polygons for a four-quadrant split of a calibrated arena quad, keyed like FOUR_QUADRANT_POSITIONS. */
+export function arenaQuadFourRegions(corners: ArenaQuad["corners"]): Record<FourQuadrant, PolygonPoint[]> {
+  const [topLeft, topRight, bottomRight, bottomLeft] = corners;
+  const { topMid, rightMid, bottomMid, leftMid, center } = arenaQuadLandmarks(corners);
+  return {
+    q1: [topMid, topRight, rightMid, center],
+    q2: [topLeft, topMid, center, leftMid],
+    q3: [leftMid, center, bottomMid, bottomLeft],
+    q4: [center, rightMid, bottomRight, bottomMid],
+  };
+}
+
+/** Sub-quad polygons for a two-quadrant split of a calibrated arena quad. */
+export function arenaQuadTwoRegions(corners: ArenaQuad["corners"], axis: "x" | "y"): Record<TwoQuadrant, PolygonPoint[]> {
+  const [topLeft, topRight, bottomRight, bottomLeft] = corners;
+  const { topMid, rightMid, bottomMid, leftMid } = arenaQuadLandmarks(corners);
+  if (axis === "x") {
+    return {
+      min: [topLeft, topMid, bottomMid, bottomLeft],
+      max: [topMid, topRight, bottomRight, bottomMid],
+    };
+  }
+  return {
+    min: [topLeft, topRight, rightMid, leftMid],
+    max: [leftMid, rightMid, bottomRight, bottomLeft],
+  };
+}
+
 /**
  * Zone containing a normalized position, or null when the point falls
  * outside every zone (zones need not tile the whole arena). The first
@@ -150,6 +239,24 @@ export function zoneOfPolygons(zones: readonly PolygonZone[], x: number, y: numb
 }
 
 /**
+ * Which side of a calibrated arena quad's vertical (left/right) split a
+ * point falls on. Derived from the quad's own top/bottom edge midpoints
+ * (see arenaQuadLandmarks) rather than a naive x-coordinate compare, so it
+ * stays correct under perspective skew. Exact-on-the-line counts as right,
+ * matching quadrantOf's half-open boundary convention.
+ */
+function isRightOfArenaQuad(corners: ArenaQuad["corners"], x: number, y: number): boolean {
+  const { topMid, bottomMid } = arenaQuadLandmarks(corners);
+  return sideOfLine(topMid, bottomMid, { x, y }) <= 0;
+}
+
+/** Which side of a calibrated arena quad's horizontal (top/bottom) split a point falls on. */
+function isBottomOfArenaQuad(corners: ArenaQuad["corners"], x: number, y: number): boolean {
+  const { leftMid, rightMid } = arenaQuadLandmarks(corners);
+  return sideOfLine(leftMid, rightMid, { x, y }) >= 0;
+}
+
+/**
  * Assign a normalized position to one of the field's spatial quadrants/zones.
  * The exact 0.5 boundary belongs to the max side: right for x, bottom for y.
  * Polygon zones return null when the point isn't inside any defined zone.
@@ -160,23 +267,36 @@ export function quadrantOfField(field: PolygonZonesField, x: number, y: number):
 export function quadrantOfField(field: PositionField, x: number, y: number): PositionQuadrant | null;
 export function quadrantOfField(field: PositionField, x: number, y: number): PositionQuadrant | null {
   if (field.type !== "polygon-zones" && field.arena !== undefined) {
-    const normalizedX = (x - field.arena.centerX) / field.arena.radiusX;
-    const normalizedY = (y - field.arena.centerY) / field.arena.radiusY;
-    if (normalizedX * normalizedX + normalizedY * normalizedY > 1) return null;
+    const arena = field.arena;
+    if (arena.type === "ellipse") {
+      const normalizedX = (x - arena.centerX) / arena.radiusX;
+      const normalizedY = (y - arena.centerY) / arena.radiusY;
+      if (normalizedX * normalizedX + normalizedY * normalizedY > 1) return null;
+    } else if (!pointInPolygon(arena.corners, x, y)) {
+      return null;
+    }
   }
   if (field.type === "four-quadrant") {
     if (field.arena === undefined) return quadrantOf(x, y);
-    const right = x >= field.arena.centerX;
-    const bottom = y >= field.arena.centerY;
+    const arena = field.arena;
+    const right = arena.type === "ellipse" ? x >= arena.centerX : isRightOfArenaQuad(arena.corners, x, y);
+    const bottom = arena.type === "ellipse" ? y >= arena.centerY : isBottomOfArenaQuad(arena.corners, x, y);
     if (right) return bottom ? "q4" : "q1";
     return bottom ? "q3" : "q2";
   }
   if (field.type === "two-quadrant") {
-    const coordinate = field.axis === "x" ? x : y;
-    const boundary = field.arena === undefined
-      ? 0.5
-      : field.axis === "x" ? field.arena.centerX : field.arena.centerY;
-    return coordinate >= boundary ? "max" : "min";
+    if (field.arena === undefined) {
+      const coordinate = field.axis === "x" ? x : y;
+      return coordinate >= 0.5 ? "max" : "min";
+    }
+    const arena = field.arena;
+    if (arena.type === "ellipse") {
+      const coordinate = field.axis === "x" ? x : y;
+      const boundary = field.axis === "x" ? arena.centerX : arena.centerY;
+      return coordinate >= boundary ? "max" : "min";
+    }
+    const isMax = field.axis === "x" ? isRightOfArenaQuad(arena.corners, x, y) : isBottomOfArenaQuad(arena.corners, x, y);
+    return isMax ? "max" : "min";
   }
   return zoneOfPolygons(field.zones, x, y);
 }

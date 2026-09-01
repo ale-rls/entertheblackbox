@@ -943,6 +943,34 @@ body:has(.editor),
 .arena-editor-center { cursor: move; }
 .arena-editor-handle:active { cursor: grabbing; }
 
+.arena-quad-editor {
+  display: grid;
+  gap: var(--sc-tool-space-4);
+  margin-block-start: var(--sc-tool-space-4);
+}
+
+.arena-quad-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sc-tool-space-4) var(--sc-tool-space-3);
+}
+
+.arena-quad-corner-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--sc-tool-space-2);
+}
+
+.arena-quad-corner-fields .sc-tool-label { margin: 0; }
+
+.arena-quad-corner-label {
+  grid-column: span 2;
+  color: var(--sc-tool-color-text-muted);
+  font-size: var(--sc-tool-font-size-1);
+  text-transform: capitalize;
+}
+
 .field-error {
   margin-block: calc(-1 * var(--sc-tool-space-3)) var(--sc-tool-space-5);
   color: var(--sc-tool-color-danger);

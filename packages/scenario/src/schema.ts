@@ -47,23 +47,49 @@ export const arenaEllipseSchema = z.object({
   { message: "arena ellipse must fit vertically inside the display", path: ["radiusY"] },
 );
 
+export const polygonPointSchema = z.object({
+  x: unitCoordinateSchema,
+  y: unitCoordinateSchema,
+});
+
+/**
+ * Perspective-calibrated alternative to arenaEllipseSchema: the voting
+ * surface's four corners as they actually appear in the shot, in on-screen
+ * order starting top-left. Preferred over the ellipse when the filmed
+ * floor is visibly skewed by camera angle -- see arenaQuadLandmarks in
+ * @smartphonecracy/shared for how the split lines are derived from it.
+ */
+export const arenaQuadSchema = z.object({
+  type: z.literal("quad"),
+  corners: z.tuple([polygonPointSchema, polygonPointSchema, polygonPointSchema, polygonPointSchema]),
+}).refine(
+  (quad) => {
+    const [topLeft, topRight, bottomRight, bottomLeft] = quad.corners;
+    const area = Math.abs(
+      topLeft.x * topRight.y - topRight.x * topLeft.y
+      + topRight.x * bottomRight.y - bottomRight.x * topRight.y
+      + bottomRight.x * bottomLeft.y - bottomLeft.x * bottomRight.y
+      + bottomLeft.x * topLeft.y - topLeft.x * bottomLeft.y,
+    ) / 2;
+    return area > 0.01;
+  },
+  { message: "arena quad corners must enclose a visible area", path: ["corners"] },
+);
+
+export const arenaSchema = z.union([arenaEllipseSchema, arenaQuadSchema]);
+
 export const fourQuadrantFieldSchema = z.object({
   type: z.literal("four-quadrant"),
   xAxis: axisSchema,
   yAxis: axisSchema,
-  arena: arenaEllipseSchema.optional(),
+  arena: arenaSchema.optional(),
 });
 
 export const twoQuadrantFieldSchema = z.object({
   type: z.literal("two-quadrant"),
   axis: z.enum(["x", "y"]),
   labels: axisSchema,
-  arena: arenaEllipseSchema.optional(),
-});
-
-export const polygonPointSchema = z.object({
-  x: unitCoordinateSchema,
-  y: unitCoordinateSchema,
+  arena: arenaSchema.optional(),
 });
 
 export const polygonZoneSchema = z.object({
@@ -384,6 +410,8 @@ export type Quadrant = z.infer<typeof quadrantSchema>;
 export type TwoQuadrant = z.infer<typeof twoQuadrantSchema>;
 export type Axis = z.infer<typeof axisSchema>;
 export type ArenaEllipse = z.infer<typeof arenaEllipseSchema>;
+export type ArenaQuad = z.infer<typeof arenaQuadSchema>;
+export type Arena = z.infer<typeof arenaSchema>;
 export type FourQuadrantField = z.infer<typeof fourQuadrantFieldSchema>;
 export type TwoQuadrantField = z.infer<typeof twoQuadrantFieldSchema>;
 export type PositionField = z.infer<typeof positionFieldSchema>;

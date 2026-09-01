@@ -3,6 +3,7 @@ import type { StudioProject } from "@smartphonecracy/studio-adapter";
 import { compiledJson, componentTypeForPhase, phaseIdError, type AuthorableComponentType, type Phase } from "./model.js";
 import { PolygonEditor, type PolygonEditorMedia } from "./PolygonEditor.js";
 import { ArenaEllipseEditor, PLATE_A_ARENA_PRESET } from "./ArenaEllipseEditor.js";
+import { ArenaQuadEditor, DEFAULT_ARENA_QUAD } from "./ArenaQuadEditor.js";
 import { TimingTimeline } from "./TimingTimeline.js";
 import { studioMediaKindForSource, type StudioMediaKind } from "../media/library.js";
 
@@ -167,14 +168,27 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
             }
             const { arena: _arena, ...withoutArena } = field;
             onChange({ ...phase, field: withoutArena } as Phase);
-          }} />Constrain voting to a calibrated ellipse</label>
-          <p className="sc-tool-copy field-hint">Positions outside the oval do not count. The split lines pass through the oval’s calibrated center.</p>
-          {field.arena !== undefined && <ArenaEllipseEditor
-            arena={field.arena}
-            field={field}
-            {...(fieldMedia ? { media: fieldMedia } : {})}
-            onChange={(arena) => onChange({ ...phase, field: { ...field, arena } } as Phase)}
-          />}
+          }} />Constrain voting to a calibrated arena</label>
+          {field.arena !== undefined && <label className="sc-tool-label">{label("Arena shape", "field.arena.type")}<select className="sc-tool-select" value={field.arena.type} onChange={(event) => {
+            const nextArena = event.target.value === "quad" ? { ...DEFAULT_ARENA_QUAD } : { ...PLATE_A_ARENA_PRESET };
+            onChange({ ...phase, field: { ...field, arena: nextArena } } as Phase);
+          }}><option value="ellipse">Ellipse · center + radius</option><option value="quad">Perspective quad · 4 corners</option></select></label>}
+          <p className="sc-tool-copy field-hint">{field.arena === undefined || field.arena.type === "ellipse"
+            ? "Positions outside the oval do not count. The split lines pass through the oval’s calibrated center."
+            : "Positions outside the quad do not count. The split lines connect the midpoints of opposite edges, so they follow the quad's perspective skew instead of a straight center line."}</p>
+          {field.arena !== undefined && (field.arena.type === "quad"
+            ? <ArenaQuadEditor
+                arena={field.arena}
+                field={field}
+                {...(fieldMedia ? { media: fieldMedia } : {})}
+                onChange={(arena) => onChange({ ...phase, field: { ...field, arena } } as Phase)}
+              />
+            : <ArenaEllipseEditor
+                arena={field.arena}
+                field={field}
+                {...(fieldMedia ? { media: fieldMedia } : {})}
+                onChange={(arena) => onChange({ ...phase, field: { ...field, arena } } as Phase)}
+              />)}
         </fieldset>;
       })()}
       {phase.kind === "position-question" && (() => {

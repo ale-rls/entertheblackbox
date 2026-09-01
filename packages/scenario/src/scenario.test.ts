@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  arenaQuadSchema,
   mediaManifestSchema,
   polygonZonesFieldSchema,
   scenarioSchema,
@@ -187,6 +188,53 @@ describe("scenarioSchema structural rejection", () => {
         ...compositeVote,
         field: { ...compositeVote.field, arena: { ...ellipse, radiusY: 0.4 } },
       }],
+    }).success).toBe(false);
+
+    const quad = {
+      type: "quad" as const,
+      corners: [
+        { x: 0.14, y: 0.52 },
+        { x: 0.86, y: 0.52 },
+        { x: 0.94, y: 0.97 },
+        { x: 0.06, y: 0.97 },
+      ],
+    };
+    expect(scenarioSchema.safeParse({
+      ...composite,
+      phases: [composite.phases[0], {
+        ...compositeVote,
+        field: { ...compositeVote.field, arena: quad },
+      }],
+    }).success).toBe(true);
+    expect(scenarioSchema.safeParse({
+      ...composite,
+      phases: [composite.phases[0], {
+        ...compositeVote,
+        // A quad collapsed onto a single point has no visible area.
+        field: { ...compositeVote.field, arena: { type: "quad", corners: [quad.corners[0], quad.corners[0], quad.corners[0], quad.corners[0]] } },
+      }],
+    }).success).toBe(false);
+  });
+
+  it("validates an arena quad's corners", () => {
+    expect(arenaQuadSchema.safeParse({
+      type: "quad",
+      corners: [{ x: 0.14, y: 0.52 }, { x: 0.86, y: 0.52 }, { x: 0.94, y: 0.97 }, { x: 0.06, y: 0.97 }],
+    }).success).toBe(true);
+    // Out-of-range coordinate.
+    expect(arenaQuadSchema.safeParse({
+      type: "quad",
+      corners: [{ x: -0.1, y: 0.52 }, { x: 0.86, y: 0.52 }, { x: 0.94, y: 0.97 }, { x: 0.06, y: 0.97 }],
+    }).success).toBe(false);
+    // Only 3 corners.
+    expect(arenaQuadSchema.safeParse({
+      type: "quad",
+      corners: [{ x: 0.14, y: 0.52 }, { x: 0.86, y: 0.52 }, { x: 0.94, y: 0.97 }],
+    }).success).toBe(false);
+    // Degenerate (zero-area) quad.
+    expect(arenaQuadSchema.safeParse({
+      type: "quad",
+      corners: [{ x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }],
     }).success).toBe(false);
   });
 

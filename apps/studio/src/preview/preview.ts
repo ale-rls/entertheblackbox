@@ -1,12 +1,17 @@
 import {
+  arenaQuadFourRegions,
+  arenaQuadTwoRegions,
+  centroid,
   classifyPositionVotesForField,
   deterministicChoice,
   resolvePositionFixedTransition,
   resolvePositionPlurality,
+  type FourQuadrant,
   type PositionField,
   type PositionQuadrant,
   type PositionStatus,
   type PositionedVote,
+  type TwoQuadrant,
 } from "../../../../packages/shared/src/index.js";
 import type { StudioProject } from "@smartphonecracy/studio-adapter";
 import { diagnostics, type Diagnostic } from "../diagnostics/diagnostics.js";
@@ -55,6 +60,10 @@ const zoneCentroid = (points: readonly { x: number; y: number }[]): readonly [nu
 const pointFor = (field: PositionField, quadrant: PositionQuadrant): readonly [number, number] => {
   if (field.type === "four-quadrant") {
     if (field.arena === undefined) return fourPoint[quadrant as keyof typeof fourPoint];
+    if (field.arena.type === "quad") {
+      const region = arenaQuadFourRegions(field.arena.corners)[quadrant as FourQuadrant];
+      return [centroid(region).x, centroid(region).y];
+    }
     const right = quadrant === "q1" || quadrant === "q4";
     const bottom = quadrant === "q3" || quadrant === "q4";
     return [
@@ -68,6 +77,10 @@ const pointFor = (field: PositionField, quadrant: PositionQuadrant): readonly [n
     return zoneCentroid(zone.points);
   }
   if (field.arena !== undefined) {
+    if (field.arena.type === "quad") {
+      const region = arenaQuadTwoRegions(field.arena.corners, field.axis)[quadrant as TwoQuadrant];
+      return [centroid(region).x, centroid(region).y];
+    }
     if (field.axis === "x") return [field.arena.centerX + (quadrant === "min" ? -0.5 : 0.5) * field.arena.radiusX, field.arena.centerY];
     return [field.arena.centerX, field.arena.centerY + (quadrant === "min" ? -0.5 : 0.5) * field.arena.radiusY];
   }

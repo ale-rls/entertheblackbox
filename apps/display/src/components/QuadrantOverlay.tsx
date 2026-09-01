@@ -2,7 +2,8 @@ import type {
   QuestionResolvedMessage,
   QuestionStatusMessage,
 } from "@smartphonecracy/protocol";
-import type { ArenaEllipse, Axis, PolygonZonesField, PositionField } from "@smartphonecracy/scenario";
+import type { Arena, ArenaEllipse, ArenaQuad, Axis, PolygonZonesField, PositionField } from "@smartphonecracy/scenario";
+import { arenaQuadFourRegions, arenaQuadLandmarks, arenaQuadTwoRegions, centroid } from "@smartphonecracy/shared";
 
 export type AxisLabels = Axis;
 export type QuestionField = PositionField;
@@ -42,12 +43,17 @@ function isPolygonZonesCounts(counts: PositionCounts): counts is Record<string, 
   return !isFourQuadrantCounts(counts) && !isTwoQuadrantCounts(counts);
 }
 
+function sameArena(a: Arena | undefined, b: Arena | undefined): boolean {
+  if (a === undefined) return b === undefined;
+  if (b === undefined || a.type !== b.type) return false;
+  if (a.type === "ellipse") {
+    return b.type === "ellipse" && a.centerX === b.centerX && a.centerY === b.centerY && a.radiusX === b.radiusX && a.radiusY === b.radiusY;
+  }
+  return b.type === "quad" && a.corners.every((corner, i) => corner.x === b.corners[i]?.x && corner.y === b.corners[i]?.y);
+}
+
 function sameField(left: QuestionField, right: QuestionField): boolean {
   if (left.type !== right.type) return false;
-  const sameArena = (a: ArenaEllipse | undefined, b: ArenaEllipse | undefined) =>
-    a === undefined
-      ? b === undefined
-      : b !== undefined && a.type === b.type && a.centerX === b.centerX && a.centerY === b.centerY && a.radiusX === b.radiusX && a.radiusY === b.radiusY;
   if (left.type === "two-quadrant") return right.type === "two-quadrant" && left.axis === right.axis && sameArena(left.arena, right.arena);
   if (left.type === "polygon-zones") {
     return (
@@ -59,15 +65,13 @@ function sameField(left: QuestionField, right: QuestionField): boolean {
   return right.type === "four-quadrant" && sameArena(left.arena, right.arena);
 }
 
-function centroid(points: readonly { x: number; y: number }[]): { x: number; y: number } {
-  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
-  return { x: sum.x / points.length, y: sum.y / points.length };
-}
-
 /** Keeps a label's placement from running off either side of the screen. */
 function clampPercent(value: number, min = 6, max = 94): number {
   return Math.min(max, Math.max(min, value));
 }
+
+const svgPoints = (points: readonly { x: number; y: number }[]): string =>
+  points.map((p) => `${p.x * 100},${p.y * 100}`).join(" ");
 
 const ZONE_LABEL_BOTTOM_PERCENT = 86;
 
@@ -104,7 +108,7 @@ function PolygonZoneOverlay({
               ]
                 .filter(Boolean)
                 .join(" ")}
-              points={zone.points.map((p) => `${p.x * 100},${p.y * 100}`).join(" ")}
+              points={svgPoints(zone.points)}
             />
           ))}
         </svg>
@@ -289,6 +293,72 @@ function ArenaEllipseOverlay({
 }
 
 /**
+ * Perspective-calibrated renderer for a quad arena: regions, divider
+ * lines, and label/count anchors are all derived from the quad's own edge
+ * midpoints (arenaQuadLandmarks) rather than a center + radius, so a
+ * skewed trapezoid (e.g. a circular floor filmed at an angle) renders
+ * true to the calibrated shape instead of an idealized ellipse.
+ */
+function ArenaQuadOverlay({
+  field,
+  counts,
+  winner,
+  showCounts,
+  highlightRegionId,
+}: {
+  field: Exclude<QuestionField, PolygonZonesField> & { arena: ArenaQuad };
+  counts: FourQuadrantCounts | TwoQuadrantCounts | null;
+  winner: string | null;
+  showCounts: boolean;
+  highlightRegionId: string | null;
+}) {
+  const { corners } = field.arena;
+  const { topMid, rightMid, bottomMid, leftMid } = arenaQuadLandmarks(corners);
+  const ids: Array<FourQuadrant | TwoQuadrant> = field.type === "four-quadrant"
+    ? ["q1", "q2", "q3", "q4"]
+    : ["min", "max"];
+  const regions = field.type === "four-quadrant"
+    ? arenaQuadFourRegions(corners)
+    : arenaQuadTwoRegions(corners, field.axis);
+  const labels = field.type === "four-quadrant"
+    ? { x: field.xAxis, y: field.yAxis }
+    : { [field.axis]: field.labels } as Partial<Record<"x" | "y", AxisLabels>>;
+
+  return <div className={`quadrant-overlay arena-ellipse-overlay arena-ellipse-${field.type}`}>
+    <svg className="arena-ellipse-shapes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+      {ids.map((id) => <polygon
+        key={id}
+        data-quadrant={id}
+        className={arenaRegionClass(id, winner, highlightRegionId)}
+        points={svgPoints(regions[id as keyof typeof regions])}
+      />)}
+      {(field.type === "four-quadrant" || field.axis === "y") && <line className="arena-divider" x1={leftMid.x * 100} y1={leftMid.y * 100} x2={rightMid.x * 100} y2={rightMid.y * 100} />}
+      {(field.type === "four-quadrant" || field.axis === "x") && <line className="arena-divider" x1={topMid.x * 100} y1={topMid.y * 100} x2={bottomMid.x * 100} y2={bottomMid.y * 100} />}
+      <polygon className="arena-outline" points={svgPoints(corners)} />
+    </svg>
+    {labels.x && <>
+      <ArenaLabel axis="x" endpoint="min" label={labels.x.minLabel} x={clampPercent(leftMid.x * 100, 9, 91)} y={leftMid.y * 100} />
+      <ArenaLabel axis="x" endpoint="max" label={labels.x.maxLabel} x={clampPercent(rightMid.x * 100, 9, 91)} y={rightMid.y * 100} />
+    </>}
+    {labels.y && <>
+      <ArenaLabel axis="y" endpoint="min" label={labels.y.minLabel} x={topMid.x * 100} y={topMid.y * 100} />
+      <ArenaLabel axis="y" endpoint="max" label={labels.y.maxLabel} x={bottomMid.x * 100} y={bottomMid.y * 100} />
+    </>}
+    {showCounts && ids.map((id) => {
+      const position = centroid(regions[id as keyof typeof regions]);
+      const count = counts?.[id as keyof typeof counts];
+      return <div
+        key={id}
+        className={["arena-count", winner !== null && winner !== id ? "arena-count-dimmed" : "", winner === id ? "arena-count-winner" : ""].filter(Boolean).join(" ")}
+        style={{ left: `${position.x * 100}%`, top: `${position.y * 100}%` }}
+      >{count !== undefined && <span className="quadrant-count">{count}</span>}</div>;
+    })}
+    {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
+    {winner === "empty" && <div className="outcome outcome-empty" />}
+  </div>;
+}
+
+/**
  * Spatial question field with pinned four-quadrant naming and two-quadrant
  * min/max naming. Two-quadrant X fields split left/right; Y fields split
  * top/bottom. The server remains the resolution oracle: this component only
@@ -338,13 +408,21 @@ export function QuadrantOverlay({
     const counts = field.type === "four-quadrant"
       ? countSource !== null && isFourQuadrantCounts(countSource) ? countSource : null
       : countSource !== null && isTwoQuadrantCounts(countSource) ? countSource : null;
-    return <ArenaEllipseOverlay
-      field={field as typeof field & { arena: ArenaEllipse }}
-      counts={counts}
-      winner={winner}
-      showCounts={showCounts}
-      highlightRegionId={highlightRegionId}
-    />;
+    return field.arena.type === "quad"
+      ? <ArenaQuadOverlay
+          field={field as typeof field & { arena: ArenaQuad }}
+          counts={counts}
+          winner={winner}
+          showCounts={showCounts}
+          highlightRegionId={highlightRegionId}
+        />
+      : <ArenaEllipseOverlay
+          field={field as typeof field & { arena: ArenaEllipse }}
+          counts={counts}
+          winner={winner}
+          showCounts={showCounts}
+          highlightRegionId={highlightRegionId}
+        />;
   }
 
   if (field.type === "four-quadrant") {

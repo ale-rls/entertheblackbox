@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import scenario from "../../../../content/scenarios/dev.json";
 import manifest from "../../../../content/media-manifest.json";
+import { quadrantOfField, type FourQuadrantField, type TwoQuadrantField } from "../../../../packages/shared/src/index.js";
 import { importRuntime } from "../io.js";
-import { advancePreview, continueAfterResolution, resolvePreview, startPreview } from "./preview.js";
+import { advancePreview, continueAfterResolution, outcomeVotes, resolvePreview, startPreview } from "./preview.js";
 const project = importRuntime(scenario, manifest).project;
 describe("outcome preview", () => {
   it("walks video and fixed phases manually", () => {
@@ -36,5 +37,35 @@ describe("outcome preview", () => {
     expect(resolvePreview(two, "max", true, true).resolution).toMatchObject({ winner: "max", quadrantCounts: { min: 0, max: 3 } });
     expect(resolvePreview(two, "tie", false, false).resolution).toMatchObject({ winner: "tie", quadrantCounts: { min: 1, max: 1 } });
     expect(resolvePreview(two, "empty").resolution).toMatchObject({ winner: "empty", quadrantCounts: { min: 0, max: 0 } });
+  });
+
+  it("places forced-outcome votes inside the correct region of a perspective-skewed arena quad", () => {
+    // A genuinely skewed trapezoid so the round-trip only passes if pointFor
+    // actually accounts for the quad's shape rather than a symmetric offset.
+    const arena = {
+      type: "quad" as const,
+      corners: [
+        { x: 0.1, y: 0.1 },
+        { x: 0.6, y: 0.15 },
+        { x: 0.9, y: 0.9 },
+        { x: 0.2, y: 0.85 },
+      ] as [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }, { x: number; y: number }],
+    };
+    const four: FourQuadrantField = {
+      type: "four-quadrant",
+      xAxis: { minLabel: "left", maxLabel: "right" },
+      yAxis: { minLabel: "top", maxLabel: "bottom" },
+      arena,
+    };
+    for (const quadrant of ["q1", "q2", "q3", "q4"] as const) {
+      const [vote] = outcomeVotes(four, quadrant, false, false);
+      expect(quadrantOfField(four, vote!.x!, vote!.y!)).toBe(quadrant);
+    }
+
+    const twoX: TwoQuadrantField = { type: "two-quadrant", axis: "x", labels: { minLabel: "left", maxLabel: "right" }, arena };
+    for (const quadrant of ["min", "max"] as const) {
+      const [vote] = outcomeVotes(twoX, quadrant, false, false);
+      expect(quadrantOfField(twoX, vote!.x!, vote!.y!)).toBe(quadrant);
+    }
   });
 });
