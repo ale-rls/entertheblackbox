@@ -145,6 +145,29 @@ body {
 .trackpad:active {
   cursor: grabbing;
 }
+.trackpad-instruction {
+  position: absolute;
+  top: max(1rem, env(safe-area-inset-top));
+  right: 1rem;
+  left: 1rem;
+  margin: 0;
+  color: rgb(255 255 255 / 42%);
+  font-family: system-ui, sans-serif;
+  font-size: clamp(.9rem, 4vw, 1.1rem);
+  text-align: center;
+  pointer-events: none;
+}
+.live-cursor-dot {
+  position: absolute;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid rgb(255 255 255 / 80%);
+  border-radius: 50%;
+  box-shadow: 0 0 .9rem currentColor, 0 2px 6px rgb(0 0 0 / 65%);
+  transform: translate(-50%, -50%);
+  transition: left 30ms linear, top 30ms linear;
+  pointer-events: none;
+}
 
 .rating-buttons {
   position: absolute;

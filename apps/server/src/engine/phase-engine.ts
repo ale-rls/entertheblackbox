@@ -880,6 +880,9 @@ export class PhaseEngine {
 
   private transition(reason: string, sessionEnded?: { reason: string; endedAt: number }): void {
     this.emitCheckpoint("transition", reason);
+    // Hide the join QR before the active phase frame reaches the display,
+    // avoiding even a one-message flash over the opening shot.
+    this.qr?.push();
     this.broadcast({
       t: "phase",
       v: PROTOCOL_VERSION,
@@ -889,7 +892,6 @@ export class PhaseEngine {
       serverTime: this.now(),
     });
     if (sessionEnded !== undefined) this.onSessionEnded?.(sessionEnded);
-    this.qr?.push();
   }
 
   private emitCheckpoint(kind: "transition" | "recovery", reason: string): void {

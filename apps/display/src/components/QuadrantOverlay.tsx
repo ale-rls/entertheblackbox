@@ -65,6 +65,11 @@ function sameField(left: QuestionField, right: QuestionField): boolean {
   return right.type === "four-quadrant" && sameArena(left.arena, right.arena);
 }
 
+function regionLabel(field: Exclude<QuestionField, PolygonZonesField>, id: string): string {
+  if (field.type === "two-quadrant") return id === "min" ? field.labels.minLabel : field.labels.maxLabel;
+  return id;
+}
+
 /** Keeps a label's placement from running off either side of the screen. */
 function clampPercent(value: number, min = 6, max = 94): number {
   return Math.min(max, Math.max(min, value));
@@ -86,11 +91,13 @@ function PolygonZoneOverlay({
   counts,
   winner,
   lotterySelected,
+  highlightRegionIds,
 }: {
   field: PolygonZonesField;
   counts: Record<string, number> | null;
   winner: string | null;
   lotterySelected: string | null;
+  highlightRegionIds: readonly string[];
 }) {
   return (
     <div className="quadrant-overlay quadrant-overlay-polygon-zones">
@@ -105,6 +112,7 @@ function PolygonZoneOverlay({
                 "zone-shape",
                 winner === zone.id ? "zone-shape-winner" : "",
                 winner !== zone.id ? "zone-shape-dimmed" : "",
+                highlightRegionIds.includes(zone.id) ? "zone-shape-blink" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -132,8 +140,8 @@ function PolygonZoneOverlay({
           </div>
         );
       })}
-      {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
-      {lotterySelected !== null && <div className="outcome outcome-kleroterion">Kleroterion · {field.zones.find((zone) => zone.id === lotterySelected)?.label ?? lotterySelected}</div>}
+      {winner === "tie" && lotterySelected === null && <div className="outcome outcome-tie">Gleichstand</div>}
+      {lotterySelected !== null && <div className="outcome outcome-kleroterion">Lottokratie entscheidet… {field.zones.find((zone) => zone.id === lotterySelected)?.label ?? lotterySelected}</div>}
       {winner === "empty" && <div className="outcome outcome-empty" />}
     </div>
   );
@@ -217,13 +225,15 @@ function ArenaEllipseOverlay({
   counts,
   winner,
   showCounts,
-  highlightRegionId,
+  highlightRegionIds,
+  lotterySelected,
 }: {
   field: Exclude<QuestionField, PolygonZonesField> & { arena: ArenaEllipse };
   counts: FourQuadrantCounts | TwoQuadrantCounts | null;
   winner: string | null;
   showCounts: boolean;
-  highlightRegionId: string | null;
+  highlightRegionIds: readonly string[];
+  lotterySelected: string | null;
 }) {
   const { centerX, centerY, radiusX, radiusY } = field.arena;
   const cx = centerX * 100;
@@ -264,7 +274,7 @@ function ArenaEllipseOverlay({
     <svg className="arena-ellipse-shapes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
       <defs><clipPath id="arena-ellipse-clip"><ellipse cx={cx} cy={cy} rx={rx} ry={ry} /></clipPath></defs>
       <g clipPath="url(#arena-ellipse-clip)">
-        {ids.map((id) => <rect key={id} data-quadrant={id} className={arenaRegionClass(id, winner, highlightRegionId)} {...regionRect(id)} />)}
+        {ids.map((id) => <rect key={id} data-quadrant={id} className={arenaRegionClass(id, winner, highlightRegionIds.includes(id) ? id : null)} {...regionRect(id)} />)}
         {(field.type === "four-quadrant" || field.axis === "y") && <line className="arena-divider" x1={cx - rx} y1={cy} x2={cx + rx} y2={cy} />}
         {(field.type === "four-quadrant" || field.axis === "x") && <line className="arena-divider" x1={cx} y1={cy - ry} x2={cx} y2={cy + ry} />}
       </g>
@@ -287,7 +297,9 @@ function ArenaEllipseOverlay({
         style={{ left: `${position.x}%`, top: `${position.y}%` }}
       >{count !== undefined && <span className="quadrant-count">{count}</span>}</div>;
     })}
-    {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
+    {winner === "tie" && lotterySelected === null && <div className="outcome outcome-tie">Gleichstand</div>}
+    {lotterySelected !== null && <div className="outcome outcome-kleroterion">Lottokratie entscheidet… {regionLabel(field, lotterySelected)}</div>}
+    {winner !== null && winner !== "tie" && winner !== "empty" && <div className="outcome outcome-majority">Mehrheit: {field.type === "two-quadrant" ? (winner === "min" ? field.labels.minLabel : field.labels.maxLabel) : winner}</div>}
     {winner === "empty" && <div className="outcome outcome-empty" />}
   </div>;
 }
@@ -304,13 +316,15 @@ function ArenaQuadOverlay({
   counts,
   winner,
   showCounts,
-  highlightRegionId,
+  highlightRegionIds,
+  lotterySelected,
 }: {
   field: Exclude<QuestionField, PolygonZonesField> & { arena: ArenaQuad };
   counts: FourQuadrantCounts | TwoQuadrantCounts | null;
   winner: string | null;
   showCounts: boolean;
-  highlightRegionId: string | null;
+  highlightRegionIds: readonly string[];
+  lotterySelected: string | null;
 }) {
   const { corners } = field.arena;
   const { topMid, rightMid, bottomMid, leftMid } = arenaQuadLandmarks(corners);
@@ -329,7 +343,7 @@ function ArenaQuadOverlay({
       {ids.map((id) => <polygon
         key={id}
         data-quadrant={id}
-        className={arenaRegionClass(id, winner, highlightRegionId)}
+        className={arenaRegionClass(id, winner, highlightRegionIds.includes(id) ? id : null)}
         points={svgPoints(regions[id as keyof typeof regions])}
       />)}
       {(field.type === "four-quadrant" || field.axis === "y") && <line className="arena-divider" x1={leftMid.x * 100} y1={leftMid.y * 100} x2={rightMid.x * 100} y2={rightMid.y * 100} />}
@@ -353,7 +367,9 @@ function ArenaQuadOverlay({
         style={{ left: `${position.x * 100}%`, top: `${position.y * 100}%` }}
       >{count !== undefined && <span className="quadrant-count">{count}</span>}</div>;
     })}
-    {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
+    {winner === "tie" && lotterySelected === null && <div className="outcome outcome-tie">Gleichstand</div>}
+    {lotterySelected !== null && <div className="outcome outcome-kleroterion">Lottokratie entscheidet… {regionLabel(field, lotterySelected)}</div>}
+    {winner !== null && winner !== "tie" && winner !== "empty" && <div className="outcome outcome-majority">Mehrheit: {field.type === "two-quadrant" ? (winner === "min" ? field.labels.minLabel : field.labels.maxLabel) : winner}</div>}
     {winner === "empty" && <div className="outcome outcome-empty" />}
   </div>;
 }
@@ -371,6 +387,7 @@ export function QuadrantOverlay({
   resolution,
   showCounts = true,
   highlightRegionId = null,
+  highlightRegionIds = [],
 }: {
   field: QuestionField;
   liveField: QuestionField | null;
@@ -378,6 +395,7 @@ export function QuadrantOverlay({
   resolution: QuestionResolvedMessage | null;
   showCounts?: boolean;
   highlightRegionId?: string | null;
+  highlightRegionIds?: readonly string[];
 }) {
   const resolutionMatches =
     resolution !== null && sameField(field, resolution.field);
@@ -390,6 +408,15 @@ export function QuadrantOverlay({
       ? null
       : resolution.winner;
   const lotterySelected = resolutionMatches ? resolution?.tieBreak?.selected ?? null : null;
+  const resolvedHighlights = resolutionMatches
+    ? resolution.tieBreak?.candidates
+      ?? (winner === "tie" ? Object.keys(resolution.quadrantCounts) : winner === null || winner === "empty" ? [] : [winner])
+    : [];
+  const highlighted = [
+    ...resolvedHighlights,
+    ...highlightRegionIds,
+    ...(highlightRegionId === null ? [] : [highlightRegionId]),
+  ];
 
   if (field.type === "polygon-zones") {
     const counts =
@@ -400,6 +427,7 @@ export function QuadrantOverlay({
         counts={counts}
         winner={lotterySelected ?? (winner === "tie" || winner === "empty" ? winner : (winner as string | null))}
         lotterySelected={lotterySelected}
+        highlightRegionIds={highlighted}
       />
     );
   }
@@ -414,14 +442,16 @@ export function QuadrantOverlay({
           counts={counts}
           winner={winner}
           showCounts={showCounts}
-          highlightRegionId={highlightRegionId}
+          highlightRegionIds={highlighted}
+          lotterySelected={lotterySelected}
         />
       : <ArenaEllipseOverlay
           field={field as typeof field & { arena: ArenaEllipse }}
           counts={counts}
           winner={winner}
           showCounts={showCounts}
-          highlightRegionId={highlightRegionId}
+          highlightRegionIds={highlighted}
+          lotterySelected={lotterySelected}
         />;
   }
 
@@ -447,10 +477,12 @@ export function QuadrantOverlay({
             position={FOUR_QUADRANT_POSITIONS[id]}
             count={showCounts ? counts?.[id] ?? null : null}
             winner={winner}
-            highlight={highlightRegionId === id}
+            highlight={highlighted.includes(id)}
           />
         ))}
-        {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
+        {winner === "tie" && lotterySelected === null && <div className="outcome outcome-tie">Gleichstand</div>}
+        {lotterySelected !== null && <div className="outcome outcome-kleroterion">Lottokratie entscheidet… {regionLabel(field, lotterySelected)}</div>}
+        {winner !== null && winner !== "tie" && winner !== "empty" && <div className="outcome outcome-majority">Mehrheit: {winner}</div>}
         {winner === "empty" && <div className="outcome outcome-empty" />}
       </div>
     );
@@ -472,10 +504,12 @@ export function QuadrantOverlay({
           position={positions[id]}
           count={showCounts ? counts?.[id] ?? null : null}
           winner={winner}
-          highlight={highlightRegionId === id}
+          highlight={highlighted.includes(id)}
         />
       ))}
-      {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
+      {winner === "tie" && lotterySelected === null && <div className="outcome outcome-tie">Gleichstand</div>}
+      {lotterySelected !== null && <div className="outcome outcome-kleroterion">Lottokratie entscheidet… {regionLabel(field, lotterySelected)}</div>}
+      {winner !== null && winner !== "tie" && winner !== "empty" && <div className="outcome outcome-majority">Mehrheit: {winner === "min" ? field.labels.minLabel : field.labels.maxLabel}</div>}
       {winner === "empty" && <div className="outcome outcome-empty" />}
     </div>
   );

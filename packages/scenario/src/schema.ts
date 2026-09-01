@@ -196,6 +196,22 @@ export const idlePhaseSchema = z.object({
 export const ratingConfigSchema = z.object({
   /** Shown on the live meter, e.g. the candidate's name. */
   candidateLabel: z.string().min(1, "candidateLabel must be non-empty"),
+  windows: z.array(z.object({
+    startAtMs: z.number().int().nonnegative(),
+    endAtMs: z.number().int().positive(),
+  }).refine((window) => window.startAtMs < window.endAtMs, {
+    message: "reaction window start must be before end",
+    path: ["startAtMs"],
+  })).optional(),
+});
+
+export const subtitleSchema = z.object({
+  text: z.string().min(1, "subtitle text must be non-empty"),
+  startAtMs: z.number().int().nonnegative(),
+  endAtMs: z.number().int().positive(),
+}).refine((subtitle) => subtitle.startAtMs < subtitle.endAtMs, {
+  message: "subtitle start must be before end",
+  path: ["startAtMs"],
 });
 
 export const videoPhaseSchema = z.object({
@@ -213,12 +229,19 @@ export const videoPhaseSchema = z.object({
   /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
   showCursors: z.boolean().optional(),
   rating: ratingConfigSchema.optional(),
+  subtitles: z.array(subtitleSchema).optional(),
 }).superRefine((phase, ctx) => {
   const problem = mediaCombinationError(phase.src, phase.audioSrc);
   if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem, path: [phase.audioSrc === undefined ? "src" : "audioSrc"] });
   if (phase.audioSrc === undefined && phase.tailDurationMs !== undefined) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "tailDurationMs is only valid when audioSrc is present", path: ["tailDurationMs"] });
   }
+  phase.subtitles?.forEach((subtitle, index) => {
+    if (subtitle.endAtMs > phase.expectedDurationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "subtitle must end within the phase", path: ["subtitles", index, "endAtMs"] });
+  });
+  phase.rating?.windows?.forEach((window, index) => {
+    if (window.endAtMs > phase.expectedDurationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "reaction window must end within the phase", path: ["rating", "windows", index, "endAtMs"] });
+  });
 });
 
 const positionQuestionBaseSchema = z.object({
@@ -286,6 +309,8 @@ const videoPositionQuestionBaseSchema = z.object({
   showCursors: z.boolean().optional(),
   /** Optional applause/boo controls shown alongside the position spectrum. */
   rating: ratingConfigSchema.optional(),
+  subtitles: z.array(subtitleSchema).optional(),
+  closeCountdownSeconds: z.union([z.literal(5), z.literal(10)]).optional(),
 });
 
 const polygonZonesVideoQuestionVariantSchema = videoPositionQuestionBaseSchema
@@ -333,6 +358,12 @@ export const videoPositionQuestionPhaseSchema = z.union([
       path: ["showAtMs"],
     });
   }
+  phase.subtitles?.forEach((subtitle, index) => {
+    if (subtitle.endAtMs > phase.expectedDurationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "subtitle must end within the phase", path: ["subtitles", index, "endAtMs"] });
+  });
+  phase.rating?.windows?.forEach((window, index) => {
+    if (window.endAtMs > phase.expectedDurationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "reaction window must end within the phase", path: ["rating", "windows", index, "endAtMs"] });
+  });
 });
 
 type UnknownRecord = Record<string, unknown>;
@@ -427,6 +458,7 @@ export type PolygonZone = z.infer<typeof polygonZoneSchema>;
 export type PolygonZonesField = z.infer<typeof polygonZonesFieldSchema>;
 export type PolygonZonesPluralityNext = z.infer<typeof polygonZonesPluralityNextSchema>;
 export type RatingConfig = z.infer<typeof ratingConfigSchema>;
+export type Subtitle = z.infer<typeof subtitleSchema>;
 export type IdlePhase = z.infer<typeof idlePhaseSchema>;
 export type VideoPhase = z.infer<typeof videoPhaseSchema>;
 export type PositionQuestionPhase = z.infer<typeof positionQuestionPhaseSchema>;

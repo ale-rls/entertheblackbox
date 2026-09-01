@@ -29,7 +29,7 @@ function setup(overrides: Partial<ConstructorParameters<typeof QrGrantPushLoop>[
 }
 
 describe("QR grant push loop", () => {
-  it("issues large idle/lobby grants and corner active grants with a stable parameter-free URL", () => {
+  it("issues large idle/lobby grants and hides the QR during active play", () => {
     const { loop, sent, setLifecycle } = setup();
     loop.push();
     setLifecycle("lobby");
@@ -38,7 +38,7 @@ describe("QR grant push loop", () => {
     loop.push();
 
     expect(sent.map((message) => message.t === "qr_grant" ? message.placement : message.t)).toEqual([
-      "large", "large", "corner",
+      "large", "large", "qr_hidden",
     ]);
     const url = new URL((sent[0] as Extract<QrPushMessage, { t: "qr_grant" }>).url);
     expect(url.toString()).toBe("https://phone.example/join");
@@ -53,9 +53,12 @@ describe("QR grant push loop", () => {
   });
 
   it.each([
+    {},
+    { allowLateJoin: true },
     { allowLateJoin: false },
+    { activeQrVisibility: "corner" as const },
     { activeQrVisibility: "hidden" as const },
-  ])("hides QR during active play when admission is closed (%o)", (policy) => {
+  ])("always hides QR during active play (%o)", (policy) => {
     const { loop, sent, setLifecycle } = setup(policy);
     setLifecycle("active");
     loop.push();

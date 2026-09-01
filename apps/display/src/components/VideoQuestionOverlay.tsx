@@ -5,9 +5,8 @@ import type {
   QuestionStatusMessage,
 } from "@smartphonecracy/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
-import { Countdown } from "./Countdown.js";
 import { QuadrantOverlay } from "./QuadrantOverlay.js";
-import { VoteCloseCountdown, isInVoteCloseWindow } from "./VoteCloseCountdown.js";
+import { VoteCloseCountdown } from "./VoteCloseCountdown.js";
 
 export type VideoQuestionPhase = Extract<PhaseSnapshotMessage, { kind: "video-position-question" }>;
 export type VideoQuestionStage = "hidden" | "shown" | "open" | "closed";
@@ -23,14 +22,6 @@ export function videoQuestionStage(phase: VideoQuestionPhase, now: number): Vide
 /** Only the statue-picker's polygon zones keep their vote tallies and the "Voting open/closed" pill on screen. */
 function showsCountsAndVotingState(fieldType: string): boolean {
   return fieldType === "polygon-zones";
-}
-
-function leadingSide(
-  counts: NonNullable<QuestionStatusMessage["quadrantCounts"]> | null,
-): "min" | "max" | null {
-  if (counts === null || !("min" in counts) || !("max" in counts)) return null;
-  if (counts.min === counts.max) return null;
-  return counts.min > counts.max ? "min" : "max";
 }
 
 export function VideoQuestionOverlay({
@@ -68,13 +59,12 @@ export function VideoQuestionOverlay({
       ? "Voting open"
       : "Voting closed";
   const keepCountsAndVotingState = showsCountsAndVotingState(phase.field.type);
-  // The two-quadrant field (e.g. Fakt/Lüge) gets a dramatic centered
-  // countdown for the final seconds instead of the small corner one, with
-  // the leading side blinking so the room can feel the vote tipping.
-  const usesCenterCloseCountdown = phase.field.type === "two-quadrant";
-  const remainingMs = clock.remainingUntil(closeAt);
-  const inCloseWindow = votingOpen && usesCenterCloseCountdown && isInVoteCloseWindow(remainingMs);
-  const highlightRegionId = inCloseWindow ? leadingSide(liveCounts) : null;
+  const highlightRegionIds = stage === "closed" && resolution !== null
+    ? resolution.tieBreak?.candidates
+      ?? (resolution.winner === "tie"
+        ? Object.keys(resolution.quadrantCounts)
+        : resolution.winner === "empty" || resolution.winner === "fixed" ? [] : [resolution.winner])
+    : [];
 
   return (
     <div className="question question-over-video" data-voting-open={votingOpen}>
@@ -87,11 +77,9 @@ export function VideoQuestionOverlay({
         liveCounts={liveCounts}
         resolution={resolution}
         showCounts={keepCountsAndVotingState}
-        highlightRegionId={highlightRegionId}
+        highlightRegionIds={highlightRegionIds}
       />
-      {votingOpen && (usesCenterCloseCountdown
-        ? <VoteCloseCountdown clock={clock} deadlineAt={closeAt} soundEnabled={soundEnabled} />
-        : <Countdown clock={clock} deadlineAt={closeAt} />)}
+      {votingOpen && <VoteCloseCountdown clock={clock} deadlineAt={closeAt} soundEnabled={soundEnabled} durationSeconds={phase.closeCountdownSeconds ?? 5} />}
       {keepCountsAndVotingState && <div className="voting-state">{votingState}</div>}
     </div>
   );

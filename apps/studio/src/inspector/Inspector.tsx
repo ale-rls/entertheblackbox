@@ -104,9 +104,28 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       />{label("Applause + boo crowd sounds", "rating")}</label>
       {phase.rating && text("Reaction subject", "rating.candidateLabel", phase.rating.candidateLabel, (candidateLabel) => onChange({
         ...phase,
-        rating: { candidateLabel },
+        rating: { ...phase.rating, candidateLabel },
       }))}
+      {phase.rating && <fieldset><legend>Crowd sound windows <small>rating.windows</small></legend>
+        {(phase.rating.windows ?? []).map((window, index) => <div className="polygon-point-fields" key={`reaction-${index}`}>
+          {number(`Window ${index + 1} start (ms)`, `rating.windows.${index}.startAtMs`, window.startAtMs, (startAtMs) => onChange({ ...phase, rating: { ...phase.rating!, windows: phase.rating!.windows!.map((item, itemIndex) => itemIndex === index ? { ...item, startAtMs } : item) } }))}
+          {number(`Window ${index + 1} end (ms)`, `rating.windows.${index}.endAtMs`, window.endAtMs, (endAtMs) => onChange({ ...phase, rating: { ...phase.rating!, windows: phase.rating!.windows!.map((item, itemIndex) => itemIndex === index ? { ...item, endAtMs } : item) } }))}
+          <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, rating: { ...phase.rating!, windows: phase.rating!.windows!.filter((_, itemIndex) => itemIndex !== index) } })}>Remove window</button>
+        </div>)}
+        <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, rating: { ...phase.rating!, windows: [...(phase.rating!.windows ?? []), { startAtMs: 0, endAtMs: Math.min(phase.expectedDurationMs, 5_000) }] } })}>Add sound window</button>
+      </fieldset>}
       {phase.kind === "video-position-question" && phase.rating && <p className="sc-tool-copy field-hint">The phone keeps the regular spectrum trackpad active and shows applause/boo as secondary buttons. Reactions play varied crowd samples on the display; no score is shown.</p>}
+      <fieldset><legend>Subtitles <small>subtitles</small></legend>
+        {(phase.subtitles ?? []).map((subtitle, index) => <div key={`subtitle-${index}`}>
+          {text(`Subtitle ${index + 1}`, `subtitles.${index}.text`, subtitle.text, (value) => onChange({ ...phase, subtitles: phase.subtitles!.map((item, itemIndex) => itemIndex === index ? { ...item, text: value } : item) }))}
+          <div className="polygon-point-fields">
+            {number("Start (ms)", `subtitles.${index}.startAtMs`, subtitle.startAtMs, (startAtMs) => onChange({ ...phase, subtitles: phase.subtitles!.map((item, itemIndex) => itemIndex === index ? { ...item, startAtMs } : item) }))}
+            {number("End (ms)", `subtitles.${index}.endAtMs`, subtitle.endAtMs, (endAtMs) => onChange({ ...phase, subtitles: phase.subtitles!.map((item, itemIndex) => itemIndex === index ? { ...item, endAtMs } : item) }))}
+          </div>
+          <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, subtitles: phase.subtitles!.filter((_, itemIndex) => itemIndex !== index) })}>Remove subtitle</button>
+        </div>)}
+        <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, subtitles: [...(phase.subtitles ?? []), { text: "New subtitle", startAtMs: 0, endAtMs: Math.min(phase.expectedDurationMs, 5_000) }] })}>Add subtitle</button>
+      </fieldset>
     </>}
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
@@ -212,6 +231,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         const closeOffset = phase.closeAtMs - timelineOriginMs;
         const hideOffset = phase.hideAtMs - timelineOriginMs;
         return <fieldset className="timeline-fields"><legend>Vote timeline <small>{phase.audioSrc === undefined ? "milliseconds from media start" : "milliseconds from MP3 end"}</small></legend>
+          <label className="sc-tool-label">{label("Close countdown", "closeCountdownSeconds")}<select className="sc-tool-select" value={phase.closeCountdownSeconds ?? 5} onChange={(event) => onChange({ ...phase, closeCountdownSeconds: Number(event.target.value) as 5 | 10 })}><option value="5">5 seconds</option><option value="10">10 seconds</option></select></label>
           <TimingTimeline label="Vote" min={timelineMinMs} max={timelineMaxMs} origin={0} markers={[
             { id: "show", label: "Show question", runtime: "showAtMs", value: showOffset, min: timelineMinMs, max: openOffset, tone: "show", onChange: (value) => changeOffset("showAtMs", value) },
             { id: "open", label: "Open voting", runtime: "openAtMs", value: openOffset, min: showOffset, max: Math.max(showOffset, closeOffset - 1), tone: "open", onChange: (value) => changeOffset("openAtMs", value) },
@@ -220,7 +240,9 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
           ]} />
           {phase.audioSrc !== undefined && <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={(phase.tailDurationMs ?? 0) < 1} onClick={() => {
             const tailDurationMs = phase.tailDurationMs ?? 0;
-            onChange({ ...phase, showAtMs: timelineOriginMs, openAtMs: timelineOriginMs, closeAtMs: timelineOriginMs + Math.max(1, Math.floor(tailDurationMs * .8)), hideAtMs: timelineOriginMs + tailDurationMs });
+            const openAtMs = timelineOriginMs + Math.min(15_000, Math.max(0, tailDurationMs - 2));
+            const closeAtMs = Math.min(timelineOriginMs + tailDurationMs - 1, openAtMs + 5_000);
+            onChange({ ...phase, showAtMs: timelineOriginMs, openAtMs, closeAtMs, hideAtMs: Math.min(timelineOriginMs + tailDurationMs, closeAtMs + 5_000), closeCountdownSeconds: phase.closeCountdownSeconds ?? 5 });
           }}>Fit vote to audio tail</button>}
           <p className="sc-tool-copy field-hint">{phase.audioSrc === undefined
             ? `Required order: show ≤ open < close ≤ hide ≤ media duration (${phase.expectedDurationMs} ms).`

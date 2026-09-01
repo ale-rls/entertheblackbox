@@ -56,6 +56,7 @@ export function App() {
   const [configError, setConfigError] = useState("");
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
   const position = useRef<TrackpadState>({ ...TRACKPAD_CENTER });
+  const [visiblePosition, setVisiblePosition] = useState<TrackpadState>({ ...TRACKPAD_CENTER });
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   const seq = useRef(0);
   const throttle = useMemo(() => new InputThrottle(), []);
@@ -187,6 +188,7 @@ export function App() {
       e.clientY - last.y,
       surface,
     );
+    setVisiblePosition(position.current);
     lastPointer.current = { x: e.clientX, y: e.clientY };
     sendPosition();
   };
@@ -247,6 +249,12 @@ export function App() {
           onPointerUp={onPointerEnd}
           onPointerCancel={onPointerEnd}
         >
+          <p className="trackpad-instruction">Wische um deine Cursor zu bewegen</p>
+          {identity && <span
+            className="live-cursor-dot"
+            aria-hidden="true"
+            style={{ left: `${visiblePosition.x * 100}%`, top: `${visiblePosition.y * 100}%`, backgroundColor: identity.color }}
+          />}
           {!state.inputOpen && (
             <p className="watch-screen">{state.join.kind === "accepted" ? `${submittedName}, watch the screen` : "Joining…"}</p>
           )}

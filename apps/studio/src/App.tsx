@@ -44,6 +44,19 @@ const componentTypeLabel: Record<AuthorableComponentType, string> = {
   "image-audio-position-question": "still image + MP3 + position vote",
 };
 
+/** Default authoring rhythm: 15s decide, 5s vote, 5s result hold. */
+const defaultVideoVoteTiming = (expectedDurationMs: number, originMs = 0) => {
+  const openAtMs = Math.min(originMs + 15_000, expectedDurationMs - 2);
+  const closeAtMs = Math.min(openAtMs + 5_000, expectedDurationMs - 1);
+  return {
+    showAtMs: originMs,
+    openAtMs,
+    closeAtMs,
+    hideAtMs: Math.min(closeAtMs + 5_000, expectedDurationMs),
+    closeCountdownSeconds: 5 as const,
+  };
+};
+
 declare const __POCKETBASE_URL__: string;
 const POCKETBASE_URL = __POCKETBASE_URL__;
 
@@ -444,7 +457,7 @@ export function App() {
       : kind === "position-question"
         ? { kind, id, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, durationMs: 60000, freezeMs: 5000, connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
         : mediaVote
-          ? { kind: "video-position-question" as const, id, ...mediaFields, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, showAtMs: imageAudio ? mediaDurationMs : Math.floor(expectedDurationMs * .25), openAtMs: imageAudio ? mediaDurationMs : Math.floor(expectedDurationMs * .3), closeAtMs: imageAudio ? mediaDurationMs + Math.max(1, Math.floor(tailDurationMs * .8)) : Math.max(Math.floor(expectedDurationMs * .3) + 1, Math.floor(expectedDurationMs * .75)), hideAtMs: imageAudio ? expectedDurationMs : Math.max(Math.floor(expectedDurationMs * .75), Math.floor(expectedDurationMs * .875)), connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
+          ? { kind: "video-position-question" as const, id, ...mediaFields, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, ...defaultVideoVoteTiming(expectedDurationMs, imageAudio ? mediaDurationMs : 0), connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
           : { kind: "video" as const, id, ...mediaFields, next: "idle" };
     const phases = [...draft.project.scenario.phases, phase] as Draft["project"]["scenario"]["phases"];
     const nextNodes = [...nodes, { id, type: "phase", position: { x: 400, y: 200 }, data: nodeDataForPhase(phase as Phase) }];
@@ -524,10 +537,7 @@ export function App() {
           audioSrc: undefined,
           tailDurationMs: undefined,
           expectedDurationMs,
-          showAtMs: Math.floor(expectedDurationMs * .25),
-          openAtMs: Math.floor(expectedDurationMs * .3),
-          closeAtMs: Math.max(Math.floor(expectedDurationMs * .3) + 1, Math.floor(expectedDurationMs * .75)),
-          hideAtMs: Math.max(Math.floor(expectedDurationMs * .75), Math.floor(expectedDurationMs * .875)),
+          ...defaultVideoVoteTiming(expectedDurationMs),
         };
       }
       const image = studioMediaKindForSource(mediaPhase.src) === "image"
@@ -549,10 +559,7 @@ export function App() {
         audioSrc: audio,
         tailDurationMs,
         expectedDurationMs,
-        showAtMs: mediaDurationMs,
-        openAtMs: mediaDurationMs,
-        closeAtMs: mediaDurationMs + Math.max(1, Math.floor(tailDurationMs * .8)),
-        hideAtMs: expectedDurationMs,
+        ...defaultVideoVoteTiming(expectedDurationMs, mediaDurationMs),
       };
     };
     if (phase.kind === kind && (phase.kind === "video" || phase.kind === "video-position-question")) {

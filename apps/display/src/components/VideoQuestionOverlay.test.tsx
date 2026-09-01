@@ -120,11 +120,10 @@ describe("videoQuestionStage", () => {
     expect(html).toContain("Voting open");
   });
 
-  it("only shows a countdown for a two-quadrant vote in its final 3 seconds, centered", () => {
+  it("shows a configurable centered countdown and only blinks the resolved winner after close", () => {
     const closeAt = twoQuadrantPhase.startedAt + twoQuadrantPhase.closeAtMs;
 
-    // Outside the final 3 seconds there's no corner ticker at all for this
-    // field type -- only the dramatic centered countdown near the close.
+    // Outside the default final 5 seconds the countdown stays hidden.
     const early = renderToStaticMarkup(
       <VideoQuestionOverlay phase={twoQuadrantPhase} clock={clockAt(closeAt - 10_000)} liveField={null} liveCounts={null} resolution={null} />,
     );
@@ -140,6 +139,6 @@ describe("videoQuestionStage", () => {
       />,
     );
     expect(final).toContain("vote-close-countdown");
-    expect(final).toContain("arena-region-blink");
+    expect(final).not.toContain("arena-region-blink");
   });
 });

@@ -19,6 +19,7 @@ import { PhaseVideo } from "./components/PhaseVideo.js";
 import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
 import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
+import { PhaseSubtitles } from "./components/PhaseSubtitles.js";
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -33,6 +34,7 @@ import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
 declare const __BUILD_VERSION__: string | undefined;
 declare const __REALTIME_WS_URL__: string | undefined;
 declare const __DISPLAY_TOKEN__: string | undefined;
+declare const __LOBBY_WIFI_NAME__: string | undefined;
 
 const config = {
   url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
@@ -280,6 +282,7 @@ export function App() {
           phase={phase}
           clock={connection.clock}
           joinUrl={state.qrGrant?.showJoinUrl === false ? null : state.qrGrant?.url ?? null}
+          networkName={typeof __LOBBY_WIFI_NAME__ === "string" ? __LOBBY_WIFI_NAME__ : "[Netzname]"}
         />
         {phase?.kind === "position-question" && (
           <div className="question">
@@ -300,6 +303,7 @@ export function App() {
         {phase?.kind === "video" && phase.title && (
           <div className="video-title">{phase.title}</div>
         )}
+        {(phase?.kind === "video" || phase?.kind === "video-position-question") && <PhaseSubtitles phase={phase} clock={connection.clock} />}
         {phase?.kind === "video-position-question" && (
           <VideoQuestionOverlay
             phase={phase}
@@ -311,7 +315,7 @@ export function App() {
           />
         )}
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.rating && (
-          <CrowdReactionSounds status={state.ratingStatus} soundEnabled={soundEnabled} />
+          <CrowdReactionSounds status={state.ratingStatus} soundEnabled={soundEnabled} {...(phase.rating.windows === undefined ? {} : { windows: phase.rating.windows })} elapsedMs={connection.clock.now() - phase.startedAt} />
         )}
         {state.notice && (
           <div

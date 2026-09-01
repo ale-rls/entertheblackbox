@@ -13,7 +13,7 @@ const idlePhase = (deadlineAt: number | null): PhaseSnapshotMessage => ({
 });
 
 describe("LobbyCountdown", () => {
-  it("always renders a distant countdown in hours, minutes, and seconds", () => {
+  it("renders the lobby heading, label, instructions, and a minutes/seconds countdown", () => {
     const clock = new ServerClock();
     const lobby = renderToStaticMarkup(
       <LobbyCountdown
@@ -23,7 +23,10 @@ describe("LobbyCountdown", () => {
         joinUrl="https://join.example/phone/"
       />,
     );
-    expect(lobby).toContain("01:01:01");
+    expect(lobby).toContain("61:01");
+    expect(lobby).toContain("Join the show");
+    expect(lobby).toContain("Show starts in…");
+    expect(lobby).toContain("Besucher-WLAN [Netzname]");
     expect(lobby).toContain("https://join.example/phone/");
     expect(lobby).not.toContain("Show starts at");
 
@@ -33,9 +36,9 @@ describe("LobbyCountdown", () => {
   });
 
   it("formats zero-padded durations and floors expired deadlines at zero", () => {
-    expect(formatLobbyCountdown(10_000)).toBe("00:00:10");
-    expect(formatLobbyCountdown(3_661_000)).toBe("01:01:01");
-    expect(formatLobbyCountdown(-1)).toBe("00:00:00");
+    expect(formatLobbyCountdown(10_000)).toBe("00:10");
+    expect(formatLobbyCountdown(3_661_000)).toBe("61:01");
+    expect(formatLobbyCountdown(-1)).toBe("00:00");
   });
 
   it("keeps the join URL visible in a manual lobby without a deadline", () => {

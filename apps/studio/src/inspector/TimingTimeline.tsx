@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { formatTimelineTime } from "./timing.js";
 
 export type TimelineMarker = {
@@ -27,6 +27,7 @@ const percent = (value: number, min: number, max: number) => max === min ? 0 : (
 
 export function TimingTimeline({ label, min, max, markers, origin, step = 100 }: Props) {
   const [draftValues, setDraftValues] = useState<Record<string, number>>(() => Object.fromEntries(markers.map((marker) => [marker.id, marker.value])));
+  const [draggingMarkerId, setDraggingMarkerId] = useState<string | null>(null);
   const markerValues = markers.map((marker) => `${marker.id}:${marker.value}`).join("|");
   useEffect(() => {
     setDraftValues(Object.fromEntries(markers.map((marker) => [marker.id, marker.value])));
@@ -52,9 +53,42 @@ export function TimingTimeline({ label, min, max, markers, origin, step = 100 }:
     marker.onChange(next);
   };
   const hasOrigin = origin !== undefined && origin > min && origin < max;
+  const valueAtPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const raw = min + clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1) * (max - min);
+    return Math.round(raw / step) * step;
+  };
+  const markerAtPointer = (value: number) => markers.reduce((nearest, marker) =>
+    Math.abs((draftValues[marker.id] ?? marker.value) - value) < Math.abs((draftValues[nearest.id] ?? nearest.value) - value) ? marker : nearest,
+  markers[0]!);
+  const moveRulerMarker = (event: ReactPointerEvent<HTMLDivElement>, final: boolean) => {
+    if (markers.length === 0) return;
+    const raw = valueAtPointer(event);
+    const marker = markers.find((candidate) => candidate.id === draggingMarkerId) ?? markerAtPointer(raw);
+    const next = clamp(raw, marker.min ?? min, marker.max ?? max);
+    preview(marker, next);
+    if (final) commit(marker, String(next));
+  };
 
   return <div className="timing-timeline" aria-label={`${label} timeline`}>
-    <div className="timing-ruler" aria-hidden="true">
+    <div
+      className="timing-ruler"
+      role="group"
+      aria-label={`${label} interactive timeline ruler`}
+      onPointerDown={(event) => {
+        const marker = markerAtPointer(valueAtPointer(event));
+        setDraggingMarkerId(marker.id);
+        event.currentTarget.setPointerCapture(event.pointerId);
+        moveRulerMarker(event, false);
+      }}
+      onPointerMove={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) moveRulerMarker(event, false); }}
+      onPointerUp={(event) => {
+        moveRulerMarker(event, true);
+        event.currentTarget.releasePointerCapture(event.pointerId);
+        setDraggingMarkerId(null);
+      }}
+      onPointerCancel={() => setDraggingMarkerId(null)}
+    >
       <div className="timing-ruler-track" />
       {hasOrigin && <span className="timing-origin" style={{ "--timeline-left": `${percent(origin, min, max)}%` } as CSSProperties} />}
       {markers.map((marker) => <span

@@ -21,6 +21,8 @@ export default defineConfig({
     // a changed DISPLAY_TOKEN in Coolify needs apps/display rebuilt, not
     // just restarted, to take effect here.
     __DISPLAY_TOKEN__: JSON.stringify(process.env.DISPLAY_TOKEN ?? ""),
+    // Venue-configured SSID shown in the two-line lobby instructions.
+    __LOBBY_WIFI_NAME__: JSON.stringify(process.env.LOBBY_WIFI_NAME ?? "[Netzname]"),
   },
   plugins: [react()],
 });

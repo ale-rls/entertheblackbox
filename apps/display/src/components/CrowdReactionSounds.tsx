@@ -14,6 +14,8 @@ export const CROWD_REACTION_SAMPLES = {
   ],
 } as const;
 
+const REACTION_THROTTLE_MS = 1_200;
+
 type ReactionKind = keyof typeof CROWD_REACTION_SAMPLES;
 
 export function pickReactionSample(kind: ReactionKind, random = Math.random): string {
@@ -33,12 +35,17 @@ function reactionVolume(newReactions: number): number {
 export function CrowdReactionSounds({
   status,
   soundEnabled,
+  windows,
+  elapsedMs = 0,
 }: {
   status: RatingStatusMessage | null;
   soundEnabled: boolean;
+  windows?: readonly { startAtMs: number; endAtMs: number }[];
+  elapsedMs?: number;
 }) {
   const previous = useRef<RatingStatusMessage | null>(null);
   const activeAudio = useRef(new Set<HTMLAudioElement>());
+  const lastPlayedAt = useRef<Record<ReactionKind, number>>({ applause: -Infinity, boo: -Infinity });
 
   useEffect(() => () => {
     for (const audio of activeAudio.current) {
@@ -62,11 +69,15 @@ export function CrowdReactionSounds({
       applause: Math.max(0, status.applause - before.applause),
       boo: Math.max(0, status.boo - before.boo),
     };
-    if (!soundEnabled) return;
+    const insideWindow = windows === undefined || windows.some((window) => elapsedMs >= window.startAtMs && elapsedMs < window.endAtMs);
+    if (!soundEnabled || !insideWindow) return;
 
     for (const kind of ["applause", "boo"] as const) {
       const delta = deltas[kind];
       if (delta === 0) continue;
+      const now = Date.now();
+      if (now - lastPlayedAt.current[kind] < REACTION_THROTTLE_MS) continue;
+      lastPlayedAt.current[kind] = now;
       const audio = new Audio(pickReactionSample(kind));
       audio.preload = "auto";
       audio.volume = reactionVolume(delta);
@@ -76,7 +87,7 @@ export function CrowdReactionSounds({
       audio.addEventListener("error", release, { once: true });
       void audio.play().catch(release);
     }
-  }, [soundEnabled, status]);
+  }, [elapsedMs, soundEnabled, status, windows]);
 
   return null;
 }

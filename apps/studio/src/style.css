@@ -661,6 +661,7 @@ body:has(.editor),
   height: 2.5rem;
   margin-inline: var(--sc-tool-space-2);
 }
+.timing-ruler { cursor: ew-resize; touch-action: none; user-select: none; }
 
 .timing-ruler-track {
   position: absolute;

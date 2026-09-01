@@ -429,7 +429,7 @@ describe("Studio feedback and keyboard entry", () => {
       ?.querySelector<HTMLInputElement>("input")!;
     expect(document.body.textContent).toContain("milliseconds from MP3 end");
     expect(inputFor("Show question").value).toBe("0");
-    expect(inputFor("Open voting").value).toBe("0");
+    expect(inputFor("Open voting").value).toBe("15000");
     expect(inputFor("Close voting").value).toBe("20000");
     expect(inputFor("Hide question").value).toBe("25000");
 
@@ -439,8 +439,8 @@ describe("Studio feedback and keyboard entry", () => {
       tailInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => { button("Fit vote to audio tail").click(); });
-    expect(inputFor("Close voting").value).toBe("24000");
-    expect(inputFor("Hide question").value).toBe("30000");
+    expect(inputFor("Close voting").value).toBe("20000");
+    expect(inputFor("Hide question").value).toBe("25000");
 
     await act(async () => { document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"]')?.click(); });
     const alternate = Array.from(document.querySelectorAll<HTMLElement>(".media-row"))
@@ -449,8 +449,8 @@ describe("Studio feedback and keyboard entry", () => {
     await flush();
     expect(document.body.textContent).toContain("Audio duration: 20.000 seconds");
     expect(inputFor("Show question").value).toBe("0");
-    expect(inputFor("Close voting").value).toBe("24000");
-    expect(inputFor("Hide question").value).toBe("30000");
+    expect(inputFor("Close voting").value).toBe("20000");
+    expect(inputFor("Hide question").value).toBe("25000");
   });
 
   it("opens the live display and admin as clearly named external tools", async () => {

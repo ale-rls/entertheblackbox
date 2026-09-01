@@ -4,10 +4,9 @@ import type { ServerClock } from "../lib/serverClock.js";
 
 export function formatLobbyCountdown(remainingMs: number): string {
   const totalSeconds = Math.max(0, Math.ceil(remainingMs / 1_000));
-  const hours = Math.floor(totalSeconds / 3_600);
-  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds]
+  return [minutes, seconds]
     .map((part) => String(part).padStart(2, "0"))
     .join(":");
 }
@@ -35,11 +34,13 @@ export function LobbyCountdown({
   phase,
   clock,
   joinUrl,
+  networkName = "[Netzname]",
 }: {
   sessionId: string | null;
   phase: PhaseSnapshotMessage | null;
   clock: ServerClock;
   joinUrl: string | null;
+  networkName?: string;
 }) {
   if (sessionId !== "lobby" || phase?.kind !== "idle") {
     return null;
@@ -49,12 +50,17 @@ export function LobbyCountdown({
 
   return (
     <div className="lobby-information">
+      <h1 className="lobby-heading">Join the show</h1>
       {phase.deadlineAt !== null && (
-        <LobbyClock clock={clock} deadlineAt={phase.deadlineAt} />
+        <div className="lobby-timer"><p className="lobby-countdown-label">Show starts in…</p><LobbyClock clock={clock} deadlineAt={phase.deadlineAt} /></div>
       )}
       {joinUrl !== null && (
         <div className="lobby-join-url" aria-label="Phone join URL">{joinUrl}</div>
       )}
+      <div className="lobby-instructions">
+        <p>Verbinde dich mit dem Besucher-WLAN {networkName} oder nutze dein eigenes mobiles Netz.</p>
+        <p>Scanne den QR-Code mit deinem Smartphone und folge den Anleitungen auf deinem Display.</p>
+      </div>
     </div>
   );
 }

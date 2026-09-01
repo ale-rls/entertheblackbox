@@ -135,7 +135,7 @@ describe("QuadrantOverlay", () => {
       'class="quadrant quadrant-top quadrant-dimmed" data-quadrant="min"',
     );
     expect(html).toContain(
-      'class="quadrant quadrant-bottom quadrant-winner" data-quadrant="max"',
+      'class="quadrant quadrant-bottom quadrant-winner quadrant-blink" data-quadrant="max"',
     );
   });
 
@@ -218,7 +218,7 @@ describe("QuadrantOverlay", () => {
       />,
     );
     expect(tie.match(/quadrant-dimmed/g)).toHaveLength(2);
-    expect(tie).toContain('class="outcome outcome-tie">tie</div>');
+    expect(tie).toContain('class="outcome outcome-tie">Gleichstand</div>');
 
     const empty = renderToStaticMarkup(
       <QuadrantOverlay
@@ -305,7 +305,7 @@ describe("QuadrantOverlay", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay field={zonesField} liveField={null} liveCounts={null} resolution={resolution} />,
     );
-    expect(html).toContain("Kleroterion · Dionysos");
+    expect(html).toContain("Lottokratie entscheidet… Dionysos");
     expect(html).toContain("zone-shape-winner");
     expect(html.match(/zone-shape-dimmed/g)).toHaveLength(2);
   });

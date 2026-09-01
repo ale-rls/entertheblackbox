@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ServerClock } from "../lib/serverClock.js";
 
 /** How many seconds before the deadline the dramatic center countdown takes over. */
-export const VOTE_CLOSE_COUNTDOWN_SECONDS = 3;
+export const DEFAULT_VOTE_CLOSE_COUNTDOWN_SECONDS = 5;
 
 const BEEP_FREQUENCY_HZ = 880;
 const BEEP_DURATION_S = 0.12;
@@ -50,10 +50,12 @@ export function VoteCloseCountdown({
   clock,
   deadlineAt,
   soundEnabled,
+  durationSeconds = DEFAULT_VOTE_CLOSE_COUNTDOWN_SECONDS,
 }: {
   clock: ServerClock;
   deadlineAt: number;
   soundEnabled: boolean;
+  durationSeconds?: 5 | 10;
 }) {
   const [remainingMs, setRemainingMs] = useState(() => clock.remainingUntil(deadlineAt));
   const lastBeepSecond = useRef<number | null>(null);
@@ -67,7 +69,7 @@ export function VoteCloseCountdown({
   }, [clock, deadlineAt]);
 
   const secondsLeft = Math.ceil(remainingMs / 1000);
-  const inFinalCountdown = remainingMs > 0 && secondsLeft <= VOTE_CLOSE_COUNTDOWN_SECONDS;
+  const inFinalCountdown = remainingMs > 0 && secondsLeft <= durationSeconds;
 
   useEffect(() => {
     if (!inFinalCountdown || !soundEnabled) return;
@@ -83,6 +85,6 @@ export function VoteCloseCountdown({
 }
 
 /** True during the final countdown window -- lets a parent decide when to blink the leading side. */
-export function isInVoteCloseWindow(remainingMs: number): boolean {
-  return remainingMs > 0 && Math.ceil(remainingMs / 1000) <= VOTE_CLOSE_COUNTDOWN_SECONDS;
+export function isInVoteCloseWindow(remainingMs: number, durationSeconds = DEFAULT_VOTE_CLOSE_COUNTDOWN_SECONDS): boolean {
+  return remainingMs > 0 && Math.ceil(remainingMs / 1000) <= durationSeconds;
 }
