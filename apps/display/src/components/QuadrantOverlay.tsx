@@ -64,11 +64,18 @@ function centroid(points: readonly { x: number; y: number }[]): { x: number; y: 
   return { x: sum.x / points.length, y: sum.y / points.length };
 }
 
+/** Keeps a label's placement from running off either side of the screen. */
+function clampPercent(value: number, min = 6, max = 94): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+const ZONE_LABEL_BOTTOM_PERCENT = 86;
+
 /**
  * Arbitrary-polygon zones (e.g. a 3-way statue vote). Shapes render in an
  * SVG stretched to the arena's aspect ratio; labels/counts render as plain
- * HTML positioned at each zone's centroid so text never gets skewed by a
- * non-uniform SVG scale.
+ * HTML aligned along a common bottom row (horizontally at each zone's
+ * centroid) so text never gets skewed by a non-uniform SVG scale.
  */
 function PolygonZoneOverlay({
   field,
@@ -83,21 +90,25 @@ function PolygonZoneOverlay({
 }) {
   return (
     <div className="quadrant-overlay quadrant-overlay-polygon-zones">
-      <svg className="zone-shapes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-        {field.zones.map((zone) => (
-          <polygon
-            key={zone.id}
-            className={[
-              "zone-shape",
-              winner === zone.id ? "zone-shape-winner" : "",
-              winner !== null && winner !== zone.id ? "zone-shape-dimmed" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            points={zone.points.map((p) => `${p.x * 100},${p.y * 100}`).join(" ")}
-          />
-        ))}
-      </svg>
+      {/* The perspective-warped zone borders are only useful once there's an
+          outcome to point at -- otherwise they just clutter the shot. */}
+      {winner !== null && (
+        <svg className="zone-shapes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+          {field.zones.map((zone) => (
+            <polygon
+              key={zone.id}
+              className={[
+                "zone-shape",
+                winner === zone.id ? "zone-shape-winner" : "",
+                winner !== zone.id ? "zone-shape-dimmed" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              points={zone.points.map((p) => `${p.x * 100},${p.y * 100}`).join(" ")}
+            />
+          ))}
+        </svg>
+      )}
       {field.zones.map((zone) => {
         const c = centroid(zone.points);
         return (
@@ -110,7 +121,7 @@ function PolygonZoneOverlay({
             ]
               .filter(Boolean)
               .join(" ")}
-            style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%` }}
+            style={{ left: `${clampPercent(c.x * 100)}%`, top: `${ZONE_LABEL_BOTTOM_PERCENT}%` }}
           >
             <span className="zone-name">{zone.label}</span>
             {counts !== null && <span className="zone-count">{counts[zone.id] ?? 0}</span>}
@@ -138,11 +149,13 @@ function Region({
   position,
   count,
   winner,
+  highlight = false,
 }: {
   id: FourQuadrant | TwoQuadrant;
   position: string;
   count: number | null;
   winner: string | null;
+  highlight?: boolean;
 }) {
   return (
     <div
@@ -151,6 +164,7 @@ function Region({
         `quadrant-${position}`,
         winner === id ? "quadrant-winner" : "",
         winner !== null && winner !== id ? "quadrant-dimmed" : "",
+        highlight ? "quadrant-blink" : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -161,12 +175,13 @@ function Region({
   );
 }
 
-function arenaRegionClass(id: string, winner: string | null): string {
+function arenaRegionClass(id: string, winner: string | null, highlightRegionId: string | null): string {
   return [
     "arena-region",
     `arena-region-${id}`,
     winner === id ? "arena-region-winner" : "",
     winner !== null && winner !== id ? "arena-region-dimmed" : "",
+    highlightRegionId === id ? "arena-region-blink" : "",
   ].filter(Boolean).join(" ");
 }
 
@@ -197,10 +212,14 @@ function ArenaEllipseOverlay({
   field,
   counts,
   winner,
+  showCounts,
+  highlightRegionId,
 }: {
   field: Exclude<QuestionField, PolygonZonesField> & { arena: ArenaEllipse };
   counts: FourQuadrantCounts | TwoQuadrantCounts | null;
   winner: string | null;
+  showCounts: boolean;
+  highlightRegionId: string | null;
 }) {
   const { centerX, centerY, radiusX, radiusY } = field.arena;
   const cx = centerX * 100;
@@ -241,21 +260,21 @@ function ArenaEllipseOverlay({
     <svg className="arena-ellipse-shapes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
       <defs><clipPath id="arena-ellipse-clip"><ellipse cx={cx} cy={cy} rx={rx} ry={ry} /></clipPath></defs>
       <g clipPath="url(#arena-ellipse-clip)">
-        {ids.map((id) => <rect key={id} data-quadrant={id} className={arenaRegionClass(id, winner)} {...regionRect(id)} />)}
+        {ids.map((id) => <rect key={id} data-quadrant={id} className={arenaRegionClass(id, winner, highlightRegionId)} {...regionRect(id)} />)}
         {(field.type === "four-quadrant" || field.axis === "y") && <line className="arena-divider" x1={cx - rx} y1={cy} x2={cx + rx} y2={cy} />}
         {(field.type === "four-quadrant" || field.axis === "x") && <line className="arena-divider" x1={cx} y1={cy - ry} x2={cx} y2={cy + ry} />}
       </g>
       <ellipse className="arena-outline" cx={cx} cy={cy} rx={rx} ry={ry} />
     </svg>
     {labels.x && <>
-      <ArenaLabel axis="x" endpoint="min" label={labels.x.minLabel} x={cx - rx} y={cy} />
-      <ArenaLabel axis="x" endpoint="max" label={labels.x.maxLabel} x={cx + rx} y={cy} />
+      <ArenaLabel axis="x" endpoint="min" label={labels.x.minLabel} x={clampPercent(cx - rx, 9, 91)} y={cy} />
+      <ArenaLabel axis="x" endpoint="max" label={labels.x.maxLabel} x={clampPercent(cx + rx, 9, 91)} y={cy} />
     </>}
     {labels.y && <>
       <ArenaLabel axis="y" endpoint="min" label={labels.y.minLabel} x={cx} y={cy - ry} />
       <ArenaLabel axis="y" endpoint="max" label={labels.y.maxLabel} x={cx} y={cy + ry} />
     </>}
-    {ids.map((id) => {
+    {showCounts && ids.map((id) => {
       const position = countPosition(id);
       const count = counts?.[id as keyof typeof counts];
       return <div
@@ -280,11 +299,15 @@ export function QuadrantOverlay({
   liveField,
   liveCounts,
   resolution,
+  showCounts = true,
+  highlightRegionId = null,
 }: {
   field: QuestionField;
   liveField: QuestionField | null;
   liveCounts: PositionCounts | null;
   resolution: QuestionResolvedMessage | null;
+  showCounts?: boolean;
+  highlightRegionId?: string | null;
 }) {
   const resolutionMatches =
     resolution !== null && sameField(field, resolution.field);
@@ -315,7 +338,13 @@ export function QuadrantOverlay({
     const counts = field.type === "four-quadrant"
       ? countSource !== null && isFourQuadrantCounts(countSource) ? countSource : null
       : countSource !== null && isTwoQuadrantCounts(countSource) ? countSource : null;
-    return <ArenaEllipseOverlay field={field as typeof field & { arena: ArenaEllipse }} counts={counts} winner={winner} />;
+    return <ArenaEllipseOverlay
+      field={field as typeof field & { arena: ArenaEllipse }}
+      counts={counts}
+      winner={winner}
+      showCounts={showCounts}
+      highlightRegionId={highlightRegionId}
+    />;
   }
 
   if (field.type === "four-quadrant") {
@@ -338,8 +367,9 @@ export function QuadrantOverlay({
             key={id}
             id={id}
             position={FOUR_QUADRANT_POSITIONS[id]}
-            count={counts?.[id] ?? null}
+            count={showCounts ? counts?.[id] ?? null : null}
             winner={winner}
+            highlight={highlightRegionId === id}
           />
         ))}
         {winner === "tie" && <div className="outcome outcome-tie">tie</div>}
@@ -362,8 +392,9 @@ export function QuadrantOverlay({
           key={id}
           id={id}
           position={positions[id]}
-          count={counts?.[id] ?? null}
+          count={showCounts ? counts?.[id] ?? null : null}
           winner={winner}
+          highlight={highlightRegionId === id}
         />
       ))}
       {winner === "tie" && <div className="outcome outcome-tie">tie</div>}

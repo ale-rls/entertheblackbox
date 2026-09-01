@@ -27,6 +27,34 @@ const phase = {
   deadlineAt: 51_000,
 } satisfies VideoQuestionPhase;
 
+const twoQuadrantPhase = {
+  ...phase,
+  field: {
+    type: "two-quadrant",
+    axis: "x",
+    labels: { minLabel: "Fakt", maxLabel: "Lüge" },
+    arena: { type: "ellipse", centerX: 0.5, centerY: 0.6, radiusX: 0.42, radiusY: 0.24 },
+  },
+} satisfies VideoQuestionPhase;
+
+const zonesPhase = {
+  ...phase,
+  field: {
+    type: "polygon-zones",
+    zones: [
+      { id: "apollon", label: "Apollo", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }, { x: 0, y: 1 }] },
+      { id: "dionysos", label: "Dionysos", points: [{ x: 0.35, y: 0 }, { x: 0.65, y: 0 }, { x: 0.65, y: 1 }, { x: 0.35, y: 1 }] },
+    ],
+  },
+} satisfies VideoQuestionPhase;
+
+function clockAt(now: number): ServerClock {
+  return {
+    now: () => now,
+    remainingUntil: (deadlineAt: number) => Math.max(0, deadlineAt - now),
+  } as ServerClock;
+}
+
 describe("videoQuestionStage", () => {
   it("follows the show, open, close, and hide boundaries", () => {
     expect(videoQuestionStage(phase, 15_999)).toBe("hidden");
@@ -54,5 +82,64 @@ describe("videoQuestionStage", () => {
     expect(html).toContain("Choose the future you want");
     expect(html).not.toContain("Internal curator title");
     expect(html).not.toContain("<h2");
+  });
+
+  it("never renders the dark scrim", () => {
+    const html = renderToStaticMarkup(
+      <VideoQuestionOverlay phase={phase} clock={clockAt(17_000)} liveField={null} liveCounts={null} resolution={null} />,
+    );
+    expect(html).not.toContain("question-scrim");
+  });
+
+  it("hides counts and the voting-state pill for a four-quadrant field", () => {
+    const html = renderToStaticMarkup(
+      <VideoQuestionOverlay
+        phase={phase}
+        clock={clockAt(17_000)}
+        liveField={phase.field}
+        liveCounts={{ q1: 1, q2: 2, q3: 3, q4: 4 }}
+        resolution={null}
+      />,
+    );
+    expect(html).not.toContain("quadrant-count");
+    expect(html).not.toContain("voting-state");
+  });
+
+  it("keeps counts and the voting-state pill for the polygon-zones statue picker", () => {
+    const html = renderToStaticMarkup(
+      <VideoQuestionOverlay
+        phase={zonesPhase}
+        clock={clockAt(17_000)}
+        liveField={zonesPhase.field}
+        liveCounts={{ apollon: 3, dionysos: 1 }}
+        resolution={null}
+      />,
+    );
+    expect(html).toContain("zone-count");
+    expect(html).toContain("voting-state");
+    expect(html).toContain("Voting open");
+  });
+
+  it("only shows a countdown for a two-quadrant vote in its final 3 seconds, centered", () => {
+    const closeAt = twoQuadrantPhase.startedAt + twoQuadrantPhase.closeAtMs;
+
+    // Outside the final 3 seconds there's no corner ticker at all for this
+    // field type -- only the dramatic centered countdown near the close.
+    const early = renderToStaticMarkup(
+      <VideoQuestionOverlay phase={twoQuadrantPhase} clock={clockAt(closeAt - 10_000)} liveField={null} liveCounts={null} resolution={null} />,
+    );
+    expect(early).not.toContain("countdown");
+
+    const final = renderToStaticMarkup(
+      <VideoQuestionOverlay
+        phase={twoQuadrantPhase}
+        clock={clockAt(closeAt - 2_000)}
+        liveField={twoQuadrantPhase.field}
+        liveCounts={{ min: 5, max: 2 }}
+        resolution={null}
+      />,
+    );
+    expect(final).toContain("vote-close-countdown");
+    expect(final).toContain("arena-region-blink");
   });
 });

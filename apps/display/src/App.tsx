@@ -269,7 +269,10 @@ export function App() {
               : "preparing media…"}
           </div>
         )}
-        {!isIdle && (
+        {/* Plain statement videos (e.g. the host's greeting) don't need a
+            join code on screen -- the QR only matters once there's
+            something to vote on. */}
+        {!isIdle && phase?.kind !== "video" && (
           <QrBadge grant={state.qrGrant} qrHidden={state.qrHidden} clock={connection.clock} />
         )}
         <LobbyCountdown
@@ -304,6 +307,7 @@ export function App() {
             liveField={state.liveField}
             liveCounts={state.liveCounts}
             resolution={state.resolution}
+            soundEnabled={soundEnabled}
           />
         )}
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.rating && (

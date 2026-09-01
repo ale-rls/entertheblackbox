@@ -196,7 +196,7 @@ describe("QuadrantOverlay", () => {
     expect(fixed).not.toContain('class="outcome');
   });
 
-  it("renders polygon zones as SVG shapes with centroid labels and counts", () => {
+  it("renders polygon zone labels and counts without the zone borders while voting is live", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay
         field={zonesField}
@@ -207,7 +207,9 @@ describe("QuadrantOverlay", () => {
     );
 
     expect(html).toContain('class="quadrant-overlay quadrant-overlay-polygon-zones"');
-    expect(html.match(/class="zone-shape"/g)).toHaveLength(3);
+    // No winner yet -- the perspective-warped zone borders stay hidden so
+    // they don't clutter the shot while voting is still open.
+    expect(html).not.toContain("zone-shape");
     expect(html).toContain("Apollon");
     expect(html).toContain("Dionysos");
     expect(html).toContain("Kassandra");
