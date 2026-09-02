@@ -119,6 +119,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       </fieldset>}
       {phase.kind === "video-position-question" && phase.rating && <p className="sc-tool-copy field-hint">The phone keeps the regular spectrum trackpad active and shows applause/boo as secondary buttons. Reactions play varied crowd samples on the display; no score is shown.</p>}
       <fieldset><legend>Subtitles <small>subtitles</small></legend>
+        <p className="sc-tool-copy field-hint">Timed subtitles appear on the display for video and still image + MP3 media.</p>
         {(phase.subtitles ?? []).map((subtitle, index) => <div key={`subtitle-${index}`}>
           {text(`Subtitle ${index + 1}`, `subtitles.${index}.text`, subtitle.text, (value) => onChange({ ...phase, subtitles: phase.subtitles!.map((item, itemIndex) => itemIndex === index ? { ...item, text: value } : item) }))}
           <div className="polygon-point-fields">

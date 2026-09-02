@@ -20,6 +20,7 @@ import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
 import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
 import { PhaseSubtitles } from "./components/PhaseSubtitles.js";
+import { FullscreenControl } from "./components/FullscreenControl.js";
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -254,13 +255,16 @@ export function App() {
 
       {/* Layer 2: UI */}
       <section className="layer layer-ui">
-        {!soundEnabled && <button
-          type="button"
-          className="sound-control"
-          onClick={enableSound}
-        >
-          Enable sound
-        </button>}
+        <div className="display-controls">
+          {!soundEnabled && <button
+            type="button"
+            className="sound-control"
+            onClick={enableSound}
+          >
+            Enable sound
+          </button>}
+          <FullscreenControl />
+        </div>
         {mediaReady && state.connection !== "open" && (
           <div className="reconnecting">reconnecting…</div>
         )}
