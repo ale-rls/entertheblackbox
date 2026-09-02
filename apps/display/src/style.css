@@ -109,7 +109,8 @@ html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflo
   50% { fill: rgb(255 255 255 / 6%); }
 }
 .arena-outline,
-.arena-divider {
+.arena-divider,
+.arena-spectrum-axis {
   fill: none;
   stroke: rgb(255 255 255 / 82%);
   stroke-width: 2px;
@@ -117,6 +118,7 @@ html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflo
   filter: drop-shadow(0 0 6px rgb(255 255 255 / 55%)) drop-shadow(0 1px 2px rgb(0 0 0 / 55%));
 }
 .arena-outline { stroke-width: 3px; }
+.arena-spectrum-origin { fill: rgb(255 255 255 / 92%); stroke: rgb(0 0 0 / 72%); stroke-width: 0.35; vector-effect: non-scaling-stroke; }
 .arena-axis-label {
   position: absolute;
   z-index: 4;
@@ -168,15 +170,15 @@ html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflo
 .zone-count { font-size: clamp(2rem, 7vw, 6rem); font-variant-numeric: tabular-nums; }
 .zone-label-winner .zone-name, .zone-label-winner .zone-count { font-weight: 700; }
 
-.axis-cross, .axis-divider { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
-.axis-cross::before, .axis-cross::after, .axis-divider::before {
+.axis-cross, .axis-track { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.axis-cross::before, .axis-cross::after, .axis-track::before {
   content: "";
   position: absolute;
   background: rgb(255 255 255 / 72%);
   box-shadow: 0 0 8px rgb(255 255 255 / 55%);
 }
-.axis-cross::before, .axis-divider-x::before { top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-1px); }
-.axis-cross::after, .axis-divider-y::before { left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-1px); }
+.axis-cross::before, .axis-track-y::before { top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-1px); }
+.axis-cross::after, .axis-track-x::before { left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-1px); }
 .axis-arrow { position: absolute; width: 0; height: 0; border: .55rem solid transparent; }
 .axis-arrow-left { top: 50%; left: -.85rem; border-right-color: rgb(255 255 255 / 72%); transform: translateY(-50%); }
 .axis-arrow-right { top: 50%; right: -.85rem; border-left-color: rgb(255 255 255 / 72%); transform: translateY(-50%); }

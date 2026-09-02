@@ -27,16 +27,18 @@ function pointer(target: Element, type: string, clientX: number, clientY: number
   target.dispatchEvent(event);
 }
 
-async function renderEditor(onChange = vi.fn()) {
+type EditorField = Parameters<typeof ArenaQuadEditor>[0]["field"];
+
+async function renderEditor(onChange = vi.fn(), field: EditorField = {
+  type: "four-quadrant",
+  xAxis: { minLabel: "left", maxLabel: "right" },
+  yAxis: { minLabel: "top", maxLabel: "bottom" },
+}) {
   document.body.innerHTML = '<div id="root"></div>';
   root = createRoot(document.querySelector("#root")!);
   await act(async () => root?.render(<ArenaQuadEditor
     arena={DEFAULT_ARENA_QUAD}
-    field={{
-      type: "four-quadrant",
-      xAxis: { minLabel: "left", maxLabel: "right" },
-      yAxis: { minLabel: "top", maxLabel: "bottom" },
-    }}
+    field={field}
     media={{ kind: "image", src: "/media/PLATE-A_master.png" }}
     onChange={onChange}
   />));
@@ -73,6 +75,16 @@ describe("ArenaQuadEditor", () => {
         DEFAULT_ARENA_QUAD.corners[3],
       ],
     }));
+  });
+
+  it("shows the horizontal track for an X spectrum", async () => {
+    await renderEditor(vi.fn(), { type: "two-quadrant", axis: "x", labels: { minLabel: "left", maxLabel: "right" } });
+    const axis = document.querySelector(".arena-editor-axis")!;
+    expect(axis.getAttribute("x1")).toBe("10");
+    expect(Number(axis.getAttribute("x2"))).toBeCloseTo(90);
+    expect(axis.getAttribute("y1")).toBe("74.5");
+    expect(axis.getAttribute("y2")).toBe("74.5");
+    expect(document.querySelectorAll(".arena-editor-divider")).toHaveLength(0);
   });
 
   it("moves every corner together when dragging the shape body", async () => {

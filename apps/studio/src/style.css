@@ -922,7 +922,8 @@ body:has(.editor),
 }
 
 .arena-editor-outline,
-.arena-editor-divider {
+.arena-editor-divider,
+.arena-editor-axis {
   fill: none;
   stroke: var(--sc-tool-color-focus-on-dark);
   stroke-width: 1.3;
@@ -931,6 +932,20 @@ body:has(.editor),
 }
 
 .arena-editor-outline { stroke-width: 2; }
+
+.arena-copy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sc-tool-space-2);
+}
+
+.arena-copy-actions .sc-tool-copy {
+  flex: 1 1 100%;
+  min-height: 1lh;
+  color: var(--sc-tool-color-text-muted);
+  font-size: var(--sc-tool-font-size-1);
+}
 
 .arena-editor-handle,
 .arena-editor-center {

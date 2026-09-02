@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { Arena } from "../../../../packages/shared/src/index.js";
 import { compiledJson, componentTypeForPhase, phaseIdError, type AuthorableComponentType, type Phase } from "./model.js";
 import { PolygonEditor, type PolygonEditorMedia } from "./PolygonEditor.js";
 import { ArenaEllipseEditor, PLATE_A_ARENA_PRESET } from "./ArenaEllipseEditor.js";
@@ -28,6 +29,8 @@ const numberValue = (value: string, fallback: number) => {
 export function Inspector({ project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
+  const [copiedArena, setCopiedArena] = useState<Arena | null>(null);
+  const [arenaCopyFeedback, setArenaCopyFeedback] = useState<string | null>(null);
   useEffect(() => setIdInput(phase?.id ?? ""), [phase?.id]);
   const idProblem = phase ? phaseIdError(project, phase.id, idInput) : undefined;
   const detectedDuration = phase?.kind === "video" || phase?.kind === "video-position-question"
@@ -130,7 +133,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
-      <label className="sc-tool-label">{label("Position layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : phase.field.type === "two-quadrant" ? `two-quadrant-${phase.field.axis}` : "three-candidate-zones"} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Two quadrants · left / right</option><option value="two-quadrant-y">Two quadrants · top / bottom</option><option value="three-candidate-zones">Polygon zones · custom</option></select></label>
+      <label className="sc-tool-label">{label("Position layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : phase.field.type === "two-quadrant" ? `two-quadrant-${phase.field.axis}` : "three-candidate-zones"} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Horizontal spectrum · left ↔ right</option><option value="two-quadrant-y">Vertical spectrum · top ↕ bottom</option><option value="three-candidate-zones">Polygon zones · custom</option></select></label>
       {phase.field.type === "four-quadrant" ? (() => {
         const field = phase.field;
         return <>
@@ -142,8 +145,8 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       })() : phase.field.type === "two-quadrant" ? (() => {
         const field = phase.field;
         return <>
-          {text(`${field.axis === "x" ? "Left" : "Top"} quadrant`, "field.labels.minLabel", field.labels.minLabel, (minLabel) => onChange({ ...phase, field: { ...field, labels: { ...field.labels, minLabel } } } as Phase))}
-          {text(`${field.axis === "x" ? "Right" : "Bottom"} quadrant`, "field.labels.maxLabel", field.labels.maxLabel, (maxLabel) => onChange({ ...phase, field: { ...field, labels: { ...field.labels, maxLabel } } } as Phase))}
+          {text(`${field.axis === "x" ? "Left" : "Top"} endpoint`, "field.labels.minLabel", field.labels.minLabel, (minLabel) => onChange({ ...phase, field: { ...field, labels: { ...field.labels, minLabel } } } as Phase))}
+          {text(`${field.axis === "x" ? "Right" : "Bottom"} endpoint`, "field.labels.maxLabel", field.labels.maxLabel, (maxLabel) => onChange({ ...phase, field: { ...field, labels: { ...field.labels, maxLabel } } } as Phase))}
         </>;
       })() : (() => {
         const field = phase.field;
@@ -188,13 +191,30 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
             const { arena: _arena, ...withoutArena } = field;
             onChange({ ...phase, field: withoutArena } as Phase);
           }} />Constrain voting to a calibrated arena</label>
+          <div className="arena-copy-actions">
+            <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={field.arena === undefined} onClick={() => {
+              if (field.arena === undefined) return;
+              setCopiedArena(structuredClone(field.arena));
+              setArenaCopyFeedback(`Copied ${field.arena.type} arena settings.`);
+            }}>Copy arena settings</button>
+            <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={copiedArena === null} onClick={() => {
+              if (copiedArena === null) return;
+              onChange({ ...phase, field: { ...field, arena: structuredClone(copiedArena) } } as Phase);
+              setArenaCopyFeedback(`Applied ${copiedArena.type} arena settings.`);
+            }}>Paste arena settings</button>
+            <span className="sc-tool-copy" aria-live="polite">{arenaCopyFeedback}</span>
+          </div>
           {field.arena !== undefined && <label className="sc-tool-label">{label("Arena shape", "field.arena.type")}<select className="sc-tool-select" value={field.arena.type} onChange={(event) => {
             const nextArena = event.target.value === "quad" ? { ...DEFAULT_ARENA_QUAD } : { ...PLATE_A_ARENA_PRESET };
             onChange({ ...phase, field: { ...field, arena: nextArena } } as Phase);
           }}><option value="ellipse">Ellipse · center + radius</option><option value="quad">Perspective quad · 4 corners</option></select></label>}
-          <p className="sc-tool-copy field-hint">{field.arena === undefined || field.arena.type === "ellipse"
-            ? "Positions outside the oval do not count. Move the horizontal split upward to match the arena’s perspective."
-            : "Positions outside the quad do not count. The split lines connect the midpoints of opposite edges, so they follow the quad's perspective skew instead of a straight center line."}</p>
+          <p className="sc-tool-copy field-hint">{field.arena === undefined
+            ? "Calibrate the visible voting surface, then copy its settings to other questions that use the same shot."
+            : field.type === "two-quadrant"
+              ? `Positions outside the ${field.arena.type === "ellipse" ? "oval" : "shape"} do not count. The ${field.axis === "x" ? "horizontal" : "vertical"} line shows the continuous ${field.axis.toUpperCase()} spectrum; the centre point is the min/max boundary.`
+              : field.arena.type === "ellipse"
+                ? "Positions outside the oval do not count. Move the horizontal split upward to match the arena’s perspective."
+                : "Positions outside the quad do not count. The split lines connect opposite edge midpoints and follow its perspective."}</p>
           {field.arena !== undefined && (field.arena.type === "quad"
             ? <ArenaQuadEditor
                 arena={field.arena}

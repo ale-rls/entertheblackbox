@@ -32,6 +32,9 @@ const arenaFourField: QuestionField = {
   arena: { type: "ellipse", centerX: 0.5, centerY: 0.7, radiusX: 0.4, radiusY: 0.2, splitY: 0.65 },
 };
 
+const arenaTwoXField: QuestionField = { ...twoXField, arena: arenaFourField.arena };
+const arenaTwoYField: QuestionField = { ...twoYField, arena: arenaFourField.arena };
+
 const unitSquareQuad = {
   type: "quad" as const,
   corners: [
@@ -95,7 +98,7 @@ describe("QuadrantOverlay", () => {
     expect(html).toContain('data-quadrant="q4"><span class="quadrant-count">4</span>');
   });
 
-  it("renders an X two-quadrant field with one divider and only X labels", () => {
+  it("renders an X two-way field as a horizontal spectrum with only X labels", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay
         field={twoXField}
@@ -107,8 +110,10 @@ describe("QuadrantOverlay", () => {
 
     expect(html).toContain('class="axis axis-x"');
     expect(html).not.toContain('class="axis axis-y"');
-    expect(html).toContain('class="axis-divider axis-divider-x"');
-    expect(html.match(/class="axis-divider /g)).toHaveLength(1);
+    expect(html).toContain('class="axis-track axis-track-x"');
+    expect(html).toContain('class="axis-arrow axis-arrow-left"');
+    expect(html).toContain('class="axis-arrow axis-arrow-right"');
+    expect(html).not.toContain("axis-arrow-top");
     expect(html).not.toContain("axis-cross");
     expect(html.match(/data-quadrant=/g)).toHaveLength(2);
     expect(html).toContain('class="quadrant quadrant-left" data-quadrant="min"');
@@ -117,7 +122,7 @@ describe("QuadrantOverlay", () => {
     expect(html).toContain("agree");
   });
 
-  it("renders a Y two-quadrant winner using top/bottom min/max regions", () => {
+  it("renders a Y two-way field as a vertical spectrum while retaining min/max outcomes", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay
         field={twoYField}
@@ -129,8 +134,10 @@ describe("QuadrantOverlay", () => {
 
     expect(html).toContain('class="axis axis-y"');
     expect(html).not.toContain('class="axis axis-x"');
-    expect(html).toContain('class="axis-divider axis-divider-y"');
-    expect(html.match(/class="axis-divider /g)).toHaveLength(1);
+    expect(html).toContain('class="axis-track axis-track-y"');
+    expect(html).toContain('class="axis-arrow axis-arrow-top"');
+    expect(html).toContain('class="axis-arrow axis-arrow-bottom"');
+    expect(html).not.toContain("axis-arrow-left");
     expect(html).toContain(
       'class="quadrant quadrant-top quadrant-dimmed" data-quadrant="min"',
     );
@@ -158,6 +165,18 @@ describe("QuadrantOverlay", () => {
     expect(html).toContain('data-quadrant="q4"');
     expect(html).toContain('class="arena-axis-label arena-axis-label-x arena-axis-label-min"');
     expect(html).toContain('class="quadrant-count">4</span>');
+  });
+
+  it("draws the selected spectrum axis instead of its perpendicular classification boundary", () => {
+    const xHtml = renderToStaticMarkup(<QuadrantOverlay field={arenaTwoXField} liveField={arenaTwoXField} liveCounts={null} resolution={null} />);
+    const yHtml = renderToStaticMarkup(<QuadrantOverlay field={arenaTwoYField} liveField={arenaTwoYField} liveCounts={null} resolution={null} />);
+
+    expect(xHtml).toContain('<line class="arena-spectrum-axis"');
+    expect(xHtml).toContain('y1="65"');
+    expect(xHtml).toContain('y2="65"');
+    expect(xHtml).toContain('class="arena-spectrum-origin"');
+    expect(yHtml).toContain('<line class="arena-spectrum-axis" x1="50" y1="50" x2="50" y2="90"></line>');
+    expect(yHtml).toContain('class="arena-spectrum-origin"');
   });
 
   it("renders a perspective-calibrated quad arena as polygon regions split through its edge midpoints", () => {

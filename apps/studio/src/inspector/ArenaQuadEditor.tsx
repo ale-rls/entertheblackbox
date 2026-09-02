@@ -120,8 +120,8 @@ export function ArenaQuadEditor({
   };
 
   const { topMid, rightMid, bottomMid, leftMid } = arenaQuadLandmarks(arena.corners);
-  const drawHorizontal = field.type === "four-quadrant" || field.axis === "y";
-  const drawVertical = field.type === "four-quadrant" || field.axis === "x";
+  const drawHorizontal = field.type === "four-quadrant" || field.axis === "x";
+  const drawVertical = field.type === "four-quadrant" || field.axis === "y";
   const cornerLabels = ["top-left", "top-right", "bottom-right", "bottom-left"] as const;
 
   return <div className="arena-quad-editor">
@@ -139,8 +139,8 @@ export function ArenaQuadEditor({
         onPointerCancel={() => { dragging.current = null; }}
       >
         <polygon className="arena-editor-fill" points={svgPoints(arena.corners)} onPointerDown={(event) => beginDrag(event, "move")} />
-        {drawHorizontal && <line className="arena-editor-divider" x1={leftMid.x * 100} y1={leftMid.y * 100} x2={rightMid.x * 100} y2={rightMid.y * 100} />}
-        {drawVertical && <line className="arena-editor-divider" x1={topMid.x * 100} y1={topMid.y * 100} x2={bottomMid.x * 100} y2={bottomMid.y * 100} />}
+        {drawHorizontal && <line className={field.type === "four-quadrant" ? "arena-editor-divider" : "arena-editor-axis"} x1={leftMid.x * 100} y1={leftMid.y * 100} x2={rightMid.x * 100} y2={rightMid.y * 100} />}
+        {drawVertical && <line className={field.type === "four-quadrant" ? "arena-editor-divider" : "arena-editor-axis"} x1={topMid.x * 100} y1={topMid.y * 100} x2={bottomMid.x * 100} y2={bottomMid.y * 100} />}
         <polygon className="arena-editor-outline" points={svgPoints(arena.corners)} />
         {arena.corners.map((corner, index) => <circle
           key={index}
@@ -164,7 +164,7 @@ export function ArenaQuadEditor({
     </div>
     <div className="polygon-editor-actions">
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...DEFAULT_ARENA_QUAD })}>Reset to default trapezoid</button>
-      <span className="sc-tool-copy">Drag the quad to move it; drag its four corners to trace the arena's true perspective. The split lines connect opposite edge midpoints, so they follow the skew.</span>
+      <span className="sc-tool-copy">Drag the quad to move it; drag its four corners to trace the arena's perspective. Spectrum lines connect the matching edge midpoints.</span>
     </div>
   </div>;
 }

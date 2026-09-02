@@ -27,16 +27,18 @@ function pointer(target: Element, type: string, clientX: number, clientY: number
   target.dispatchEvent(event);
 }
 
-async function renderEditor(onChange = vi.fn()) {
+type EditorField = Parameters<typeof ArenaEllipseEditor>[0]["field"];
+
+async function renderEditor(onChange = vi.fn(), field: EditorField = {
+  type: "four-quadrant",
+  xAxis: { minLabel: "left", maxLabel: "right" },
+  yAxis: { minLabel: "top", maxLabel: "bottom" },
+}) {
   document.body.innerHTML = '<div id="root"></div>';
   root = createRoot(document.querySelector("#root")!);
   await act(async () => root?.render(<ArenaEllipseEditor
     arena={PLATE_A_ARENA_PRESET}
-    field={{
-      type: "four-quadrant",
-      xAxis: { minLabel: "left", maxLabel: "right" },
-      yAxis: { minLabel: "top", maxLabel: "bottom" },
-    }}
+    field={field}
     media={{ kind: "image", src: "/media/PLATE-A_master.png" }}
     onChange={onChange}
   />));
@@ -66,6 +68,14 @@ describe("ArenaEllipseEditor", () => {
     await act(async () => { pointer(svg, "pointermove", 100, 126); });
 
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ centerY: 0.735, splitY: 0.63 }));
+  });
+
+  it("shows the selected two-way spectrum axis rather than a perpendicular divider", async () => {
+    await renderEditor(vi.fn(), { type: "two-quadrant", axis: "x", labels: { minLabel: "left", maxLabel: "right" } });
+    const axis = document.querySelector(".arena-editor-axis")!;
+    expect(axis.getAttribute("y1")).toBe("67");
+    expect(axis.getAttribute("y2")).toBe("67");
+    expect(document.querySelectorAll(".arena-editor-divider")).toHaveLength(0);
   });
 
   it("resizes the ellipse with edge handles and restores the PLATE-A preset", async () => {

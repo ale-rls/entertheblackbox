@@ -494,6 +494,45 @@ describe("Studio feedback and keyboard entry", () => {
     expect(preview.rel).toBe("noreferrer");
   });
 
+  it("copies arena settings from one question to another", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+
+    const selectLastPositionQuestion = async () => {
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="position-question-"]'));
+      await act(async () => { nodes.at(-1)?.click(); });
+    };
+    await selectLastPositionQuestion();
+
+    const arenaCheckbox = () => Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.includes("Constrain voting to a calibrated arena"))
+      ?.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    const arenaInput = (name: string) => Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.startsWith(name))
+      ?.querySelector<HTMLInputElement>('input[type="number"]')!;
+
+    await act(async () => { arenaCheckbox().click(); });
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(arenaInput("centerX"), "0.54");
+      arenaInput("centerX").dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { button("Copy arena settings").click(); });
+    expect(document.body.textContent).toContain("Copied ellipse arena settings.");
+
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+    await selectLastPositionQuestion();
+    expect(arenaCheckbox().checked).toBe(false);
+    expect(button("Paste arena settings").disabled).toBe(false);
+
+    await act(async () => { button("Paste arena settings").click(); });
+    expect(arenaCheckbox().checked).toBe(true);
+    expect(arenaInput("centerX").value).toBe("0.54");
+    expect(document.body.textContent).toContain("Applied ellipse arena settings.");
+  });
+
   it("collapses and expands the bottom panel from its persistent header", async () => {
     await render(<App />);
     await act(async () => { button("New show").click(); });
