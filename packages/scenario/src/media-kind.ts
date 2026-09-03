@@ -29,3 +29,21 @@ export function mediaCombinationError(src: string, audioSrc: string | undefined)
     ? undefined
     : "audioSrc must be an MP3 file";
 }
+
+/** Validate the optional soundtrack layered on top of a regular video. */
+export function extraAudioCombinationError(
+  src: string,
+  audioSrc: string | undefined,
+  extraAudioSrc: string | undefined,
+): string | undefined {
+  if (extraAudioSrc === undefined) return undefined;
+  if (audioSrc !== undefined) {
+    return "extraAudioSrc can only be used with video, not still image + MP3 playback";
+  }
+  if (mediaKindForSource(src) !== "video") {
+    return "src must be an MP4 or WebM video when extraAudioSrc is present";
+  }
+  return mediaKindForSource(extraAudioSrc) === "audio"
+    ? undefined
+    : "extraAudioSrc must be an MP3 file";
+}

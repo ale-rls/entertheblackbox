@@ -103,6 +103,41 @@ describe("scenarioSchema structural rejection", () => {
     expect(heldVideo.success).toBe(true);
   });
 
+  it("accepts an extra MP3 alongside video and includes it in manifest validation", () => {
+    const withExtraAudio = {
+      ...baseScenario,
+      phases: baseScenario.phases.map((phase) => phase.id === "intro"
+        ? { ...phase, extraAudioSrc: "soundtrack.mp3" }
+        : phase),
+    };
+    const parsed = scenarioSchema.safeParse(withExtraAudio);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+
+    expect(validateScenario(parsed.data, { files: [
+      { src: "intro.mp4", bytes: 10, hash: "video" },
+      { src: "soundtrack.mp3", bytes: 20, hash: "soundtrack" },
+    ] }).ok).toBe(true);
+    expect(validateScenario(parsed.data, { files: [
+      { src: "intro.mp4", bytes: 10, hash: "video" },
+    ] }).errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing-media", message: expect.stringContaining("soundtrack.mp3") }),
+    ]));
+
+    expect(scenarioSchema.safeParse({
+      ...withExtraAudio,
+      phases: withExtraAudio.phases.map((phase) => phase.id === "intro"
+        ? { ...phase, extraAudioSrc: "soundtrack.wav" }
+        : phase),
+    }).success).toBe(false);
+    expect(scenarioSchema.safeParse({
+      ...withExtraAudio,
+      phases: withExtraAudio.phases.map((phase) => phase.id === "intro"
+        ? { ...phase, src: "portrait.png", audioSrc: "voice.mp3" }
+        : phase),
+    }).success).toBe(false);
+  });
+
   it("accepts optional targetAudienceSize and per-phase display effects", () => {
     const result = parse((s) => ({
       ...s,

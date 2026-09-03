@@ -12,7 +12,12 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
   const [status, setStatus] = useState<MediaSyncStatus>({ state: "idle" });
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const activeSources = useRef<{ visualSrc: string; audioSrc: string | null } | null>(null);
+  const [extraAudioUrl, setExtraAudioUrl] = useState<string | null>(null);
+  const activeSources = useRef<{
+    visualSrc: string;
+    audioSrc: string | null;
+    extraAudioSrc: string | null;
+  } | null>(null);
   const store = useMemo(() => new MediaStore({ onStatus: setStatus }), []);
 
   useEffect(() => {
@@ -41,39 +46,62 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
     };
   }, [store, manifestUrl]);
 
-  /** Point the media layer at a video, or at a cached image + audio pair. */
-  const showMedia = async (visualSrc: string | null, audioSrc: string | null = null) => {
-    activeSources.current = visualSrc === null ? null : { visualSrc, audioSrc };
+  /** Point the media layer at a video (optionally with a soundtrack), or at a cached image + audio pair. */
+  const showMedia = async (
+    visualSrc: string | null,
+    audioSrc: string | null = null,
+    extraAudioSrc: string | null = null,
+  ) => {
+    activeSources.current = visualSrc === null ? null : { visualSrc, audioSrc, extraAudioSrc };
     if (visualSrc === null) {
       store.retainOnly(new Set());
       setVideoUrl(null);
       setAudioUrl(null);
+      setExtraAudioUrl(null);
       return;
     }
-    const [visualUrl, resolvedAudioUrl] = await Promise.all([
+    const [visualUrl, resolvedAudioUrl, resolvedExtraAudioUrl] = await Promise.all([
       store.getBlobUrl(visualSrc),
       audioSrc === null ? Promise.resolve(null) : store.getBlobUrl(audioSrc),
+      extraAudioSrc === null ? Promise.resolve(null) : store.getBlobUrl(extraAudioSrc),
     ]);
     const active = activeSources.current;
-    if (active?.visualSrc !== visualSrc || active.audioSrc !== audioSrc) {
+    if (
+      active?.visualSrc !== visualSrc
+      || active.audioSrc !== audioSrc
+      || active.extraAudioSrc !== extraAudioSrc
+    ) {
       // Phase changed while the blob materialized: purge everything the
       // current phase doesn't need, including the URL just created.
-      store.retainOnly(new Set(active === null ? [] : [active.visualSrc, ...(active.audioSrc === null ? [] : [active.audioSrc])]));
+      store.retainOnly(new Set(active === null ? [] : [
+        active.visualSrc,
+        ...(active.audioSrc === null ? [] : [active.audioSrc]),
+        ...(active.extraAudioSrc === null ? [] : [active.extraAudioSrc]),
+      ]));
       return;
     }
-    store.retainOnly(new Set([visualSrc, ...(audioSrc === null ? [] : [audioSrc])]));
+    store.retainOnly(new Set([
+      visualSrc,
+      ...(audioSrc === null ? [] : [audioSrc]),
+      ...(extraAudioSrc === null ? [] : [extraAudioSrc]),
+    ]));
     setVideoUrl(visualUrl);
     setAudioUrl(resolvedAudioUrl);
+    setExtraAudioUrl(resolvedExtraAudioUrl);
   };
 
   // A video phase can arrive before boot sync finishes; once the cache
   // is ready, re-resolve the pending src so the video actually appears.
   useEffect(() => {
     if (status.state === "ready" && activeSources.current !== null) {
-      void showMedia(activeSources.current.visualSrc, activeSources.current.audioSrc);
+      void showMedia(
+        activeSources.current.visualSrc,
+        activeSources.current.audioSrc,
+        activeSources.current.extraAudioSrc,
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.state]);
 
-  return { status, videoUrl, audioUrl, showMedia, store };
+  return { status, videoUrl, audioUrl, extraAudioUrl, showMedia, store };
 }

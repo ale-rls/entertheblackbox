@@ -17,7 +17,7 @@ import { getLatestPublishedShow, listPublishedShows, loadScenarioReadiness, publ
 import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
 export const WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024;
-export const DEFAULT_MAX_WEBSOCKET_CONNECTIONS = 64;
+export const DEFAULT_MAX_WEBSOCKET_CONNECTIONS = 300;
 export const DEFAULT_WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
 
 type HeartbeatWebSocket = WebSocket & { isAlive: boolean };

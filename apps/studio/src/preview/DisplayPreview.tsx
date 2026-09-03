@@ -71,6 +71,7 @@ export function DisplayPreview({ preview }: { preview: ProjectPreview }) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const extraAudioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const tailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clock = useMemo(() => new ServerClock(), []);
@@ -104,6 +105,7 @@ export function DisplayPreview({ preview }: { preview: ProjectPreview }) {
     if (phase.kind === "video-position-question" && phase.next.type === "fixed") advance();
   };
   const finishMedia = () => {
+    extraAudioRef.current?.pause();
     const tailDurationMs = phase.kind === "video" || phase.kind === "video-position-question"
       ? phase.tailDurationMs ?? 0
       : 0;
@@ -127,6 +129,10 @@ export function DisplayPreview({ preview }: { preview: ProjectPreview }) {
       audioRef.current.muted = false;
       void audioRef.current.play().catch(() => undefined);
     }
+    if (extraAudioRef.current) {
+      extraAudioRef.current.muted = false;
+      void extraAudioRef.current.play().catch(() => undefined);
+    }
   };
   const restart = () => {
     move(startPreview(preview.project, preview.startPhaseId));
@@ -139,10 +145,16 @@ export function DisplayPreview({ preview }: { preview: ProjectPreview }) {
       : forcedOutcomes(votePhase.field).filter((outcome) => outcome !== "abandoned-solo");
   const visualUrl = (phase.kind === "video" || phase.kind === "video-position-question") ? mediaUrls[phase.src] ?? serverMediaUrl(phase.src) : null;
   const audioUrl = (phase.kind === "video" || phase.kind === "video-position-question") && phase.audioSrc ? mediaUrls[phase.audioSrc] ?? serverMediaUrl(phase.audioSrc) : null;
+  const extraAudioUrl = (phase.kind === "video" || phase.kind === "video-position-question") && phase.extraAudioSrc
+    ? mediaUrls[phase.extraAudioSrc] ?? serverMediaUrl(phase.extraAudioSrc)
+    : null;
 
   return <main className="display-root studio-display-preview">
     <section className="layer layer-video">
-      {(snapshot.kind === "video" || snapshot.kind === "video-position-question") && snapshot.audioSrc === undefined && visualUrl && <video ref={videoRef} key={`${phaseEpoch}:${snapshot.id}`} src={visualUrl} autoPlay muted={!soundEnabled} playsInline onEnded={finishMedia} />}
+      {(snapshot.kind === "video" || snapshot.kind === "video-position-question") && snapshot.audioSrc === undefined && visualUrl && <>
+        <video ref={videoRef} key={`${phaseEpoch}:${snapshot.id}`} src={visualUrl} autoPlay muted={!soundEnabled} playsInline onEnded={finishMedia} />
+        {extraAudioUrl && <audio ref={extraAudioRef} key={`${phaseEpoch}:${snapshot.id}:extra-audio`} src={extraAudioUrl} autoPlay muted={!soundEnabled} aria-label="Extra video audio track" />}
+      </>}
       {(snapshot.kind === "video" || snapshot.kind === "video-position-question") && snapshot.audioSrc !== undefined && visualUrl && audioUrl && <div className="phase-image-audio"><img src={visualUrl} alt="" /><audio ref={audioRef} key={`${phaseEpoch}:${snapshot.id}`} src={audioUrl} autoPlay muted={!soundEnabled} onEnded={finishMedia} /></div>}
     </section>
     <section className="layer layer-ui">

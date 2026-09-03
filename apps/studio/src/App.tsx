@@ -108,7 +108,7 @@ export function App() {
   const [showDiagnostics, setShowDiagnostics] = useState(true);
   const [localManifest, setLocalManifest] = useState<MediaManifest>();
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
-  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; target: "src" | "audioSrc"; mediaKind: Exclude<StudioMediaKind, "unknown">; trigger: HTMLButtonElement | null }>();
+  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; target: "src" | "audioSrc" | "extraAudioSrc"; mediaKind: Exclude<StudioMediaKind, "unknown">; trigger: HTMLButtonElement | null }>();
   const [mediaUploading, setMediaUploading] = useState(false);
   const [importFeedback, setImportFeedback] = useState<InlineFeedback>();
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
@@ -391,7 +391,7 @@ export function App() {
     setMediaPicker(undefined);
     setMediaLibraryOpen(true);
   };
-  const openMediaPicker = (phaseId: string, target: "src" | "audioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement | null = null) => {
+  const openMediaPicker = (phaseId: string, target: "src" | "audioSrc" | "extraAudioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement | null = null) => {
     setMediaLibraryOpen(false);
     setMediaPicker({ phaseId, target, mediaKind, trigger });
   };
@@ -488,7 +488,9 @@ export function App() {
       closeMediaPicker();
       return;
     }
-    const nextPhase = mediaPicker.target === "audioSrc" && row.durationMs !== undefined
+    const nextPhase = mediaPicker.target === "extraAudioSrc"
+      ? { ...phase, extraAudioSrc: row.src }
+      : mediaPicker.target === "audioSrc" && row.durationMs !== undefined
       ? (() => {
           const previousAudioDurationMs = phase.expectedDurationMs - (phase.tailDurationMs ?? 0);
           const shiftMs = row.durationMs - previousAudioDurationMs;
@@ -554,12 +556,13 @@ export function App() {
         ?? Math.max(1, mediaPhase.expectedDurationMs - (mediaPhase.tailDurationMs ?? 0));
       const expectedDurationMs = mediaDurationMs + tailDurationMs;
       if (mediaPhase.kind === "video") {
-        return { ...mediaPhase, src: image, audioSrc: audio, tailDurationMs, expectedDurationMs };
+          return { ...mediaPhase, src: image, audioSrc: audio, extraAudioSrc: undefined, tailDurationMs, expectedDurationMs };
       }
       return {
         ...mediaPhase,
         src: image,
         audioSrc: audio,
+        extraAudioSrc: undefined,
         tailDurationMs,
         expectedDurationMs,
         ...defaultVideoVoteTiming(expectedDurationMs, mediaDurationMs),
@@ -826,7 +829,11 @@ export function App() {
     ? draft.project.scenario.phases.find((phase) => phase.id === mediaPicker.phaseId)
     : undefined;
   const mediaPickerSelectedSrc = mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
-    ? mediaPicker?.target === "audioSrc" ? mediaPickerPhase.audioSrc ?? "" : mediaPickerPhase.src
+    ? mediaPicker?.target === "audioSrc"
+      ? mediaPickerPhase.audioSrc ?? ""
+      : mediaPicker?.target === "extraAudioSrc"
+        ? mediaPickerPhase.extraAudioSrc ?? ""
+        : mediaPickerPhase.src
     : "";
   const selectedPhase = draft.project.scenario.phases.find((phase) => phase.id === selectedId);
   const preparePreviewFromSelected = (event: ReactMouseEvent<HTMLAnchorElement>) => {

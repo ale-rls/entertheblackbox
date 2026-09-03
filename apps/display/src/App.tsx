@@ -56,6 +56,7 @@ export function App() {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const stateRef = useRef(state);
   const activeMediaRef = useRef<HTMLMediaElement | null>(null);
+  const activeExtraAudioRef = useRef<HTMLAudioElement | null>(null);
   stateRef.current = state;
 
   const cursorField = useMemo(() => new CursorField(), []);
@@ -194,12 +195,16 @@ export function App() {
   const setActiveMedia = useCallback((mediaElement: HTMLMediaElement | null) => {
     activeMediaRef.current = mediaElement;
   }, []);
+  const setActiveExtraAudio = useCallback((audioElement: HTMLAudioElement | null) => {
+    activeExtraAudioRef.current = audioElement;
+  }, []);
   const enableSound = useCallback(() => {
-    if (activeMediaRef.current !== null) {
+    for (const mediaElement of [activeMediaRef.current, activeExtraAudioRef.current]) {
+      if (mediaElement === null) continue;
       // Keep this play() call inside the click handler: browsers require an
       // explicit user gesture before they allow audible media playback.
-      activeMediaRef.current.muted = false;
-      const play = activeMediaRef.current.play();
+      mediaElement.muted = false;
+      const play = mediaElement.play();
       void play?.catch((error: unknown) => {
         console.warn("display: failed to enable audible playback:", error);
       });
@@ -211,12 +216,13 @@ export function App() {
   // preloading plausible next videos needs the id→src map from STEP-026.
   const phaseVisualSrc = phase?.kind === "video" || phase?.kind === "video-position-question" ? phase.src : null;
   const phaseAudioSrc = phase?.kind === "video" || phase?.kind === "video-position-question" ? phase.audioSrc ?? null : null;
+  const phaseExtraAudioSrc = phase?.kind === "video" || phase?.kind === "video-position-question" ? phase.extraAudioSrc ?? null : null;
   const spectrumPhase = phase?.kind === "position-question" || phase?.kind === "video-position-question"
     ? phase
     : null;
   useEffect(() => {
-    void media.showMedia(phaseVisualSrc, phaseAudioSrc);
-  }, [phaseVisualSrc, phaseAudioSrc]);
+    void media.showMedia(phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc);
+  }, [phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc]);
 
   return (
     <main className="display-root">
@@ -236,8 +242,10 @@ export function App() {
             phase={phase}
             phaseEpoch={state.phaseEpoch}
             src={media.videoUrl}
+            {...(media.extraAudioUrl === null ? {} : { extraAudioSrc: media.extraAudioUrl })}
             soundEnabled={soundEnabled}
             onVideoElement={setActiveMedia}
+            onExtraAudioElement={setActiveExtraAudio}
             send={sendDisplayMessage}
           />
         )}

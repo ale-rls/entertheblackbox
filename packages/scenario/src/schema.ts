@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@smartphonecracy/shared";
-import { mediaCombinationError } from "./media-kind.js";
+import { extraAudioCombinationError, mediaCombinationError } from "./media-kind.js";
 
 const unitCoordinateSchema = z.number().min(0).max(1);
 
@@ -250,6 +250,8 @@ export const videoPhaseSchema = z.object({
   src: z.string().min(1, "media src must be non-empty"),
   /** When present, src is a still image and this MP3 drives playback/timing. */
   audioSrc: z.string().min(1, "audioSrc must be non-empty").optional(),
+  /** Optional MP3 played once alongside a regular video's own audio. */
+  extraAudioSrc: z.string().min(1, "extraAudioSrc must be non-empty").optional(),
   /** Silent visual hold after video or image + MP3 playback ends. */
   tailDurationMs: z.number().int().nonnegative().optional(),
   expectedDurationMs: z.number().int().positive(),
@@ -262,6 +264,8 @@ export const videoPhaseSchema = z.object({
 }).superRefine((phase, ctx) => {
   const problem = mediaCombinationError(phase.src, phase.audioSrc);
   if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem, path: [phase.audioSrc === undefined ? "src" : "audioSrc"] });
+  const extraAudioProblem = extraAudioCombinationError(phase.src, phase.audioSrc, phase.extraAudioSrc);
+  if (extraAudioProblem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: extraAudioProblem, path: ["extraAudioSrc"] });
   phase.subtitles?.forEach((subtitle, index) => {
     if (subtitle.endAtMs > phase.expectedDurationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "subtitle must end within the phase", path: ["subtitles", index, "endAtMs"] });
   });
@@ -323,6 +327,8 @@ const videoPositionQuestionBaseSchema = z.object({
   src: z.string().min(1, "media src must be non-empty"),
   /** When present, src is a still image and this MP3 drives playback/timing. */
   audioSrc: z.string().min(1, "audioSrc must be non-empty").optional(),
+  /** Optional MP3 played once alongside a regular video's own audio. */
+  extraAudioSrc: z.string().min(1, "extraAudioSrc must be non-empty").optional(),
   /** Silent visual hold after video or image + MP3 playback ends. */
   tailDurationMs: z.number().int().nonnegative().optional(),
   expectedDurationMs: z.number().int().positive(),
@@ -374,6 +380,8 @@ export const videoPositionQuestionPhaseSchema = z.union([
 ]).superRefine((phase, ctx) => {
   const mediaProblem = mediaCombinationError(phase.src, phase.audioSrc);
   if (mediaProblem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: mediaProblem, path: [phase.audioSrc === undefined ? "src" : "audioSrc"] });
+  const extraAudioProblem = extraAudioCombinationError(phase.src, phase.audioSrc, phase.extraAudioSrc);
+  if (extraAudioProblem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: extraAudioProblem, path: ["extraAudioSrc"] });
   const ordered = phase.showAtMs <= phase.openAtMs
     && phase.openAtMs < phase.closeAtMs
     && phase.closeAtMs <= phase.hideAtMs

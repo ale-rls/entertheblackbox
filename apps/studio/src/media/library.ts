@@ -13,7 +13,11 @@ export function studioMediaKindForSource(src: string): StudioMediaKind {
 
 export function phaseMediaSources(phase: StudioProject["scenario"]["phases"][number]): string[] {
   if (phase.kind !== "video" && phase.kind !== "video-position-question") return [];
-  return [phase.src, ...(phase.audioSrc === undefined ? [] : [phase.audioSrc])];
+  return [
+    phase.src,
+    ...(phase.audioSrc === undefined ? [] : [phase.audioSrc]),
+    ...(phase.extraAudioSrc === undefined ? [] : [phase.extraAudioSrc]),
+  ];
 }
 
 export type MediaRow = StudioProject["manifest"]["files"][number] & {

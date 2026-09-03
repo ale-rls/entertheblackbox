@@ -106,7 +106,11 @@ export function validateScenario(
     const known = new Set(mediaManifest.files.map((f) => f.src));
     for (const phase of scenario.phases) {
       if (phase.kind !== "video" && phase.kind !== "video-position-question") continue;
-      for (const src of [phase.src, ...(phase.audioSrc === undefined ? [] : [phase.audioSrc])]) {
+      for (const src of [
+        phase.src,
+        ...(phase.audioSrc === undefined ? [] : [phase.audioSrc]),
+        ...(phase.extraAudioSrc === undefined ? [] : [phase.extraAudioSrc]),
+      ]) {
         if (known.has(src)) continue;
         errors.push({
           severity: "error",

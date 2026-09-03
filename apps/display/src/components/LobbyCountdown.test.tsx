@@ -13,7 +13,7 @@ const idlePhase = (deadlineAt: number | null): PhaseSnapshotMessage => ({
 });
 
 describe("LobbyCountdown", () => {
-  it("renders the lobby heading, label, instructions, and a minutes/seconds countdown", () => {
+  it("renders the lobby heading with a minutes/seconds countdown and instructions", () => {
     const clock = new ServerClock();
     const lobby = renderToStaticMarkup(
       <LobbyCountdown
@@ -25,7 +25,6 @@ describe("LobbyCountdown", () => {
     );
     expect(lobby).toContain("61:01");
     expect(lobby).toContain("Show starts in 61:01");
-    expect(lobby).toContain("Show starts in…");
     expect(lobby).not.toContain("Join the show");
     expect(lobby).toContain("Besucher-WLAN [Netzname]");
     expect(lobby).toContain("https://join.example/phone/");

@@ -169,9 +169,14 @@ export function App() {
   }, [state.reloadRequired]);
 
   useEffect(() => {
-    if (consent === null || consent.status === "granted" || consent.status === "deleted") return;
+    // Once the user has answered ("submitting"), only the fetch's own
+    // outcome may decide the final state -- otherwise an answer that lands
+    // near the deadline reschedules this fallback at ~0ms and can flip a
+    // just-submitted "granted" straight to "deleted" before the request
+    // resolves.
+    if (consent === null || consent.status !== "prompt") return;
     const timer = window.setTimeout(() => {
-      setConsent((current) => current !== null && current.status !== "granted" && current.status !== "deleted"
+      setConsent((current) => current !== null && current.status === "prompt"
         ? { ...current, status: "deleted", error: null }
         : current);
     }, Math.max(0, consent.deadlineAt - Date.now()));

@@ -25,14 +25,6 @@ function useLobbyRemaining(clock: ServerClock, deadlineAt: number): string {
   return remaining;
 }
 
-function LobbyClock({ clock, deadlineAt }: { clock: ServerClock; deadlineAt: number }) {
-  return (
-    <div className="lobby-countdown" aria-label="Time until show starts" aria-live="polite">
-      {useLobbyRemaining(clock, deadlineAt)}
-    </div>
-  );
-}
-
 function LobbyHeading({ clock, deadlineAt }: { clock: ServerClock; deadlineAt: number | null }) {
   // The countdown hook must run unconditionally (Rules of Hooks), so it
   // always ticks against a real deadline; `clock.now()` is a harmless
@@ -67,13 +59,10 @@ export function LobbyCountdown({
         <p>Verbinde dich mit dem Besucher-WLAN {networkName} oder nutze dein eigenes mobiles Netz.</p>
         <p>Scanne den QR-Code mit deinem Smartphone und folge den Anleitungen auf deinem Display.</p>
       </div>
-      {phase.deadlineAt !== null && (
-        <div className="lobby-timer"><p className="lobby-countdown-label">Show starts in…</p><LobbyClock clock={clock} deadlineAt={phase.deadlineAt} /></div>
-      )}
       {joinUrl !== null && (
         <div className="lobby-join-url" aria-label="Phone join URL">{joinUrl}</div>
       )}
-      <h1 className="lobby-heading"><LobbyHeading clock={clock} deadlineAt={phase.deadlineAt} /></h1>
+      <h1 className="lobby-heading" aria-live="polite"><LobbyHeading clock={clock} deadlineAt={phase.deadlineAt} /></h1>
     </div>
   );
 }
