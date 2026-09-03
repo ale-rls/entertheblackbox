@@ -127,9 +127,31 @@ const fixedPositionQuestionNextSchema = z.object({
 });
 
 export const tieBreakSchema = z.object({
-  /** Deterministic draw among the candidates tied for the highest count. */
+  /** Deterministic draw among tied leaders, or an explicitly curated outcome pool. */
   type: z.literal("kleroterion"),
+  candidates: z
+    .array(z.string().min(1))
+    .min(2, "tie-break candidates must include at least two outcomes")
+    .refine((candidates) => new Set(candidates).size === candidates.length, {
+      message: "tie-break candidates must not contain duplicates",
+    })
+    .optional(),
 });
+
+function validateTieBreakCandidates(
+  next: { map: object; tieBreak?: { candidates?: string[] | undefined } | undefined },
+  ctx: z.RefinementCtx,
+): void {
+  next.tieBreak?.candidates?.forEach((candidate, index) => {
+    if (!Object.hasOwn(next.map, candidate)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `tie-break candidate “${candidate}” is not an outcome in next.map`,
+        path: ["tieBreak", "candidates", index],
+      });
+    }
+  });
+}
 
 export const fourQuadrantPluralityNextSchema = z.object({
   type: z.literal("quadrant-plurality"),
@@ -149,7 +171,7 @@ export const fourQuadrantPluralityNextSchema = z.object({
       message: "countedStatuses must not contain duplicates",
     }),
   tieBreak: tieBreakSchema.optional(),
-});
+}).superRefine(validateTieBreakCandidates);
 
 export const twoQuadrantPluralityNextSchema = z.object({
   type: z.literal("quadrant-plurality"),
@@ -166,7 +188,7 @@ export const twoQuadrantPluralityNextSchema = z.object({
       message: "countedStatuses must not contain duplicates",
     }),
   tieBreak: tieBreakSchema.optional(),
-});
+}).superRefine(validateTieBreakCandidates);
 
 export const polygonZonesPluralityNextSchema = z.object({
   type: z.literal("quadrant-plurality"),
@@ -181,7 +203,7 @@ export const polygonZonesPluralityNextSchema = z.object({
       message: "countedStatuses must not contain duplicates",
     }),
   tieBreak: tieBreakSchema.optional(),
-});
+}).superRefine(validateTieBreakCandidates);
 
 export const positionQuestionNextSchema = z.union([
   fixedPositionQuestionNextSchema,

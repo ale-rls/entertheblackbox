@@ -128,7 +128,8 @@ export function resolvePreview(session: PreviewSession, outcome: ForcedOutcome, 
   const resolved = phase.next.type === "fixed" ? resolvePositionFixedTransition(phase.field, votes, phase.next.target) : (() => {
     const result = resolvePositionPlurality(phase.field, votes, counted);
     if (result.winner === "tie" && phase.next.tieBreak?.type === "kleroterion") {
-      const candidates = (result.tiedCandidates ?? []) as string[];
+      const candidates = phase.next.tieBreak.candidates
+        ?? ((result.tiedCandidates ?? []) as string[]);
       const selected = deterministicChoice(`studio-preview:${phase.id}`, candidates);
       return { ...result, resolvedTarget: (phase.next.map as Record<string, string>)[selected]!, tieBreak: { type: "kleroterion" as const, candidates, selected } };
     }
@@ -136,7 +137,10 @@ export function resolvePreview(session: PreviewSession, outcome: ForcedOutcome, 
     return { ...result, resolvedTarget };
   })();
   const freezeMs = phase.kind === "position-question" ? phase.freezeMs : phase.hideAtMs - phase.closeAtMs;
-  return { ...session, resolution: { votes, ...classification, quadrantCounts: resolved.quadrantCounts, winner: resolved.winner, resolvedTarget: resolved.resolvedTarget, freezeMs } };
+  const tieBreak = "tieBreak" in resolved && resolved.tieBreak !== undefined && resolved.tieBreak !== null
+    ? resolved.tieBreak as NonNullable<PreviewResolution["tieBreak"]>
+    : undefined;
+  return { ...session, resolution: { votes, ...classification, quadrantCounts: resolved.quadrantCounts, winner: resolved.winner, resolvedTarget: resolved.resolvedTarget, freezeMs, ...(tieBreak === undefined ? {} : { tieBreak }) } };
 }
 export function continueAfterResolution(session: PreviewSession): PreviewSession {
   if (!session.resolution) throw new Error("Resolve the question first.");

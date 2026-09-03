@@ -121,6 +121,20 @@ describe("scenarioSchema structural rejection", () => {
     }
   });
 
+  it("accepts a curated random tie pool and rejects invalid outcome selections", () => {
+    const withCandidates = (candidates: string[]) => parse((s) => ({
+      ...s,
+      phases: s.phases.map((phase) => phase.id === "q1" && phase.kind === "position-question"
+        ? { ...phase, next: { ...phase.next, tieBreak: { type: "kleroterion", candidates } } }
+        : phase),
+    }));
+
+    expect(withCandidates(["q1", "q3"]).success).toBe(true);
+    expect(withCandidates(["q1"]).success).toBe(false);
+    expect(withCandidates(["q1", "q1"]).success).toBe(false);
+    expect(withCandidates(["q1", "not-an-outcome"]).success).toBe(false);
+  });
+
   it("accepts optional display titles and rejects empty titles", () => {
     const titled = parse((s) => ({
       ...s,

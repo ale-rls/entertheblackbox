@@ -39,6 +39,25 @@ describe("outcome preview", () => {
     expect(resolvePreview(two, "empty").resolution).toMatchObject({ winner: "empty", quadrantCounts: { min: 0, max: 0 } });
   });
 
+  it("previews a curated random tie outcome pool", () => {
+    const curated = {
+      ...project,
+      scenario: {
+        ...project.scenario,
+        entryPhaseId: "question-quadrant",
+        phases: project.scenario.phases.map((phase) => phase.id === "question-quadrant" && phase.kind === "position-question" && phase.next.type === "quadrant-plurality"
+          ? { ...phase, next: { ...phase.next, tieBreak: { type: "kleroterion" as const, candidates: ["q3", "q4"] } } }
+          : phase),
+      },
+    };
+    const resolution = resolvePreview(startPreview(curated as unknown as typeof project), "tie", false, false).resolution;
+    expect(resolution?.tieBreak?.candidates).toEqual(["q3", "q4"]);
+    expect(["q3", "q4"]).toContain(resolution?.tieBreak?.selected);
+    const question = curated.scenario.phases.find((phase) => phase.id === "question-quadrant");
+    if (!question || question.kind !== "position-question" || question.next.type !== "quadrant-plurality") throw new Error("question fixture missing");
+    expect(resolution?.resolvedTarget).toBe((question.next.map as Record<string, string>)[resolution!.tieBreak!.selected]);
+  });
+
   it("places forced-outcome votes inside the correct region of a perspective-skewed arena quad", () => {
     // A genuinely skewed trapezoid so the round-trip only passes if pointFor
     // actually accounts for the quad's shape rather than a symmetric offset.

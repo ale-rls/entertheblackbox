@@ -947,6 +947,14 @@ body:has(.editor),
   font-size: var(--sc-tool-font-size-1);
 }
 
+.tie-break-options {
+  display: grid;
+  gap: var(--sc-tool-space-3);
+  margin-block-start: var(--sc-tool-space-3);
+  padding-inline-start: var(--sc-tool-space-4);
+  border-inline-start: 2px solid var(--sc-tool-color-rule-strong);
+}
+
 .arena-editor-handle,
 .arena-editor-center {
   fill: var(--sc-tool-color-focus-on-dark);

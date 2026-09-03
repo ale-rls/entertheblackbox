@@ -155,10 +155,29 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
           <p className="sc-tool-copy field-hint">Select a zone, drag its corners, or redraw it by clicking around the arena. Zone IDs stay stable because they are also graph output handles.</p>
           <PolygonEditor zones={field.zones} {...(fieldMedia ? { media: fieldMedia } : {})} onChange={(zones) => {
             const currentNext = phase.next;
-            const currentMap = currentNext.type === "quadrant-plurality" ? currentNext.map as Record<string, string> : undefined;
-            const next = currentMap
-              ? { ...currentNext, map: Object.fromEntries(zones.map((zone) => [zone.id, currentMap[zone.id] ?? "idle"])) }
-              : currentNext;
+            if (currentNext.type !== "quadrant-plurality") {
+              onChange({ ...phase, field: { ...field, zones } } as Phase);
+              return;
+            }
+            const currentMap = currentNext.map as Record<string, string>;
+            const zoneIds = zones.map((zone) => zone.id);
+            const map = Object.fromEntries(zoneIds.map((id) => [id, currentMap[id] ?? "idle"]));
+            const selectedCandidates = currentNext.tieBreak?.candidates;
+            const candidates = selectedCandidates === undefined
+              ? undefined
+              : zoneIds.filter((id) => selectedCandidates.includes(id));
+            if (candidates !== undefined) {
+              for (const id of zoneIds) if (candidates.length < 2 && !candidates.includes(id)) candidates.push(id);
+            }
+            const next = {
+              ...currentNext,
+              map,
+              ...(candidates === undefined ? {} : {
+                tieBreak: zoneIds.length >= 2
+                  ? { type: "kleroterion" as const, candidates }
+                  : { type: "kleroterion" as const },
+              }),
+            };
             onChange({ ...phase, field: { ...field, zones }, next } as Phase);
           }} />
           {field.zones.map((zone, zoneIndex) => <fieldset key={zone.id}><legend>{zone.id}</legend>
@@ -284,15 +303,45 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
 function CountedStatuses({ phase, onChange }: { phase: Extract<Phase, { kind: "position-question" | "video-position-question" }>; onChange: (phase: Phase) => void }) {
   if (phase.next.type !== "quadrant-plurality") return null;
   const next = phase.next;
-  return <fieldset><legend>Count participant states <small>next.countedStatuses</small></legend>{(["valid", "stale", "disconnected"] as const).map((status) => <label className="sc-tool-checkbox check" key={status}><input type="checkbox" checked={next.countedStatuses.includes(status)} onChange={(event) => {
-    const values = event.target.checked ? [...next.countedStatuses, status] : next.countedStatuses.filter((item) => item !== status);
-    if (values.length === 0) return;
-    if (phase.field.type === "four-quadrant") {
+  const outcomeIds = Object.keys(next.map);
+  const selectedCandidates = next.tieBreak?.candidates;
+  const outcomeLabel = (id: string) => phase.field.type === "two-quadrant"
+    ? id === "min" ? phase.field.labels.minLabel : phase.field.labels.maxLabel
+    : phase.field.type === "polygon-zones"
+      ? phase.field.zones.find((zone) => zone.id === id)?.label ?? id
+      : id.toUpperCase();
+  return <fieldset><legend>Count participant states <small>next.countedStatuses</small></legend>
+    {(["valid", "stale", "disconnected"] as const).map((status) => <label className="sc-tool-checkbox check" key={status}><input type="checkbox" checked={next.countedStatuses.includes(status)} onChange={(event) => {
+      const values = event.target.checked ? [...next.countedStatuses, status] : next.countedStatuses.filter((item) => item !== status);
+      if (values.length === 0) return;
       onChange({ ...phase, next: { ...next, countedStatuses: values as typeof next.countedStatuses } } as Phase);
-    } else {
-      onChange({ ...phase, next: { ...next, countedStatuses: values as typeof next.countedStatuses } } as Phase);
-    }
-  }} />{status}</label>)}<label className="sc-tool-checkbox check"><input type="checkbox" checked={next.tieBreak?.type === "kleroterion"} onChange={(event) => onChange({ ...phase, next: { ...next, tieBreak: event.target.checked ? { type: "kleroterion" } : undefined } } as Phase)} />Resolve exact ties with Kleroterion</label></fieldset>;
+    }} />{status}</label>)}
+    <label className="sc-tool-checkbox check"><input type="checkbox" checked={next.tieBreak?.type === "kleroterion"} onChange={(event) => onChange({ ...phase, next: { ...next, tieBreak: event.target.checked ? { type: "kleroterion" } : undefined } } as Phase)} />Resolve ties with a random draw (Kleroterion)</label>
+    {next.tieBreak?.type === "kleroterion" && <div className="tie-break-options">
+      <label className="sc-tool-label">Random outcome pool <small className="sc-tool-mono">next.tieBreak.candidates</small><select className="sc-tool-select" value={selectedCandidates === undefined ? "tied" : "selected"} onChange={(event) => onChange({
+        ...phase,
+        next: {
+          ...next,
+          tieBreak: event.target.value === "selected"
+            ? { type: "kleroterion", candidates: outcomeIds }
+            : { type: "kleroterion" },
+        },
+      } as Phase)}><option value="tied">Outcomes tied for first</option><option value="selected" disabled={outcomeIds.length < 2}>Selected outcomes</option></select></label>
+      {selectedCandidates !== undefined && <fieldset><legend>Eligible random outcomes <small>at least two</small></legend>
+        {outcomeIds.map((id) => {
+          const checked = selectedCandidates.includes(id);
+          return <label className="sc-tool-checkbox check" key={id}><input type="checkbox" checked={checked} disabled={checked && selectedCandidates.length <= 2} onChange={(event) => {
+            const candidates = event.target.checked
+              ? outcomeIds.filter((candidate) => selectedCandidates.includes(candidate) || candidate === id)
+              : selectedCandidates.filter((candidate) => candidate !== id);
+            if (candidates.length < 2) return;
+            onChange({ ...phase, next: { ...next, tieBreak: { type: "kleroterion", candidates } } } as Phase);
+          }} />{outcomeLabel(id)} <span className="sc-tool-mono">→ {(next.map as Record<string, string>)[id]}</span></label>;
+        })}
+      </fieldset>}
+      <p className="sc-tool-copy field-hint">The draw is stable for this show session, so reconnecting or replaying the result cannot reroll it.</p>
+    </div>}
+  </fieldset>;
 }
 
 function Compiled({ project }: { project: StudioProject }) {

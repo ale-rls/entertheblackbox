@@ -669,14 +669,20 @@ export function App() {
           ...(phase.field.type !== "polygon-zones" && phase.field.arena ? { arena: phase.field.arena } : {}),
         };
       const keepsOutcomeShape = phase.field.type === field.type && field.type !== "polygon-zones";
-      const next = phase.next.type === "fixed" || keepsOutcomeShape ? phase.next : {
-        ...phase.next,
-        map: field.type === "two-quadrant"
+      const next = phase.next.type === "fixed" || keepsOutcomeShape ? phase.next : (() => {
+        const map = field.type === "two-quadrant"
           ? { min: "idle", max: "idle" }
           : field.type === "polygon-zones"
             ? Object.fromEntries(field.zones.map((zone) => [zone.id, "idle"]))
-            : { q1: "idle", q2: "idle", q3: "idle", q4: "idle" },
-      };
+            : { q1: "idle", q2: "idle", q3: "idle", q4: "idle" };
+        return {
+          ...phase.next,
+          map,
+          ...(phase.next.tieBreak?.candidates === undefined ? {} : {
+            tieBreak: { type: "kleroterion" as const, candidates: Object.keys(map) },
+          }),
+        };
+      })();
       const nextPhase = { ...phase, field, next } as Phase;
       const nextEdges = next.type === "quadrant-plurality"
         ? replacePluralityLayoutEdges(edges, nextPhase as Extract<Phase, { kind: "position-question" | "video-position-question" }>)

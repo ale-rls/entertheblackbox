@@ -123,7 +123,10 @@ export function resolveSnapshot(
   const counted = new Set<CountablePositionVoteStatus>(question.next.countedStatuses);
   const outcome = resolvePositionPlurality(question.field, snapshot.votes, counted);
   if (outcome.winner === "tie" && question.next.tieBreak?.type === "kleroterion") {
-    const candidates = (outcome.tiedCandidates ?? []) as string[];
+    // An explicit pool lets the author curate which branches a tie may
+    // activate. Omitting it preserves the original tied-leaders-only draw.
+    const candidates = question.next.tieBreak.candidates
+      ?? ((outcome.tiedCandidates ?? []) as string[]);
     const selected = deterministicChoice(`${snapshot.sessionId}:${snapshot.questionId}:${snapshot.phaseEpoch}`, candidates);
     const resolvedTarget = (question.next.map as Record<string, string>)[selected]!;
     return {

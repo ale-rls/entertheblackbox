@@ -175,6 +175,28 @@ describe("VoteEngine", () => {
     expect(votes.finalize(201)).toBe(result);
   });
 
+  it("resolves a tie from an explicitly selected outcome pool", () => {
+    const votes = new VoteEngine();
+    begin(votes, ["left", "right"], {
+      type: "quadrant-plurality",
+      map: { q1: "q1-target", q2: "q2-target", q3: "q3-target", q4: "q4-target" },
+      tie: "tie-target",
+      tieBreak: { type: "kleroterion", candidates: ["q3", "q4"] },
+      empty: "empty-target",
+      countedStatuses: ["valid"],
+    });
+    votes.recordInput("left", 0.25, 0.25, 10);
+    votes.recordInput("right", 0.75, 0.25, 10);
+    votes.recordHeartbeat("left", 150);
+    votes.recordHeartbeat("right", 150);
+
+    const result = votes.finalize(200)!;
+    expect(result.winner).toBe("tie");
+    expect(result.tieBreak?.candidates).toEqual(["q3", "q4"]);
+    expect(["q3", "q4"]).toContain(result.tieBreak?.selected);
+    expect(result.resolvedTarget).toBe(`${result.tieBreak?.selected}-target`);
+  });
+
   it("resolves fixed transitions with real counts but no quadrant winner", () => {
     const votes = new VoteEngine();
     begin(votes, ["participant"], { type: "fixed", target: "fixed-target" });

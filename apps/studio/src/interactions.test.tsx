@@ -422,6 +422,39 @@ describe("Studio feedback and keyboard entry", () => {
     expect(document.body.textContent).toContain("total with tail: 13.000 seconds");
   });
 
+  it("authors a curated random outcome pool for tied votes", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+    const node = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="position-question-"]')).at(-1)!;
+    await act(async () => { node.click(); });
+
+    const tieToggle = Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.includes("Resolve ties with a random draw"))
+      ?.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    await act(async () => { tieToggle.click(); });
+
+    const pool = Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.includes("Random outcome pool"))
+      ?.querySelector<HTMLSelectElement>("select")!;
+    expect(pool.value).toBe("tied");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(pool, "selected");
+      pool.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const eligibleInputs = () => Array.from(document.querySelectorAll<HTMLInputElement>(".tie-break-options fieldset input[type=checkbox]"));
+    expect(eligibleInputs()).toHaveLength(4);
+    expect(eligibleInputs().every((input) => input.checked)).toBe(true);
+    await act(async () => { eligibleInputs()[2]!.click(); });
+    await act(async () => { eligibleInputs()[3]!.click(); });
+
+    expect(eligibleInputs().map((input) => input.checked)).toEqual([true, true, false, false]);
+    expect(eligibleInputs().slice(0, 2).every((input) => input.disabled)).toBe(true);
+    expect(document.querySelector(".tie-break-options")?.textContent).toContain("stable for this show session");
+  });
+
   it("edits image + MP3 vote timing relative to the audio tail", async () => {
     media.load.mockResolvedValue({ files: [
       { src: "portrait.png", bytes: 2_000, hash: "image" },
