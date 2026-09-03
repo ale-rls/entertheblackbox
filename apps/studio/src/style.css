@@ -829,7 +829,7 @@ body:has(.editor),
 
 .polygon-editor-media { pointer-events: none; }
 .polygon-editor-media-video { object-fit: cover; }
-.polygon-editor-media-image { object-fit: contain; background: var(--sc-tool-color-canvas); }
+.polygon-editor-media-image { object-fit: cover; background: var(--sc-tool-color-canvas); }
 
 .polygon-editor-canvas {
   z-index: 1;

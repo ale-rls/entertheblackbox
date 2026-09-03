@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { arenaEllipseSplitY, type ArenaEllipse, type Axis } from "../../../../packages/shared/src/index.js";
 import type { PolygonEditorMedia } from "./PolygonEditor.js";
+import { REFERENCE_DISPLAY_HEIGHT, REFERENCE_DISPLAY_WIDTH } from "./referenceDisplay.js";
 
 type DragHandle = "move" | "left" | "right" | "top" | "bottom" | "split-y";
 type Point = { x: number; y: number };
@@ -54,14 +55,7 @@ export function ArenaEllipseEditor({
   media?: PolygonEditorMedia;
   onChange: (arena: ArenaEllipse) => void;
 }) {
-  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const dragging = useRef<{ handle: DragHandle; start: Point; arena: ArenaEllipse } | null>(null);
-
-  useEffect(() => {
-    const updateViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener("resize", updateViewport);
-    return () => window.removeEventListener("resize", updateViewport);
-  }, []);
 
   const beginDrag = (event: ReactPointerEvent<SVGElement>, handle: DragHandle) => {
     event.preventDefault();
@@ -142,7 +136,7 @@ export function ArenaEllipseEditor({
   const lineClass = field.type === "four-quadrant" || !spectrum ? "arena-editor-divider" : "arena-editor-axis";
 
   return <div className="arena-ellipse-editor">
-    <div className="polygon-editor-viewport" data-media-kind={media?.kind} style={{ aspectRatio: `${viewport.width} / ${viewport.height}` }}>
+    <div className="polygon-editor-viewport" data-media-kind={media?.kind} style={{ aspectRatio: `${REFERENCE_DISPLAY_WIDTH} / ${REFERENCE_DISPLAY_HEIGHT}` }}>
       {media?.kind === "video" && <VideoBackdrop media={media} />}
       {media?.kind === "image" && <img className="polygon-editor-media polygon-editor-media-image" src={media.src} alt="" />}
       <svg
@@ -170,7 +164,7 @@ export function ArenaEllipseEditor({
           onPointerDown={(event) => beginDrag(event, handle)}
         />)}
       </svg>
-      <span className="polygon-editor-viewport-label">Display viewport · {viewport.width}×{viewport.height}{media ? ` · ${media.kind === "image" ? "contain" : "cover"}` : ""}</span>
+      <span className="polygon-editor-viewport-label">Display viewport · {REFERENCE_DISPLAY_WIDTH}×{REFERENCE_DISPLAY_HEIGHT}{media ? " · cover" : ""}</span>
     </div>
     <div className="arena-ellipse-fields">
       {(["centerX", "centerY", "radiusX", "radiusY", "splitY"] as const).map((key) => <label className="sc-tool-label" key={key}>

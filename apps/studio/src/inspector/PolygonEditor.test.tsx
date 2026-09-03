@@ -75,21 +75,21 @@ describe("PolygonEditor", () => {
     expect(viewport.dataset.mediaKind).toBe("video");
     expect(video.getAttribute("src")).toBe("/media/scene.mp4");
     expect(svg.getAttribute("preserveAspectRatio")).toBe("none");
-    expect(viewport.textContent).toContain(`${window.innerWidth}×${window.innerHeight} · cover`);
+    expect(viewport.textContent).toContain("1920×1080 · cover");
 
     Object.defineProperty(video, "duration", { value: 30, configurable: true });
     await act(async () => { video.dispatchEvent(new Event("loadedmetadata")); });
     expect(video.currentTime).toBe(15);
   });
 
-  it("uses contain framing for an image + audio phase", async () => {
+  it("uses cover framing for an image + audio phase", async () => {
     document.body.innerHTML = '<div id="root"></div>';
     root = createRoot(document.querySelector("#root")!);
     await act(async () => root?.render(<PolygonEditor zones={zones} media={{ kind: "image", src: "/media/plate.png" }} onChange={vi.fn()} />));
 
     expect(document.querySelector(".polygon-editor-media-image")?.getAttribute("src")).toBe("/media/plate.png");
     expect(document.querySelector(".polygon-editor-scrim")).toBeNull();
-    expect(document.querySelector(".polygon-editor-viewport")?.textContent).toContain(`${window.innerWidth}×${window.innerHeight} · contain`);
+    expect(document.querySelector(".polygon-editor-viewport")?.textContent).toContain("1920×1080 · cover");
   });
 
   it("shows every authored zone and draggable handles for the selected polygon", async () => {

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import { REFERENCE_DISPLAY_HEIGHT, REFERENCE_DISPLAY_WIDTH } from "./referenceDisplay.js";
 
 type PositionPhase = Extract<StudioProject["scenario"]["phases"][number], { kind: "position-question" | "video-position-question" }>;
 type PolygonField = Extract<PositionPhase["field"], { type: "polygon-zones" }>;
@@ -59,19 +60,12 @@ function VideoBackdrop({ media }: { media: PolygonEditorMedia }) {
 export function PolygonEditor({ zones, media, onChange }: { zones: PolygonZone[]; media?: PolygonEditorMedia; onChange: (zones: PolygonZone[]) => void }) {
   const [selectedId, setSelectedId] = useState(zones[0]?.id ?? "");
   const [drawing, setDrawing] = useState<Drawing | null>(null);
-  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const draggingPoint = useRef<number | null>(null);
   const selected = zones.find((zone) => zone.id === selectedId) ?? zones[0];
 
   useEffect(() => {
     if (!zones.some((zone) => zone.id === selectedId)) setSelectedId(zones[0]?.id ?? "");
   }, [selectedId, zones]);
-
-  useEffect(() => {
-    const updateViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener("resize", updateViewport);
-    return () => window.removeEventListener("resize", updateViewport);
-  }, []);
 
   const replaceSelectedPoints = (points: PolygonPoint[]) => {
     if (!selected) return;
@@ -119,7 +113,7 @@ export function PolygonEditor({ zones, media, onChange }: { zones: PolygonZone[]
         onChange(nextZones);
       }}>Remove zone</button>
     </div>
-    <div className="polygon-editor-viewport" data-media-kind={media?.kind} style={{ aspectRatio: `${viewport.width} / ${viewport.height}` }}>
+    <div className="polygon-editor-viewport" data-media-kind={media?.kind} style={{ aspectRatio: `${REFERENCE_DISPLAY_WIDTH} / ${REFERENCE_DISPLAY_HEIGHT}` }}>
       {media?.kind === "video" && <VideoBackdrop media={media} />}
       {media?.kind === "image" && <img className="polygon-editor-media polygon-editor-media-image" src={media.src} alt="" />}
       <svg
@@ -162,7 +156,7 @@ export function PolygonEditor({ zones, media, onChange }: { zones: PolygonZone[]
               {drawing.points.map((point, index) => <circle className="polygon-editor-draft-point" key={index} cx={point.x * 100} cy={point.y * 100} r="2.1" />)}
             </>}
       </svg>
-      <span className="polygon-editor-viewport-label">Display viewport · {viewport.width}×{viewport.height}{media ? ` · ${media.kind === "image" ? "contain" : "cover"}` : ""}</span>
+      <span className="polygon-editor-viewport-label">Display viewport · {REFERENCE_DISPLAY_WIDTH}×{REFERENCE_DISPLAY_HEIGHT}{media ? " · cover" : ""}</span>
     </div>
     {drawing === null
       ? <div className="polygon-editor-actions">
