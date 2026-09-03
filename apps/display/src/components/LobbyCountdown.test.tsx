@@ -24,8 +24,9 @@ describe("LobbyCountdown", () => {
       />,
     );
     expect(lobby).toContain("61:01");
-    expect(lobby).toContain("Join the show");
+    expect(lobby).toContain("Show starts in 61:01");
     expect(lobby).toContain("Show starts in…");
+    expect(lobby).not.toContain("Join the show");
     expect(lobby).toContain("Besucher-WLAN [Netzname]");
     expect(lobby).toContain("https://join.example/phone/");
     expect(lobby).not.toContain("Show starts at");

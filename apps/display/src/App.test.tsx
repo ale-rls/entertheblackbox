@@ -64,7 +64,6 @@ vi.mock("./components/IdleAttract.js", () => ({
   IdleAttract: () => <div data-testid="idle-attract">idle attract</div>,
 }));
 vi.mock("./components/LobbyCountdown.js", () => ({ LobbyCountdown: () => null }));
-vi.mock("./components/PhoneCount.js", () => ({ PhoneCount: () => null }));
 vi.mock("./cursors/CursorCanvas.js", () => ({
   CursorCanvas: ({ field }: { field: { size: number } }) => {
     harness.cursorField = field;

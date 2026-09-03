@@ -15,7 +15,6 @@ import { QrBadge } from "./components/QrBadge.js";
 import { QuadrantOverlay } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
-import { PhoneCount } from "./components/PhoneCount.js";
 import { PhaseVideo } from "./components/PhaseVideo.js";
 import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
 import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
@@ -354,7 +353,6 @@ export function App() {
             {state.notice.message}
           </div>
         )}
-        {isIdle && <PhoneCount count={state.presenceCount} />}
       </section>
 
       {/* Layer 3: cursor canvas */}

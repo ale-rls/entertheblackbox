@@ -11,7 +11,7 @@ export function formatLobbyCountdown(remainingMs: number): string {
     .join(":");
 }
 
-function LobbyClock({ clock, deadlineAt }: { clock: ServerClock; deadlineAt: number }) {
+function useLobbyRemaining(clock: ServerClock, deadlineAt: number): string {
   const getRemaining = () => formatLobbyCountdown(clock.remainingUntil(deadlineAt));
   const [remaining, setRemaining] = useState(getRemaining);
 
@@ -22,11 +22,24 @@ function LobbyClock({ clock, deadlineAt }: { clock: ServerClock; deadlineAt: num
     return () => clearInterval(timer);
   }, [clock, deadlineAt]);
 
+  return remaining;
+}
+
+function LobbyClock({ clock, deadlineAt }: { clock: ServerClock; deadlineAt: number }) {
   return (
     <div className="lobby-countdown" aria-label="Time until show starts" aria-live="polite">
-      {remaining}
+      {useLobbyRemaining(clock, deadlineAt)}
     </div>
   );
+}
+
+function LobbyHeading({ clock, deadlineAt }: { clock: ServerClock; deadlineAt: number | null }) {
+  // The countdown hook must run unconditionally (Rules of Hooks), so it
+  // always ticks against a real deadline; `clock.now()` is a harmless
+  // stand-in for the no-deadline case, whose result is never rendered.
+  const remaining = useLobbyRemaining(clock, deadlineAt ?? clock.now());
+  if (deadlineAt === null) return <>Join the show</>;
+  return <>Show starts in {remaining}</>;
 }
 
 export function LobbyCountdown({
@@ -60,7 +73,7 @@ export function LobbyCountdown({
       {joinUrl !== null && (
         <div className="lobby-join-url" aria-label="Phone join URL">{joinUrl}</div>
       )}
-      <h1 className="lobby-heading">Join the show</h1>
+      <h1 className="lobby-heading"><LobbyHeading clock={clock} deadlineAt={phase.deadlineAt} /></h1>
     </div>
   );
 }
