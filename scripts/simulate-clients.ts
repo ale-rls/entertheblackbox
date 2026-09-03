@@ -9,6 +9,8 @@ type Options = {
   installationId: string;
   roomId: string;
   displayToken: string;
+  joinRateLimitMaxAttempts: number;
+  joinRateLimitWindowMs: number;
 };
 
 type PhoneState = {
@@ -69,11 +71,18 @@ export function parseArgs(argv: string[]): Options {
   };
   return {
     url: values.get("--url") ?? "ws://127.0.0.1:3000/ws",
-    count: integer("--count", 30, 1, 30),
+    count: integer("--count", 30, 1, 1_000),
     durationMs: integer("--duration-ms", 70_000, 1_000, 3_600_000),
     installationId: values.get("--installation-id") ?? "dev-installation",
     roomId: values.get("--room-id") ?? "main",
     displayToken: values.get("--display-token") ?? "dev-display-token",
+    // Must match the target server's JOIN_RATE_LIMIT_MAX_ATTEMPTS /
+    // JOIN_RATE_LIMIT_WINDOW_MS (apps/server/src/config.ts) -- these drive
+    // the reconnect-timing math below, which otherwise trips the server's
+    // own per-IP join limiter mid-test since every simulated client
+    // connects from this one machine's address.
+    joinRateLimitMaxAttempts: integer("--join-rate-limit-max-attempts", 30, 1, 100_000),
+    joinRateLimitWindowMs: integer("--join-rate-limit-window-ms", 60_000, 1_000, 3_600_000),
   };
 }
 
@@ -190,11 +199,14 @@ export async function runSimulation(options: Options): Promise<Record<string, nu
     }
   }, 1_000);
 
-  const reconnectAt = options.count + Math.ceil(options.count / 2) > 30
-    ? 60_100
+  const totalJoins = options.count + Math.ceil(options.count / 2);
+  const reconnectAt = totalJoins > options.joinRateLimitMaxAttempts
+    ? options.joinRateLimitWindowMs + 100
     : Math.floor(options.durationMs / 2);
   if (reconnectAt + 200 >= options.durationMs) {
-    throw new Error("duration is too short for reconnects under the 30 joins/minute local rate limit");
+    throw new Error(
+      `duration is too short for reconnects under the ${options.joinRateLimitMaxAttempts} joins per ${options.joinRateLimitWindowMs}ms local rate limit`,
+    );
   }
   await new Promise((resolve) => setTimeout(resolve, reconnectAt));
   for (let index = 0; index < phones.length; index += 2) phones[index]!.socket.close();

@@ -165,6 +165,18 @@ To exercise the multiplayer server without browsers:
 pnpm simulate-clients
 ```
 
+Defaults to 30 simulated phones (the historical local-installation player cap).
+For a larger production deployment, raise `--count` along with the server's
+`MAX_PARTICIPANTS`/`MAX_WEBSOCKET_CONNECTIONS`/`JOIN_RATE_LIMIT_*` env vars
+(`apps/server/src/config.ts`) and pass matching `--join-rate-limit-*` flags so
+the script's reconnect timing doesn't trip the server's own join limiter, e.g.:
+
+```bash
+pnpm simulate-clients -- --count 300 --duration-ms 180000 \
+  --join-rate-limit-max-attempts 400 --join-rate-limit-window-ms 60000 \
+  --url wss://your-staging-host/ws
+```
+
 ## Content
 
 - `content/scenarios/dev.json` — example development show

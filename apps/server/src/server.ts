@@ -2,13 +2,14 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import { z } from "zod";
-import { AdmissionController } from "./admission/index.js";
+import { AdmissionController, InMemoryIpRateLimiter } from "./admission/index.js";
 import { verifyParticipantLease } from "./admission/tokens.js";
 import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
 import type { GhostPool } from "./ghosts/index.js";
 import { MovementConsentManager } from "./movement/index.js";
+import { DEFAULT_INSTALLATION_POLICY } from "@smartphonecracy/shared";
 import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
 import { readServerConfigOverride, writeActiveShowId, writeTargetAudienceSize } from "./persistence/installation-config.js";
 import { writeLobbyStartTimes } from "./persistence/lobby-config.js";
@@ -58,6 +59,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     maxPayload: WEBSOCKET_MAX_PAYLOAD_BYTES,
   });
   const maxWebSocketConnections = options.maxWebSocketConnections
+    ?? config.maxWebSocketConnections
     ?? DEFAULT_MAX_WEBSOCKET_CONNECTIONS;
   if (!Number.isSafeInteger(maxWebSocketConnections) || maxWebSocketConnections < 1) {
     throw new Error("maxWebSocketConnections must be a positive integer");
@@ -89,6 +91,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     installationId: config.installationId,
     roomId: config.roomId,
     secret: config.joinGrantSecret,
+    policy: { ...DEFAULT_INSTALLATION_POLICY, maxParticipants: config.maxParticipants },
+    rateLimiter: new InMemoryIpRateLimiter(config.joinRateLimit),
     trustProxy: config.trustProxy,
     buildVersion: config.buildVersion,
     allowPublicJoin: true,

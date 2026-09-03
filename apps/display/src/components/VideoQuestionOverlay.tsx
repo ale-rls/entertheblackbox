@@ -5,7 +5,7 @@ import type {
   QuestionStatusMessage,
 } from "@smartphonecracy/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
-import { QuadrantOverlay } from "./QuadrantOverlay.js";
+import { QuadrantOverlay, questionFieldCenter } from "./QuadrantOverlay.js";
 import { VoteCloseCountdown } from "./VoteCloseCountdown.js";
 
 export type VideoQuestionPhase = Extract<PhaseSnapshotMessage, { kind: "video-position-question" }>;
@@ -50,16 +50,34 @@ export function VideoQuestionOverlay({
 
   const closeAt = phase.startedAt + phase.closeAtMs;
   const stage = videoQuestionStage(phase, now);
-  if (stage === "hidden") return null;
 
-  const votingOpen = stage === "open" && resolution === null;
-  const votingState = stage === "shown"
+  // The overlay's own div fades out (CSS `question-out` animation) once
+  // `stage` goes "hidden" instead of vanishing instantly, so unmounting is
+  // deferred to the animation's end rather than to this render.
+  const [rendered, setRendered] = useState(stage !== "hidden");
+  useEffect(() => {
+    if (stage !== "hidden") setRendered(true);
+  }, [stage]);
+
+  // While fading out, keep rendering the last non-hidden stage's content
+  // (counts, highlights, voting state) so only opacity changes -- the
+  // underlying values would otherwise snap away the instant `stage` flips.
+  const [displayStage, setDisplayStage] = useState(stage);
+  useEffect(() => {
+    if (stage !== "hidden") setDisplayStage(stage);
+  }, [stage]);
+
+  if (stage === "hidden" && !rendered) return null;
+
+  const fadingOut = stage === "hidden";
+  const votingOpen = displayStage === "open" && resolution === null;
+  const votingState = displayStage === "shown"
     ? "Voting opens soon"
     : votingOpen
       ? "Voting open"
       : "Voting closed";
   const keepCountsAndVotingState = showsCountsAndVotingState(phase.field.type);
-  const highlightRegionIds = stage === "closed" && resolution !== null
+  const highlightRegionIds = displayStage === "closed" && resolution !== null
     ? resolution.tieBreak?.candidates
       ?? (resolution.winner === "tie"
         ? Object.keys(resolution.quadrantCounts)
@@ -67,7 +85,13 @@ export function VideoQuestionOverlay({
     : [];
 
   return (
-    <div className="question question-over-video" data-voting-open={votingOpen}>
+    <div
+      className={`question question-over-video${fadingOut ? " question-fade-out" : ""}`}
+      data-voting-open={votingOpen}
+      onAnimationEnd={(event) => {
+        if (fadingOut && event.animationName === "question-out") setRendered(false);
+      }}
+    >
       <div className="question-copy">
         <p className="question-text">{phase.text}</p>
       </div>
@@ -79,7 +103,7 @@ export function VideoQuestionOverlay({
         showCounts={keepCountsAndVotingState}
         highlightRegionIds={highlightRegionIds}
       />
-      {votingOpen && <VoteCloseCountdown clock={clock} deadlineAt={closeAt} soundEnabled={soundEnabled} durationSeconds={phase.closeCountdownSeconds ?? 5} />}
+      {votingOpen && <VoteCloseCountdown clock={clock} deadlineAt={closeAt} soundEnabled={soundEnabled} durationSeconds={phase.closeCountdownSeconds ?? 5} center={questionFieldCenter(phase.field)} />}
       {keepCountsAndVotingState && <div className="voting-state">{votingState}</div>}
     </div>
   );

@@ -51,11 +51,14 @@ export function VoteCloseCountdown({
   deadlineAt,
   soundEnabled,
   durationSeconds = DEFAULT_VOTE_CLOSE_COUNTDOWN_SECONDS,
+  center,
 }: {
   clock: ServerClock;
   deadlineAt: number;
   soundEnabled: boolean;
   durationSeconds?: 5 | 10;
+  /** Arena center (0-100 percentages) to align on instead of the screen center. */
+  center?: { x: number; y: number } | null;
 }) {
   const [remainingMs, setRemainingMs] = useState(() => clock.remainingUntil(deadlineAt));
   const lastBeepSecond = useRef<number | null>(null);
@@ -80,8 +83,10 @@ export function VoteCloseCountdown({
 
   if (!inFinalCountdown) return null;
 
+  const style = center ? { left: `${center.x}%`, top: `${center.y}%` } : undefined;
+
   // Keyed by the second so the CSS pulse-in animation restarts on every tick.
-  return <div key={secondsLeft} className="vote-close-countdown">{secondsLeft}</div>;
+  return <div key={secondsLeft} className="vote-close-countdown" style={style}>{secondsLeft}</div>;
 }
 
 /** True during the final countdown window -- lets a parent decide when to blink the leading side. */

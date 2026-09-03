@@ -25,7 +25,7 @@ test.describe("full scenario flow", () => {
     // Display must not sit in a media-retry state with intact media, and
     // must render the idle attract layer once ready.
     await expect(display.locator(".idle")).toBeVisible();
-    const attractVideo = display.locator(".idle-attract-video");
+    const attractVideo = display.locator(".idle-attract-video-active");
     await expect(attractVideo).toBeVisible();
     await expect(attractVideo).toHaveAttribute("loop", "");
     await expect(display.locator(".idle-attract-overlay")).toBeVisible();
@@ -142,7 +142,7 @@ test.describe("full scenario flow", () => {
       .poll(async () => (await adminStatus(server.baseUrl)).lifecycle, { timeout: 30_000 })
       .toBe("idle");
     await expect(display.locator(".idle")).toBeVisible();
-    const returnedAttractVideo = display.locator(".idle-attract-video");
+    const returnedAttractVideo = display.locator(".idle-attract-video-active");
     await expect(returnedAttractVideo).toBeVisible();
     await expect.poll(async () => returnedAttractVideo.evaluate((video: HTMLVideoElement) => ({
       hasError: video.error !== null,

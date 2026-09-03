@@ -75,6 +75,22 @@ function clampPercent(value: number, min = 6, max = 94): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/**
+ * The field's own arena center (the ellipse/quad "circle", or a
+ * perspective-skewed quad's true midpoint), in the same 0-100 percentage
+ * space the overlay itself renders in. `null` for fields with no arena
+ * (e.g. a plain four-quadrant cross or polygon zones), where there's no
+ * off-screen-center point to aim at.
+ */
+export function questionFieldCenter(field: QuestionField): { x: number; y: number } | null {
+  if (field.type === "polygon-zones" || field.arena === undefined) return null;
+  if (field.arena.type === "ellipse") {
+    return { x: field.arena.centerX * 100, y: field.arena.centerY * 100 };
+  }
+  const { center } = arenaQuadLandmarks(field.arena.corners);
+  return { x: center.x * 100, y: center.y * 100 };
+}
+
 const svgPoints = (points: readonly { x: number; y: number }[]): string =>
   points.map((p) => `${p.x * 100},${p.y * 100}`).join(" ");
 

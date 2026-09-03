@@ -20,6 +20,10 @@ const envSchema = z.object({
   ADMIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(600),
   ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES: z.coerce.number().int().positive().default(30),
   ADMIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+  MAX_PARTICIPANTS: z.coerce.number().int().positive().default(30),
+  MAX_WEBSOCKET_CONNECTIONS: z.coerce.number().int().positive().default(300),
+  JOIN_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(30),
+  JOIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   JOIN_GRANT_SECRET: z.string().min(16).default(DEVELOPMENT_JOIN_GRANT_SECRET),
   TRUST_PROXY: z.enum(["true", "false"]).default("false"),
   ALLOW_LATE_JOIN: z.enum(["true", "false"]).default("true"),
@@ -49,6 +53,12 @@ export type ServerConfig = {
   adminRateLimit: {
     maxAuthenticatedRequests: number;
     maxAuthenticationFailures: number;
+    windowMs: number;
+  };
+  maxParticipants: number;
+  maxWebSocketConnections: number;
+  joinRateLimit: {
+    maxAttempts: number;
     windowMs: number;
   };
   joinGrantSecret: string;
@@ -114,6 +124,12 @@ export function loadConfig(
       maxAuthenticatedRequests: value.ADMIN_RATE_LIMIT_MAX_REQUESTS,
       maxAuthenticationFailures: value.ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES,
       windowMs: value.ADMIN_RATE_LIMIT_WINDOW_MS,
+    },
+    maxParticipants: value.MAX_PARTICIPANTS,
+    maxWebSocketConnections: value.MAX_WEBSOCKET_CONNECTIONS,
+    joinRateLimit: {
+      maxAttempts: value.JOIN_RATE_LIMIT_MAX_ATTEMPTS,
+      windowMs: value.JOIN_RATE_LIMIT_WINDOW_MS,
     },
     joinGrantSecret: value.JOIN_GRANT_SECRET,
     trustProxy: value.TRUST_PROXY === "true",

@@ -15,7 +15,7 @@ import { QrBadge } from "./components/QrBadge.js";
 import { QuadrantOverlay } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
-import { PhaseVideo } from "./components/PhaseVideo.js";
+import { PhaseVideoHandoff, type PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
 import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
 import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
@@ -54,6 +54,7 @@ const config = {
 export function App() {
   const [state, dispatch] = useReducer(displayReducer, initialDisplayState);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [presentedVideoKey, setPresentedVideoKey] = useState<string | null>(null);
   const stateRef = useRef(state);
   const activeMediaRef = useRef<HTMLMediaElement | null>(null);
   const activeExtraAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -220,6 +221,30 @@ export function App() {
   const spectrumPhase = phase?.kind === "position-question" || phase?.kind === "video-position-question"
     ? phase
     : null;
+  const phaseVideoKey = (phase?.kind === "video" || phase?.kind === "video-position-question")
+    && phase.audioSrc === undefined
+    ? `${state.sessionId ?? "pending"}:${state.phaseEpoch}`
+    : null;
+  const phaseVideoCandidate: PhaseVideoCandidate | null = phaseVideoKey !== null
+    && (phase?.kind === "video" || phase?.kind === "video-position-question")
+    && phase.audioSrc === undefined
+    && media.visualSrc === phase.src
+    && media.videoUrl !== null
+    ? {
+        key: phaseVideoKey,
+        sessionId: state.sessionId,
+        phase,
+        phaseEpoch: state.phaseEpoch,
+        src: media.videoUrl,
+        ...(media.extraAudioUrl === null ? {} : { extraAudioSrc: media.extraAudioUrl }),
+      }
+    : null;
+  // Keep the already-decoded attract player mounted for the lifetime of the
+  // app. It stays visible beneath an outgoing phase frame until an incoming
+  // phase video is presented, and stays paused/hidden during the show. This
+  // also gives video -> idle transitions an immediately available frame.
+  const idleMediaVisible = isIdle
+    || (phaseVideoKey !== null && presentedVideoKey !== phaseVideoKey);
   useEffect(() => {
     void media.showMedia(phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc);
   }, [phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc]);
@@ -228,28 +253,22 @@ export function App() {
     <main className="display-root">
       {/* Layer 1: video */}
       <section className="layer layer-video">
-        {isIdle && (
-          <IdleAttract
-            grant={state.qrGrant}
-            qrHidden={state.qrHidden}
-            clock={connection.clock}
-          />
-        )}
-        {(phase?.kind === "video" || phase?.kind === "video-position-question") && media.videoUrl !== null && phase.audioSrc === undefined && (
-          <PhaseVideo
-            key={phase.id}
-            sessionId={state.sessionId}
-            phase={phase}
-            phaseEpoch={state.phaseEpoch}
-            src={media.videoUrl}
-            {...(media.extraAudioUrl === null ? {} : { extraAudioSrc: media.extraAudioUrl })}
-            soundEnabled={soundEnabled}
-            onVideoElement={setActiveMedia}
-            onExtraAudioElement={setActiveExtraAudio}
-            send={sendDisplayMessage}
-          />
-        )}
-        {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.audioSrc !== undefined && media.videoUrl !== null && media.audioUrl !== null && (
+        <IdleAttract
+          grant={state.qrGrant}
+          qrHidden={state.qrHidden}
+          clock={connection.clock}
+          mediaVisible={idleMediaVisible}
+        />
+        <PhaseVideoHandoff
+          desiredKey={phaseVideoKey}
+          candidate={phaseVideoCandidate}
+          soundEnabled={soundEnabled}
+          onVideoElement={setActiveMedia}
+          onExtraAudioElement={setActiveExtraAudio}
+          onActiveKey={setPresentedVideoKey}
+          send={sendDisplayMessage}
+        />
+        {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.audioSrc !== undefined && media.visualSrc === phase.src && media.videoUrl !== null && media.audioUrl !== null && (
           <PhaseImageAudio
             key={phase.id}
             sessionId={state.sessionId}

@@ -10,9 +10,12 @@ import { MediaStore, type MediaSyncStatus } from "./mediaStore.js";
  */
 export function useMedia(manifestUrl = "/media-manifest.json") {
   const [status, setStatus] = useState<MediaSyncStatus>({ state: "idle" });
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [extraAudioUrl, setExtraAudioUrl] = useState<string | null>(null);
+  const [resolvedMedia, setResolvedMedia] = useState<{
+    visualSrc: string;
+    visualUrl: string | null;
+    audioUrl: string | null;
+    extraAudioUrl: string | null;
+  } | null>(null);
   const activeSources = useRef<{
     visualSrc: string;
     audioSrc: string | null;
@@ -55,9 +58,7 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
     activeSources.current = visualSrc === null ? null : { visualSrc, audioSrc, extraAudioSrc };
     if (visualSrc === null) {
       store.retainOnly(new Set());
-      setVideoUrl(null);
-      setAudioUrl(null);
-      setExtraAudioUrl(null);
+      setResolvedMedia(null);
       return;
     }
     const [visualUrl, resolvedAudioUrl, resolvedExtraAudioUrl] = await Promise.all([
@@ -85,9 +86,16 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
       ...(audioSrc === null ? [] : [audioSrc]),
       ...(extraAudioSrc === null ? [] : [extraAudioSrc]),
     ]));
-    setVideoUrl(visualUrl);
-    setAudioUrl(resolvedAudioUrl);
-    setExtraAudioUrl(resolvedExtraAudioUrl);
+    // Publish the source identity and all of its URLs atomically. During an
+    // asynchronous phase change the previous resolved media may remain here,
+    // but consumers can now prove that it belongs to the previous phase rather
+    // than briefly attaching its Blob URL to the incoming <video>.
+    setResolvedMedia({
+      visualSrc,
+      visualUrl,
+      audioUrl: resolvedAudioUrl,
+      extraAudioUrl: resolvedExtraAudioUrl,
+    });
   };
 
   // A video phase can arrive before boot sync finishes; once the cache
@@ -103,5 +111,13 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.state]);
 
-  return { status, videoUrl, audioUrl, extraAudioUrl, showMedia, store };
+  return {
+    status,
+    visualSrc: resolvedMedia?.visualSrc ?? null,
+    videoUrl: resolvedMedia?.visualUrl ?? null,
+    audioUrl: resolvedMedia?.audioUrl ?? null,
+    extraAudioUrl: resolvedMedia?.extraAudioUrl ?? null,
+    showMedia,
+    store,
+  };
 }

@@ -20,6 +20,7 @@ export type PhaseVideoProps = {
   soundEnabled: boolean;
   onVideoElement?: (video: HTMLVideoElement | null) => void;
   onExtraAudioElement?: (audio: HTMLAudioElement | null) => void;
+  onFirstFrame?: () => void;
   send: (message: DisplayToServerMessage) => void;
 };
 
@@ -32,11 +33,15 @@ export function PhaseVideo({
   soundEnabled,
   onVideoElement,
   onExtraAudioElement,
+  onFirstFrame,
   send,
 }: PhaseVideoProps) {
   const tailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const extraAudioRef = useRef<HTMLAudioElement | null>(null);
+  const firstFrameReported = useRef(false);
+  const firstFrameCallback = useRef<{ video: HTMLVideoElement; id: number } | null>(null);
+  const firstFrameAnimation = useRef<number | null>(null);
   const diagnostics = useVideoPlaybackDiagnostics({
     sessionId,
     phaseId: phase.id,
@@ -69,6 +74,20 @@ export function PhaseVideo({
   useEffect(() => () => {
     if (tailTimer.current !== null) clearTimeout(tailTimer.current);
   }, [completePhase]);
+  useEffect(() => {
+    firstFrameReported.current = false;
+    return () => {
+      const callback = firstFrameCallback.current;
+      if (callback !== null) {
+        callback.video.cancelVideoFrameCallback(callback.id);
+      }
+      if (firstFrameAnimation.current !== null) {
+        cancelAnimationFrame(firstFrameAnimation.current);
+      }
+      firstFrameCallback.current = null;
+      firstFrameAnimation.current = null;
+    };
+  }, [phaseEpoch, src]);
   const handleEnded = () => {
     extraAudioRef.current?.pause();
     const tailDurationMs = phase.tailDurationMs ?? 0;
@@ -88,6 +107,23 @@ export function PhaseVideo({
   const handlePlaying = () => {
     diagnostics.onPlaying();
     const video = videoRef.current;
+    if (video !== null && !firstFrameReported.current && onFirstFrame !== undefined) {
+      firstFrameReported.current = true;
+      if (typeof video.requestVideoFrameCallback === "function") {
+        const id = video.requestVideoFrameCallback(() => {
+          firstFrameCallback.current = null;
+          onFirstFrame();
+        });
+        firstFrameCallback.current = { video, id };
+      } else {
+        // `playing` can precede the compositor's paint. Waiting one animation
+        // frame keeps the readiness fallback from revealing a black element.
+        firstFrameAnimation.current = requestAnimationFrame(() => {
+          firstFrameAnimation.current = null;
+          onFirstFrame();
+        });
+      }
+    }
     const audio = extraAudioRef.current;
     if (video === null || audio === null) return;
     if (Math.abs(audio.currentTime - video.currentTime) > 0.25) audio.currentTime = video.currentTime;
