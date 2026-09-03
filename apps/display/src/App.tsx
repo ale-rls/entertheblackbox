@@ -230,6 +230,8 @@ export function App() {
     && (phase?.kind === "video" || phase?.kind === "video-position-question")
     && phase.audioSrc === undefined
     && media.visualSrc === phase.src
+    && media.audioSrc === phaseAudioSrc
+    && media.extraAudioSrc === phaseExtraAudioSrc
     && media.videoUrl !== null
     ? {
         key: phaseVideoKey,
@@ -269,7 +271,13 @@ export function App() {
           onActiveKey={setPresentedVideoKey}
           send={sendDisplayMessage}
         />
-        {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.audioSrc !== undefined && media.visualSrc === phase.src && media.videoUrl !== null && media.audioUrl !== null && (
+        {(phase?.kind === "video" || phase?.kind === "video-position-question")
+          && phase.audioSrc !== undefined
+          && media.visualSrc === phase.src
+          && media.audioSrc === phaseAudioSrc
+          && media.extraAudioSrc === phaseExtraAudioSrc
+          && media.videoUrl !== null
+          && media.audioUrl !== null && (
           <PhaseImageAudio
             key={phase.id}
             sessionId={state.sessionId}

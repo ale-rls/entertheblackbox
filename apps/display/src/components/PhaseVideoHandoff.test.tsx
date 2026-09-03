@@ -98,4 +98,41 @@ describe("PhaseVideoHandoff", () => {
     expect(document.querySelector(".phase-video-slot-active")?.getAttribute("data-phase-key")).toBe(second.key);
     expect(document.querySelector('video[src="blob:first"]')).toBeNull();
   });
+
+  it("updates a prepared slot when its extra audio changes", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const value = {
+      ...candidate("question", 2),
+      src: "blob:shared-loop",
+      extraAudioSrc: "blob:question-1",
+    };
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+
+    await act(async () => {
+      root?.render(
+        <PhaseVideoHandoff
+          desiredKey={value.key}
+          candidate={value}
+          soundEnabled={false}
+          send={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+    expect(document.querySelector("audio")?.getAttribute("src")).toBe("blob:question-1");
+
+    await act(async () => {
+      root?.render(
+        <PhaseVideoHandoff
+          desiredKey={value.key}
+          candidate={{ ...value, extraAudioSrc: "blob:question-2" }}
+          soundEnabled={false}
+          send={vi.fn()}
+        />,
+      );
+      await Promise.resolve();
+    });
+    expect(document.querySelector("audio")?.getAttribute("src")).toBe("blob:question-2");
+  });
 });

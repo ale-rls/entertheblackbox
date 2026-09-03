@@ -81,7 +81,11 @@ export function PhaseVideoHandoff({
 
     const targetSlot: Slot = currentSlot === 0 ? 1 : 0;
     setSlots((previous) => {
-      if (previous[targetSlot]?.key === candidate.key && previous[targetSlot]?.src === candidate.src) {
+      if (
+        previous[targetSlot]?.key === candidate.key
+        && previous[targetSlot]?.src === candidate.src
+        && previous[targetSlot]?.extraAudioSrc === candidate.extraAudioSrc
+      ) {
         return previous;
       }
       const next: [PhaseVideoCandidate | null, PhaseVideoCandidate | null] = [...previous];

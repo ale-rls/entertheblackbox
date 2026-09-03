@@ -2,6 +2,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { PROTOCOL_VERSION, type ServerToClientMessage } from "@smartphonecracy/protocol";
+import type { PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
 import { App } from "./App.js";
 
 const harness = vi.hoisted(() => {
@@ -17,7 +19,15 @@ const harness = vi.hoisted(() => {
     mediaStatus: { state: "idle" } as
       | { state: "idle" }
       | { state: "ready" },
+    visualSrc: null as string | null,
+    audioSrc: null as string | null,
+    extraAudioSrc: null as string | null,
+    videoUrl: null as string | null,
+    audioUrl: null as string | null,
+    extraAudioUrl: null as string | null,
     showMedia: vi.fn(),
+    connectionOptions: null as null | { onMessage: (message: ServerToClientMessage) => void },
+    videoCandidate: null as PhaseVideoCandidate | null,
     realtimeStart: vi.fn(),
     realtimeStop: vi.fn(),
     realtimeOptions: null as null | {
@@ -30,7 +40,10 @@ const harness = vi.hoisted(() => {
 });
 
 vi.mock("./lib/connection.js", () => ({
-  DisplayConnection: vi.fn(() => harness.connection),
+  DisplayConnection: vi.fn((options: NonNullable<typeof harness.connectionOptions>) => {
+    harness.connectionOptions = options;
+    return harness.connection;
+  }),
 }));
 
 vi.mock("./cursors/realtimeWsClient.js", () => ({
@@ -43,11 +56,22 @@ vi.mock("./cursors/realtimeWsClient.js", () => ({
 vi.mock("./media/useMedia.js", () => ({
   useMedia: () => ({
     status: harness.mediaStatus,
-    videoUrl: null,
-    audioUrl: null,
+    visualSrc: harness.visualSrc,
+    audioSrc: harness.audioSrc,
+    extraAudioSrc: harness.extraAudioSrc,
+    videoUrl: harness.videoUrl,
+    audioUrl: harness.audioUrl,
+    extraAudioUrl: harness.extraAudioUrl,
     showMedia: harness.showMedia,
     store: {},
   }),
+}));
+
+vi.mock("./components/PhaseVideoHandoff.js", () => ({
+  PhaseVideoHandoff: ({ candidate }: { candidate: PhaseVideoCandidate | null }) => {
+    harness.videoCandidate = candidate;
+    return null;
+  },
 }));
 
 vi.mock("./lib/kiosk.js", () => ({
@@ -91,6 +115,14 @@ afterEach(async () => {
   harness.realtimeOptions = null;
   harness.cursorField = null;
   harness.mediaStatus = { state: "idle" };
+  harness.visualSrc = null;
+  harness.audioSrc = null;
+  harness.extraAudioSrc = null;
+  harness.videoUrl = null;
+  harness.audioUrl = null;
+  harness.extraAudioUrl = null;
+  harness.connectionOptions = null;
+  harness.videoCandidate = null;
 });
 
 describe("App media-readiness gate", () => {
@@ -148,5 +180,46 @@ describe("App media-readiness gate", () => {
 
     await act(async () => button.click());
     expect(document.querySelector(".sound-control")).toBeNull();
+  });
+
+  it("waits for the matching extra audio when consecutive phases share one video", async () => {
+    harness.mediaStatus = { state: "ready" };
+    harness.visualSrc = "shared-loop.mp4";
+    harness.audioSrc = null;
+    harness.extraAudioSrc = "question-1.mp3";
+    harness.videoUrl = "blob:shared-loop";
+    harness.extraAudioUrl = "blob:question-1";
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+
+    await act(async () => {
+      harness.connectionOptions?.onMessage({
+        t: "snapshot",
+        v: PROTOCOL_VERSION,
+        sessionId: "session-1",
+        phaseEpoch: 2,
+        serverTime: 0,
+        phase: {
+          kind: "video",
+          id: "question-2",
+          src: "shared-loop.mp4",
+          extraAudioSrc: "question-2.mp3",
+          expectedDurationMs: 10_000,
+          next: "question-3",
+          scenarioVersion: "show-1",
+          startedAt: 0,
+          deadlineAt: null,
+        },
+      });
+    });
+
+    expect(harness.videoCandidate).toBeNull();
+
+    harness.extraAudioSrc = "question-2.mp3";
+    harness.extraAudioUrl = "blob:question-2";
+    await act(async () => root?.render(<App />));
+
+    expect(harness.videoCandidate?.extraAudioSrc).toBe("blob:question-2");
   });
 });

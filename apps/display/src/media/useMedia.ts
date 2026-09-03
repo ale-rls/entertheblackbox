@@ -12,6 +12,8 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
   const [status, setStatus] = useState<MediaSyncStatus>({ state: "idle" });
   const [resolvedMedia, setResolvedMedia] = useState<{
     visualSrc: string;
+    audioSrc: string | null;
+    extraAudioSrc: string | null;
     visualUrl: string | null;
     audioUrl: string | null;
     extraAudioUrl: string | null;
@@ -92,6 +94,8 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
     // than briefly attaching its Blob URL to the incoming <video>.
     setResolvedMedia({
       visualSrc,
+      audioSrc,
+      extraAudioSrc,
       visualUrl,
       audioUrl: resolvedAudioUrl,
       extraAudioUrl: resolvedExtraAudioUrl,
@@ -114,6 +118,8 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
   return {
     status,
     visualSrc: resolvedMedia?.visualSrc ?? null,
+    audioSrc: resolvedMedia?.audioSrc ?? null,
+    extraAudioSrc: resolvedMedia?.extraAudioSrc ?? null,
     videoUrl: resolvedMedia?.visualUrl ?? null,
     audioUrl: resolvedMedia?.audioUrl ?? null,
     extraAudioUrl: resolvedMedia?.extraAudioUrl ?? null,
