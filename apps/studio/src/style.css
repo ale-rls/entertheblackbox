@@ -59,6 +59,30 @@ body:has(.editor),
   line-height: var(--sc-tool-line-height-copy);
 }
 
+.live-show-warning {
+  width: fit-content;
+  max-width: 48rem;
+  margin: var(--sc-tool-space-4) 0 0;
+  padding: var(--sc-tool-space-3) var(--sc-tool-space-4);
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-warning);
+  border-radius: var(--sc-tool-radius-1);
+  background: color-mix(in srgb, var(--sc-tool-color-warning) 12%, var(--sc-tool-color-surface-2));
+  color: var(--sc-tool-color-text-secondary);
+  font-size: var(--sc-tool-font-size-0);
+  line-height: var(--sc-tool-line-height-copy);
+}
+
+.live-show-warning strong {
+  color: var(--sc-tool-color-warning);
+}
+
+.live-show-warning-compact {
+  max-width: 25rem;
+  flex: 0 1 auto;
+  margin: 0;
+  padding-block: var(--sc-tool-space-2);
+}
+
 .home article {
   display: grid;
   min-width: 0;

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ServerClock } from "../lib/serverClock.js";
+import { questionFieldCenter } from "./QuadrantOverlay.js";
 import { VideoQuestionOverlay, videoQuestionStage, type VideoQuestionPhase } from "./VideoQuestionOverlay.js";
 
 const phase = {
@@ -34,7 +35,7 @@ const twoQuadrantPhase = {
     axis: "x",
     variant: "spectrum",
     labels: { minLabel: "Fakt", maxLabel: "Lüge" },
-    arena: { type: "ellipse", centerX: 0.5, centerY: 0.6, radiusX: 0.42, radiusY: 0.24 },
+    arena: { type: "ellipse", centerX: 0.5, centerY: 0.6, radiusX: 0.42, radiusY: 0.24, splitY: 0.55 },
   },
 } satisfies VideoQuestionPhase;
 
@@ -106,7 +107,7 @@ describe("videoQuestionStage", () => {
     expect(html).not.toContain("voting-state");
   });
 
-  it("keeps counts and the voting-state pill for the polygon-zones statue picker", () => {
+  it("keeps polygon-zone counts without showing a voting-state pill", () => {
     const html = renderToStaticMarkup(
       <VideoQuestionOverlay
         phase={zonesPhase}
@@ -117,8 +118,8 @@ describe("videoQuestionStage", () => {
       />,
     );
     expect(html).toContain("zone-count");
-    expect(html).toContain("voting-state");
-    expect(html).toContain("Voting open");
+    expect(html).not.toContain("voting-state");
+    expect(html).not.toContain("Voting open");
   });
 
   it("shows a configurable centered countdown and only blinks the resolved winner after close", () => {
@@ -140,6 +141,8 @@ describe("videoQuestionStage", () => {
       />,
     );
     expect(final).toContain("vote-close-countdown");
+    expect(final).toContain('style="left:50%;top:55.');
+    expect(questionFieldCenter(twoQuadrantPhase.field)?.y).toBeCloseTo(55);
     expect(final).not.toContain("arena-region-blink");
   });
 });

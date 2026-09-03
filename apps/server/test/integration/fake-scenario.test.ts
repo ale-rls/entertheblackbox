@@ -45,7 +45,7 @@ function last(socket: TestSocket, type: string): any {
 }
 
 function createHarness(
-  policy: { noParticipantGraceMs?: number; allowLateJoin?: boolean } = {},
+  policy: { allowLateJoin?: boolean } = {},
   testScenario: typeof scenario = scenario,
 ) {
   let now = 1_000;
@@ -80,7 +80,6 @@ function createHarness(
       interactiveIdleTimeoutMs: 60_000,
       maxSessionDurationMs: 120_000,
       displayDisconnectTimeoutMs: 500,
-      noParticipantGraceMs: policy.noParticipantGraceMs ?? 500,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
   });
@@ -246,18 +245,16 @@ describe("fake scenario server integration", () => {
     expect(h.engine.lifecycleState).toBe("idle");
   });
 
-  it("abandons a solo session after disconnect grace and recovers active state after a crash", async () => {
-    const abandoned = createHarness({ noParticipantGraceMs: 200 });
-    abandoned.display();
-    const solo = await abandoned.phone(1);
-    abandoned.advance(100);
-    expect(abandoned.engine.lifecycleState).toBe("active");
+  it("keeps a solo session playing after disconnect and recovers active state after a crash", async () => {
+    const continuing = createHarness();
+    continuing.display();
+    const solo = await continuing.phone(1);
+    continuing.advance(100);
+    expect(continuing.engine.lifecycleState).toBe("active");
     solo.close();
-    abandoned.advance(200);
-    expect(abandoned.engine.lifecycleState).toBe("active");
-    abandoned.advance(200);
-    expect(abandoned.engine.lifecycleState).toBe("idle");
-    expect(abandoned.checkpoints.at(-1)?.reason).toBe("no-participants");
+    continuing.advance(1_000);
+    expect(continuing.engine.lifecycleState).toBe("active");
+    expect(continuing.checkpoints.at(-1)?.reason).toBe("session-start");
 
     const recovered = createHarness();
     recovered.display();

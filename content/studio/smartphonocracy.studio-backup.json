@@ -3,7 +3,7 @@
   "version": 1,
   "draft": {
     "id": "29b4ac23-61b9-4850-a230-6d7493179bfe",
-    "name": "Smartphonocracy v14 — production media",
+    "name": "Smartphonocracy v15 — production media",
     "updatedAt": 1787843624830,
     "localMediaSources": [
       "2.0 Athene_Vox_Begrüssung_alt.mp3",
@@ -53,7 +53,7 @@
     ],
     "project": {
       "scenario": {
-        "version": "smartphonocracy-v14-de-2026.08.27",
+        "version": "smartphonocracy-v15-de-2026.09.03",
         "entryPhaseId": "Athene",
         "cyclesAllowed": false,
         "targetAudienceSize": 30,
@@ -92,11 +92,13 @@
             "expectedDurationMs": 120000,
             "field": {
               "axis": "x",
+              "splitX": 0.47,
               "labels": {
                 "maxLabel": "Lüge",
                 "minLabel": "Fakt"
               },
-              "type": "two-quadrant"
+              "type": "two-quadrant",
+              "variant": "split"
             },
             "hideAtMs": 50000,
             "id": "ostrakismos",
@@ -118,11 +120,13 @@
             "expectedDurationMs": 120084,
             "field": {
               "axis": "x",
+              "splitX": 0.47,
               "labels": {
                 "maxLabel": "Fakt",
                 "minLabel": "Lüge"
               },
-              "type": "two-quadrant"
+              "type": "two-quadrant",
+              "variant": "split"
             },
             "hideAtMs": 75000,
             "id": "video-position-question-966206",
@@ -144,11 +148,13 @@
             "expectedDurationMs": 120209,
             "field": {
               "axis": "x",
+              "splitX": 0.47,
               "labels": {
                 "maxLabel": "Lüge",
                 "minLabel": "Fakt"
               },
-              "type": "two-quadrant"
+              "type": "two-quadrant",
+              "variant": "split"
             },
             "hideAtMs": 70000,
             "id": "video-position-question-f46987",
@@ -726,7 +732,7 @@
     "document": {
       "studioFormatVersion": 1,
       "canvasFormatVersion": 1,
-      "runtimeScenarioVersion": "smartphonocracy-v14-de-2026.08.27",
+      "runtimeScenarioVersion": "smartphonocracy-v15-de-2026.09.03",
       "showId": "8031057e-1a58-41b5-bd8b-731e801f132d",
       "nodes": [
         {

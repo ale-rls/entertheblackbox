@@ -1,5 +1,5 @@
 {
-  "version": "smartphonocracy-v14-de-2026.08.27",
+  "version": "smartphonocracy-v15-de-2026.09.03",
   "entryPhaseId": "Athene",
   "cyclesAllowed": false,
   "targetAudienceSize": 30,
@@ -38,6 +38,7 @@
       "expectedDurationMs": 120000,
       "field": {
         "axis": "x",
+        "splitX": 0.47,
         "labels": {
           "maxLabel": "Lüge",
           "minLabel": "Fakt"
@@ -65,6 +66,7 @@
       "expectedDurationMs": 120084,
       "field": {
         "axis": "x",
+        "splitX": 0.47,
         "labels": {
           "maxLabel": "Fakt",
           "minLabel": "Lüge"
@@ -92,6 +94,7 @@
       "expectedDurationMs": 120209,
       "field": {
         "axis": "x",
+        "splitX": 0.47,
         "labels": {
           "maxLabel": "Lüge",
           "minLabel": "Fakt"

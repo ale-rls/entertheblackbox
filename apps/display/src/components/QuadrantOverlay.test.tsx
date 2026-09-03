@@ -159,6 +159,24 @@ describe("QuadrantOverlay", () => {
     expect(html).not.toContain("axis-arrow");
   });
 
+  it("moves an uncalibrated left/right divider and its hit regions off centre", () => {
+    const field = { ...twoXSplitField, splitX: 0.47 };
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay field={field} liveField={field} liveCounts={{ min: 1, max: 2 }} resolution={null} />,
+    );
+    expect(html).toContain('class="axis-divider axis-divider-x" style="left:47%;right:auto"');
+    expect(html).toContain('data-quadrant="min" style="inset:0 53% 0 0"');
+    expect(html).toContain('data-quadrant="max" style="inset:0 0 0 47%"');
+  });
+
+  it("blinks the leading side after a fixed left/right decision", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay field={twoXSplitField} liveField={twoXSplitField} liveCounts={null} resolution={resolved(twoXSplitField, "fixed")} />,
+    );
+    expect(html).toContain('quadrant-right quadrant-blink');
+    expect(html).not.toContain('quadrant-left quadrant-blink');
+  });
+
   it("clips calibrated quadrants and divider lines to the arena ellipse", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay

@@ -111,8 +111,6 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .phase-subtitles p { display: table; max-width: 70rem; margin: .25rem auto; padding: .45rem .8rem; border-radius: .35rem; background: rgb(0 0 0 / 72%); font-size: clamp(1.25rem, 3vw, 2.6rem); font-weight: 700; line-height: 1.2; text-wrap: balance; }
 .question-over-video { animation: question-in 180ms ease-out; }
 .question-over-video.question-fade-out { animation: question-out 320ms ease-in forwards; }
-.voting-state { position: absolute; z-index: 6; left: 2rem; bottom: 2rem; padding: .55rem .8rem; border-radius: 999px; background: rgb(0 0 0 / 68%); font-weight: 700; }
-.question-over-video[data-voting-open="false"] .voting-state { color: rgb(255 255 255 / 72%); }
 @keyframes question-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes question-out { from { opacity: 1; } to { opacity: 0; } }
 .vote-close-countdown {
@@ -234,7 +232,7 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 }
 .axis-cross::before, .axis-track-y::before { top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-1px); }
 .axis-cross::after, .axis-track-x::before { left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-1px); }
-.axis-divider-x::before { top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-1px); }
+.axis-divider-x::before { top: 0; bottom: 0; left: 0; width: 2px; transform: translateX(-1px); }
 .axis-divider-y::before { left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-1px); }
 .axis-arrow { position: absolute; width: 0; height: 0; border: .55rem solid transparent; }
 .axis-arrow-left { top: 50%; left: -.85rem; border-right-color: rgb(255 255 255 / 72%); transform: translateY(-50%); }
@@ -257,6 +255,7 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 
 .countdown, .reconnecting, .media-status, .notice, .lobby-information { position: absolute; z-index: 6; }
 .countdown { right: 2rem; bottom: 2rem; }
+.countdown-field-centered { right: auto; bottom: auto; transform: translate(-50%, -50%); font-size: clamp(5rem, 16vw, 13rem); font-weight: 700; text-shadow: 0 0 24px rgb(255 255 255 / 55%), 0 2px 12px rgb(0 0 0 / 72%); }
 .lobby-information {
   inset: 0;
   pointer-events: none;

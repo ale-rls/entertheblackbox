@@ -37,6 +37,8 @@ export type BuildServerOptions = {
   maxWebSocketConnections?: number;
   webSocketKeepAliveIntervalMs?: number;
   movementConsentTimeoutMs?: number;
+  /** Notifies the process host after an active session has safely reached idle. */
+  onSessionEnded?: (event: { reason: string; sessionId: string; endedAt: number }) => void;
 };
 
 export type ServerRuntime = {
@@ -122,9 +124,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         allowLateJoin: config.allowLateJoin,
         showPhoneJoinBaseUrl: config.showPhoneJoinBaseUrl,
       },
-      onSessionEnded: ({ sessionId, endedAt }) => {
+      onSessionEnded: (event) => {
+        const { sessionId, endedAt } = event;
         movementConsent?.endSession(sessionId);
         admission.endParticipantSession(endedAt);
+        options.onSessionEnded?.(event);
       },
       onCheckpoint: (checkpoint) => adminData?.recordCheckpoint?.(checkpoint),
       onVoteSnapshotEnqueued: (snapshot) => adminData?.recordVoteSnapshot?.(snapshot),
@@ -160,6 +164,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     buildVersion: config.buildVersion,
     installationId: config.installationId,
     roomId: config.roomId,
+    showLifecycle: engine?.lifecycleState ?? null,
     scenarioVersion: readiness.ready ? readiness.scenario.version : null,
     scenarioWarnings: readiness.warnings,
     webSocketClients: webSockets.clients.size,

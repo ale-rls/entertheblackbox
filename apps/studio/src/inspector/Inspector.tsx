@@ -164,6 +164,20 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         return <>
           {text(`${field.axis === "x" ? "Left" : "Top"} endpoint`, "field.labels.minLabel", field.labels.minLabel, (minLabel) => onChange({ ...phase, field: { ...field, labels: { ...field.labels, minLabel } } } as Phase))}
           {text(`${field.axis === "x" ? "Right" : "Bottom"} endpoint`, "field.labels.maxLabel", field.labels.maxLabel, (maxLabel) => onChange({ ...phase, field: { ...field, labels: { ...field.labels, maxLabel } } } as Phase))}
+          {field.axis === "x" && field.arena === undefined && <label className="sc-tool-label">{label("Left / right divider (%)", "field.splitX")}<input
+            className="sc-tool-field"
+            type="number"
+            min="5"
+            max="95"
+            step="0.1"
+            value={(field.splitX ?? 0.5) * 100}
+            onChange={(event) => {
+              const percent = Math.min(95, Math.max(5, numberValue(event.target.value, (field.splitX ?? 0.5) * 100)));
+              const splitX = Math.round(percent * 10) / 1_000;
+              onChange({ ...phase, field: { ...field, splitX: splitX === 0.5 ? undefined : splitX } } as Phase);
+            }}
+          /></label>}
+          {field.axis === "x" && field.arena === undefined && <p className="sc-tool-copy field-hint">Moves the vertical left/right voting boundary. 50% is the display centre; smaller values move it left.</p>}
         </>;
       })() : (() => {
         const field = phase.field;

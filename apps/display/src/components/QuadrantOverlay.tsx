@@ -38,6 +38,13 @@ function isTwoQuadrantCounts(
   return "min" in counts && "max" in counts;
 }
 
+function leadingTwoWayRegions(counts: TwoQuadrantCounts): TwoQuadrant[] {
+  const highest = Math.max(counts.min, counts.max);
+  return highest === 0
+    ? []
+    : (["min", "max"] as const).filter((id) => counts[id] === highest);
+}
+
 /** Anything that isn't the fixed q1-q4/min-max shapes is a zone-id-keyed record. */
 function isPolygonZonesCounts(counts: PositionCounts): counts is Record<string, number> {
   return !isFourQuadrantCounts(counts) && !isTwoQuadrantCounts(counts);
@@ -54,7 +61,7 @@ function sameArena(a: Arena | undefined, b: Arena | undefined): boolean {
 
 function sameField(left: QuestionField, right: QuestionField): boolean {
   if (left.type !== right.type) return false;
-  if (left.type === "two-quadrant") return right.type === "two-quadrant" && left.axis === right.axis && (left.variant ?? "spectrum") === (right.variant ?? "spectrum") && sameArena(left.arena, right.arena);
+  if (left.type === "two-quadrant") return right.type === "two-quadrant" && left.axis === right.axis && (left.variant ?? "spectrum") === (right.variant ?? "spectrum") && (left.splitX ?? 0.5) === (right.splitX ?? 0.5) && sameArena(left.arena, right.arena);
   if (left.type === "polygon-zones") {
     return (
       right.type === "polygon-zones" &&
@@ -85,7 +92,7 @@ function clampPercent(value: number, min = 6, max = 94): number {
 export function questionFieldCenter(field: QuestionField): { x: number; y: number } | null {
   if (field.type === "polygon-zones" || field.arena === undefined) return null;
   if (field.arena.type === "ellipse") {
-    return { x: field.arena.centerX * 100, y: field.arena.centerY * 100 };
+    return { x: field.arena.centerX * 100, y: arenaEllipseSplitY(field.arena) * 100 };
   }
   const { center } = arenaQuadLandmarks(field.arena.corners);
   return { x: center.x * 100, y: center.y * 100 };
@@ -178,13 +185,20 @@ function Region({
   count,
   winner,
   highlight = false,
+  boundary,
 }: {
   id: FourQuadrant | TwoQuadrant;
   position: string;
   count: number | null;
   winner: string | null;
   highlight?: boolean;
+  boundary?: number;
 }) {
+  const style = boundary === undefined
+    ? undefined
+    : id === "min"
+      ? { inset: `0 ${100 - boundary * 100}% 0 0` }
+      : { inset: `0 0 0 ${boundary * 100}%` };
   return (
     <div
       className={[
@@ -197,6 +211,7 @@ function Region({
         .filter(Boolean)
         .join(" ")}
       data-quadrant={id}
+      style={style}
     >
       {count !== null && <span className="quadrant-count">{count}</span>}
     </div>
@@ -441,8 +456,15 @@ export function QuadrantOverlay({
     ? resolution.tieBreak?.candidates
       ?? (winner === "tie" ? Object.keys(resolution.quadrantCounts) : winner === null || winner === "empty" ? [] : [winner])
     : [];
+  const fixedTwoWayHighlights = resolutionMatches
+    && resolution.winner === "fixed"
+    && field.type === "two-quadrant"
+    && isTwoQuadrantCounts(resolution.quadrantCounts)
+    ? leadingTwoWayRegions(resolution.quadrantCounts)
+    : [];
   const highlighted = [
     ...resolvedHighlights,
+    ...fixedTwoWayHighlights,
     ...highlightRegionIds,
     ...(highlightRegionId === null ? [] : [highlightRegionId]),
   ];
@@ -520,6 +542,7 @@ export function QuadrantOverlay({
   const counts =
     countSource !== null && isTwoQuadrantCounts(countSource) ? countSource : null;
   const positions = TWO_QUADRANT_POSITIONS[field.axis];
+  const splitX = field.axis === "x" ? field.splitX ?? 0.5 : 0.5;
   return (
     <div
       className={`quadrant-overlay quadrant-overlay-two-quadrant quadrant-overlay-axis-${field.axis}`}
@@ -529,7 +552,7 @@ export function QuadrantOverlay({
         ? <div className={`axis-track axis-track-${field.axis}`} aria-hidden>
             {field.axis === "x" ? <><span className="axis-arrow axis-arrow-left" /><span className="axis-arrow axis-arrow-right" /></> : <><span className="axis-arrow axis-arrow-top" /><span className="axis-arrow axis-arrow-bottom" /></>}
           </div>
-        : <div className={`axis-divider axis-divider-${field.axis}`} aria-hidden />}
+        : <div className={`axis-divider axis-divider-${field.axis}`} style={field.axis === "x" ? { left: `${splitX * 100}%`, right: "auto" } : undefined} aria-hidden />}
       {(["min", "max"] as const).map((id) => (
         <Region
           key={id}
@@ -538,6 +561,7 @@ export function QuadrantOverlay({
           count={showCounts ? counts?.[id] ?? null : null}
           winner={winner}
           highlight={highlighted.includes(id)}
+          {...(field.axis === "x" ? { boundary: splitX } : {})}
         />
       ))}
       {winner === "tie" && lotterySelected === null && <div className="outcome outcome-tie">Gleichstand</div>}

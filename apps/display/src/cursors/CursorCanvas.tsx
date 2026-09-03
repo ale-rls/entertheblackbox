@@ -1,6 +1,12 @@
 import { useEffect, useRef } from "react";
 import type { CursorField } from "./cursorField.js";
 
+export function cursorOpacity(ghost: boolean, blinkActiveVoters: boolean, frozen: boolean, at: number): number {
+  if (ghost) return 0.5;
+  if (!blinkActiveVoters || !frozen) return 1;
+  return Math.floor(at / 320) % 2 === 0 ? 1 : 0.08;
+}
+
 /**
  * Canvas cursor layer: draws one crisp dot per interpolated cursor. When
  * `showCursors` is false, the canvas is cleared and nothing is drawn each
@@ -8,7 +14,15 @@ import type { CursorField } from "./cursorField.js";
  * ingesting) so rendering resumes instantly and correctly-positioned once
  * it flips back true -- gated at render time, not ingestion time.
  */
-export function CursorCanvas({ field, showCursors = true }: { field: CursorField; showCursors?: boolean }) {
+export function CursorCanvas({
+  field,
+  showCursors = true,
+  blinkActiveVoters = false,
+}: {
+  field: CursorField;
+  showCursors?: boolean;
+  blinkActiveVoters?: boolean;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -31,10 +45,11 @@ export function CursorCanvas({ field, showCursors = true }: { field: CursorField
 
       if (showCursors) {
         const radius = Math.max(6, Math.round(height * 0.008));
-        for (const cursor of field.renderAt(performance.timeOrigin + performance.now())) {
+        const renderAt = performance.timeOrigin + performance.now();
+        for (const cursor of field.renderAt(renderAt)) {
           const cx = cursor.x * width;
           const cy = cursor.y * height;
-          ctx.globalAlpha = cursor.ghost ? 0.5 : 1;
+          ctx.globalAlpha = cursorOpacity(cursor.ghost, blinkActiveVoters, field.isFrozen, renderAt);
           ctx.fillStyle = cursor.color;
           ctx.beginPath();
           ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -50,7 +65,7 @@ export function CursorCanvas({ field, showCursors = true }: { field: CursorField
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
     };
-  }, [field, showCursors]);
+  }, [blinkActiveVoters, field, showCursors]);
 
   return <canvas ref={canvasRef} className="cursor-canvas" />;
 }

@@ -12,7 +12,7 @@ import { useMedia } from "./media/useMedia.js";
 import { displayReducer, initialDisplayState } from "./state/store.js";
 import { Countdown } from "./components/Countdown.js";
 import { QrBadge } from "./components/QrBadge.js";
-import { QuadrantOverlay } from "./components/QuadrantOverlay.js";
+import { QuadrantOverlay, questionFieldCenter } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhaseVideoHandoff, type PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
@@ -21,6 +21,7 @@ import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
 import { PhaseSubtitles } from "./components/PhaseSubtitles.js";
 import { FullscreenControl } from "./components/FullscreenControl.js";
+import { VoteDecisionSound } from "./components/VoteDecisionSound.js";
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -343,7 +344,7 @@ export function App() {
               resolution={state.resolution}
             />
             {state.resolution === null && phase.deadlineAt !== null && (
-              <Countdown clock={connection.clock} deadlineAt={phase.deadlineAt} />
+              <Countdown clock={connection.clock} deadlineAt={phase.deadlineAt} center={questionFieldCenter(phase.field)} />
             )}
           </div>
         )}
@@ -364,6 +365,7 @@ export function App() {
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.rating && (
           <CrowdReactionSounds status={state.ratingStatus} soundEnabled={soundEnabled} {...(phase.rating.windows === undefined ? {} : { windows: phase.rating.windows })} elapsedMs={connection.clock.now() - phase.startedAt} />
         )}
+        <VoteDecisionSound resolution={state.resolution} soundEnabled={soundEnabled} />
         {state.notice && (
           <div
             className={[
@@ -384,7 +386,7 @@ export function App() {
 
       {/* Layer 3: cursor canvas */}
       <section className="layer layer-cursors">
-        <CursorCanvas field={cursorField} showCursors={phase !== null && phase.kind !== "idle" ? (phase.showCursors ?? true) : true} />
+        <CursorCanvas field={cursorField} showCursors={phase !== null && phase.kind !== "idle" ? (phase.showCursors ?? true) : true} blinkActiveVoters={state.resolution !== null} />
       </section>
     </main>
   );

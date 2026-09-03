@@ -186,7 +186,7 @@ describe("HTTP readiness and bundles", () => {
     const ready = await runtime.app.inject({ url: "/readyz" });
     expect(ready.json()).toEqual({ ok: true, scenarioVersion: "test-1" });
     const status = (await runtime.app.inject({ url: "/api/status" })).json();
-    expect(status).toMatchObject({ ready: true, scenarioVersion: "test-1" });
+    expect(status).toMatchObject({ ready: true, showLifecycle: "idle", scenarioVersion: "test-1" });
     expect(status).not.toHaveProperty("displayToken");
     for (const role of ["display", "phone", "admin"]) {
       const response = await runtime.app.inject({ url: `/${role}/` });
@@ -213,13 +213,14 @@ describe("HTTP readiness and bundles", () => {
 
   it("accepts signed end-of-show movement consent and rejects another lease", async () => {
     const deleteMovementRecordings = vi.fn(async () => undefined);
+    const onSessionEnded = vi.fn();
     const adminData: AdminDataSource = {
       audit: vi.fn(),
       recentErrors: async () => [],
       exportSession: async () => null,
       deleteMovementRecordings,
     };
-    const runtime = await buildServer({ config: await fixture(), adminData });
+    const runtime = await buildServer({ config: await fixture(), adminData, onSessionEnded });
     runtimes.push(runtime);
     const port = await listen(runtime);
     const phone = await openWebSocket(port);
@@ -245,8 +246,13 @@ describe("HTTP readiness and bundles", () => {
     }));
     await displaySnapshot;
     expect(runtime.engine?.adminStart()).toEqual({ ok: true });
+    expect((await runtime.app.inject({ url: "/api/status" })).json()).toMatchObject({ showLifecycle: "active" });
     const sessionId = runtime.engine!.currentSessionId;
     expect(runtime.engine?.adminIdle()).toEqual({ ok: true });
+    expect(onSessionEnded).toHaveBeenCalledWith(expect.objectContaining({
+      reason: "admin-idle",
+      sessionId,
+    }));
 
     const accepted = await runtime.app.inject({
       method: "POST",

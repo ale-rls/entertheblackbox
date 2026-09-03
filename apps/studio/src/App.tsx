@@ -35,6 +35,13 @@ const download = (name: string, value: unknown) => {
 };
 
 type InlineFeedback = { status: "info" | "success" | "danger"; message: string };
+type ShowLifecycle = "idle" | "lobby" | "active";
+
+function LiveShowWarning({ compact = false }: { compact?: boolean }) {
+  return <p className={`live-show-warning${compact ? " live-show-warning-compact" : ""}`} role="status">
+    <strong>Live show running.</strong> Draft saves are safe; publishing and shared-media changes will apply after the show ends.
+  </p>;
+}
 
 const componentTypeLabel: Record<AuthorableComponentType, string> = {
   video: "video",
@@ -118,6 +125,7 @@ export function App() {
   const [publishForm, setPublishForm] = useState({ showId: "", name: "" });
   const [publishing, setPublishing] = useState(false);
   const [publishFeedback, setPublishFeedback] = useState<InlineFeedback>();
+  const [showLifecycle, setShowLifecycle] = useState<ShowLifecycle | null>(null);
   const [signInForm, setSignInForm] = useState({ email: "", password: "" });
   const [signingIn, setSigningIn] = useState(false);
   const [signInFeedback, setSignInFeedback] = useState<InlineFeedback>();
@@ -134,6 +142,28 @@ export function App() {
   useEffect(() => operatorPb.authStore.onChange((_token, record) => {
     setOperatorEmail(operatorPb.authStore.isValid ? ((record as { email?: string } | null)?.email ?? "operator") : null);
   }), [operatorPb]);
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const response = await fetch("/api/status", { cache: "no-store" });
+        if (!response.ok) throw new Error("status unavailable");
+        const body = await response.json() as { showLifecycle?: unknown };
+        const lifecycle = body.showLifecycle;
+        if (!cancelled) {
+          setShowLifecycle(lifecycle === "idle" || lifecycle === "lobby" || lifecycle === "active" ? lifecycle : null);
+        }
+      } catch {
+        if (!cancelled) setShowLifecycle(null);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 2_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
   const [confirmation, setConfirmation] = useState<ConfirmationDetails>();
   const importInputRef = useRef<HTMLInputElement>(null);
   const homeHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -669,6 +699,7 @@ export function App() {
             : phase.field.type === "two-quadrant"
               ? phase.field.labels
               : { minLabel: "Min", maxLabel: "Max" },
+          ...(layout.startsWith("two-quadrant-x-") && phase.field.type === "two-quadrant" && phase.field.splitX !== undefined ? { splitX: phase.field.splitX } : {}),
           ...(phase.field.type !== "polygon-zones" && phase.field.arena ? { arena: phase.field.arena } : {}),
         };
       const keepsOutcomeShape = phase.field.type === field.type && field.type !== "polygon-zones";
@@ -714,6 +745,7 @@ export function App() {
 
   if (!draft) return <main className="home" data-sc-tool-density="compact" data-sc-tool-root>
     <header className="home-heading"><p className="sc-tool-eyebrow">Authoring workspace</p><h1 ref={homeHeadingRef} tabIndex={-1}>Show Studio</h1><p className="sc-tool-copy lede">Create and safely round-trip Smartphonecracy shows.</p></header>
+    {showLifecycle === "active" && <LiveShowWarning />}
     <div className="home-actions">
       <button className="sc-tool-button" data-sc-tool-variant="primary" onClick={createShow}>New show</button>
       <button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => void importLatestProduction()}>New from active production</button>
@@ -740,7 +772,7 @@ export function App() {
     <h2>Recent drafts</h2>{recent.length === 0 && <p className="sc-tool-copy lede">No local drafts yet. Import scenario.json and media-manifest.json together.</p>}
     {localManifest && <p className="sc-tool-copy lede">Media library: {localManifest.files.length} file{localManifest.files.length === 1 ? "" : "s"} available.</p>}
     {recent.map((item) => <article key={item.id}><button className="sc-tool-button draft-open" data-sc-tool-variant="quiet" onClick={() => void recoverDraft(db, item.id).then((recovered) => setDraft(recovered && localManifest ? refreshDraftLocalMedia(recovered, localManifest) : recovered))}>{item.name}</button><small className="sc-tool-copy sc-tool-mono">{new Date(item.updatedAt).toLocaleString()}</small><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => duplicate(item)}>Duplicate</button><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => download(`${item.name}.studio-backup.json`, exportBackup(item))}>Export backup</button><button className="sc-tool-button" data-sc-tool-variant="danger" onClick={(event) => remove(item, event.currentTarget)}>Delete</button></article>)}
-    {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={undefined} feedback={importFeedback} uploading={mediaUploading} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
+    {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={undefined} feedback={importFeedback} uploading={mediaUploading} showActive={showLifecycle === "active"} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}
   </main>;
 
@@ -807,7 +839,12 @@ export function App() {
           ? "Show ID must be letters, numbers, - or _ only, and Name can't be empty."
           : `Publish failed (${response.status}).`);
       }
-      setPublishFeedback({ status: "success", message: `Published "${publishForm.name}". It goes live automatically within moments -- pick it in /admin's Active show panel first if another show is currently pinned as active.` });
+      setPublishFeedback({
+        status: "success",
+        message: showLifecycle === "active"
+          ? `Published "${publishForm.name}". The running show was not interrupted; production will reload after it ends.`
+          : `Published "${publishForm.name}". It goes live automatically within moments -- pick it in /admin's Active show panel first if another show is currently pinned as active.`,
+      });
     } catch (error) {
       setPublishFeedback({
         status: "danger",
@@ -884,6 +921,7 @@ export function App() {
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={openMediaLibrary}>Media</button>
       <input aria-label="Show name" className="sc-tool-field show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
       <SaveStatus status={status} />
+      {showLifecycle === "active" && <LiveShowWarning compact />}
       {selectedPhase && <a className="sc-tool-button" data-sc-tool-variant="primary" href="preview.html" target="_blank" rel="noreferrer" onClick={preparePreviewFromSelected}>Preview from here</a>}
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/display/" target="_blank" rel="noreferrer">Display</a>
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/admin/" target="_blank" rel="noreferrer">Admin</a>
@@ -895,6 +933,7 @@ export function App() {
       {exportFeedback && <Feedback id="studio-export-feedback" className="menubar-feedback" feedback={exportFeedback} />}
       {publishOpen && <div className="sc-tool-panel publish-panel" role="dialog" aria-labelledby="publish-heading">
         <p className="sc-tool-eyebrow" id="publish-heading">Publish to PocketBase</p>
+        {showLifecycle === "active" && <LiveShowWarning />}
         {operatorEmail === null ? <>
           <p className="sc-tool-help">Sign in with your operator credentials (the same ones used for /admin). Stays signed in on this device for 30 days.</p>
           <form onSubmit={(event) => void signIn(event)}>
@@ -943,8 +982,8 @@ export function App() {
     <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
     <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onComponentTypeChange={changeSelectedComponentType} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} />
     <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} collapsed={!showDiagnostics} onToggle={() => setShowDiagnostics((value) => !value)} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onAcknowledgeAll={(keys) => setAcknowledged((current) => new Set([...current, ...keys]))} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
-    {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
-    {mediaPicker && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} selection={{ contextLabel: `${mediaPicker.mediaKind} for ${mediaPicker.phaseId}`, selectedSrc: mediaPickerSelectedSrc, mediaKind: mediaPicker.mediaKind, onSelect: selectMedia }} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={closeMediaPicker} />}
+    {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} showActive={showLifecycle === "active"} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
+    {mediaPicker && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} showActive={showLifecycle === "active"} selection={{ contextLabel: `${mediaPicker.mediaKind} for ${mediaPicker.phaseId}`, selectedSrc: mediaPickerSelectedSrc, mediaKind: mediaPicker.mediaKind, onSelect: selectMedia }} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={closeMediaPicker} />}
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}
   </main>;
 }

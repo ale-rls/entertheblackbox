@@ -38,7 +38,6 @@ export type PhaseEnginePolicy = {
   interactiveIdleTimeoutMs: number;
   maxSessionDurationMs: number;
   displayDisconnectTimeoutMs: number;
-  noParticipantGraceMs: number;
 };
 
 export const DEFAULT_PHASE_ENGINE_POLICY: PhaseEnginePolicy = {
@@ -46,7 +45,6 @@ export const DEFAULT_PHASE_ENGINE_POLICY: PhaseEnginePolicy = {
   interactiveIdleTimeoutMs: 180_000,
   maxSessionDurationMs: 1_800_000,
   displayDisconnectTimeoutMs: 30_000,
-  noParticipantGraceMs: 120_000,
 };
 
 const QUESTION_STATUS_INTERVAL_MS = 250;
@@ -185,7 +183,6 @@ export class PhaseEngine {
   private deadlineAt: number | null = null;
   private sessionStartedAt: number | null = null;
   private lastInputAt: number | null = null;
-  private noParticipantSince: number | null = null;
   private displayDisconnectedAt: number | null = null;
   private displayHeartbeatAt: number | null = null;
   private displayPlaybackIssue: DisplayPlaybackIssue | null = null;
@@ -455,16 +452,6 @@ export class PhaseEngine {
       }
     } else {
       this.displayDisconnectedAt = null;
-    }
-
-    if ((this.lifecycle === "active" || this.autoStartOnFirstParticipant) && this.registry.connectedCount === 0) {
-      this.noParticipantSince ??= now;
-      if (now - this.noParticipantSince >= this.policy.noParticipantGraceMs) {
-        this.abortToIdle("no-participants", now);
-        return;
-      }
-    } else {
-      this.noParticipantSince = null;
     }
 
     if (this.lifecycle === "lobby") {
@@ -818,7 +805,6 @@ export class PhaseEngine {
     this.phaseEpoch += 1;
     this.sessionStartedAt = null;
     this.lastInputAt = now;
-    this.noParticipantSince = null;
     this.deadlineNotified = false;
     this.transition("lobby-start");
   }
@@ -829,7 +815,6 @@ export class PhaseEngine {
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
     this.lastInputAt = null;
-    this.noParticipantSince = null;
     this.joinMovementRecordingForConnectedParticipants();
     this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "session-start");
@@ -906,7 +891,6 @@ export class PhaseEngine {
 
   private abortToIdle(reason: string, now: number): void {
     this.enterPhase("idle", now, reason);
-    this.noParticipantSince = null;
     this.displayDisconnectedAt = this.displaySocket === undefined ? now : null;
   }
 

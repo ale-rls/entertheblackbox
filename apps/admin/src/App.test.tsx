@@ -314,7 +314,7 @@ describe("Admin operations UI", () => {
 
     const saveRequest = requests.find(({ url, method }) => url.endsWith("/shows") && method === "POST");
     expect(saveRequest?.body).toBe(JSON.stringify({ showId: "show-b" }));
-    expect(document.body.textContent).toContain("applies automatically");
+    expect(document.body.textContent).toContain("queued until the current show ends");
   });
 
   it("does not present inactive recent-error or session-export features", async () => {

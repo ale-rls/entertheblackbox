@@ -3,6 +3,7 @@ import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@smartphonecracy/shared";
 import { extraAudioCombinationError, mediaCombinationError } from "./media-kind.js";
 
 const unitCoordinateSchema = z.number().min(0).max(1);
+const splitCoordinateSchema = z.number().min(0.05).max(0.95);
 
 /**
  * Zod schemas for the scenario model (plan §5).
@@ -96,6 +97,8 @@ export const twoQuadrantFieldSchema = z.object({
   axis: z.enum(["x", "y"]),
   variant: twoQuadrantVariantSchema.default("spectrum"),
   labels: axisSchema,
+  /** Optional viewport X coordinate for an off-centre left/right boundary. */
+  splitX: splitCoordinateSchema.optional(),
   arena: arenaSchema.optional(),
 });
 

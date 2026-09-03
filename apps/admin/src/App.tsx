@@ -348,7 +348,7 @@ export function App() {
         body: JSON.stringify({ showId: selectedShowId }),
       });
       selectedShowIdTouched.current = false;
-      setFeedback({ status: "success", message: "Saved -- applies automatically within moments." });
+      setFeedback({ status: "success", message: status?.lifecycle === "active" ? "Saved -- queued until the current show ends." : "Saved -- applies automatically within moments." });
       await loadShows();
     } catch (error) {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not save the active show." });
@@ -370,7 +370,7 @@ export function App() {
         body: JSON.stringify({ targetAudienceSize: value }),
       });
       targetAudienceSizeTouched.current = false;
-      setFeedback({ status: "success", message: "Saved -- applies automatically within moments." });
+      setFeedback({ status: "success", message: status?.lifecycle === "active" ? "Saved -- queued until the current show ends." : "Saved -- applies automatically within moments." });
       await loadGhosts();
     } catch (error) {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not save the ghost fill target." });
@@ -641,7 +641,7 @@ export function App() {
                 </label>
                 <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingShow || !selectedShowId}>{savingShow ? "Saving…" : "Save"}</button>
               </form>}
-          <p className="sc-tool-help">Applies automatically within moments of saving -- no manual restart needed.</p>
+          <p className="sc-tool-help">Applies automatically; while a show is running, the change waits until that show ends.</p>
         </section>
 
         <section className="sc-tool-panel" aria-labelledby="admin-ghosts-heading">
@@ -659,7 +659,7 @@ export function App() {
             </label>
             <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingGhosts || targetAudienceSize === ""}>{savingGhosts ? "Saving…" : "Save"}</button>
           </form>
-          <p className="sc-tool-help">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghosts and defers to whatever the published show sets. Applies automatically within moments of saving.</p>
+          <p className="sc-tool-help">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghosts and defers to whatever the published show sets. While a show is running, the change waits until that show ends.</p>
         </section>
 
       </div>}

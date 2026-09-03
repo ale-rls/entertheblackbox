@@ -43,6 +43,18 @@ describe("quadrantOfField", () => {
     expect(quadrantOfField(field, 0.5, 0.1)).toBe("max");
   });
 
+  it("uses a configurable off-centre boundary for left/right fields", () => {
+    const field = {
+      type: "two-quadrant" as const,
+      axis: "x" as const,
+      variant: "split" as const,
+      splitX: 0.47,
+      labels: { minLabel: "left", maxLabel: "right" },
+    };
+    expect(quadrantOfField(field, 0.469, 0.5)).toBe("min");
+    expect(quadrantOfField(field, 0.47, 0.5)).toBe("max");
+  });
+
   it("uses min/max for a y-axis two-quadrant field", () => {
     const field = {
       type: "two-quadrant" as const,

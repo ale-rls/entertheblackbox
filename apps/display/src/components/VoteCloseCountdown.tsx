@@ -4,41 +4,7 @@ import type { ServerClock } from "../lib/serverClock.js";
 /** How many seconds before the deadline the dramatic center countdown takes over. */
 export const DEFAULT_VOTE_CLOSE_COUNTDOWN_SECONDS = 5;
 
-const BEEP_FREQUENCY_HZ = 880;
-const BEEP_DURATION_S = 0.12;
-
-type AudioContextCtor = typeof AudioContext;
-
-// A single shared context: creating one per beep would hit the browser's
-// concurrent-context limits, and each kiosk tab only ever needs one.
-let sharedAudioContext: AudioContext | null = null;
-
-function getAudioContext(): AudioContext | null {
-  if (typeof window === "undefined") return null;
-  const Ctor: AudioContextCtor | undefined =
-    window.AudioContext ?? (window as unknown as { webkitAudioContext?: AudioContextCtor }).webkitAudioContext;
-  if (Ctor === undefined) return null;
-  if (sharedAudioContext === null) sharedAudioContext = new Ctor();
-  return sharedAudioContext;
-}
-
-/** Short synthesized tick -- no bundled asset fits a generic countdown beep. */
-function playBeep(): void {
-  const ctx = getAudioContext();
-  if (ctx === null) return;
-  void ctx.resume().catch(() => {});
-  const oscillator = ctx.createOscillator();
-  const gain = ctx.createGain();
-  oscillator.type = "sine";
-  oscillator.frequency.value = BEEP_FREQUENCY_HZ;
-  gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.35, ctx.currentTime + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + BEEP_DURATION_S);
-  oscillator.connect(gain);
-  gain.connect(ctx.destination);
-  oscillator.start();
-  oscillator.stop(ctx.currentTime + BEEP_DURATION_S + 0.02);
-}
+export const VOTE_COUNTDOWN_SOUND_SRC = "/display/sfx/Ping4.mp3";
 
 /**
  * Dramatic centered countdown for the final seconds before a vote closes.
@@ -62,6 +28,7 @@ export function VoteCloseCountdown({
 }) {
   const [remainingMs, setRemainingMs] = useState(() => clock.remainingUntil(deadlineAt));
   const lastBeepSecond = useRef<number | null>(null);
+  const ping = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     lastBeepSecond.current = null;
@@ -78,8 +45,19 @@ export function VoteCloseCountdown({
     if (!inFinalCountdown || !soundEnabled) return;
     if (lastBeepSecond.current === secondsLeft) return;
     lastBeepSecond.current = secondsLeft;
-    playBeep();
+    const audio = ping.current ?? new Audio(VOTE_COUNTDOWN_SOUND_SRC);
+    audio.preload = "auto";
+    ping.current = audio;
+    audio.pause();
+    audio.currentTime = 0;
+    void audio.play().catch(() => {});
   }, [inFinalCountdown, secondsLeft, soundEnabled]);
+
+  useEffect(() => () => {
+    ping.current?.pause();
+    ping.current?.removeAttribute("src");
+    ping.current = null;
+  }, []);
 
   if (!inFinalCountdown) return null;
 

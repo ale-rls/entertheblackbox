@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createRestartScheduler, subscribeWithRetry } from "./index.js";
+import { createActiveShowRestartGate, createRestartScheduler, subscribeWithRetry } from "./index.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 
 function fakePocketbase(subscribe: (topic: string, callback: () => void) => Promise<() => void>): PocketBaseClient {
@@ -137,5 +137,35 @@ describe("createRestartScheduler", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("createActiveShowRestartGate", () => {
+  it("defers and coalesces reloads until the active show reaches idle", () => {
+    let active = true;
+    const schedule = vi.fn();
+    const gate = createActiveShowRestartGate(schedule, () => active);
+
+    gate.request("scenarios");
+    gate.request("media");
+    gate.request("scenarios");
+    expect(schedule).not.toHaveBeenCalled();
+
+    gate.flush();
+    expect(schedule).not.toHaveBeenCalled();
+
+    active = false;
+    gate.flush();
+    expect(schedule).toHaveBeenCalledOnce();
+    expect(schedule).toHaveBeenCalledWith("scenarios, media");
+  });
+
+  it("passes reloads through immediately while no show is active", () => {
+    const schedule = vi.fn();
+    const gate = createActiveShowRestartGate(schedule, () => false);
+
+    gate.request("installation_config");
+
+    expect(schedule).toHaveBeenCalledWith("installation_config");
   });
 });

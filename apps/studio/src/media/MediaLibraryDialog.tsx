@@ -51,6 +51,7 @@ export function MediaLibraryDialog({
   project,
   feedback,
   uploading,
+  showActive = false,
   selection,
   onUpload,
   onDelete,
@@ -60,6 +61,7 @@ export function MediaLibraryDialog({
   project: StudioProject | undefined;
   feedback: MediaLibraryFeedback | undefined;
   uploading: boolean;
+  showActive?: boolean;
   selection?: MediaLibrarySelection;
   onUpload: (files: FileList) => void | Promise<void>;
   onDelete: (row: MediaLibraryRow, trigger: HTMLButtonElement) => void;
@@ -100,6 +102,7 @@ export function MediaLibraryDialog({
         <div><p className="sc-tool-eyebrow">{selecting ? "Media picker" : "Shared media"}</p><h2 id="media-library-title">{selecting ? "Choose media" : "Media library"}</h2><p className="sc-tool-copy">{selection ? `${selection.contextLabel} · ` : ""}{availableCount} file{availableCount === 1 ? "" : "s"}{!selection && (project ? ` · ${used} used in this show` : " · shared across shows")}</p></div>
         <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={uploading} onClick={onClose}>{selecting ? "Cancel" : "Close"}</button>
       </header>
+      {showActive && <p className="live-show-warning" role="status"><strong>Live show running.</strong> Uploads and removals are safe; the server will apply them after the show ends.</p>}
       <div
         className="media-dropzone"
         data-dragging={dragging}

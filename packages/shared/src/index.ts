@@ -105,6 +105,8 @@ export type TwoQuadrantField = {
   axis: "x" | "y";
   variant: "split" | "spectrum";
   labels: Axis;
+  /** Viewport X coordinate of the left/right boundary when no arena is configured. */
+  splitX?: number | undefined;
   arena?: Arena | undefined;
 };
 
@@ -303,7 +305,8 @@ export function quadrantOfField(field: PositionField, x: number, y: number): Pos
   if (field.type === "two-quadrant") {
     if (field.arena === undefined) {
       const coordinate = field.axis === "x" ? x : y;
-      return coordinate >= 0.5 ? "max" : "min";
+      const boundary = field.axis === "x" ? field.splitX ?? 0.5 : 0.5;
+      return coordinate >= boundary ? "max" : "min";
     }
     const arena = field.arena;
     if (arena.type === "ellipse") {

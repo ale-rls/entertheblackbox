@@ -88,7 +88,6 @@ function setup(options: {
       interactiveIdleTimeoutMs: options.interactiveIdleTimeoutMs ?? 100,
       maxSessionDurationMs: options.maxSessionDurationMs ?? 10_000,
       displayDisconnectTimeoutMs: options.displayDisconnectTimeoutMs ?? 1_000_000,
-      noParticipantGraceMs: 100,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
     ...(options.autoStartOnFirstParticipant === undefined ? {} : { autoStartOnFirstParticipant: options.autoStartOnFirstParticipant }),
@@ -672,11 +671,10 @@ describe("PhaseEngine lifecycle", () => {
     ]);
   });
 
-  it("aborts to idle on interactive inactivity, max duration, no participants, and display loss", () => {
+  it("aborts to idle on interactive inactivity, max duration, and display loss", () => {
     const cases = [
       { label: "interactive-idle-timeout", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
       { label: "max-session-duration", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
-      { label: "no-participants", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
       { label: "display-timeout", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
     ] as const;
 
@@ -697,20 +695,32 @@ describe("PhaseEngine lifecycle", () => {
       now = 1_100;
       engine.tick(now);
       engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
-      if (testCase.label === "no-participants") {
-        registry.releaseSocket(phone as unknown as WebSocket, now);
-        engine.socketClosed(phone as unknown as WebSocket);
-      }
       if (testCase.label === "display-timeout") engine.socketClosed(display as unknown as WebSocket);
-      if (testCase.label === "no-participants") {
-        engine.tick(now + 1);
-        engine.tick(now + 101);
-      } else {
-        testCase.trigger(engine, now);
-      }
+      testCase.trigger(engine, now);
       expect(engine.lifecycleState, testCase.label).toBe("idle");
       expect(checkpoints.at(-1)?.reason, testCase.label).toBe(testCase.label);
     }
+  });
+
+  it("keeps an active show running when every participant disconnects", () => {
+    let now = 1_000;
+    const checkpoints: PhaseCheckpoint[] = [];
+    const { engine, registry } = setup({ now: () => now, checkpoints });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket);
+    connectDisplay(engine, display as unknown as WebSocket);
+    now = 1_100;
+    engine.tick(now);
+
+    registry.releaseSocket(phone as unknown as WebSocket, now);
+    engine.socketClosed(phone as unknown as WebSocket);
+    engine.tick(now + 1_000);
+
+    expect(engine.lifecycleState).toBe("active");
+    expect(engine.currentPhaseId).toBe("intro");
+    expect(checkpoints.at(-1)?.reason).toBe("session-start");
   });
 
   it("recovers active state to idle and authenticates/replaces displays", () => {

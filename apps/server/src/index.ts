@@ -49,7 +49,11 @@ export async function listenWithCleanup(
  * PocketBase reports a change, so it must be fully self-contained and
  * side-effect-free beyond what it returns.
  */
-async function boot(config: ServerConfig, pocketbase: PocketBaseClient): Promise<ServerRuntime> {
+async function boot(
+  config: ServerConfig,
+  pocketbase: PocketBaseClient,
+  onSessionEnded?: () => void,
+): Promise<ServerRuntime> {
   const override = await readServerConfigOverride(pocketbase)
     .catch((error: unknown) => {
       console.error("pocketbase: failed to load server config override", error);
@@ -112,6 +116,7 @@ async function boot(config: ServerConfig, pocketbase: PocketBaseClient): Promise
     });
   const runtime = await buildServer({
     config, readiness, adminData, pocketbase, ghostPool, scheduledStartTimes,
+    ...(onSessionEnded === undefined ? {} : { onSessionEnded }),
     ...(override?.targetAudienceSize === undefined ? {} : { targetAudienceSizeOverride: override.targetAudienceSize }),
   });
   await listenWithCleanup(runtime.app, { host: config.host, port: config.port });
@@ -210,6 +215,32 @@ export function createRestartScheduler(
   };
 }
 
+/**
+ * Holds content/config reloads while a show is active, then releases one
+ * coalesced reload as soon as the engine reports that the session ended.
+ */
+export function createActiveShowRestartGate(
+  schedule: (reason: string) => void,
+  isShowActive: () => boolean,
+): { request: (reason: string) => void; flush: () => void } {
+  const deferredReasons = new Set<string>();
+  return {
+    request(reason) {
+      if (isShowActive()) {
+        deferredReasons.add(reason);
+        return;
+      }
+      schedule(reason);
+    },
+    flush() {
+      if (isShowActive() || deferredReasons.size === 0) return;
+      const reason = [...deferredReasons].join(", ");
+      deferredReasons.clear();
+      schedule(reason);
+    },
+  };
+}
+
 export async function startServer(): Promise<void> {
   const config = loadConfig();
   const pocketbase = new PocketBaseClient(config);
@@ -217,7 +248,8 @@ export async function startServer(): Promise<void> {
     console.error("pocketbase: failed initial auth", error);
   });
 
-  let runtime = await boot(config, pocketbase);
+  let flushDeferredRestart = () => {};
+  let runtime = await boot(config, pocketbase, () => flushDeferredRestart());
   let restarting = false;
   let shuttingDown = false;
 
@@ -228,16 +260,24 @@ export async function startServer(): Promise<void> {
   // installation_config migration. What used to require an operator to
   // notice and manually restart/redeploy is now automatic: PocketBase's
   // realtime feed (SSE) pushes a message the instant Studio publishes a
-  // show, uploads media, or an operator changes the active show, and we
-  // react by rebooting in place (which re-runs the media sync too) -- same
-  // restart, just triggered by PocketBase instead of a human.
+  // show, uploads media, or an operator changes the active show. Idle and
+  // lobby installations reboot after the short settle delay; active shows
+  // keep their in-memory engine and defer one coalesced reboot until their
+  // session ends, so authoring cannot interrupt playback.
+  let requestRestart = (_reason: string) => {};
   const restart = async (reason: string): Promise<void> => {
     if (restarting || shuttingDown) return;
+    // The show may have started during the scheduler's settle delay. Check
+    // again at execution time so that race cannot interrupt a new session.
+    if (runtime.engine?.lifecycleState === "active") {
+      requestRestart(reason);
+      return;
+    }
     restarting = true;
     try {
       runtime.app.log.info({ reason }, "pocketbase change detected, restarting server");
       await runtime.app.close();
-      runtime = await boot(config, pocketbase);
+      runtime = await boot(config, pocketbase, () => flushDeferredRestart());
     } catch (error) {
       console.error("restart: failed to reboot server after pocketbase change", error);
     } finally {
@@ -246,9 +286,15 @@ export async function startServer(): Promise<void> {
   };
   const isStopped = () => shuttingDown;
   const restarts = createRestartScheduler(restart, isStopped);
-  subscribeWithRetry(pocketbase, "scenarios", () => restarts.schedule("scenarios"), isStopped);
-  subscribeWithRetry(pocketbase, "installation_config", () => restarts.schedule("installation_config"), isStopped);
-  subscribeWithRetry(pocketbase, "media", () => restarts.schedule("media"), isStopped);
+  const restartGate = createActiveShowRestartGate(
+    (reason) => restarts.schedule(reason),
+    () => runtime.engine?.lifecycleState === "active",
+  );
+  requestRestart = restartGate.request;
+  flushDeferredRestart = restartGate.flush;
+  subscribeWithRetry(pocketbase, "scenarios", () => restartGate.request("scenarios"), isStopped);
+  subscribeWithRetry(pocketbase, "installation_config", () => restartGate.request("installation_config"), isStopped);
+  subscribeWithRetry(pocketbase, "media", () => restartGate.request("media"), isStopped);
 
   const shutdown = async (signal: NodeJS.Signals) => {
     if (shuttingDown) return;

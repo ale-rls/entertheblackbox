@@ -92,6 +92,20 @@ function button(label: string): HTMLButtonElement {
 }
 
 describe("Studio confirmations", () => {
+  it("warns when the production show is active", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/api/status")) {
+        return Response.json({ showLifecycle: "active" });
+      }
+      return new Response(null, { status: 404 });
+    }));
+
+    await render(<App />);
+
+    expect(document.querySelector(".live-show-warning")?.textContent).toContain("Live show running");
+    expect(document.querySelector(".live-show-warning")?.textContent).toContain("apply after the show ends");
+  });
+
   it("traps focus, closes on Escape, and restores the delete trigger", async () => {
     database.drafts = [{ id: "draft-1", name: "Museum Show", updatedAt: 1 } as Draft];
     await render(<App />);

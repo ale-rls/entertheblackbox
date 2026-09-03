@@ -89,7 +89,12 @@ const pointFor = (field: PositionField, quadrant: PositionQuadrant): readonly [n
     const edgeY = field.arena.centerY + (quadrant === "min" ? -field.arena.radiusY : field.arena.radiusY);
     return [field.arena.centerX, splitY + 0.5 * (edgeY - splitY)];
   }
-  if (field.axis === "x") return quadrant === "min" ? [0.25, 0.5] : [0.75, 0.5];
+  if (field.axis === "x") {
+    const boundary = field.splitX ?? 0.5;
+    return quadrant === "min"
+      ? [boundary / 2, 0.5]
+      : [boundary + (1 - boundary) / 2, 0.5];
+  }
   return quadrant === "min" ? [0.5, 0.25] : [0.5, 0.75];
 };
 export function forcedOutcomes(field: PositionField): ForcedOutcome[] {

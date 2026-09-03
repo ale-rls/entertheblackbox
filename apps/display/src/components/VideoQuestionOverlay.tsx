@@ -19,8 +19,8 @@ export function videoQuestionStage(phase: VideoQuestionPhase, now: number): Vide
   return "closed";
 }
 
-/** Only the statue-picker's polygon zones keep their vote tallies and the "Voting open/closed" pill on screen. */
-function showsCountsAndVotingState(fieldType: string): boolean {
+/** Only the statue-picker's polygon zones keep their vote tallies on screen. */
+function showsCounts(fieldType: string): boolean {
   return fieldType === "polygon-zones";
 }
 
@@ -60,7 +60,7 @@ export function VideoQuestionOverlay({
   }, [stage]);
 
   // While fading out, keep rendering the last non-hidden stage's content
-  // (counts, highlights, voting state) so only opacity changes -- the
+  // (counts and highlights) so only opacity changes -- the
   // underlying values would otherwise snap away the instant `stage` flips.
   const [displayStage, setDisplayStage] = useState(stage);
   useEffect(() => {
@@ -71,12 +71,7 @@ export function VideoQuestionOverlay({
 
   const fadingOut = stage === "hidden";
   const votingOpen = displayStage === "open" && resolution === null;
-  const votingState = displayStage === "shown"
-    ? "Voting opens soon"
-    : votingOpen
-      ? "Voting open"
-      : "Voting closed";
-  const keepCountsAndVotingState = showsCountsAndVotingState(phase.field.type);
+  const keepCounts = showsCounts(phase.field.type);
   const highlightRegionIds = displayStage === "closed" && resolution !== null
     ? resolution.tieBreak?.candidates
       ?? (resolution.winner === "tie"
@@ -100,11 +95,10 @@ export function VideoQuestionOverlay({
         liveField={liveField}
         liveCounts={liveCounts}
         resolution={resolution}
-        showCounts={keepCountsAndVotingState}
+        showCounts={keepCounts}
         highlightRegionIds={highlightRegionIds}
       />
       {votingOpen && <VoteCloseCountdown clock={clock} deadlineAt={closeAt} soundEnabled={soundEnabled} durationSeconds={phase.closeCountdownSeconds ?? 5} center={questionFieldCenter(phase.field)} />}
-      {keepCountsAndVotingState && <div className="voting-state">{votingState}</div>}
     </div>
   );
 }
