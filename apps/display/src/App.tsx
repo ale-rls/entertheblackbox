@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import type { DisplayToServerMessage } from "@smartphonecracy/protocol";
 import { CursorField } from "./cursors/cursorField.js";
 import { CursorCanvas } from "./cursors/CursorCanvas.js";
+import { SpectrumGlowCanvas } from "./cursors/SpectrumGlowCanvas.js";
 import { RealtimeWsClient } from "./cursors/realtimeWsClient.js";
 import { DisplayConnection } from "./lib/connection.js";
 import { applyKioskGuards, performReload } from "./lib/kiosk.js";
@@ -211,6 +212,9 @@ export function App() {
   // preloading plausible next videos needs the id→src map from STEP-026.
   const phaseVisualSrc = phase?.kind === "video" || phase?.kind === "video-position-question" ? phase.src : null;
   const phaseAudioSrc = phase?.kind === "video" || phase?.kind === "video-position-question" ? phase.audioSrc ?? null : null;
+  const spectrumPhase = phase?.kind === "position-question" || phase?.kind === "video-position-question"
+    ? phase
+    : null;
   useEffect(() => {
     void media.showMedia(phaseVisualSrc, phaseAudioSrc);
   }, [phaseVisualSrc, phaseAudioSrc]);
@@ -252,6 +256,19 @@ export function App() {
           />
         )}
       </section>
+
+      {/* Density-driven spectrum bloom, above media but beneath crisp UI. */}
+      {spectrumPhase !== null && (spectrumPhase.spectrumGlow ?? true) && <section className="layer layer-spectrum-glow">
+        <SpectrumGlowCanvas
+          cursorField={cursorField}
+          field={spectrumPhase.field}
+          clock={connection.clock}
+          {...(spectrumPhase.kind === "video-position-question" ? {
+            visibleFrom: spectrumPhase.startedAt + spectrumPhase.showAtMs,
+            visibleUntil: spectrumPhase.startedAt + spectrumPhase.hideAtMs,
+          } : {})}
+        />
+      </section>}
 
       {/* Layer 2: UI */}
       <section className="layer layer-ui">

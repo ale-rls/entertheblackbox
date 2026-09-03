@@ -552,6 +552,24 @@ describe("Studio feedback and keyboard entry", () => {
     expect(button("Collapse panel").getAttribute("aria-expanded")).toBe("true");
   });
 
+  it("acknowledges every acknowledgement-required diagnostic at once", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+
+    const acknowledgementInputs = () => Array.from(document.querySelectorAll<HTMLInputElement>(".diagnostics input[type=checkbox]"));
+    expect(acknowledgementInputs().length).toBeGreaterThan(1);
+    expect(acknowledgementInputs().every((input) => !input.checked)).toBe(true);
+    expect(button("Acknowledge all").disabled).toBe(false);
+
+    await act(async () => { button("Acknowledge all").click(); });
+
+    expect(acknowledgementInputs().every((input) => input.checked)).toBe(true);
+    expect(button("Acknowledge all").disabled).toBe(true);
+    expect(document.querySelector(".diagnostics-list-heading")?.textContent).not.toContain("export blocked");
+  });
+
   it("returns focus to a menu trigger after a normal selection", async () => {
     const selected = vi.fn();
     await render(<Menu label="View" items={[{ label: "Save layout", onSelect: selected }]} />);

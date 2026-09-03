@@ -18,14 +18,18 @@ const fourField: QuestionField = {
 const twoXField: QuestionField = {
   type: "two-quadrant",
   axis: "x",
+  variant: "spectrum",
   labels: { minLabel: "disagree", maxLabel: "agree" },
 };
 
 const twoYField: QuestionField = {
   type: "two-quadrant",
   axis: "y",
+  variant: "spectrum",
   labels: { minLabel: "local", maxLabel: "global" },
 };
+
+const twoXSplitField: QuestionField = { ...twoXField, variant: "split" };
 
 const arenaFourField: QuestionField = {
   ...fourField,
@@ -146,6 +150,15 @@ describe("QuadrantOverlay", () => {
     );
   });
 
+  it("renders a hard two-way split with a perpendicular divider and no spectrum arrows", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay field={twoXSplitField} liveField={twoXSplitField} liveCounts={{ min: 1, max: 2 }} resolution={null} />,
+    );
+    expect(html).toContain('class="axis-divider axis-divider-x"');
+    expect(html).not.toContain("axis-track");
+    expect(html).not.toContain("axis-arrow");
+  });
+
   it("clips calibrated quadrants and divider lines to the arena ellipse", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay
@@ -177,6 +190,14 @@ describe("QuadrantOverlay", () => {
     expect(xHtml).toContain('class="arena-spectrum-origin"');
     expect(yHtml).toContain('<line class="arena-spectrum-axis" x1="50" y1="50" x2="50" y2="90"></line>');
     expect(yHtml).toContain('class="arena-spectrum-origin"');
+  });
+
+  it("draws the classification boundary and no origin for a calibrated hard split", () => {
+    const split = { ...arenaTwoXField, variant: "split" as const };
+    const html = renderToStaticMarkup(<QuadrantOverlay field={split} liveField={split} liveCounts={null} resolution={null} />);
+    expect(html).toContain('<line class="arena-divider" x1="50" y1="50" x2="50" y2="90"></line>');
+    expect(html).not.toContain("arena-spectrum-axis");
+    expect(html).not.toContain("arena-spectrum-origin");
   });
 
   it("renders a perspective-calibrated quad arena as polygon regions split through its edge midpoints", () => {

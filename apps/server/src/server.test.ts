@@ -13,6 +13,7 @@ import {
   WEBSOCKET_MAX_PAYLOAD_BYTES,
   type ServerRuntime,
 } from "./index.js";
+import type { AdminDataSource } from "./admin/index.js";
 
 const runtimes: ServerRuntime[] = [];
 
@@ -56,6 +57,7 @@ async function fixture(invalidScenario = false) {
         field: {
           type: "two-quadrant",
           axis: "x",
+          variant: "spectrum",
           labels: { minLabel: "No", maxLabel: "Yes" },
         },
         next: { type: "fixed", target: "outro" },
@@ -207,6 +209,61 @@ describe("HTTP readiness and bundles", () => {
     expect(response.body).not.toContain("question");
     expect(response.body).not.toContain("scenario-internal-marker");
     expect(response.body).not.toContain("video-internal-marker");
+  });
+
+  it("accepts signed end-of-show movement consent and rejects another lease", async () => {
+    const deleteMovementRecordings = vi.fn(async () => undefined);
+    const adminData: AdminDataSource = {
+      audit: vi.fn(),
+      recentErrors: async () => [],
+      exportSession: async () => null,
+      deleteMovementRecordings,
+    };
+    const runtime = await buildServer({ config: await fixture(), adminData });
+    runtimes.push(runtime);
+    const port = await listen(runtime);
+    const phone = await openWebSocket(port);
+    const identityPromise = new Promise<Record<string, unknown>>((resolve) => {
+      phone.once("message", (raw) => resolve(JSON.parse(raw.toString()) as Record<string, unknown>));
+    });
+    phone.send(JSON.stringify({
+      t: "join", v: 2, clientVersion: "dev",
+      installationId: runtime.config.installationId,
+      roomId: runtime.config.roomId,
+      name: "Ada",
+      joinGrant: runtime.admission.issueJoinGrant().token,
+    }));
+    const identity = await identityPromise;
+
+    const display = await openWebSocket(port);
+    const displaySnapshot = new Promise<void>((resolve) => display.once("message", () => resolve()));
+    display.send(JSON.stringify({
+      t: "display_join", v: 2, clientVersion: "dev",
+      installationId: runtime.config.installationId,
+      roomId: runtime.config.roomId,
+      displayToken: runtime.config.displayToken,
+    }));
+    await displaySnapshot;
+    expect(runtime.engine?.adminStart()).toEqual({ ok: true });
+    const sessionId = runtime.engine!.currentSessionId;
+    expect(runtime.engine?.adminIdle()).toEqual({ ok: true });
+
+    const accepted = await runtime.app.inject({
+      method: "POST",
+      url: "/api/movement-consent",
+      payload: { sessionId, participantLease: identity.participantLease, granted: false },
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(deleteMovementRecordings).toHaveBeenCalledWith(sessionId, identity.clientId);
+
+    const rejected = await runtime.app.inject({
+      method: "POST",
+      url: "/api/movement-consent",
+      payload: { sessionId, participantLease: "not-a-signed-lease", granted: false },
+    });
+    expect(rejected.statusCode).toBe(401);
+    phone.close();
+    display.close();
   });
 
   it("serves the media manifest and immutable media without changing readiness", async () => {

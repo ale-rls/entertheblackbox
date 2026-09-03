@@ -19,6 +19,20 @@ afterEach(async () => {
 });
 
 describe("IdleAttract", () => {
+  it("uses only the three current 1.0 attract clips in the bundled lobby playlist", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => {
+      root?.render(<IdleAttract grant={null} qrHidden={false} clock={new ServerClock()} random={() => 0} />);
+      await Promise.resolve();
+    });
+    const src = document.querySelector("video")?.getAttribute("src") ?? "";
+    expect(src).toContain("1.0_25_a_breath.mp4");
+    expect(src).not.toContain("idle-attract.mp4");
+  });
+
   it("rewinds and explicitly restarts playback each time idle remounts", async () => {
     const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);

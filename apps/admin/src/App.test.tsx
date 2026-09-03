@@ -37,6 +37,14 @@ const activeStatus: Status = {
   phaseEpoch: 7,
 };
 
+const sceneFlow = {
+  entryPhaseId: "intro",
+  scenes: [
+    { id: "intro", kind: "video", title: "Opening film", routes: [{ outcome: "next", target: "question-02" }] },
+    { id: "question-02", kind: "position-question", title: "Choose a position", routes: [{ outcome: "next", target: "idle" }] },
+  ],
+};
+
 let root: Root | null = null;
 
 beforeAll(() => {
@@ -78,12 +86,13 @@ function button(label: string): HTMLButtonElement {
 }
 
 function createAdminFetch(options?: { status?: Status; rejectAction?: string }) {
-  const requests: Array<{ url: string; method: string }> = [];
+  const requests: Array<{ url: string; method: string; body?: string }> = [];
   const mock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
-    requests.push({ url, method });
+    requests.push({ url, method, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
     if (url.endsWith("/status")) return jsonResponse(options?.status ?? activeStatus);
+    if (url.endsWith("/flow")) return jsonResponse(sceneFlow);
     if (url.endsWith("/shows") && method === "GET") {
       return jsonResponse({ active: "show-a", pending: null, shows: [{ showId: "show-a", name: "Election night", version: "1.0.0", publishedAt: 1_000 }] });
     }
@@ -169,6 +178,32 @@ describe("Admin operations UI", () => {
     await flush();
     expect(requests).toContainEqual({ url: "/api/admin/restart", method: "POST" });
     expect(document.activeElement).toBe(restartTrigger);
+  });
+
+  it("shows the published flow and confirms a direct jump to any other scene", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    const { requests } = createAdminFetch();
+    await renderApp();
+
+    expect(document.body.textContent).toContain("Scene navigator");
+    expect(document.body.textContent).toContain("Opening film");
+    expect(document.body.textContent).toContain("next → question-02");
+    const current = document.querySelector<HTMLButtonElement>('[aria-current="step"]')!;
+    expect(current.disabled).toBe(true);
+    expect(current.textContent).toContain("Choose a position");
+
+    const opening = document.querySelector<HTMLButtonElement>('[aria-label="Opening film, jump to this scene"]')!;
+    await act(async () => { opening.click(); });
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Jump to “Opening film”?");
+    await act(async () => { button("Jump to scene").click(); });
+    await flush();
+
+    expect(requests).toContainEqual({
+      url: "/api/admin/jump",
+      method: "POST",
+      body: JSON.stringify({ phaseId: "intro" }),
+    });
+    expect(document.body.textContent).toContain("Jumped to “Opening film”.");
   });
 
   it("keeps server-refused actions visible as inline failure feedback", async () => {

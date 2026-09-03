@@ -28,8 +28,16 @@ function setup(options: {
     get nextLobbyStartAt() { return lobbyTimes[0] ?? null; },
     setLobbyStartTimes: vi.fn((times: readonly number[]) => { lobbyTimes = [...times]; return { ok: true }; }),
     currentDisplayPlaybackIssue: { status: "stalled", mediaId: "intro.mp4", detail: "buffering stopped", reportedAt: 1_000 },
+    adminFlow: {
+      entryPhaseId: "intro",
+      scenes: [
+        { id: "intro", kind: "video", title: "Opening", routes: [{ outcome: "next", target: "q1" }] },
+        { id: "q1", kind: "position-question", title: "Choose", routes: [{ outcome: "next", target: "idle" }] },
+      ],
+    },
     adminStart: vi.fn(() => ({ ok: false, reason: "wrong-phase" })),
     adminIdle: vi.fn(() => ({ ok: true })), adminSkip: vi.fn(() => ({ ok: true })), adminRestart: vi.fn(() => ({ ok: true })),
+    adminJump: vi.fn((phaseId: string) => phaseId === "missing" ? ({ ok: false, reason: "invalid-target" }) : ({ ok: true })),
   } as unknown as PhaseEngine;
   const data: AdminDataSource = {
     audit, recentErrors: async () => [{ message: "example" }],
@@ -124,6 +132,32 @@ describe("admin API", () => {
     expect(engine.adminIdle).toHaveBeenCalledOnce();
     expect((await app.inject({ method: "POST", url: "/api/admin/start", headers })).statusCode).toBe(409);
     expect(audit).toHaveBeenCalledTimes(2);
+  });
+
+  it("exposes the running scenario flow and jumps directly to a validated scene", async () => {
+    const { app, engine, audit } = setup();
+    const headers = { authorization: "Bearer strong-admin-token" };
+
+    const flow = await app.inject({ url: "/api/admin/flow", headers });
+    expect(flow.statusCode).toBe(200);
+    expect(flow.json()).toMatchObject({
+      entryPhaseId: "intro",
+      scenes: [
+        { id: "intro", kind: "video", routes: [{ outcome: "next", target: "q1" }] },
+        { id: "q1", kind: "position-question", routes: [{ outcome: "next", target: "idle" }] },
+      ],
+    });
+
+    const jumped = await app.inject({ method: "POST", url: "/api/admin/jump", headers, payload: { phaseId: "intro" } });
+    expect(jumped.statusCode).toBe(200);
+    expect(engine.adminJump).toHaveBeenCalledWith("intro");
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({
+      action: "jump",
+      detail: { phaseId: "intro", ok: true },
+    }));
+
+    expect((await app.inject({ method: "POST", url: "/api/admin/jump", headers, payload: { phaseId: 42 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/admin/jump", headers, payload: { phaseId: "missing" } })).statusCode).toBe(409);
   });
 
   it("returns recent errors and JSON/CSV session exports", async () => {

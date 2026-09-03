@@ -20,6 +20,7 @@ type VoteSnapshotRecord = {
   votes: readonly PositionVote[];
 };
 type MovementRecordingRecord = {
+  id: string;
   recordingId: string;
   sessionId: string;
   participantId: string;
@@ -54,6 +55,9 @@ function votesToCsv(votes: readonly PositionVote[]): string {
  * triggered it; failures are logged to stderr instead of surfaced.
  */
 export class PocketBaseAdminDataSource implements AdminDataSource {
+  private movementWriteQueue: Promise<void> = Promise.resolve();
+  private readonly recordingIdsByParticipant = new Map<string, Set<string>>();
+
   constructor(
     private readonly client: PocketBaseClient,
     private readonly installation: { installationId: string; roomId: string },
@@ -85,33 +89,69 @@ export class PocketBaseAdminDataSource implements AdminDataSource {
   }
 
   recordMovementStarted(event: MovementRecordingStarted): void {
-    void this.create("movement_recordings", {
-      recordingId: event.recordingId,
-      sessionId: event.sessionId,
-      participantId: event.participantId,
-      participantName: event.participantName,
-      showId: event.showId,
-      scenarioVersion: event.scenarioVersion,
-      installationId: event.installationId,
-      roomId: event.roomId,
-      startedAt: event.startedAt,
-      status: "recording",
-      sampleCount: 0,
-    });
+    const key = this.participantKey(event.sessionId, event.participantId);
+    const recordingIds = this.recordingIdsByParticipant.get(key) ?? new Set<string>();
+    recordingIds.add(event.recordingId);
+    this.recordingIdsByParticipant.set(key, recordingIds);
+    void this.enqueueMovementWrite(async () => {
+      await this.createOrThrow("movement_recordings", {
+        recordingId: event.recordingId,
+        sessionId: event.sessionId,
+        participantId: event.participantId,
+        participantName: event.participantName,
+        showId: event.showId,
+        scenarioVersion: event.scenarioVersion,
+        installationId: event.installationId,
+        roomId: event.roomId,
+        startedAt: event.startedAt,
+        status: "recording",
+        sampleCount: 0,
+      });
+    }).catch((error) => console.error("pocketbase: failed to write to movement_recordings", error));
   }
 
   recordMovementBatch(event: MovementBatchFlushed): void {
-    void this.create("movement_recording_batches", {
-      recordingId: event.recordingId,
-      sessionId: event.sessionId,
-      batchIndex: event.batchIndex,
-      recordedAt: event.recordedAt,
-      samples: event.samples,
-    });
+    void this.enqueueMovementWrite(async () => {
+      await this.createOrThrow("movement_recording_batches", {
+        recordingId: event.recordingId,
+        sessionId: event.sessionId,
+        batchIndex: event.batchIndex,
+        recordedAt: event.recordedAt,
+        samples: event.samples,
+      });
+    }).catch((error) => console.error("pocketbase: failed to write to movement_recording_batches", error));
   }
 
   recordMovementFinalized(event: MovementRecordingFinalized): void {
-    void this.finalizeMovementRecording(event);
+    void this.enqueueMovementWrite(() => this.finalizeMovementRecording(event))
+      .catch((error) => console.error("pocketbase: failed to finalize movement_recordings", error));
+  }
+
+  async deleteMovementRecordings(sessionId: string, participantId: string): Promise<void> {
+    await this.enqueueMovementWrite(async () => {
+      await this.client.ensureAuth();
+      const participantFilter = this.client.pb.filter(
+        "sessionId = {:sessionId} && participantId = {:participantId}",
+        { sessionId, participantId },
+      );
+      const records = await this.client.pb.collection<MovementRecordingRecord>("movement_recordings")
+        .getFullList({ filter: participantFilter });
+      const key = this.participantKey(sessionId, participantId);
+      const recordingIds = new Set([
+        ...(this.recordingIdsByParticipant.get(key) ?? []),
+        ...records.map((record) => record.recordingId),
+      ]);
+
+      for (const recordingId of recordingIds) {
+        const filter = this.client.pb.filter("recordingId = {:recordingId}", { recordingId });
+        const batches = await this.client.pb.collection("movement_recording_batches").getFullList({ filter });
+        await Promise.all(batches.map((batch) =>
+          this.client.pb.collection("movement_recording_batches").delete(batch.id)));
+      }
+      await Promise.all(records.map((record) =>
+        this.client.pb.collection("movement_recordings").delete(record.id)));
+      this.recordingIdsByParticipant.delete(key);
+    });
   }
 
   async recentErrors(): Promise<readonly unknown[]> {
@@ -161,25 +201,35 @@ export class PocketBaseAdminDataSource implements AdminDataSource {
 
   private async create<T extends Record<string, unknown>>(collection: string, data: T): Promise<void> {
     try {
-      await this.client.ensureAuth();
-      await this.client.pb.collection(collection).create(data);
+      await this.createOrThrow(collection, data);
     } catch (error) {
       console.error(`pocketbase: failed to write to ${collection}`, error);
     }
   }
 
+  private async createOrThrow<T extends Record<string, unknown>>(collection: string, data: T): Promise<void> {
+    await this.client.ensureAuth();
+    await this.client.pb.collection(collection).create(data);
+  }
+
   private async finalizeMovementRecording(event: MovementRecordingFinalized): Promise<void> {
-    try {
-      await this.client.ensureAuth();
-      const record = await this.client.pb.collection("movement_recordings")
-        .getFirstListItem(this.client.pb.filter("recordingId = {:id}", { id: event.recordingId }));
-      await this.client.pb.collection("movement_recordings").update(record.id, {
-        endedAt: event.endedAt,
-        status: event.status,
-        sampleCount: event.sampleCount,
-      });
-    } catch (error) {
-      console.error("pocketbase: failed to finalize movement_recordings", error);
-    }
+    await this.client.ensureAuth();
+    const record = await this.client.pb.collection("movement_recordings")
+      .getFirstListItem(this.client.pb.filter("recordingId = {:id}", { id: event.recordingId }));
+    await this.client.pb.collection("movement_recordings").update(record.id, {
+      endedAt: event.endedAt,
+      status: event.status,
+      sampleCount: event.sampleCount,
+    });
+  }
+
+  private participantKey(sessionId: string, participantId: string): string {
+    return `${sessionId}\u0000${participantId}`;
+  }
+
+  private enqueueMovementWrite<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.movementWriteQueue.then(operation, operation);
+    this.movementWriteQueue = result.then(() => undefined, () => undefined);
+    return result;
   }
 }

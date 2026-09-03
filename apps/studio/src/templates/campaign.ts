@@ -5,6 +5,7 @@ type Phase = StudioProject["scenario"]["phases"][number];
 const spectrumField = {
   type: "two-quadrant" as const,
   axis: "x" as const,
+  variant: "spectrum" as const,
   labels: { minLabel: "überzeugt mich nicht", maxLabel: "überzeugt mich" },
 };
 

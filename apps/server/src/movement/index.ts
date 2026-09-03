@@ -8,3 +8,9 @@ export {
   type MovementRecordingStarted,
   type MovementSample,
 } from "./movement-recorder.js";
+export {
+  MOVEMENT_CONSENT_TIMEOUT_MS,
+  MovementConsentManager,
+  type MovementConsentDataSource,
+  type MovementConsentResult,
+} from "./movement-consent.js";

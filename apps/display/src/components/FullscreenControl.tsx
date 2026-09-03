@@ -24,22 +24,20 @@ export function FullscreenControl({ doc = document }: { doc?: Document }) {
     };
   }, [doc]);
 
-  const toggleFullscreen = useCallback(async () => {
+  const enterFullscreen = useCallback(async () => {
     if (!supported || pending) return;
     setPending(true);
     setError(null);
     try {
-      if (!doc.fullscreenElement) {
-        await doc.documentElement.requestFullscreen();
-      } else {
-        await doc.exitFullscreen();
-      }
+      await doc.documentElement.requestFullscreen();
     } catch {
       setError("Fullscreen was blocked by the browser.");
     } finally {
       setPending(false);
     }
   }, [doc, pending, supported]);
+
+  if (isFullscreen) return null;
 
   return <>
     <button
@@ -48,9 +46,9 @@ export function FullscreenControl({ doc = document }: { doc?: Document }) {
       disabled={!supported || pending}
       aria-pressed={isFullscreen}
       title={supported ? undefined : "Fullscreen is unavailable in this browser"}
-      onClick={() => void toggleFullscreen()}
+      onClick={() => void enterFullscreen()}
     >
-      {isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+      Enter fullscreen
     </button>
     {error && <span className="fullscreen-error" role="status">{error}</span>}
   </>;

@@ -1078,6 +1078,16 @@ body:has(.editor),
   font-weight: var(--sc-tool-font-weight-medium);
 }
 
+.diagnostics-list-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--sc-tool-space-4);
+}
+
+.diagnostics-list-heading h3 {
+  margin-inline-end: 0;
+}
+
 .diagnostics table {
   width: 100%;
   min-width: 42rem;

@@ -42,7 +42,8 @@
           "maxLabel": "Lüge",
           "minLabel": "Fakt"
         },
-        "type": "two-quadrant"
+        "type": "two-quadrant",
+        "variant": "split"
       },
       "hideAtMs": 50000,
       "id": "ostrakismos",
@@ -68,7 +69,8 @@
           "maxLabel": "Fakt",
           "minLabel": "Lüge"
         },
-        "type": "two-quadrant"
+        "type": "two-quadrant",
+        "variant": "split"
       },
       "hideAtMs": 75000,
       "id": "video-position-question-966206",
@@ -94,7 +96,8 @@
           "maxLabel": "Lüge",
           "minLabel": "Fakt"
         },
-        "type": "two-quadrant"
+        "type": "two-quadrant",
+        "variant": "split"
       },
       "hideAtMs": 70000,
       "id": "video-position-question-f46987",
@@ -121,13 +124,14 @@
       "expectedDurationMs": 17769,
       "showAtMs": 0,
       "openAtMs": 50,
-      "closeAtMs": 9769,
+      "closeAtMs": 10050,
       "hideAtMs": 14769,
       "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
       "field": {
         "type": "two-quadrant",
         "axis": "x",
+        "variant": "spectrum",
         "labels": {
           "minLabel": "Geburt",
           "maxLabel": "Tod"
@@ -149,13 +153,14 @@
       "expectedDurationMs": 16567,
       "showAtMs": 0,
       "openAtMs": 50,
-      "closeAtMs": 8567,
+      "closeAtMs": 10050,
       "hideAtMs": 13567,
       "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
       "field": {
         "type": "two-quadrant",
         "axis": "x",
+        "variant": "spectrum",
         "labels": {
           "minLabel": "Geburt",
           "maxLabel": "Tod"
@@ -177,13 +182,14 @@
       "expectedDurationMs": 17351,
       "showAtMs": 0,
       "openAtMs": 50,
-      "closeAtMs": 9351,
+      "closeAtMs": 10050,
       "hideAtMs": 14351,
       "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
       "field": {
         "type": "two-quadrant",
         "axis": "x",
+        "variant": "spectrum",
         "labels": {
           "minLabel": "Geburt",
           "maxLabel": "Tod"
@@ -205,7 +211,7 @@
       "expectedDurationMs": 18396,
       "showAtMs": 0,
       "openAtMs": 50,
-      "closeAtMs": 10396,
+      "closeAtMs": 10050,
       "hideAtMs": 15396,
       "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
@@ -236,7 +242,7 @@
       "expectedDurationMs": 18318,
       "showAtMs": 0,
       "openAtMs": 50,
-      "closeAtMs": 10318,
+      "closeAtMs": 10050,
       "hideAtMs": 15318,
       "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
@@ -267,7 +273,7 @@
       "expectedDurationMs": 17429,
       "showAtMs": 0,
       "openAtMs": 50,
-      "closeAtMs": 9429,
+      "closeAtMs": 10050,
       "hideAtMs": 14429,
       "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
@@ -298,7 +304,7 @@
       "expectedDurationMs": 20564,
       "showAtMs": 0,
       "openAtMs": 50,
-      "closeAtMs": 12564,
+      "closeAtMs": 10050,
       "hideAtMs": 17564,
       "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
@@ -329,7 +335,7 @@
       "expectedDurationMs": 17926,
       "showAtMs": 0,
       "openAtMs": 50,
-      "closeAtMs": 9926,
+      "closeAtMs": 10050,
       "hideAtMs": 14926,
       "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
@@ -360,7 +366,7 @@
       "expectedDurationMs": 17273,
       "showAtMs": 0,
       "openAtMs": 50,
-      "closeAtMs": 9273,
+      "closeAtMs": 10050,
       "hideAtMs": 14273,
       "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
@@ -391,13 +397,14 @@
       "expectedDurationMs": 17586,
       "showAtMs": 0,
       "openAtMs": 50,
-      "closeAtMs": 9586,
+      "closeAtMs": 10050,
       "hideAtMs": 14586,
       "connectionStaleAfterMs": 10000,
       "showLiveCounts": true,
       "field": {
         "type": "two-quadrant",
         "axis": "x",
+        "variant": "spectrum",
         "labels": {
           "minLabel": "Das Teufelszeug rühr ich nicht an!",
           "maxLabel": "Ich bin eine KI"

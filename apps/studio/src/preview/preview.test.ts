@@ -62,7 +62,7 @@ describe("outcome preview", () => {
       expect(quadrantOfField(four, vote!.x!, vote!.y!)).toBe(quadrant);
     }
 
-    const twoX: TwoQuadrantField = { type: "two-quadrant", axis: "x", labels: { minLabel: "left", maxLabel: "right" }, arena };
+    const twoX: TwoQuadrantField = { type: "two-quadrant", axis: "x", variant: "spectrum", labels: { minLabel: "left", maxLabel: "right" }, arena };
     for (const quadrant of ["min", "max"] as const) {
       const [vote] = outcomeVotes(twoX, quadrant, false, false);
       expect(quadrantOfField(twoX, vote!.x!, vote!.y!)).toBe(quadrant);

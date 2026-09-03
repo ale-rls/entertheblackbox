@@ -78,13 +78,21 @@ describe("ArenaQuadEditor", () => {
   });
 
   it("shows the horizontal track for an X spectrum", async () => {
-    await renderEditor(vi.fn(), { type: "two-quadrant", axis: "x", labels: { minLabel: "left", maxLabel: "right" } });
+    await renderEditor(vi.fn(), { type: "two-quadrant", axis: "x", variant: "spectrum", labels: { minLabel: "left", maxLabel: "right" } });
     const axis = document.querySelector(".arena-editor-axis")!;
     expect(axis.getAttribute("x1")).toBe("10");
     expect(Number(axis.getAttribute("x2"))).toBeCloseTo(90);
     expect(axis.getAttribute("y1")).toBe("74.5");
     expect(axis.getAttribute("y2")).toBe("74.5");
     expect(document.querySelectorAll(".arena-editor-divider")).toHaveLength(0);
+  });
+
+  it("shows the perpendicular classification boundary for a hard split", async () => {
+    await renderEditor(vi.fn(), { type: "two-quadrant", axis: "x", variant: "split", labels: { minLabel: "left", maxLabel: "right" } });
+    const divider = document.querySelector(".arena-editor-divider")!;
+    expect(Number(divider.getAttribute("x1"))).toBeCloseTo(50);
+    expect(Number(divider.getAttribute("x2"))).toBeCloseTo(50);
+    expect(document.querySelector(".arena-editor-axis")).toBeNull();
   });
 
   it("moves every corner together when dragging the shape body", async () => {

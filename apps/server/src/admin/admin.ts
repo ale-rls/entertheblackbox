@@ -20,6 +20,7 @@ export interface AdminDataSource {
   recordMovementStarted?(event: MovementRecordingStarted): void;
   recordMovementBatch?(event: MovementBatchFlushed): void;
   recordMovementFinalized?(event: MovementRecordingFinalized): void;
+  deleteMovementRecordings?(sessionId: string, participantId: string): Promise<void>;
 }
 
 export type RegisterAdminOptions = {
@@ -130,6 +131,11 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         phaseId: engine?.currentPhaseId ?? null,
         phaseEpoch: engine?.currentPhaseEpoch ?? null,
       };
+    });
+    admin.get("/flow", async (_request, reply) => {
+      const engine = options.engine();
+      if (engine === null) return reply.code(503).send({ error: "engine_unavailable" });
+      return engine.adminFlow;
     });
     admin.get("/lobby", async () => {
       const engine = options.engine();
@@ -254,6 +260,18 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       if (!result) return reply.code(404).send({ error: "session_not_found" });
       if (request.query.format === "csv") return reply.type("text/csv; charset=utf-8").send(result.csv);
       return result.json;
+    });
+    admin.post<{ Body: { phaseId?: unknown } }>("/jump", async (request, reply) => {
+      const { phaseId } = request.body ?? {};
+      if (typeof phaseId !== "string" || phaseId === "") {
+        return reply.code(400).send({ error: "invalid_phase_id" });
+      }
+      const engine = options.engine();
+      const result: TransitionResult = engine === null
+        ? { ok: false, reason: "wrong-phase" }
+        : engine.adminJump(phaseId);
+      options.data?.audit({ action: "jump", at: new Date().toISOString(), detail: { phaseId, ...result } });
+      return result.ok ? result : reply.code(409).send(result);
     });
     for (const action of ["start", "idle", "skip", "restart"] as const) {
       admin.post(`/${action}`, async (_request, reply) => {

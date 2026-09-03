@@ -21,6 +21,7 @@
       "field": {
         "type": "two-quadrant",
         "axis": "x",
+        "variant": "spectrum",
         "labels": {
           "minLabel": "Crazy",
           "maxLabel": "Weird"

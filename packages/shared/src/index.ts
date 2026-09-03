@@ -103,6 +103,7 @@ export type FourQuadrantField = {
 export type TwoQuadrantField = {
   type: "two-quadrant";
   axis: "x" | "y";
+  variant: "split" | "spectrum";
   labels: Axis;
   arena?: Arena | undefined;
 };

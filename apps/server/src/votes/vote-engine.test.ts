@@ -217,6 +217,7 @@ describe("VoteEngine", () => {
         field: {
           type: "two-quadrant",
           axis: "x",
+          variant: "spectrum",
           labels: { minLabel: "Disagree", maxLabel: "Agree" },
         },
         durationMs: 1_000,
@@ -271,6 +272,7 @@ describe("VoteEngine", () => {
         field: {
           type: "two-quadrant",
           axis: "y",
+          variant: "spectrum",
           labels: { minLabel: "Top", maxLabel: "Bottom" },
         },
         durationMs: 1_000,

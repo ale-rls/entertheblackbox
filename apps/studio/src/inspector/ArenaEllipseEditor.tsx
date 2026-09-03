@@ -50,7 +50,7 @@ export function ArenaEllipseEditor({
   onChange,
 }: {
   arena: ArenaEllipse;
-  field: { type: "four-quadrant"; xAxis: Axis; yAxis: Axis } | { type: "two-quadrant"; axis: "x" | "y"; labels: Axis };
+  field: { type: "four-quadrant"; xAxis: Axis; yAxis: Axis } | { type: "two-quadrant"; axis: "x" | "y"; variant: "split" | "spectrum"; labels: Axis };
   media?: PolygonEditorMedia;
   onChange: (arena: ArenaEllipse) => void;
 }) {
@@ -136,8 +136,10 @@ export function ArenaEllipseEditor({
   const ry = arena.radiusY * 100;
   const splitY = arenaEllipseSplitY(arena) * 100;
   const splitHalfWidth = rx * Math.sqrt(Math.max(0, 1 - ((splitY - cy) / ry) ** 2));
-  const drawHorizontal = field.type === "four-quadrant" || field.axis === "x";
-  const drawVertical = field.type === "four-quadrant" || field.axis === "y";
+  const spectrum = field.type === "two-quadrant" && field.variant !== "split";
+  const drawHorizontal = field.type === "four-quadrant" || (spectrum ? field.axis === "x" : field.axis === "y");
+  const drawVertical = field.type === "four-quadrant" || (spectrum ? field.axis === "y" : field.axis === "x");
+  const lineClass = field.type === "four-quadrant" || !spectrum ? "arena-editor-divider" : "arena-editor-axis";
 
   return <div className="arena-ellipse-editor">
     <div className="polygon-editor-viewport" data-media-kind={media?.kind} style={{ aspectRatio: `${viewport.width} / ${viewport.height}` }}>
@@ -154,10 +156,10 @@ export function ArenaEllipseEditor({
         onPointerCancel={() => { dragging.current = null; }}
       >
         <ellipse className="arena-editor-fill" cx={cx} cy={cy} rx={rx} ry={ry} onPointerDown={(event) => beginDrag(event, "move")} />
-        {drawHorizontal && <line className={field.type === "four-quadrant" ? "arena-editor-divider" : "arena-editor-axis"} x1={cx - splitHalfWidth} y1={splitY} x2={cx + splitHalfWidth} y2={splitY} />}
-        {drawVertical && <line className={field.type === "four-quadrant" ? "arena-editor-divider" : "arena-editor-axis"} x1={cx} y1={cy - ry} x2={cx} y2={cy + ry} />}
+        {drawHorizontal && <line className={lineClass} x1={cx - splitHalfWidth} y1={splitY} x2={cx + splitHalfWidth} y2={splitY} />}
+        {drawVertical && <line className={lineClass} x1={cx} y1={cy - ry} x2={cx} y2={cy + ry} />}
         <ellipse className="arena-editor-outline" cx={cx} cy={cy} rx={rx} ry={ry} />
-        <circle className="arena-editor-center" data-arena-handle="split-y" aria-label="Spectrum centre" cx={cx} cy={splitY} r="1.5" onPointerDown={(event) => beginDrag(event, "split-y")} />
+        {(field.type === "four-quadrant" || spectrum) && <circle className="arena-editor-center" data-arena-handle="split-y" aria-label="Spectrum centre" cx={cx} cy={splitY} r="1.5" onPointerDown={(event) => beginDrag(event, "split-y")} />}
         {(["left", "right", "top", "bottom"] as const).map((handle) => <circle
           key={handle}
           className="arena-editor-handle"

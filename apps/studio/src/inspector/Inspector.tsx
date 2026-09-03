@@ -17,7 +17,7 @@ type Props = {
   onChooseMedia: (phaseId: string, target: "src" | "audioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
   onComponentTypeChange: (type: AuthorableComponentType, trigger: HTMLSelectElement) => void;
   onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
-  onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", trigger: HTMLSelectElement) => void;
+  onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x-split" | "two-quadrant-x-spectrum" | "two-quadrant-y-split" | "two-quadrant-y-spectrum" | "three-candidate-zones", trigger: HTMLSelectElement) => void;
   onTargetAudienceSizeChange: (value: number) => void;
 };
 
@@ -134,7 +134,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
-      <label className="sc-tool-label">{label("Position layout", "field.type")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : phase.field.type === "two-quadrant" ? `two-quadrant-${phase.field.axis}` : "three-candidate-zones"} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x">Horizontal spectrum · left ↔ right</option><option value="two-quadrant-y">Vertical spectrum · top ↕ bottom</option><option value="three-candidate-zones">Polygon zones · custom</option></select></label>
+      <label className="sc-tool-label">{label("Position layout", "field.type + field.variant")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : phase.field.type === "two-quadrant" ? `two-quadrant-${phase.field.axis}-${phase.field.variant ?? "spectrum"}` : "three-candidate-zones"} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x-split" | "two-quadrant-x-spectrum" | "two-quadrant-y-split" | "two-quadrant-y-spectrum" | "three-candidate-zones", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x-split">Horizontal vote · hard left / right split</option><option value="two-quadrant-x-spectrum">Horizontal spectrum · left ↔ right</option><option value="two-quadrant-y-split">Vertical vote · hard top / bottom split</option><option value="two-quadrant-y-spectrum">Vertical spectrum · top ↕ bottom</option><option value="three-candidate-zones">Polygon zones · custom</option></select></label>
       {phase.field.type === "four-quadrant" ? (() => {
         const field = phase.field;
         return <>
@@ -181,6 +181,8 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
           </fieldset>)}
         </fieldset>;
       })()}
+      {phase.field.type === "two-quadrant" && phase.field.variant !== "split" &&
+        <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.spectrumGlow ?? true} onChange={(event) => onChange({ ...phase, spectrumGlow: event.target.checked })} />{label("Show spectrum density glow", "spectrumGlow")}</label>}
       {phase.field.type !== "polygon-zones" && (() => {
         const field = phase.field;
         return <fieldset><legend>Arena surface <small>field.arena</small></legend>
@@ -212,7 +214,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
           <p className="sc-tool-copy field-hint">{field.arena === undefined
             ? "Calibrate the visible voting surface, then copy its settings to other questions that use the same shot."
             : field.type === "two-quadrant"
-              ? `Positions outside the ${field.arena.type === "ellipse" ? "oval" : "shape"} do not count. The ${field.axis === "x" ? "horizontal" : "vertical"} line shows the continuous ${field.axis.toUpperCase()} spectrum; the centre point is the min/max boundary.`
+              ? `Positions outside the ${field.arena.type === "ellipse" ? "oval" : "shape"} do not count. ${field.variant === "split" ? `The divider creates hard ${field.axis === "x" ? "left / right" : "top / bottom"} regions.` : `The ${field.axis === "x" ? "horizontal" : "vertical"} line shows the continuous ${field.axis.toUpperCase()} spectrum; the centre point is the min/max boundary.`}`
               : field.arena.type === "ellipse"
                 ? "Positions outside the oval do not count. Move the horizontal split upward to match the arena’s perspective."
                 : "Positions outside the quad do not count. The split lines connect opposite edge midpoints and follow its perspective."}</p>

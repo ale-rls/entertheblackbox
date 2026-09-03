@@ -26,7 +26,7 @@ async function renderControl() {
 }
 
 describe("FullscreenControl", () => {
-  it("enters and exits fullscreen and follows browser fullscreen changes", async () => {
+  it("enters fullscreen, hides the control there, and returns after an external exit", async () => {
     let fullscreenElement: Element | null = null;
     Object.defineProperty(document, "fullscreenElement", {
       configurable: true,
@@ -52,12 +52,14 @@ describe("FullscreenControl", () => {
 
     await act(async () => button.click());
     expect(document.documentElement.requestFullscreen).toHaveBeenCalledTimes(1);
-    expect(button.textContent).toBe("Exit fullscreen");
-    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(document.querySelector(".fullscreen-control")).toBeNull();
+    expect(document.exitFullscreen).not.toHaveBeenCalled();
 
-    await act(async () => button.click());
-    expect(document.exitFullscreen).toHaveBeenCalledTimes(1);
-    expect(button.textContent).toBe("Enter fullscreen");
+    await act(async () => {
+      fullscreenElement = null;
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    expect(document.querySelector(".fullscreen-control")?.textContent).toBe("Enter fullscreen");
   });
 
   it("shows a useful status when the browser blocks fullscreen", async () => {

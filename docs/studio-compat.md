@@ -12,7 +12,7 @@ it does not maintain a second runtime schema.
 | Entry and cycles | `entryPhaseId` plus scenario-level `cyclesAllowed` | Preserved and graph-validated |
 | Idle | `{ kind: "idle", id: "idle" }` | Preserved |
 | Video transition | `next` is a phase-ID string | Preserved; no hypothetical transition object |
-| Position-question field | `four-quadrant` with X+Y axes, or `two-quadrant` with one active X/Y axis | Preserved, rendered, and correlated with transition outcomes |
+| Position-question field | `four-quadrant` with X+Y axes, or `two-quadrant` with one active X/Y axis and a `split`/`spectrum` variant | Preserved, rendered, and correlated with transition outcomes; legacy two-quadrant fields default to `spectrum` |
 | Position-question transition | Discriminated `fixed` or `quadrant-plurality`; plurality maps are q1–q4 for four quadrants and min/max for two | Preserved and graph-validated |
 | Media manifest | `{ files: [{ src, bytes, hash }] }` | Preserved; durations belong to video phases, not the manifest |
 | Unknown runtime fields | Not interpreted by the current canonical schema | Raw-carried and restored on export; phase and manifest-file extensions follow stable `id`/`src` identities through collection edits |

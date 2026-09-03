@@ -63,7 +63,7 @@ function setup(options: {
   displayDisconnectTimeoutMs?: number;
   testScenario?: typeof scenario;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
-  sessionEnds?: Array<{ reason: string; endedAt: number }>;
+  sessionEnds?: Array<{ reason: string; sessionId: string; endedAt: number }>;
   movementStarted?: MovementRecordingStarted[];
   movementBatches?: MovementBatchFlushed[];
   movementFinalized?: MovementRecordingFinalized[];
@@ -95,7 +95,7 @@ function setup(options: {
     ...(options.scheduledStartTimes === undefined ? {} : { scheduledStartTimes: options.scheduledStartTimes }),
     ...(options.sessionEnds === undefined
       ? {}
-      : { onSessionEnded: (event: { reason: string; endedAt: number }) => options.sessionEnds!.push(event) }),
+      : { onSessionEnded: (event: { reason: string; sessionId: string; endedAt: number }) => options.sessionEnds!.push(event) }),
     ...(options.onVoteSnapshotEnqueued === undefined
       ? {}
       : { onVoteSnapshotEnqueued: options.onVoteSnapshotEnqueued }),
@@ -192,6 +192,7 @@ const twoQuadrantScenario = scenarioSchema.parse({
         field: {
           type: "two-quadrant",
           axis: "x",
+          variant: "spectrum",
           labels: { minLabel: "Disagree", maxLabel: "Agree" },
         },
         showLiveCounts: true,
@@ -774,7 +775,7 @@ describe("PhaseEngine lifecycle", () => {
 
   it("signals session end once when active play returns to idle", () => {
     let now = 1_000;
-    const sessionEnds: Array<{ reason: string; endedAt: number }> = [];
+    const sessionEnds: Array<{ reason: string; sessionId: string; endedAt: number }> = [];
     const { engine, registry } = setup({ now: () => now, sessionEnds });
     const phone = new MockSocket();
     const display = new MockSocket();
@@ -786,7 +787,7 @@ describe("PhaseEngine lifecycle", () => {
 
     now = 1_125;
     expect(engine.adminIdle(now)).toEqual({ ok: true });
-    expect(sessionEnds).toEqual([{ reason: "admin-idle", endedAt: 1_125 }]);
+    expect(sessionEnds).toEqual([{ reason: "admin-idle", sessionId: "session-1", endedAt: 1_125 }]);
 
     engine.adminIdle(1_150);
     expect(sessionEnds).toHaveLength(1);
@@ -1077,6 +1078,51 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.currentPhaseId).toBe("intro");
     expect(engine.currentPhaseEpoch).toBe(restartedEpoch);
     expect(checkpoints.map((checkpoint) => checkpoint.reason)).toContain("admin-restart");
+  });
+
+  it("describes the complete operator flow and safely jumps to any active scene", () => {
+    let now = 1_000;
+    const checkpoints: PhaseCheckpoint[] = [];
+    const { engine, registry } = setup({ now: () => now, checkpoints });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+
+    expect(engine.adminFlow).toEqual({
+      entryPhaseId: "intro",
+      scenes: [
+        { id: "intro", kind: "video", title: "intro", routes: [{ outcome: "next", target: "question" }] },
+        { id: "question", kind: "position-question", title: "Choose", routes: [{ outcome: "next", target: "idle" }] },
+      ],
+    });
+    expect(engine.adminJump("question", now)).toEqual({ ok: false, reason: "wrong-phase" });
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    const introEpoch = engine.currentPhaseEpoch;
+    now = 1_050;
+    expect(engine.adminJump("question", now)).toEqual({ ok: true });
+    expect(engine.currentPhaseId).toBe("question");
+    expect(engine.currentPhaseEpoch).toBeGreaterThan(introEpoch);
+    expect(engine.getSnapshot()).toMatchObject({ id: "question", startedAt: now, deadlineAt: now + 200 });
+    expect(checkpoints.at(-1)?.reason).toBe("admin-jump");
+    expect(engine.completeVideo("session-1", "intro", introEpoch, now + 1)).toEqual({ ok: false, reason: "wrong-phase" });
+    expect(engine.currentPhaseId).toBe("question");
+
+    expect(engine.adminJump("idle", now + 1)).toEqual({ ok: false, reason: "invalid-target" });
+    expect(engine.adminJump("missing", now + 1)).toEqual({ ok: false, reason: "invalid-target" });
+    expect(engine.currentPhaseId).toBe("question");
+  });
+
+  it("includes every branch outcome in the operator flow", () => {
+    const { engine } = setup({ now: () => 1_000, testScenario: twoQuadrantScenario });
+    expect(engine.adminFlow.scenes.find((scene) => scene.id === "question")?.routes).toEqual([
+      { outcome: "min", target: "idle" },
+      { outcome: "max", target: "idle" },
+      { outcome: "tie", target: "idle" },
+      { outcome: "empty", target: "idle" },
+    ]);
   });
 
   it("advances immediately when skipping an already-resolved question", () => {

@@ -21,7 +21,7 @@ const QR_RENDER_SIZE_PX = 512;
 type AttractVideo = { url: string; markerTrack: MarkerTrack | null };
 
 const bundledIdleAttractVideos: readonly AttractVideo[] = Object.entries(import.meta.glob<string>(
-  "../assets/*.mp4",
+  "../assets/1.0_25_*.mp4",
   { eager: true, query: "?url", import: "default" },
 ))
   .sort(([left], [right]) => left.localeCompare(right))

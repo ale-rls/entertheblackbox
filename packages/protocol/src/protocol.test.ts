@@ -54,8 +54,10 @@ const fourField = {
 const twoField = {
   type: "two-quadrant" as const,
   axis: "x" as const,
+  variant: "spectrum" as const,
   labels: { minLabel: "disagree", maxLabel: "agree" },
 };
+const twoSplitField = { ...twoField, variant: "split" as const };
 
 const zonesField = {
   type: "polygon-zones" as const,
@@ -128,7 +130,7 @@ const serverMessages: ServerToClientMessage[] = [
     phaseEpoch: 3,
     connectedCount: 5,
     positionedCount: 4,
-    field: twoField,
+    field: twoSplitField,
     quadrantCounts: { min: 1, max: 3 },
   },
   {
@@ -202,6 +204,20 @@ describe("round-trips", () => {
   it("parses Uint8Array payloads (ws binary frames)", () => {
     const bytes = new TextEncoder().encode(encodeMessage({ t: "ping", v: 2, clientTime: 1 }));
     expect(parseClientMessage(bytes).ok).toBe(true);
+  });
+
+  it("mirrors two-quadrant variants on the wire and defaults legacy fields to spectrum", () => {
+    const parsed = parseServerMessage(JSON.stringify({
+      t: "question_status",
+      v: 2,
+      sessionId: "s1",
+      phaseEpoch: 3,
+      connectedCount: 1,
+      positionedCount: 1,
+      field: { type: "two-quadrant", axis: "x", labels: { minLabel: "No", maxLabel: "Yes" } },
+      quadrantCounts: { min: 0, max: 1 },
+    }));
+    expect(parsed).toMatchObject({ ok: true, message: { field: { variant: "spectrum" } } });
   });
 });
 

@@ -68,7 +68,7 @@ export function ArenaQuadEditor({
   onChange,
 }: {
   arena: ArenaQuad;
-  field: { type: "four-quadrant"; xAxis: Axis; yAxis: Axis } | { type: "two-quadrant"; axis: "x" | "y"; labels: Axis };
+  field: { type: "four-quadrant"; xAxis: Axis; yAxis: Axis } | { type: "two-quadrant"; axis: "x" | "y"; variant: "split" | "spectrum"; labels: Axis };
   media?: PolygonEditorMedia;
   onChange: (arena: ArenaQuad) => void;
 }) {
@@ -120,8 +120,10 @@ export function ArenaQuadEditor({
   };
 
   const { topMid, rightMid, bottomMid, leftMid } = arenaQuadLandmarks(arena.corners);
-  const drawHorizontal = field.type === "four-quadrant" || field.axis === "x";
-  const drawVertical = field.type === "four-quadrant" || field.axis === "y";
+  const spectrum = field.type === "two-quadrant" && field.variant !== "split";
+  const drawHorizontal = field.type === "four-quadrant" || (spectrum ? field.axis === "x" : field.axis === "y");
+  const drawVertical = field.type === "four-quadrant" || (spectrum ? field.axis === "y" : field.axis === "x");
+  const lineClass = field.type === "four-quadrant" || !spectrum ? "arena-editor-divider" : "arena-editor-axis";
   const cornerLabels = ["top-left", "top-right", "bottom-right", "bottom-left"] as const;
 
   return <div className="arena-quad-editor">
@@ -139,8 +141,8 @@ export function ArenaQuadEditor({
         onPointerCancel={() => { dragging.current = null; }}
       >
         <polygon className="arena-editor-fill" points={svgPoints(arena.corners)} onPointerDown={(event) => beginDrag(event, "move")} />
-        {drawHorizontal && <line className={field.type === "four-quadrant" ? "arena-editor-divider" : "arena-editor-axis"} x1={leftMid.x * 100} y1={leftMid.y * 100} x2={rightMid.x * 100} y2={rightMid.y * 100} />}
-        {drawVertical && <line className={field.type === "four-quadrant" ? "arena-editor-divider" : "arena-editor-axis"} x1={topMid.x * 100} y1={topMid.y * 100} x2={bottomMid.x * 100} y2={bottomMid.y * 100} />}
+        {drawHorizontal && <line className={lineClass} x1={leftMid.x * 100} y1={leftMid.y * 100} x2={rightMid.x * 100} y2={rightMid.y * 100} />}
+        {drawVertical && <line className={lineClass} x1={topMid.x * 100} y1={topMid.y * 100} x2={bottomMid.x * 100} y2={bottomMid.y * 100} />}
         <polygon className="arena-editor-outline" points={svgPoints(arena.corners)} />
         {arena.corners.map((corner, index) => <circle
           key={index}

@@ -108,7 +108,7 @@ describe("Studio canvas graph", () => {
     };
     const switched = {
       ...routed,
-      field: { type: "two-quadrant" as const, axis: "x" as const, labels },
+      field: { type: "two-quadrant" as const, axis: "x" as const, variant: "spectrum" as const, labels },
       next: { ...routed.next, map: { min: "idle", max: "idle" } },
     };
     const switchedProject = {

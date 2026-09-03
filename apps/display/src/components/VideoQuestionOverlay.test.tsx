@@ -32,6 +32,7 @@ const twoQuadrantPhase = {
   field: {
     type: "two-quadrant",
     axis: "x",
+    variant: "spectrum",
     labels: { minLabel: "Fakt", maxLabel: "Lüge" },
     arena: { type: "ellipse", centerX: 0.5, centerY: 0.6, radiusX: 0.42, radiusY: 0.24 },
   },

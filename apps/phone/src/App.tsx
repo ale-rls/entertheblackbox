@@ -1,21 +1,22 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
 import { PROTOCOL_VERSION } from "@smartphonecracy/protocol";
-import { PhoneConnection } from "./lib/connection.js";
+import { PhoneConnection, type EndedPhoneSession } from "./lib/connection.js";
 import { RealtimeCursorPublisher } from "./lib/realtimeWsClient.js";
 import { loadLease } from "./lib/lease.js";
 import {
   applyDelta,
   InputThrottle,
   TRACKPAD_CENTER,
+  trackpadSurfaceSize,
   type TrackpadState,
 } from "./lib/trackpad.js";
 import { initialPhoneState, phoneReducer } from "./state/store.js";
 
 /**
  * Phone controller (plan §10): fullscreen relative trackpad, small
- * identity marker, minimal connection indicator. No names, no accounts.
- * The phone never mirrors the question/countdown — participants look up
- * at the projection.
+ * identity marker, minimal connection indicator, and current scene text.
+ * The phone does not mirror the vote or countdown — participants still look
+ * up at the projection for the shared interaction.
  */
 
 declare const __BUILD_VERSION__: string | undefined;
@@ -30,6 +31,15 @@ const baseConfig = {
 };
 
 type JoinConfig = { installationId: string; roomId: string };
+type ConsentStatus = "prompt" | "submitting" | "granted" | "deleted";
+type ConsentState = {
+  session: EndedPhoneSession;
+  deadlineAt: number;
+  status: ConsentStatus;
+  error: string | null;
+};
+
+const CONSENT_TIMEOUT_MS = 60_000;
 
 function loadParticipantName(): string {
   try { return localStorage.getItem("participant-name") ?? ""; }
@@ -54,6 +64,7 @@ export function App() {
   const [submittedName, setSubmittedName] = useState<string | null>(null);
   const [joinConfig, setJoinConfig] = useState<JoinConfig | null>(null);
   const [configError, setConfigError] = useState("");
+  const [consent, setConsent] = useState<ConsentState | null>(null);
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
   const position = useRef<TrackpadState>({ ...TRACKPAD_CENTER });
   const [visiblePosition, setVisiblePosition] = useState<TrackpadState>({ ...TRACKPAD_CENTER });
@@ -87,11 +98,15 @@ export function App() {
         ...baseConfig,
         ...joinConfig,
         name: submittedName,
-        onMessage: (message) => dispatch({ type: "server-message", message }),
+        onMessage: (message) => dispatch({ type: "server-message", message, receivedAtMs: Date.now() }),
         onSocketOpen: () => dispatch({ type: "socket-open" }),
         onSocketLost: () => dispatch({ type: "socket-lost" }),
-        onSessionEnded: () => {
-          setSubmittedName(null);
+        onSessionEnded: (session) => {
+          if (session !== null && session.sessionId !== "idle" && session.sessionId !== "lobby") {
+            setConsent({ session, deadlineAt: Date.now() + CONSENT_TIMEOUT_MS, status: "prompt", error: null });
+          } else {
+            setSubmittedName(null);
+          }
           dispatch({ type: "session-ended" });
         },
       }),
@@ -153,6 +168,53 @@ export function App() {
     }
   }, [state.reloadRequired]);
 
+  useEffect(() => {
+    if (consent === null || consent.status === "granted" || consent.status === "deleted") return;
+    const timer = window.setTimeout(() => {
+      setConsent((current) => current !== null && current.status !== "granted" && current.status !== "deleted"
+        ? { ...current, status: "deleted", error: null }
+        : current);
+    }, Math.max(0, consent.deadlineAt - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [consent?.deadlineAt, consent?.status]);
+
+  const submitConsent = async (granted: boolean) => {
+    if (consent === null || consent.status === "submitting") return;
+    const session = consent.session;
+    setConsent((current) => current === null ? null : { ...current, status: "submitting", error: null });
+    try {
+      const response = await fetch("/api/movement-consent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          sessionId: session.sessionId,
+          participantLease: session.participantLease,
+          granted,
+        }),
+      });
+      if (!response.ok) throw new Error(`Feedback konnte nicht gespeichert werden (${response.status}).`);
+      setConsent((current) => current === null ? null : {
+        ...current,
+        status: granted ? "granted" : "deleted",
+        error: null,
+      });
+    } catch (error) {
+      setConsent((current) => current === null ? null : {
+        ...current,
+        status: "prompt",
+        error: error instanceof Error ? error.message : "Feedback konnte nicht gespeichert werden.",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (state.phaseTiming === null || (state.phaseTiming.subtitles.length === 0 && state.phaseTiming.rating?.windows === undefined)) return;
+    const update = () => dispatch({ type: "clock-tick", nowMs: Date.now() });
+    update();
+    const timer = window.setInterval(update, 100);
+    return () => window.clearInterval(timer);
+  }, [state.phaseEpoch, state.phaseTiming?.startedAt]);
+
   const sendPosition = (delivery: "move" | "final" = "move") => {
     if (!state.inputOpen || state.sessionId === null) return;
     const now = Date.now();
@@ -181,7 +243,7 @@ export function App() {
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const last = lastPointer.current;
     if (last === null) return;
-    const surface = Math.min(window.innerWidth, window.innerHeight);
+    const surface = trackpadSurfaceSize(window.innerWidth, window.innerHeight);
     position.current = applyDelta(
       position.current,
       e.clientX - last.x,
@@ -250,11 +312,11 @@ export function App() {
           onPointerCancel={onPointerEnd}
         >
           <p className="trackpad-instruction">Wische um deine Cursor zu bewegen</p>
-          {identity && <span
-            className="live-cursor-dot"
-            aria-hidden="true"
-            style={{ left: `${visiblePosition.x * 100}%`, top: `${visiblePosition.y * 100}%`, backgroundColor: identity.color }}
-          />}
+          {state.phoneDisplayText !== null && <p className="phone-phase-text" aria-live="polite">{state.phoneDisplayText}</p>}
+          {identity && <div className="live-cursor-field" aria-hidden="true"><span
+              className="live-cursor-dot"
+              style={{ left: `${visiblePosition.x * 100}%`, top: `${visiblePosition.y * 100}%`, backgroundColor: identity.color }}
+            /></div>}
           {!state.inputOpen && (
             <p className="watch-screen">{state.join.kind === "accepted" ? `${submittedName}, watch the screen` : "Joining…"}</p>
           )}
@@ -301,6 +363,38 @@ export function App() {
           className={`connection-dot ${state.join.kind === "accepted" ? "online" : "offline"}`}
         />
       </footer>
+
+      {consent !== null && (
+        <div className="consent-backdrop">
+          <section
+            className="consent-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="movement-consent-title"
+          >
+            {consent.status === "granted" ? (
+              <p id="movement-consent-title" className="consent-result">Danke für dein Commitment :-)</p>
+            ) : consent.status === "deleted" ? (
+              <p id="movement-consent-title" className="consent-result">Alles klar. Deine Daten werden gelöscht.</p>
+            ) : (
+              <>
+                <h1 id="movement-consent-title">
+                  Möchtest du deine Cursorbewegungen spenden und als Geist in unserer Arena weiterleben?
+                </h1>
+                <div className="consent-actions">
+                  <button type="button" disabled={consent.status === "submitting"} onClick={() => void submitConsent(true)}>
+                    JA
+                  </button>
+                  <button type="button" disabled={consent.status === "submitting"} onClick={() => void submitConsent(false)}>
+                    NEIN
+                  </button>
+                </div>
+                {consent.error !== null && <p className="consent-error" role="alert">{consent.error}</p>}
+              </>
+            )}
+          </section>
+        </div>
+      )}
     </main>
   );
 }

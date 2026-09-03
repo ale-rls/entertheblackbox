@@ -10,6 +10,10 @@ export type TrackpadState = { x: number; y: number };
 
 export const TRACKPAD_CENTER: TrackpadState = { x: 0.5, y: 0.5 };
 
+/** The input and phone-side marker share this centered, non-stretched square. */
+export const trackpadSurfaceSize = (widthPx: number, heightPx: number): number =>
+  Math.max(0, Math.min(widthPx, heightPx));
+
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 export function applyDelta(

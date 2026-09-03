@@ -11,6 +11,7 @@ const unitCoordinateSchema = z.number().min(0).max(1);
 
 export const quadrantSchema = z.enum(FOUR_QUADRANTS);
 export const twoQuadrantSchema = z.enum(TWO_QUADRANTS);
+export const twoQuadrantVariantSchema = z.enum(["split", "spectrum"]);
 
 export const positionVoteStatusSchema = z.enum([
   "valid",
@@ -93,6 +94,7 @@ export const fourQuadrantFieldSchema = z.object({
 export const twoQuadrantFieldSchema = z.object({
   type: z.literal("two-quadrant"),
   axis: z.enum(["x", "y"]),
+  variant: twoQuadrantVariantSchema.default("spectrum"),
   labels: axisSchema,
   arena: arenaSchema.optional(),
 });
@@ -257,6 +259,8 @@ const positionQuestionBaseSchema = z.object({
   showLiveCounts: z.boolean(),
   /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
   showCursors: z.boolean().optional(),
+  /** Whether continuous spectra bloom with cursor-density heat. Defaults to true when omitted. */
+  spectrumGlow: z.boolean().optional(),
 });
 
 const polygonZonesQuestionVariantSchema = positionQuestionBaseSchema
@@ -309,6 +313,8 @@ const videoPositionQuestionBaseSchema = z.object({
   connectionStaleAfterMs: z.number().int().positive(),
   showLiveCounts: z.boolean(),
   showCursors: z.boolean().optional(),
+  /** Whether continuous spectra bloom with cursor-density heat. Defaults to true when omitted. */
+  spectrumGlow: z.boolean().optional(),
   /** Optional applause/boo controls shown alongside the position spectrum. */
   rating: ratingConfigSchema.optional(),
   subtitles: z.array(subtitleSchema).optional(),
@@ -438,6 +444,7 @@ export const mediaManifestSchema = z.object({
 
 export type Quadrant = z.infer<typeof quadrantSchema>;
 export type TwoQuadrant = z.infer<typeof twoQuadrantSchema>;
+export type TwoQuadrantVariant = z.infer<typeof twoQuadrantVariantSchema>;
 export type Axis = z.infer<typeof axisSchema>;
 export type ArenaEllipse = z.infer<typeof arenaEllipseSchema>;
 export type ArenaQuad = z.infer<typeof arenaQuadSchema>;

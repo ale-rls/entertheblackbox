@@ -213,9 +213,9 @@ test.describe("Show Studio v1", () => {
     const handles = () => node.locator(".port-out .port-name").allTextContents();
     await expect.poll(handles).toEqual(["q1 · top right", "q2 · top left", "q3 · bottom left", "q4 · bottom right / center", "tie", "no votes"]);
 
-    await page.getByLabel("Quadrant layout").selectOption("two-quadrant-x");
-    await page.getByRole("alertdialog", { name: "Change “question-quadrant” to left / right quadrants?" }).getByRole("button", { name: "Replace connections" }).click();
-    await expect(page.getByLabel("Quadrant layout")).toHaveValue("two-quadrant-x");
+    await page.getByLabel("Position layout").selectOption("two-quadrant-x-split");
+    await page.getByRole("alertdialog", { name: "Change “question-quadrant” to a horizontal two-region field?" }).getByRole("button", { name: "Replace connections" }).click();
+    await expect(page.getByLabel("Position layout")).toHaveValue("two-quadrant-x-split");
     await expect.poll(handles).toEqual(["min · left · Deregulate", "max · right · Regulate", "tie", "no votes"]);
 
     await page.getByRole("button", { name: "Edit" }).click();

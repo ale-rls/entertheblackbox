@@ -50,17 +50,17 @@ export function LobbyCountdown({
 
   return (
     <div className="lobby-information">
-      <h1 className="lobby-heading">Join the show</h1>
+      <div className="lobby-instructions">
+        <p>Verbinde dich mit dem Besucher-WLAN {networkName} oder nutze dein eigenes mobiles Netz.</p>
+        <p>Scanne den QR-Code mit deinem Smartphone und folge den Anleitungen auf deinem Display.</p>
+      </div>
       {phase.deadlineAt !== null && (
         <div className="lobby-timer"><p className="lobby-countdown-label">Show starts in…</p><LobbyClock clock={clock} deadlineAt={phase.deadlineAt} /></div>
       )}
       {joinUrl !== null && (
         <div className="lobby-join-url" aria-label="Phone join URL">{joinUrl}</div>
       )}
-      <div className="lobby-instructions">
-        <p>Verbinde dich mit dem Besucher-WLAN {networkName} oder nutze dein eigenes mobiles Netz.</p>
-        <p>Scanne den QR-Code mit deinem Smartphone und folge den Anleitungen auf deinem Display.</p>
-      </div>
+      <h1 className="lobby-heading">Join the show</h1>
     </div>
   );
 }

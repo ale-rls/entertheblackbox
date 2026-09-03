@@ -65,11 +65,13 @@ describe("two-quadrant resolution math", () => {
   const xField = {
     type: "two-quadrant" as const,
     axis: "x" as const,
+    variant: "spectrum" as const,
     labels: { minLabel: "disagree", maxLabel: "agree" },
   };
   const yField = {
     type: "two-quadrant" as const,
     axis: "y" as const,
+    variant: "spectrum" as const,
     labels: { minLabel: "top", maxLabel: "bottom" },
   };
   const votes = [

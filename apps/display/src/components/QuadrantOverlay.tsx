@@ -54,7 +54,7 @@ function sameArena(a: Arena | undefined, b: Arena | undefined): boolean {
 
 function sameField(left: QuestionField, right: QuestionField): boolean {
   if (left.type !== right.type) return false;
-  if (left.type === "two-quadrant") return right.type === "two-quadrant" && left.axis === right.axis && sameArena(left.arena, right.arena);
+  if (left.type === "two-quadrant") return right.type === "two-quadrant" && left.axis === right.axis && (left.variant ?? "spectrum") === (right.variant ?? "spectrum") && sameArena(left.arena, right.arena);
   if (left.type === "polygon-zones") {
     return (
       right.type === "polygon-zones" &&
@@ -272,21 +272,26 @@ function ArenaEllipseOverlay({
   const labels = field.type === "four-quadrant"
     ? { x: field.xAxis, y: field.yAxis }
     : { [field.axis]: field.labels } as Partial<Record<"x" | "y", AxisLabels>>;
+  const spectrum = field.type === "two-quadrant" && field.variant !== "split";
+  const horizontalLine = field.type === "four-quadrant" || (spectrum ? field.axis === "x" : field.axis === "y");
+  const verticalLine = field.type === "four-quadrant" || (spectrum ? field.axis === "y" : field.axis === "x");
+  const xLabelHalfWidth = field.type === "two-quadrant" && !spectrum ? rx : splitHalfWidth;
+  const xLabelY = field.type === "two-quadrant" && !spectrum ? cy : sy;
 
   return <div className={`quadrant-overlay arena-ellipse-overlay arena-ellipse-${field.type}`}>
     <svg className="arena-ellipse-shapes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
       <defs><clipPath id="arena-ellipse-clip"><ellipse cx={cx} cy={cy} rx={rx} ry={ry} /></clipPath></defs>
       <g clipPath="url(#arena-ellipse-clip)">
         {ids.map((id) => <rect key={id} data-quadrant={id} className={arenaRegionClass(id, winner, highlightRegionIds.includes(id) ? id : null)} {...regionRect(id)} />)}
-        {(field.type === "four-quadrant" || field.axis === "x") && <line className={field.type === "four-quadrant" ? "arena-divider" : "arena-spectrum-axis"} x1={cx - splitHalfWidth} y1={sy} x2={cx + splitHalfWidth} y2={sy} />}
-        {(field.type === "four-quadrant" || field.axis === "y") && <line className={field.type === "four-quadrant" ? "arena-divider" : "arena-spectrum-axis"} x1={cx} y1={cy - ry} x2={cx} y2={cy + ry} />}
-        {field.type === "two-quadrant" && <circle className="arena-spectrum-origin" cx={cx} cy={sy} r="0.8" />}
+        {horizontalLine && <line className={spectrum ? "arena-spectrum-axis" : "arena-divider"} x1={cx - splitHalfWidth} y1={sy} x2={cx + splitHalfWidth} y2={sy} />}
+        {verticalLine && <line className={spectrum ? "arena-spectrum-axis" : "arena-divider"} x1={cx} y1={cy - ry} x2={cx} y2={cy + ry} />}
+        {spectrum && <circle className="arena-spectrum-origin" cx={cx} cy={sy} r="0.8" />}
       </g>
       <ellipse className="arena-outline" cx={cx} cy={cy} rx={rx} ry={ry} />
     </svg>
     {labels.x && <>
-      <ArenaLabel axis="x" endpoint="min" label={labels.x.minLabel} x={clampPercent(cx - splitHalfWidth, 9, 91)} y={sy} />
-      <ArenaLabel axis="x" endpoint="max" label={labels.x.maxLabel} x={clampPercent(cx + splitHalfWidth, 9, 91)} y={sy} />
+      <ArenaLabel axis="x" endpoint="min" label={labels.x.minLabel} x={clampPercent(cx - xLabelHalfWidth, 9, 91)} y={xLabelY} />
+      <ArenaLabel axis="x" endpoint="max" label={labels.x.maxLabel} x={clampPercent(cx + xLabelHalfWidth, 9, 91)} y={xLabelY} />
     </>}
     {labels.y && <>
       <ArenaLabel axis="y" endpoint="min" label={labels.y.minLabel} x={cx} y={cy - ry} />
@@ -341,6 +346,9 @@ function ArenaQuadOverlay({
   const labels = field.type === "four-quadrant"
     ? { x: field.xAxis, y: field.yAxis }
     : { [field.axis]: field.labels } as Partial<Record<"x" | "y", AxisLabels>>;
+  const spectrum = field.type === "two-quadrant" && field.variant !== "split";
+  const horizontalLine = field.type === "four-quadrant" || (spectrum ? field.axis === "x" : field.axis === "y");
+  const verticalLine = field.type === "four-quadrant" || (spectrum ? field.axis === "y" : field.axis === "x");
 
   return <div className={`quadrant-overlay arena-ellipse-overlay arena-ellipse-${field.type}`}>
     <svg className="arena-ellipse-shapes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
@@ -350,9 +358,9 @@ function ArenaQuadOverlay({
         className={arenaRegionClass(id, winner, highlightRegionIds.includes(id) ? id : null)}
         points={svgPoints(regions[id as keyof typeof regions])}
       />)}
-      {(field.type === "four-quadrant" || field.axis === "x") && <line className={field.type === "four-quadrant" ? "arena-divider" : "arena-spectrum-axis"} x1={leftMid.x * 100} y1={leftMid.y * 100} x2={rightMid.x * 100} y2={rightMid.y * 100} />}
-      {(field.type === "four-quadrant" || field.axis === "y") && <line className={field.type === "four-quadrant" ? "arena-divider" : "arena-spectrum-axis"} x1={topMid.x * 100} y1={topMid.y * 100} x2={bottomMid.x * 100} y2={bottomMid.y * 100} />}
-      {field.type === "two-quadrant" && <circle className="arena-spectrum-origin" cx={center.x * 100} cy={center.y * 100} r="0.8" />}
+      {horizontalLine && <line className={spectrum ? "arena-spectrum-axis" : "arena-divider"} x1={leftMid.x * 100} y1={leftMid.y * 100} x2={rightMid.x * 100} y2={rightMid.y * 100} />}
+      {verticalLine && <line className={spectrum ? "arena-spectrum-axis" : "arena-divider"} x1={topMid.x * 100} y1={topMid.y * 100} x2={bottomMid.x * 100} y2={bottomMid.y * 100} />}
+      {spectrum && <circle className="arena-spectrum-origin" cx={center.x * 100} cy={center.y * 100} r="0.8" />}
       <polygon className="arena-outline" points={svgPoints(corners)} />
     </svg>
     {labels.x && <>
@@ -501,9 +509,11 @@ export function QuadrantOverlay({
       className={`quadrant-overlay quadrant-overlay-two-quadrant quadrant-overlay-axis-${field.axis}`}
     >
       <Axis axis={field.axis} labels={field.labels} />
-      <div className={`axis-track axis-track-${field.axis}`} aria-hidden>
-        {field.axis === "x" ? <><span className="axis-arrow axis-arrow-left" /><span className="axis-arrow axis-arrow-right" /></> : <><span className="axis-arrow axis-arrow-top" /><span className="axis-arrow axis-arrow-bottom" /></>}
-      </div>
+      {field.variant !== "split"
+        ? <div className={`axis-track axis-track-${field.axis}`} aria-hidden>
+            {field.axis === "x" ? <><span className="axis-arrow axis-arrow-left" /><span className="axis-arrow axis-arrow-right" /></> : <><span className="axis-arrow axis-arrow-top" /><span className="axis-arrow axis-arrow-bottom" /></>}
+          </div>
+        : <div className={`axis-divider axis-divider-${field.axis}`} aria-hidden />}
       {(["min", "max"] as const).map((id) => (
         <Region
           key={id}

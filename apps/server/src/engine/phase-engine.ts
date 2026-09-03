@@ -89,7 +89,7 @@ export type PhaseEngineOptions = {
   onCheckpoint?: (checkpoint: PhaseCheckpoint) => void;
   onPhaseDeadline?: (event: PhaseDeadlineEvent) => void;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
-  onSessionEnded?: (event: { reason: string; endedAt: number }) => void;
+  onSessionEnded?: (event: { reason: string; sessionId: string; endedAt: number }) => void;
   onMovementRecordingStarted?: (event: MovementRecordingStarted) => void;
   onMovementBatchFlushed?: (event: MovementBatchFlushed) => void;
   onMovementRecordingFinalized?: (event: MovementRecordingFinalized) => void;
@@ -123,6 +123,33 @@ export type ParticipantPresence = {
   lastSeenAt: number;
 };
 
+export type AdminFlowRoute = {
+  outcome: string;
+  target: string;
+};
+
+export type AdminFlowScene = {
+  id: string;
+  kind: Exclude<Phase["kind"], "idle">;
+  title: string;
+  routes: AdminFlowRoute[];
+};
+
+export type AdminFlow = {
+  entryPhaseId: string;
+  scenes: AdminFlowScene[];
+};
+
+function adminRoutesForPhase(phase: Exclude<Phase, { kind: "idle" }>): AdminFlowRoute[] {
+  if (phase.kind === "video") return [{ outcome: "next", target: phase.next }];
+  if (phase.next.type === "fixed") return [{ outcome: "next", target: phase.next.target }];
+  return [
+    ...Object.entries(phase.next.map).map(([outcome, target]) => ({ outcome, target })),
+    { outcome: "tie", target: phase.next.tie },
+    { outcome: "empty", target: phase.next.empty },
+  ];
+}
+
 function isOpen(socket: WebSocket): boolean {
   return socket.readyState === undefined || socket.readyState === 0 || socket.readyState === 1;
 }
@@ -139,7 +166,7 @@ export class PhaseEngine {
   private readonly sessionIdFactory: () => string;
   private readonly onCheckpoint: ((checkpoint: PhaseCheckpoint) => void) | undefined;
   private readonly onPhaseDeadline: ((event: PhaseDeadlineEvent) => void) | undefined;
-  private readonly onSessionEnded: ((event: { reason: string; endedAt: number }) => void) | undefined;
+  private readonly onSessionEnded: ((event: { reason: string; sessionId: string; endedAt: number }) => void) | undefined;
   private readonly votes: VoteEngine;
   private readonly ratings = new RatingEngine();
   private readonly cursors: CursorPipeline;
@@ -249,6 +276,20 @@ export class PhaseEngine {
     return this.phaseEpoch;
   }
 
+  get adminFlow(): AdminFlow {
+    return {
+      entryPhaseId: this.scenario.entryPhaseId,
+      scenes: this.scenario.phases
+        .filter((phase): phase is Exclude<Phase, { kind: "idle" }> => phase.kind !== "idle")
+        .map((phase) => ({
+          id: phase.id,
+          kind: phase.kind,
+          title: phase.title ?? (phase.kind === "video" ? phase.id : phase.text),
+          routes: adminRoutesForPhase(phase),
+        })),
+    };
+  }
+
   get isDisplayConnected(): boolean {
     return this.displaySocket !== undefined;
   }
@@ -332,6 +373,13 @@ export class PhaseEngine {
       return { ok: true };
     }
     return { ok: false, reason: "wrong-phase" };
+  }
+
+  adminJump(target: string, now = this.now()): TransitionResult {
+    if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
+    const phase = this.scenario.phases.find((candidate) => candidate.id === target);
+    if (!phase || phase.kind === "idle") return { ok: false, reason: "invalid-target" };
+    return this.advanceTo(target, now, "admin-jump");
   }
 
   adminRestart(now = this.now()): TransitionResult {
@@ -803,6 +851,7 @@ export class PhaseEngine {
   private enterPhase(target: string, now: number, reason: string): void {
     const phase = this.requirePhase(target);
     const sessionEnded = this.lifecycle !== "idle" && phase.kind === "idle";
+    const endedSessionId = sessionEnded ? this.sessionId : null;
     if (sessionEnded) {
       this.movement.finalizeSession(now);
       this.ghosts.clear();
@@ -837,7 +886,7 @@ export class PhaseEngine {
       this.lastInputAt = phase.kind === "position-question" || phase.kind === "video-position-question" ? now : null;
     }
     this.ghosts.onPhaseChanged(now);
-    this.transition(reason, sessionEnded ? { reason, endedAt: now } : undefined);
+    this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
     if ((phase.kind === "video" || phase.kind === "video-position-question") && phase.rating) {
       this.ratings.begin({
         sessionId: this.sessionId,
@@ -878,7 +927,7 @@ export class PhaseEngine {
         };
   }
 
-  private transition(reason: string, sessionEnded?: { reason: string; endedAt: number }): void {
+  private transition(reason: string, sessionEnded?: { reason: string; sessionId: string; endedAt: number }): void {
     this.emitCheckpoint("transition", reason);
     // Hide the join QR before the active phase frame reaches the display,
     // avoiding even a one-message flash over the opening shot.

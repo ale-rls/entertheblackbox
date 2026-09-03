@@ -103,16 +103,21 @@ describe("scenarioSchema structural rejection", () => {
     expect(heldVideo.success).toBe(true);
   });
 
-  it("accepts optional targetAudienceSize and per-phase showCursors", () => {
+  it("accepts optional targetAudienceSize and per-phase display effects", () => {
     const result = parse((s) => ({
       ...s,
       targetAudienceSize: 30,
-      phases: s.phases.map((phase) => phase.kind === "idle" ? phase : { ...phase, showCursors: false }),
+      phases: s.phases.map((phase) => phase.kind === "idle"
+        ? phase
+        : phase.kind === "position-question"
+          ? { ...phase, showCursors: false, spectrumGlow: false }
+          : { ...phase, showCursors: false }),
     }));
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.targetAudienceSize).toBe(30);
       expect(result.data.phases.find((p) => p.id === "intro")).toMatchObject({ showCursors: false });
+      expect(result.data.phases.find((p) => p.id === "q1")).toMatchObject({ spectrumGlow: false });
     }
   });
 
@@ -291,7 +296,19 @@ describe("scenarioSchema structural rejection", () => {
       empty: "idle",
       countedStatuses: ["valid"],
     };
+    const legacyParsed = scenarioSchema.safeParse(scenario);
+    expect(legacyParsed.success).toBe(true);
+    if (legacyParsed.success) {
+      const parsedQuestion = legacyParsed.data.phases[2];
+      if (parsedQuestion?.kind !== "position-question" || parsedQuestion.field.type !== "two-quadrant") throw new Error("expected two-quadrant question");
+      expect(parsedQuestion.field.variant).toBe("spectrum");
+    }
+
+    (question.field as Record<string, unknown>).variant = "split";
     expect(scenarioSchema.safeParse(scenario).success).toBe(true);
+    (question.field as Record<string, unknown>).variant = "diagonal";
+    expect(scenarioSchema.safeParse(scenario).success).toBe(false);
+    (question.field as Record<string, unknown>).variant = "spectrum";
 
     (question.next as { map: unknown }).map = {
       q1: "idle", q2: "idle", q3: "idle", q4: "idle",
@@ -523,6 +540,7 @@ describe("validateScenario graph checks", () => {
     q.field = {
       type: "two-quadrant",
       axis: "y",
+      variant: "spectrum",
       labels: { minLabel: "top", maxLabel: "bottom" },
     };
     q.next = {

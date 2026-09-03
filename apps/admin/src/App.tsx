@@ -33,6 +33,13 @@ export type Status = {
 
 type Feedback = { status: "success" | "danger"; message: string };
 type ConfirmAction = "idle" | "restart";
+type FlowScene = {
+  id: string;
+  kind: "video" | "position-question" | "video-position-question";
+  title: string;
+  routes: Array<{ outcome: string; target: string }>;
+};
+type SceneFlow = { entryPhaseId: string; scenes: FlowScene[] };
 type PublishedShow = { showId: string; name: string; version: string; publishedAt: number };
 type ShowsInfo = { active: string | null; pending: string | null; shows: PublishedShow[] };
 type GhostsInfo = { active: number; pending: number | null };
@@ -115,6 +122,45 @@ function ConfirmationDialog({ action, onCancel, onConfirm }: { action: ConfirmAc
   </div>;
 }
 
+function JumpConfirmationDialog({ scene, onCancel, onConfirm }: { scene: FlowScene; onCancel: () => void; onConfirm: () => void }) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const titleId = "admin-jump-confirmation-title";
+  const descriptionId = "admin-jump-confirmation-description";
+
+  useEffect(() => { cancelRef.current?.focus(); }, []);
+
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onCancel();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("button:not(:disabled)"));
+    const first = controls[0];
+    const last = controls.at(-1);
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  };
+
+  return <div className="sc-tool-dialog-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
+    <div className="sc-tool-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} onKeyDown={handleKeyDown}>
+      <p className="sc-tool-eyebrow">Scene jump</p>
+      <h2 id={titleId}>Jump to “{scene.title}”?</h2>
+      <p id={descriptionId}>This immediately leaves the current scene, clears its in-progress vote or playback state, and starts <span className="sc-tool-mono">{scene.id}</span>.</p>
+      <div className="sc-tool-dialog-actions">
+        <button ref={cancelRef} className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={onCancel}>Keep current scene</button>
+        <button className="sc-tool-button" data-sc-tool-variant="primary" type="button" onClick={onConfirm}>Jump to scene</button>
+      </div>
+    </div>
+  </div>;
+}
+
+function sceneKindLabel(kind: FlowScene["kind"]): string {
+  return kind === "video" ? "Media" : kind === "position-question" ? "Question" : "Media + vote";
+}
+
 export function App() {
   // localStorage rather than sessionStorage: the operator token is valid
   // for 30 days (operators auth collection), so the session should survive
@@ -131,6 +177,8 @@ export function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [workingAction, setWorkingAction] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [flow, setFlow] = useState<SceneFlow | null>(null);
+  const [jumpScene, setJumpScene] = useState<FlowScene | null>(null);
   const [showsInfo, setShowsInfo] = useState<ShowsInfo | null>(null);
   const [selectedShowId, setSelectedShowId] = useState("");
   const [savingShow, setSavingShow] = useState(false);
@@ -143,6 +191,7 @@ export function App() {
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
   const controlsHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const flowHeadingRef = useRef<HTMLHeadingElement | null>(null);
   // selectedShowId/targetAudienceSize are edited in-place while loadShows/
   // loadGhosts now poll every 2s (see the effect below) -- without this, a
   // poll mid-edit would stomp whatever the operator just typed/selected
@@ -208,12 +257,26 @@ export function App() {
     }
   }, [connectedToken]);
 
+  const loadFlow = useCallback(async () => {
+    if (!connectedToken) return;
+    try {
+      const response = await api("flow", connectedToken);
+      const nextFlow = await response.json() as SceneFlow;
+      if (nextFlow && typeof nextFlow.entryPhaseId === "string" && Array.isArray(nextFlow.scenes)) setFlow(nextFlow);
+    } catch {
+      // Main status polling owns connection error reporting. The active
+      // scenario is immutable for the lifetime of an engine, so this can
+      // retry on the next authenticated connection instead of polling.
+    }
+  }, [connectedToken]);
+
   useEffect(() => {
     if (!connectedToken) return;
     void refresh();
     void loadShows();
     void loadGhosts();
     void loadLobby();
+    void loadFlow();
     // shows/ghosts poll alongside status so these controls can't go stale
     // while this tab sits open -- selecting/typing a value that fell out
     // of date used to 400 instead of just re-populating.
@@ -224,7 +287,7 @@ export function App() {
       void loadLobby();
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [connectedToken, refresh, loadShows, loadGhosts, loadLobby]);
+  }, [connectedToken, refresh, loadShows, loadGhosts, loadLobby, loadFlow]);
 
   const saveLobbyTimes = async (startTimes: number[], successMessage: string) => {
     setSavingLobby(true);
@@ -360,6 +423,24 @@ export function App() {
     }
   };
 
+  const jumpToScene = async (scene: FlowScene) => {
+    setWorkingAction("jump");
+    setFeedback(null);
+    try {
+      await api("jump", connectedToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phaseId: scene.id }),
+      });
+      setFeedback({ status: "success", message: `Jumped to “${scene.title}”.` });
+      await refresh();
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not jump to that scene." });
+    } finally {
+      setWorkingAction(null);
+    }
+  };
+
   const requestConfirmation = (action: ConfirmAction, trigger: HTMLButtonElement) => {
     confirmTriggerRef.current = trigger;
     setConfirmAction(action);
@@ -376,6 +457,25 @@ export function App() {
     void control(action).finally(() => {
       requestAnimationFrame(() => {
         if (confirmTriggerRef.current?.disabled) controlsHeadingRef.current?.focus();
+      });
+    });
+  };
+  const requestJump = (scene: FlowScene, trigger: HTMLButtonElement) => {
+    confirmTriggerRef.current = trigger;
+    setJumpScene(scene);
+  };
+  const closeJumpConfirmation = () => {
+    setJumpScene(null);
+    queueMicrotask(() => confirmTriggerRef.current?.focus());
+  };
+  const confirmJump = () => {
+    if (!jumpScene) return;
+    const scene = jumpScene;
+    setJumpScene(null);
+    confirmTriggerRef.current?.focus();
+    void jumpToScene(scene).finally(() => {
+      requestAnimationFrame(() => {
+        if (confirmTriggerRef.current?.disabled) flowHeadingRef.current?.focus();
       });
     });
   };
@@ -444,6 +544,36 @@ export function App() {
             <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
             <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={!canReturnToIdle || busy} onClick={(event) => requestConfirmation("idle", event.currentTarget)}>Return to idle</button><span>Stop the current show</span></div>
           </div>
+        </section>
+
+        <section className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
+          <div className="admin-section-heading">
+            <div><p className="sc-tool-eyebrow">Whole-show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Scene navigator</h2></div>
+            <StatusLabel status={isActive ? "success" : "info"}>{isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
+          </div>
+          <p className="sc-tool-copy admin-flow-intro">The published flow is shown in Studio order. Each node includes its outgoing route; branching scenes expose every possible outcome.</p>
+          {flow?.scenes.length ? <ol className="admin-flow-list" aria-label="Published show scenes">
+            {flow.scenes.map((scene, index) => {
+              const isCurrent = status.phaseId === scene.id;
+              const isEntry = flow.entryPhaseId === scene.id;
+              return <li key={scene.id}>
+                <button
+                  className="admin-flow-node sc-tool-graph-node"
+                  data-sc-tool-domain={scene.kind === "video" ? "video" : "question"}
+                  aria-current={isCurrent ? "step" : undefined}
+                  aria-label={`${isCurrent ? "Current scene, " : ""}${scene.title}${isCurrent ? ", already playing" : ", jump to this scene"}`}
+                  type="button"
+                  disabled={!isActive || busy || isCurrent}
+                  onClick={(event) => requestJump(scene, event.currentTarget)}
+                >
+                  <span className="admin-flow-node-head"><span>{String(index + 1).padStart(2, "0")} · {sceneKindLabel(scene.kind)}</span>{isEntry && <span>Entry</span>}{isCurrent && <span>Now</span>}</span>
+                  <strong>{scene.title}</strong>
+                  <span className="sc-tool-mono admin-flow-node-id">{scene.id}</span>
+                  <span className="admin-flow-routes">{scene.routes.map((route) => <span key={`${route.outcome}:${route.target}`}><b>{route.outcome}</b> → {route.target === "idle" ? "End" : route.target}</span>)}</span>
+                </button>
+              </li>;
+            })}
+          </ol> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}
         </section>
 
         <section className="sc-tool-panel" aria-labelledby="admin-lobby-heading">
@@ -535,5 +665,6 @@ export function App() {
       </div>}
     </main>
     {confirmAction && <ConfirmationDialog action={confirmAction} onCancel={closeConfirmation} onConfirm={confirmControl} />}
+    {jumpScene && <JumpConfirmationDialog scene={jumpScene} onCancel={closeJumpConfirmation} onConfirm={confirmJump} />}
   </div>;
 }

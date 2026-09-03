@@ -36,6 +36,7 @@ describe("quadrantOfField", () => {
     const field = {
       type: "two-quadrant" as const,
       axis: "x" as const,
+      variant: "spectrum" as const,
       labels: { minLabel: "left", maxLabel: "right" },
     };
     expect(quadrantOfField(field, 0.499, 0.9)).toBe("min");
@@ -46,6 +47,7 @@ describe("quadrantOfField", () => {
     const field = {
       type: "two-quadrant" as const,
       axis: "y" as const,
+      variant: "spectrum" as const,
       labels: { minLabel: "top", maxLabel: "bottom" },
     };
     expect(quadrantOfField(field, 0.9, 0.499)).toBe("min");
@@ -63,6 +65,7 @@ describe("quadrantOfField", () => {
     const two = {
       type: "two-quadrant" as const,
       axis: "y" as const,
+      variant: "spectrum" as const,
       labels: { minLabel: "top", maxLabel: "bottom" },
       arena,
     };
@@ -99,8 +102,8 @@ describe("quadrantOfField", () => {
       yAxis: { minLabel: "top", maxLabel: "bottom" },
       arena,
     };
-    const twoX = { type: "two-quadrant" as const, axis: "x" as const, labels: { minLabel: "left", maxLabel: "right" }, arena };
-    const twoY = { type: "two-quadrant" as const, axis: "y" as const, labels: { minLabel: "top", maxLabel: "bottom" }, arena };
+    const twoX = { type: "two-quadrant" as const, axis: "x" as const, variant: "spectrum" as const, labels: { minLabel: "left", maxLabel: "right" }, arena };
+    const twoY = { type: "two-quadrant" as const, axis: "y" as const, variant: "spectrum" as const, labels: { minLabel: "top", maxLabel: "bottom" }, arena };
 
     expect(quadrantOfField(four, 0.6, 0.2)).toBe("q1"); // near the top-right corner
     expect(quadrantOfField(four, 0.5, 0.8)).toBe("q3"); // near the bottom, left of the skewed vertical split

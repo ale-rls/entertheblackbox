@@ -1,11 +1,14 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
+import { z } from "zod";
 import { AdmissionController } from "./admission/index.js";
+import { verifyParticipantLease } from "./admission/tokens.js";
 import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
 import type { GhostPool } from "./ghosts/index.js";
+import { MovementConsentManager } from "./movement/index.js";
 import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
 import { readServerConfigOverride, writeActiveShowId, writeTargetAudienceSize } from "./persistence/installation-config.js";
 import { writeLobbyStartTimes } from "./persistence/lobby-config.js";
@@ -32,6 +35,7 @@ export type BuildServerOptions = {
   verifyOperatorToken?: (token: string) => Promise<boolean>;
   maxWebSocketConnections?: number;
   webSocketKeepAliveIntervalMs?: number;
+  movementConsentTimeoutMs?: number;
 };
 
 export type ServerRuntime = {
@@ -71,6 +75,15 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       )
     : null;
   const adminData = options.adminData;
+  const movementConsent = adminData?.deleteMovementRecordings === undefined
+    ? null
+    : new MovementConsentManager({
+        deleteMovementRecordings: (sessionId, participantId) =>
+          adminData.deleteMovementRecordings!(sessionId, participantId),
+      }, {
+        ...(options.movementConsentTimeoutMs === undefined ? {} : { timeoutMs: options.movementConsentTimeoutMs }),
+        onError: (error) => app.log.error({ error }, "failed to delete unconsented movement recording"),
+      });
   let engine: PhaseEngine | null = null;
   const admission = options.admission ?? new AdmissionController({
     installationId: config.installationId,
@@ -105,10 +118,16 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         allowLateJoin: config.allowLateJoin,
         showPhoneJoinBaseUrl: config.showPhoneJoinBaseUrl,
       },
-      onSessionEnded: ({ endedAt }) => admission.endParticipantSession(endedAt),
+      onSessionEnded: ({ sessionId, endedAt }) => {
+        movementConsent?.endSession(sessionId);
+        admission.endParticipantSession(endedAt);
+      },
       onCheckpoint: (checkpoint) => adminData?.recordCheckpoint?.(checkpoint),
       onVoteSnapshotEnqueued: (snapshot) => adminData?.recordVoteSnapshot?.(snapshot),
-      onMovementRecordingStarted: (event) => adminData?.recordMovementStarted?.(event),
+      onMovementRecordingStarted: (event) => {
+        movementConsent?.track(event.sessionId, event.participantId);
+        adminData?.recordMovementStarted?.(event);
+      },
       onMovementBatchFlushed: (event) => adminData?.recordMovementBatch?.(event),
       onMovementRecordingFinalized: (event) => adminData?.recordMovementFinalized?.(event),
       ...(options.ghostPool === undefined ? {} : { ghostPool: options.ghostPool }),
@@ -147,6 +166,30 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     installationId: config.installationId,
     roomId: config.roomId,
   }));
+  const movementConsentBodySchema = z.object({
+    sessionId: z.string().min(1).max(200),
+    participantLease: z.string().min(1).max(4_096),
+    granted: z.boolean(),
+  });
+  app.post<{ Body: unknown }>("/api/movement-consent", async (request, reply) => {
+    if (movementConsent === null) return reply.code(503).send({ error: "persistence_unavailable" });
+    const parsed = movementConsentBodySchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+    const lease = verifyParticipantLease(parsed.data.participantLease, {
+      secret: config.joinGrantSecret,
+      installationId: config.installationId,
+    });
+    if (lease === null) return reply.code(401).send({ error: "invalid_participant_lease" });
+
+    const result = await movementConsent.respond(
+      parsed.data.sessionId,
+      lease.clientId,
+      parsed.data.granted,
+    );
+    if (result === "not-found") return reply.code(404).send({ error: "recording_not_found" });
+    if (result === "conflict") return reply.code(409).send({ error: "consent_already_resolved" });
+    return { ok: true };
+  });
   app.get("/api/phases", async (_request, reply) => {
     if (!readiness.ready) {
       return reply.code(503).send({ error: "scenario_unavailable" });
@@ -248,6 +291,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   // Close them before Fastify waits for the underlying server to drain.
   app.addHook("preClose", async () => {
     clearInterval(webSocketKeepAliveInterval);
+    movementConsent?.stop();
     engine?.stop();
     for (const socket of webSockets.clients) socket.terminate();
     await new Promise<void>((resolve) => webSockets.close(() => resolve()));

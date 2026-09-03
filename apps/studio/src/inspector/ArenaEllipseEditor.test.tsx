@@ -71,11 +71,20 @@ describe("ArenaEllipseEditor", () => {
   });
 
   it("shows the selected two-way spectrum axis rather than a perpendicular divider", async () => {
-    await renderEditor(vi.fn(), { type: "two-quadrant", axis: "x", labels: { minLabel: "left", maxLabel: "right" } });
+    await renderEditor(vi.fn(), { type: "two-quadrant", axis: "x", variant: "spectrum", labels: { minLabel: "left", maxLabel: "right" } });
     const axis = document.querySelector(".arena-editor-axis")!;
     expect(axis.getAttribute("y1")).toBe("67");
     expect(axis.getAttribute("y2")).toBe("67");
     expect(document.querySelectorAll(".arena-editor-divider")).toHaveLength(0);
+  });
+
+  it("shows the perpendicular classification boundary for a hard split", async () => {
+    await renderEditor(vi.fn(), { type: "two-quadrant", axis: "x", variant: "split", labels: { minLabel: "left", maxLabel: "right" } });
+    const divider = document.querySelector(".arena-editor-divider")!;
+    expect(divider.getAttribute("x1")).toBe("50");
+    expect(divider.getAttribute("x2")).toBe("50");
+    expect(document.querySelector(".arena-editor-axis")).toBeNull();
+    expect(document.querySelector(".arena-editor-center")).toBeNull();
   });
 
   it("resizes the ellipse with edge handles and restores the PLATE-A preset", async () => {

@@ -630,14 +630,14 @@ export function App() {
     });
   };
 
-  const changeQuestionLayout = (layout: "four-quadrant" | "two-quadrant-x" | "two-quadrant-y" | "three-candidate-zones", trigger: HTMLSelectElement) => {
+  const changeQuestionLayout = (layout: "four-quadrant" | "two-quadrant-x-split" | "two-quadrant-x-spectrum" | "two-quadrant-y-split" | "two-quadrant-y-spectrum" | "three-candidate-zones", trigger: HTMLSelectElement) => {
     if (!draft || !selectedId) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === selectedId);
     if (!phase || (phase.kind !== "position-question" && phase.kind !== "video-position-question")) return;
     const currentLayout = phase.field.type === "four-quadrant"
       ? "four-quadrant"
       : phase.field.type === "two-quadrant"
-        ? `two-quadrant-${phase.field.axis}`
+        ? `two-quadrant-${phase.field.axis}-${phase.field.variant ?? "spectrum"}`
         : "three-candidate-zones";
     if (currentLayout === layout) return;
     const applyChange = () => {
@@ -659,15 +659,17 @@ export function App() {
           }
         : {
           type: "two-quadrant" as const,
-          axis: layout === "two-quadrant-x" ? "x" as const : "y" as const,
+          axis: layout.startsWith("two-quadrant-x-") ? "x" as const : "y" as const,
+          variant: layout.endsWith("-split") ? "split" as const : "spectrum" as const,
           labels: phase.field.type === "four-quadrant"
-            ? layout === "two-quadrant-x" ? phase.field.xAxis : phase.field.yAxis
+            ? layout.startsWith("two-quadrant-x-") ? phase.field.xAxis : phase.field.yAxis
             : phase.field.type === "two-quadrant"
               ? phase.field.labels
               : { minLabel: "Min", maxLabel: "Max" },
           ...(phase.field.type !== "polygon-zones" && phase.field.arena ? { arena: phase.field.arena } : {}),
         };
-      const next = phase.next.type === "fixed" ? phase.next : {
+      const keepsOutcomeShape = phase.field.type === field.type && field.type !== "polygon-zones";
+      const next = phase.next.type === "fixed" || keepsOutcomeShape ? phase.next : {
         ...phase.next,
         map: field.type === "two-quadrant"
           ? { min: "idle", max: "idle" }
@@ -683,11 +685,13 @@ export function App() {
       record({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } }, document: { ...draft.document, edges: nextEdges }, updatedAt: Date.now() }, nextEdges);
       setNodes((current) => current.map((node) => node.id === selectedId ? { ...node, data: nodeDataForPhase(nextPhase) } : node));
     };
-    if (phase.next.type !== "quadrant-plurality") {
+    const selectedType = layout === "four-quadrant" ? "four-quadrant" : layout === "three-candidate-zones" ? "polygon-zones" : "two-quadrant";
+    const keepsOutcomeShape = phase.field.type === selectedType && selectedType !== "polygon-zones";
+    if (phase.next.type !== "quadrant-plurality" || keepsOutcomeShape) {
       applyChange();
       return;
     }
-    const layoutLabel = layout === "four-quadrant" ? "four quadrants" : layout === "two-quadrant-x" ? "left / right quadrants" : "top / bottom quadrants";
+    const layoutLabel = layout === "four-quadrant" ? "four quadrants" : layout === "three-candidate-zones" ? "polygon zones" : layout.includes("-x-") ? "a horizontal two-region field" : "a vertical two-region field";
     setConfirmation({
       title: `Change “${phase.id}” to ${layoutLabel}?`,
       description: "This replaces the question’s outcome connections for the new layout. You can undo this change during this editing session.",
@@ -925,7 +929,7 @@ export function App() {
     </header>
     <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
     <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onComponentTypeChange={changeSelectedComponentType} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} />
-    <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} collapsed={!showDiagnostics} onToggle={() => setShowDiagnostics((value) => !value)} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
+    <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} collapsed={!showDiagnostics} onToggle={() => setShowDiagnostics((value) => !value)} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onAcknowledgeAll={(keys) => setAcknowledged((current) => new Set([...current, ...keys]))} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
     {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
     {mediaPicker && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} selection={{ contextLabel: `${mediaPicker.mediaKind} for ${mediaPicker.phaseId}`, selectedSrc: mediaPickerSelectedSrc, mediaKind: mediaPicker.mediaKind, onSelect: selectMedia }} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={closeMediaPicker} />}
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}

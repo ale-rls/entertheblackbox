@@ -157,6 +157,32 @@ body {
   text-align: center;
   pointer-events: none;
 }
+.phone-phase-text {
+  position: absolute;
+  z-index: 1;
+  top: max(4rem, calc(env(safe-area-inset-top) + 3rem));
+  right: 1rem;
+  left: 1rem;
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: .55rem .8rem;
+  border-radius: .45rem;
+  background: rgb(0 0 0 / 58%);
+  font-size: clamp(1.1rem, 5vw, 1.6rem);
+  line-height: 1.2;
+  text-align: center;
+  white-space: pre-line;
+  pointer-events: none;
+}
+.live-cursor-field {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(100vw, 100dvh);
+  height: min(100vw, 100dvh);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
 .live-cursor-dot {
   position: absolute;
   width: 1.25rem;
@@ -254,4 +280,68 @@ body {
 
 .connection-dot.offline {
   background: #f85149;
+}
+
+.consent-backdrop {
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+  background: rgb(0 0 0 / 82%);
+  place-items: center;
+}
+
+.consent-dialog {
+  display: grid;
+  width: min(100%, 32rem);
+  gap: 1.5rem;
+  padding: clamp(1.5rem, 7vw, 2.5rem);
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 1.5rem;
+  background: #0f1116;
+  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 60%);
+}
+
+.consent-dialog h1,
+.consent-result {
+  margin: 0;
+  font-size: clamp(1.6rem, 7vw, 2.35rem);
+  line-height: 1.15;
+  text-align: center;
+}
+
+.consent-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.consent-actions button {
+  min-height: 4.5rem;
+  border: 0;
+  border-radius: .9rem;
+  background: #f5f5f5;
+  color: #08090b;
+  font-size: 1.35rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.consent-actions button:last-child {
+  border: 1px solid rgb(255 255 255 / 28%);
+  background: transparent;
+  color: #f5f5f5;
+}
+
+.consent-actions button:disabled {
+  cursor: wait;
+  opacity: .5;
+}
+
+.consent-error {
+  margin: 0;
+  color: #ff8b86;
+  line-height: 1.4;
+  text-align: center;
 }

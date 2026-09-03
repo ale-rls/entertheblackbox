@@ -51,6 +51,7 @@
       "field": {
         "type": "two-quadrant",
         "axis": "x",
+        "variant": "spectrum",
         "labels": { "minLabel": "No", "maxLabel": "Yes" }
       },
       "durationMs": 4000,
