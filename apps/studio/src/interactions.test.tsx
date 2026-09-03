@@ -580,6 +580,36 @@ describe("Studio feedback and keyboard entry", () => {
     expect(document.body.textContent).toContain("Applied ellipse arena settings.");
   });
 
+  it("shows the left/right divider prominently and updates its visual position", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+    const node = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="position-question-"]')).at(-1)!;
+    await act(async () => { node.click(); });
+
+    const layout = Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.includes("Position layout"))
+      ?.querySelector<HTMLSelectElement>("select")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(layout, "two-quadrant-x-split");
+      layout.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => { button("Replace connections").click(); });
+
+    const control = document.querySelector<HTMLElement>(".divider-position-control")!;
+    expect(control.textContent).toContain("Left / right dividing line");
+    expect(control.textContent).toContain("50%");
+    const slider = control.querySelector<HTMLInputElement>('input[type="range"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(slider, "47");
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(control.querySelector("output")?.textContent).toBe("47%");
+    expect(control.querySelector<HTMLElement>(".divider-position-preview i")?.style.left).toBe("47%");
+  });
+
   it("collapses and expands the bottom panel from its persistent header", async () => {
     await render(<App />);
     await act(async () => { button("New show").click(); });

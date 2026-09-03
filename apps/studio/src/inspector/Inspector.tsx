@@ -151,6 +151,46 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
       <label className="sc-tool-label">{label("Position layout", "field.type + field.variant")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : phase.field.type === "two-quadrant" ? `two-quadrant-${phase.field.axis}-${phase.field.variant ?? "spectrum"}` : "three-candidate-zones"} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x-split" | "two-quadrant-x-spectrum" | "two-quadrant-y-split" | "two-quadrant-y-spectrum" | "three-candidate-zones", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x-split">Horizontal vote · hard left / right split</option><option value="two-quadrant-x-spectrum">Horizontal spectrum · left ↔ right</option><option value="two-quadrant-y-split">Vertical vote · hard top / bottom split</option><option value="two-quadrant-y-spectrum">Vertical spectrum · top ↕ bottom</option><option value="three-candidate-zones">Polygon zones · custom</option></select></label>
+      {phase.field.type === "two-quadrant" && phase.field.axis === "x" && phase.field.arena === undefined && (() => {
+        const field = phase.field;
+        const percent = Math.round((field.splitX ?? 0.5) * 1_000) / 10;
+        const setDividerPercent = (raw: string) => {
+          const nextPercent = Math.min(95, Math.max(5, numberValue(raw, percent)));
+          const splitX = Math.round(nextPercent * 10) / 1_000;
+          onChange({ ...phase, field: { ...field, splitX: splitX === 0.5 ? undefined : splitX } } as Phase);
+        };
+        return <fieldset className="divider-position-control">
+          <legend>Left / right dividing line <small>field.splitX</small></legend>
+          <div className="divider-position-preview" aria-hidden="true">
+            <span>Left</span>
+            <i style={{ left: `${percent}%` }} />
+            <span>Right</span>
+          </div>
+          <div className="divider-position-fields">
+            <input
+              className="divider-position-slider"
+              aria-label="Left / right divider position"
+              type="range"
+              min="5"
+              max="95"
+              step="0.1"
+              value={percent}
+              onChange={(event) => setDividerPercent(event.currentTarget.value)}
+            />
+            <label className="sc-tool-label">{label("Exact position (%)", "field.splitX")}<input
+              className="sc-tool-field"
+              type="number"
+              min="5"
+              max="95"
+              step="0.1"
+              value={percent}
+              onChange={(event) => setDividerPercent(event.currentTarget.value)}
+            /></label>
+            <output>{percent}%</output>
+          </div>
+          <p className="sc-tool-copy">50% is centered. Smaller values move the line left; larger values move it right.</p>
+        </fieldset>;
+      })()}
       {phase.field.type === "four-quadrant" ? (() => {
         const field = phase.field;
         return <>
@@ -164,20 +204,6 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         return <>
           {text(`${field.axis === "x" ? "Left" : "Top"} endpoint`, "field.labels.minLabel", field.labels.minLabel, (minLabel) => onChange({ ...phase, field: { ...field, labels: { ...field.labels, minLabel } } } as Phase))}
           {text(`${field.axis === "x" ? "Right" : "Bottom"} endpoint`, "field.labels.maxLabel", field.labels.maxLabel, (maxLabel) => onChange({ ...phase, field: { ...field, labels: { ...field.labels, maxLabel } } } as Phase))}
-          {field.axis === "x" && field.arena === undefined && <label className="sc-tool-label">{label("Left / right divider (%)", "field.splitX")}<input
-            className="sc-tool-field"
-            type="number"
-            min="5"
-            max="95"
-            step="0.1"
-            value={(field.splitX ?? 0.5) * 100}
-            onChange={(event) => {
-              const percent = Math.min(95, Math.max(5, numberValue(event.target.value, (field.splitX ?? 0.5) * 100)));
-              const splitX = Math.round(percent * 10) / 1_000;
-              onChange({ ...phase, field: { ...field, splitX: splitX === 0.5 ? undefined : splitX } } as Phase);
-            }}
-          /></label>}
-          {field.axis === "x" && field.arena === undefined && <p className="sc-tool-copy field-hint">Moves the vertical left/right voting boundary. 50% is the display centre; smaller values move it left.</p>}
         </>;
       })() : (() => {
         const field = phase.field;

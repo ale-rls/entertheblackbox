@@ -1031,6 +1031,50 @@ body:has(.editor),
   font-size: var(--sc-tool-font-size-1);
 }
 
+.divider-position-control {
+  display: grid;
+  gap: var(--sc-tool-space-3);
+  margin-block: var(--sc-tool-space-3) var(--sc-tool-space-5);
+  padding: var(--sc-tool-space-4);
+  border-color: var(--sc-tool-color-domain-question);
+  background: color-mix(in srgb, var(--sc-tool-color-domain-question) 8%, var(--sc-tool-color-surface-2));
+}
+
+.divider-position-preview {
+  position: relative;
+  display: flex;
+  min-height: 4rem;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  padding-inline: var(--sc-tool-space-3);
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
+  border-radius: var(--sc-tool-radius-1);
+  background: var(--sc-tool-color-canvas);
+  color: var(--sc-tool-color-text-muted);
+  font-size: var(--sc-tool-font-size-1);
+}
+
+.divider-position-preview i {
+  position: absolute;
+  inset-block: 0;
+  width: 2px;
+  transform: translateX(-1px);
+  background: var(--sc-tool-color-focus-on-dark);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--sc-tool-color-focus-on-dark) 65%, transparent);
+}
+
+.divider-position-fields {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(7rem, 10rem) auto;
+  align-items: end;
+  gap: var(--sc-tool-space-3);
+}
+
+.divider-position-fields .sc-tool-label { margin: 0; }
+.divider-position-fields output { align-self: center; font-family: var(--sc-tool-font-mono); font-weight: 700; }
+.divider-position-control > .sc-tool-copy { margin: 0; font-size: var(--sc-tool-font-size-1); }
+
 .inspector details {
   margin-block-start: var(--sc-tool-space-7);
   padding-block-start: var(--sc-tool-space-5);
