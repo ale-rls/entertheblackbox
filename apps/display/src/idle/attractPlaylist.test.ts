@@ -1,21 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { pickInitialAttractIndex, pickNextAttractIndex } from "./attractPlaylist.js";
+import { attractIndexAt } from "./attractPlaylist.js";
 
 describe("attract playlist", () => {
-  it("chooses the initial clip across the full playlist", () => {
-    expect(pickInitialAttractIndex(3, () => 0)).toBe(0);
-    expect(pickInitialAttractIndex(3, () => 0.999)).toBe(2);
+  it("plays the hold clip every other time and alternates the others", () => {
+    expect(Array.from({ length: 12 }, (_, position) => attractIndexAt(position, 3))).toEqual([
+      0, 1, 0, 2,
+      0, 1, 0, 2,
+      0, 1, 0, 2,
+    ]);
   });
 
-  it("never chooses the current clip when alternatives exist", () => {
-    for (let current = 0; current < 4; current += 1) {
-      for (const random of [0, 0.24, 0.5, 0.75, 0.999]) {
-        expect(pickNextAttractIndex(current, 4, () => random)).not.toBe(current);
-      }
-    }
+  it("cycles every non-hold clip when the playlist grows", () => {
+    expect(Array.from({ length: 8 }, (_, position) => attractIndexAt(position, 4))).toEqual([
+      0, 1, 0, 2, 0, 3, 0, 1,
+    ]);
   });
 
   it("keeps a single-video playlist on its only clip", () => {
-    expect(pickNextAttractIndex(0, 1, () => 0.5)).toBe(0);
+    expect(attractIndexAt(20, 1)).toBe(0);
   });
 });

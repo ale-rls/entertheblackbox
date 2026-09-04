@@ -10,9 +10,7 @@ import {
   TRACKED_QR_MARGIN_MODULES,
 } from "../idle/qrPresentation.js";
 import {
-  pickInitialAttractIndex,
-  pickNextAttractIndex,
-  type RandomSource,
+  attractIndexAt,
 } from "../idle/attractPlaylist.js";
 import { drawTrackedQr } from "../idle/tracking.js";
 
@@ -20,12 +18,19 @@ const CHECK_INTERVAL_MS = 1000;
 const QR_RENDER_SIZE_PX = 512;
 type AttractVideo = { url: string; markerTrack: MarkerTrack | null };
 type VideoSlot = 0 | 1;
+const ATTRACT_A_FILENAME = "1.0_25_c_advert.mp4";
 
 const bundledIdleAttractVideos: readonly AttractVideo[] = Object.entries(import.meta.glob<string>(
   "../assets/1.0_25_*.mp4",
   { eager: true, query: "?url", import: "default" },
 ))
-  .sort(([left], [right]) => left.localeCompare(right))
+  .sort(([left], [right]) => {
+    const leftFilename = left.split("/").at(-1)!;
+    const rightFilename = right.split("/").at(-1)!;
+    if (leftFilename === ATTRACT_A_FILENAME) return -1;
+    if (rightFilename === ATTRACT_A_FILENAME) return 1;
+    return leftFilename.localeCompare(rightFilename);
+  })
   .map(([path, url]) => {
     const filename = path.split("/").at(-1)!;
     return { url, markerTrack: MARKER_TRACKS_BY_FILENAME[filename] ?? null };
@@ -36,23 +41,24 @@ export function IdleAttract({
   qrHidden,
   clock,
   videoUrls,
-  random = Math.random,
   mediaVisible = true,
 }: {
   grant: QrGrantMessage | null;
   qrHidden: boolean;
   clock: ServerClock;
   videoUrls?: readonly string[];
-  random?: RandomSource;
   mediaVisible?: boolean;
 }) {
   const videos: readonly AttractVideo[] = videoUrls === undefined
     ? bundledIdleAttractVideos
     : videoUrls.map((url) => ({ url, markerTrack: ORIGINAL_MARKER_TRACK }));
-  const [slotVideoIndexes, setSlotVideoIndexes] = useState<[number, number]>(() => {
-    const initial = pickInitialAttractIndex(videos.length, random);
-    return [initial, pickNextAttractIndex(initial, videos.length, random)];
-  });
+  // The first clip is the designated A/hold clip. Keep it on every even
+  // playlist beat and rotate the other clips through the odd beats.
+  const [slotVideoIndexes, setSlotVideoIndexes] = useState<[number, number]>(() => [
+    attractIndexAt(0, videos.length),
+    attractIndexAt(1, videos.length),
+  ]);
+  const nextSequencePositionRef = useRef(2);
   const [activeSlot, setActiveSlot] = useState<VideoSlot>(0);
   const activeSlotRef = useRef<VideoSlot>(0);
   const slotVideoIndexesRef = useRef(slotVideoIndexes);
@@ -166,10 +172,11 @@ export function IdleAttract({
     setActiveSlot(nextSlot);
     setSlotVideoIndexes((current) => {
       const next: [number, number] = [...current];
-      next[previousSlot] = pickNextAttractIndex(nextVideoIndex, videos.length, random);
+      next[previousSlot] = attractIndexAt(nextSequencePositionRef.current, videos.length);
+      nextSequencePositionRef.current += 1;
       return next;
     });
-  }, [random, videos.length]);
+  }, [videos.length]);
 
   const handlePlaying = useCallback((slot: VideoSlot) => {
     if (!switching.current || slot === activeSlotRef.current || pendingFrameCallback.current !== null) return;

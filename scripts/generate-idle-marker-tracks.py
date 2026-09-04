@@ -161,7 +161,10 @@ def typescript(track_data: dict[str, dict[str, object]]) -> str:
 
 
 def main() -> None:
-    videos = sorted(ASSETS.glob("*.mp4"))
+    videos = sorted(ASSETS.glob("1.0_25_*.mp4"))
+    legacy_video = ASSETS / "idle-attract.mp4"
+    if legacy_video.exists():
+        videos.append(legacy_video)
     tracks = {path.name: track_video(path) for path in videos}
     OUTPUT.write_text(typescript(tracks), encoding="utf-8")
     print(f"wrote {OUTPUT.relative_to(ROOT)} with {len(tracks)} tracks")

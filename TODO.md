@@ -3,7 +3,7 @@
 ## Loading
 
 - [ ] Remove the "Exit fullscreen" control while already in fullscreen (or otherwise fix its behavior) — `apps/display/src/components/FullscreenControl.tsx` (toggle logic L27-42, label L44-56), used in `apps/display/src/App.tsx:266`.
-- [ ] Swap the top and bottom text in the waiting room — heading vs. instructions in `apps/display/src/components/LobbyCountdown.tsx` (`.lobby-heading` L53, `.lobby-instructions` L60-63).
+- [x] Swap the top and bottom text in the waiting room — heading vs. instructions in `apps/display/src/components/LobbyCountdown.tsx` (`.lobby-heading` L53, `.lobby-instructions` L60-63).
 - [ ] Remove the "other looking" attract video from the waiting room — `apps/display/src/components/IdleAttract.tsx` (video element L153-164), rendered from `apps/display/src/App.tsx:222-229`; source clips in `apps/display/src/assets/*.mp4`.
 
 ## Voting

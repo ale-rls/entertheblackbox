@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { PROTOCOL_VERSION, type QuestionResolvedMessage } from "@smartphonecracy/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 import { questionFieldCenter } from "./QuadrantOverlay.js";
 import { VideoQuestionOverlay, videoQuestionStage, type VideoQuestionPhase } from "./VideoQuestionOverlay.js";
@@ -122,7 +123,7 @@ describe("videoQuestionStage", () => {
     expect(html).not.toContain("Voting open");
   });
 
-  it("shows a configurable centered countdown and only blinks the resolved winner after close", () => {
+  it("shows a configurable centered countdown without blinking a spectrum area after close", () => {
     const closeAt = twoQuadrantPhase.startedAt + twoQuadrantPhase.closeAtMs;
 
     // Outside the default final 5 seconds the countdown stays hidden.
@@ -144,5 +145,21 @@ describe("videoQuestionStage", () => {
     expect(final).toContain('style="left:50%;top:55.');
     expect(questionFieldCenter(twoQuadrantPhase.field)?.y).toBeCloseTo(55);
     expect(final).not.toContain("arena-region-blink");
+
+    const resolution = {
+      t: "question_resolved",
+      v: PROTOCOL_VERSION,
+      sessionId: "session-1",
+      phaseEpoch: 1,
+      field: twoQuadrantPhase.field,
+      quadrantCounts: { min: 2, max: 5 },
+      winner: "max",
+      resolvedTarget: "idle",
+      freezeUntil: closeAt + 5_000,
+    } satisfies QuestionResolvedMessage;
+    const closed = renderToStaticMarkup(
+      <VideoQuestionOverlay phase={twoQuadrantPhase} clock={clockAt(closeAt + 1)} liveField={null} liveCounts={null} resolution={resolution} />,
+    );
+    expect(closed).not.toContain("arena-region-blink");
   });
 });

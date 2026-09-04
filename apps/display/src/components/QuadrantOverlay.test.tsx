@@ -126,7 +126,7 @@ describe("QuadrantOverlay", () => {
     expect(html).toContain("agree");
   });
 
-  it("renders a Y two-way field as a vertical spectrum while retaining min/max outcomes", () => {
+  it("renders a Y two-way field as a vertical spectrum without blinking an outcome area", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay
         field={twoYField}
@@ -146,8 +146,9 @@ describe("QuadrantOverlay", () => {
       'class="quadrant quadrant-top quadrant-dimmed" data-quadrant="min"',
     );
     expect(html).toContain(
-      'class="quadrant quadrant-bottom quadrant-winner quadrant-blink" data-quadrant="max"',
+      'class="quadrant quadrant-bottom quadrant-winner" data-quadrant="max"',
     );
+    expect(html).not.toContain("quadrant-blink");
   });
 
   it("renders a hard two-way split with a perpendicular divider and no spectrum arrows", () => {
@@ -198,16 +199,16 @@ describe("QuadrantOverlay", () => {
     expect(html).toContain('class="quadrant-count">4</span>');
   });
 
-  it("draws the selected spectrum axis instead of its perpendicular classification boundary", () => {
+  it("draws the selected spectrum axis without a center-point marker", () => {
     const xHtml = renderToStaticMarkup(<QuadrantOverlay field={arenaTwoXField} liveField={arenaTwoXField} liveCounts={null} resolution={null} />);
     const yHtml = renderToStaticMarkup(<QuadrantOverlay field={arenaTwoYField} liveField={arenaTwoYField} liveCounts={null} resolution={null} />);
 
     expect(xHtml).toContain('<line class="arena-spectrum-axis"');
     expect(xHtml).toContain('y1="65"');
     expect(xHtml).toContain('y2="65"');
-    expect(xHtml).toContain('class="arena-spectrum-origin"');
     expect(yHtml).toContain('<line class="arena-spectrum-axis" x1="50" y1="50" x2="50" y2="90"></line>');
-    expect(yHtml).toContain('class="arena-spectrum-origin"');
+    expect(xHtml).not.toContain("arena-spectrum-origin");
+    expect(yHtml).not.toContain("arena-spectrum-origin");
   });
 
   it("draws the classification boundary and no origin for a calibrated hard split", () => {
@@ -238,7 +239,7 @@ describe("QuadrantOverlay", () => {
     expect(html).toContain('class="quadrant-count">4</span>');
   });
 
-  it("blinks the leading side of a quad arena and hides its count when asked", () => {
+  it("does not blink an explicitly highlighted side of a spectrum arena", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay
         field={quadTwoXField}
@@ -251,8 +252,8 @@ describe("QuadrantOverlay", () => {
     );
 
     expect(html).not.toContain("quadrant-count");
-    expect(html).toContain('class="arena-region arena-region-max arena-region-blink"');
-    expect(html).not.toContain("arena-region-min arena-region-blink");
+    expect(html).toContain('class="arena-region arena-region-max"');
+    expect(html).not.toContain("arena-region-blink");
   });
 
   it("does not render live counts from a mismatched field", () => {

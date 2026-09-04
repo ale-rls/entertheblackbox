@@ -12,7 +12,7 @@ describe("per-video marker tracks", () => {
     expect(MARKER_TRACKS_BY_FILENAME["1.0_25_a_breath.mp4"]).toMatchObject({ fps: 24, width: 1280, height: 704 });
     expect(MARKER_TRACKS_BY_FILENAME["1.0_25_a_breath.mp4"]?.frames).toHaveLength(241);
     expect(MARKER_TRACKS_BY_FILENAME["1.0_25_b_snapshot.mp4"]?.frames).toHaveLength(241);
-    expect(MARKER_TRACKS_BY_FILENAME["1.0_25_c_advert.mp4"]?.frames).toHaveLength(241);
+    expect(MARKER_TRACKS_BY_FILENAME["1.0_25_c_advert.mp4"]?.frames).toHaveLength(481);
     expect(MARKER_TRACKS_BY_FILENAME["idle-attract.mp4"]).toMatchObject({ fps: 25, width: 1280, height: 704 });
     expect(MARKER_TRACKS_BY_FILENAME["idle-attract.mp4"]?.frames).toHaveLength(249);
   });

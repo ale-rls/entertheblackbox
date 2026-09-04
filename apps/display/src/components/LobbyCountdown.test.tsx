@@ -29,7 +29,7 @@ describe("LobbyCountdown", () => {
     expect(lobby).toContain("Besucher-WLAN [Netzname]");
     expect(lobby).toContain("https://join.example/phone/");
     expect(lobby).not.toContain("Show starts at");
-    expect(lobby.indexOf("lobby-instructions")).toBeLessThan(lobby.indexOf("lobby-heading"));
+    expect(lobby.indexOf("lobby-heading")).toBeLessThan(lobby.indexOf("lobby-instructions"));
 
     expect(renderToStaticMarkup(
       <LobbyCountdown sessionId="idle" phase={idlePhase(null)} clock={clock} joinUrl={null} />,

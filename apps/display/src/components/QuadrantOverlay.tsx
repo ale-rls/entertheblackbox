@@ -316,7 +316,6 @@ function ArenaEllipseOverlay({
         {ids.map((id) => <rect key={id} data-quadrant={id} className={arenaRegionClass(id, winner, highlightRegionIds.includes(id) ? id : null)} {...regionRect(id)} />)}
         {horizontalLine && <line className={spectrum ? "arena-spectrum-axis" : "arena-divider"} x1={cx - splitHalfWidth} y1={sy} x2={cx + splitHalfWidth} y2={sy} />}
         {verticalLine && <line className={spectrum ? "arena-spectrum-axis" : "arena-divider"} x1={cx} y1={cy - ry} x2={cx} y2={cy + ry} />}
-        {spectrum && <circle className="arena-spectrum-origin" cx={cx} cy={sy} r="0.8" />}
       </g>
       <ellipse className="arena-outline" cx={cx} cy={cy} rx={rx} ry={ry} />
     </svg>
@@ -367,7 +366,7 @@ function ArenaQuadOverlay({
   lotterySelected: string | null;
 }) {
   const { corners } = field.arena;
-  const { topMid, rightMid, bottomMid, leftMid, center } = arenaQuadLandmarks(corners);
+  const { topMid, rightMid, bottomMid, leftMid } = arenaQuadLandmarks(corners);
   const ids: Array<FourQuadrant | TwoQuadrant> = field.type === "four-quadrant"
     ? ["q1", "q2", "q3", "q4"]
     : ["min", "max"];
@@ -391,7 +390,6 @@ function ArenaQuadOverlay({
       />)}
       {horizontalLine && <line className={spectrum ? "arena-spectrum-axis" : "arena-divider"} x1={leftMid.x * 100} y1={leftMid.y * 100} x2={rightMid.x * 100} y2={rightMid.y * 100} />}
       {verticalLine && <line className={spectrum ? "arena-spectrum-axis" : "arena-divider"} x1={topMid.x * 100} y1={topMid.y * 100} x2={bottomMid.x * 100} y2={bottomMid.y * 100} />}
-      {spectrum && <circle className="arena-spectrum-origin" cx={center.x * 100} cy={center.y * 100} r="0.8" />}
       <polygon className="arena-outline" points={svgPoints(corners)} />
     </svg>
     {labels.x && <>
@@ -459,15 +457,21 @@ export function QuadrantOverlay({
   const fixedTwoWayHighlights = resolutionMatches
     && resolution.winner === "fixed"
     && field.type === "two-quadrant"
+    && field.variant === "split"
     && isTwoQuadrantCounts(resolution.quadrantCounts)
     ? leadingTwoWayRegions(resolution.quadrantCounts)
     : [];
-  const highlighted = [
-    ...resolvedHighlights,
-    ...fixedTwoWayHighlights,
-    ...highlightRegionIds,
-    ...(highlightRegionId === null ? [] : [highlightRegionId]),
-  ];
+  // A spectrum represents a continuous distribution, so presenting either
+  // half as a blinking winner misstates what participants were asked. Hard
+  // splits and discrete region votes can still use the winner reveal.
+  const highlighted = field.type === "two-quadrant" && field.variant !== "split"
+    ? []
+    : [
+        ...resolvedHighlights,
+        ...fixedTwoWayHighlights,
+        ...highlightRegionIds,
+        ...(highlightRegionId === null ? [] : [highlightRegionId]),
+      ];
 
   if (field.type === "polygon-zones") {
     const counts =

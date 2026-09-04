@@ -46,17 +46,17 @@ afterEach(async () => {
 });
 
 describe("IdleAttract", () => {
-  it("uses only the three current 1.0 attract clips in the bundled lobby playlist", async () => {
+  it("uses the advert hold clip as A in the bundled lobby playlist", async () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     document.body.innerHTML = '<div id="root"></div>';
     root = createRoot(document.querySelector("#root")!);
     await act(async () => {
-      root?.render(<IdleAttract grant={null} qrHidden={false} clock={new ServerClock()} random={() => 0} />);
+      root?.render(<IdleAttract grant={null} qrHidden={false} clock={new ServerClock()} />);
       await Promise.resolve();
     });
     const src = document.querySelector(".idle-attract-video-active")?.getAttribute("src") ?? "";
-    expect(src).toContain("1.0_25_a_breath.mp4");
+    expect(src).toContain("1.0_25_c_advert.mp4");
     expect(src).not.toContain("idle-attract.mp4");
   });
 
@@ -81,7 +81,7 @@ describe("IdleAttract", () => {
     expect(play).toHaveBeenCalledTimes(2);
   });
 
-  it("plays multiple clips back to back without an immediate repeat", async () => {
+  it("plays the hold clip every other time in an A-B-A-C rhythm", async () => {
     const frames = installVideoFrameCallbacks();
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
@@ -95,7 +95,6 @@ describe("IdleAttract", () => {
           qrHidden={false}
           clock={new ServerClock()}
           videoUrls={["one.mp4", "two.mp4", "three.mp4"]}
-          random={() => 0}
         />,
       );
       await Promise.resolve();
@@ -132,5 +131,18 @@ describe("IdleAttract", () => {
       await Promise.resolve();
     });
     expect(document.querySelector(".idle-attract-video-active")?.getAttribute("src")).toBe("one.mp4");
+
+    await act(async () => {
+      first.dispatchEvent(new Event("ended"));
+      await Promise.resolve();
+    });
+    const third = [...document.querySelectorAll<HTMLVideoElement>(".idle-attract-video")]
+      .find((video) => video.getAttribute("src") === "three.mp4")!;
+    await act(async () => {
+      third.dispatchEvent(new Event("playing"));
+      frames.fire(third);
+      await Promise.resolve();
+    });
+    expect(document.querySelector(".idle-attract-video-active")?.getAttribute("src")).toBe("three.mp4");
   });
 });

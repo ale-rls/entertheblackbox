@@ -55,6 +55,7 @@ export function LobbyCountdown({
 
   return (
     <div className="lobby-information">
+      <h1 className="lobby-heading" aria-live="polite"><LobbyHeading clock={clock} deadlineAt={phase.deadlineAt} /></h1>
       <div className="lobby-instructions">
         <p>Verbinde dich mit dem Besucher-WLAN {networkName} oder nutze dein eigenes mobiles Netz.</p>
         <p>Scanne den QR-Code mit deinem Smartphone und folge den Anleitungen auf deinem Display.</p>
@@ -62,7 +63,6 @@ export function LobbyCountdown({
       {joinUrl !== null && (
         <div className="lobby-join-url" aria-label="Phone join URL">{joinUrl}</div>
       )}
-      <h1 className="lobby-heading" aria-live="polite"><LobbyHeading clock={clock} deadlineAt={phase.deadlineAt} /></h1>
     </div>
   );
 }
