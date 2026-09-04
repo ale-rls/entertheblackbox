@@ -39,7 +39,7 @@ export function LobbyCountdown({
   phase,
   clock,
   joinUrl,
-  networkName = "[Netzname]",
+  networkName = "Staedel_WiFi",
 }: {
   sessionId: string | null;
   phase: PhaseSnapshotMessage | null;

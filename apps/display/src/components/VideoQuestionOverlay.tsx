@@ -19,11 +19,6 @@ export function videoQuestionStage(phase: VideoQuestionPhase, now: number): Vide
   return "closed";
 }
 
-/** Only the statue-picker's polygon zones keep their vote tallies on screen. */
-function showsCounts(fieldType: string): boolean {
-  return fieldType === "polygon-zones";
-}
-
 export function VideoQuestionOverlay({
   phase,
   clock,
@@ -60,7 +55,7 @@ export function VideoQuestionOverlay({
   }, [stage]);
 
   // While fading out, keep rendering the last non-hidden stage's content
-  // (counts and highlights) so only opacity changes -- the
+  // (highlights and labels) so only opacity changes -- the
   // underlying values would otherwise snap away the instant `stage` flips.
   const [displayStage, setDisplayStage] = useState(stage);
   useEffect(() => {
@@ -71,7 +66,6 @@ export function VideoQuestionOverlay({
 
   const fadingOut = stage === "hidden";
   const votingOpen = displayStage === "open" && resolution === null;
-  const keepCounts = showsCounts(phase.field.type);
   const highlightRegionIds = displayStage === "closed" && resolution !== null
     ? resolution.tieBreak?.candidates
       ?? (resolution.winner === "tie"
@@ -95,7 +89,7 @@ export function VideoQuestionOverlay({
         liveField={liveField}
         liveCounts={liveCounts}
         resolution={resolution}
-        showCounts={keepCounts}
+        showCounts={false}
         highlightRegionIds={highlightRegionIds}
       />
       {votingOpen && <VoteCloseCountdown clock={clock} deadlineAt={closeAt} soundEnabled={soundEnabled} durationSeconds={phase.closeCountdownSeconds ?? 5} center={questionFieldCenter(phase.field)} />}

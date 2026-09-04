@@ -108,7 +108,7 @@ describe("videoQuestionStage", () => {
     expect(html).not.toContain("voting-state");
   });
 
-  it("keeps polygon-zone counts without showing a voting-state pill", () => {
+  it("hides polygon-zone counts and the voting-state pill", () => {
     const html = renderToStaticMarkup(
       <VideoQuestionOverlay
         phase={zonesPhase}
@@ -118,7 +118,7 @@ describe("videoQuestionStage", () => {
         resolution={null}
       />,
     );
-    expect(html).toContain("zone-count");
+    expect(html).not.toContain("zone-count");
     expect(html).not.toContain("voting-state");
     expect(html).not.toContain("Voting open");
   });

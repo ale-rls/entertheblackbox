@@ -307,7 +307,7 @@ describe("QuadrantOverlay", () => {
     expect(fixed).not.toContain('class="outcome');
   });
 
-  it("renders polygon zone labels and counts without the zone borders while voting is live", () => {
+  it("renders polygon zone labels without counts or shapes while voting is live", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay
         field={zonesField}
@@ -318,16 +318,15 @@ describe("QuadrantOverlay", () => {
     );
 
     expect(html).toContain('class="quadrant-overlay quadrant-overlay-polygon-zones"');
-    // No winner yet -- the perspective-warped zone borders stay hidden so
-    // they don't clutter the shot while voting is still open.
     expect(html).not.toContain("zone-shape");
     expect(html).toContain("Apollon");
     expect(html).toContain("Dionysos");
     expect(html).toContain("Kassandra");
-    expect(html).toContain('<span class="zone-count">2</span>');
+    expect(html).not.toContain("zone-count");
+    expect(html).not.toContain(">2</span>");
   });
 
-  it("highlights the winning zone and dims the rest", () => {
+  it("renders only the winning zone as a borderless blinking shape", () => {
     const resolution = {
       t: "question_resolved" as const,
       v: PROTOCOL_VERSION,
@@ -344,8 +343,10 @@ describe("QuadrantOverlay", () => {
       <QuadrantOverlay field={zonesField} liveField={null} liveCounts={null} resolution={resolution} />,
     );
 
-    expect(html).toContain("zone-shape-winner");
-    expect(html.match(/zone-shape-dimmed/g)).toHaveLength(2);
+    expect(html).toContain('class="zone-shape zone-shape-winner zone-shape-blink"');
+    expect(html.match(/<polygon/g)).toHaveLength(1);
+    expect(html).not.toContain("zone-count");
+    expect(html).not.toContain("zone-shape-dimmed");
     expect(html).not.toContain('class="outcome');
   });
 
@@ -368,6 +369,7 @@ describe("QuadrantOverlay", () => {
     );
     expect(html).toContain("Lottokratie entscheidet… Dionysos");
     expect(html).toContain("zone-shape-winner");
-    expect(html.match(/zone-shape-dimmed/g)).toHaveLength(2);
+    expect(html.match(/<polygon/g)).toHaveLength(2);
+    expect(html).not.toContain("zone-shape-dimmed");
   });
 });

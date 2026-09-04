@@ -22,7 +22,7 @@ export default defineConfig({
     // just restarted, to take effect here.
     __DISPLAY_TOKEN__: JSON.stringify(process.env.DISPLAY_TOKEN ?? ""),
     // Venue-configured SSID shown in the two-line lobby instructions.
-    __LOBBY_WIFI_NAME__: JSON.stringify(process.env.LOBBY_WIFI_NAME ?? "[Netzname]"),
+    __LOBBY_WIFI_NAME__: JSON.stringify(process.env.LOBBY_WIFI_NAME ?? "Staedel_WiFi"),
   },
   plugins: [react()],
 });

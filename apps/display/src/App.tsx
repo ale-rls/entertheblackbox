@@ -339,7 +339,7 @@ export function App() {
           phase={phase}
           clock={connection.clock}
           joinUrl={state.qrGrant?.showJoinUrl === false ? null : state.qrGrant?.url ?? null}
-          networkName={typeof __LOBBY_WIFI_NAME__ === "string" ? __LOBBY_WIFI_NAME__ : "[Netzname]"}
+          networkName={typeof __LOBBY_WIFI_NAME__ === "string" ? __LOBBY_WIFI_NAME__ : "Staedel_WiFi"}
         />
         {phase?.kind === "position-question" && (
           <div className="question">

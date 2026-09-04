@@ -45,11 +45,6 @@ function leadingTwoWayRegions(counts: TwoQuadrantCounts): TwoQuadrant[] {
     : (["min", "max"] as const).filter((id) => counts[id] === highest);
 }
 
-/** Anything that isn't the fixed q1-q4/min-max shapes is a zone-id-keyed record. */
-function isPolygonZonesCounts(counts: PositionCounts): counts is Record<string, number> {
-  return !isFourQuadrantCounts(counts) && !isTwoQuadrantCounts(counts);
-}
-
 function sameArena(a: Arena | undefined, b: Arena | undefined): boolean {
   if (a === undefined) return b === undefined;
   if (b === undefined || a.type !== b.type) return false;
@@ -104,38 +99,35 @@ const svgPoints = (points: readonly { x: number; y: number }[]): string =>
 const ZONE_LABEL_BOTTOM_PERCENT = 86;
 
 /**
- * Arbitrary-polygon zones (e.g. a 3-way statue vote). Shapes render in an
- * SVG stretched to the arena's aspect ratio; labels/counts render as plain
- * HTML aligned along a common bottom row (horizontally at each zone's
+ * Arbitrary-polygon zones (e.g. a 3-way statue vote). The highlighted shape
+ * renders in an SVG stretched to the arena's aspect ratio; option labels render
+ * as plain HTML along a common bottom row (horizontally at each zone's
  * centroid) so text never gets skewed by a non-uniform SVG scale.
  */
 function PolygonZoneOverlay({
   field,
-  counts,
   winner,
   lotterySelected,
   highlightRegionIds,
 }: {
   field: PolygonZonesField;
-  counts: Record<string, number> | null;
   winner: string | null;
   lotterySelected: string | null;
   highlightRegionIds: readonly string[];
 }) {
+  const highlightedZones = field.zones.filter((zone) => highlightRegionIds.includes(zone.id));
+
   return (
     <div className="quadrant-overlay quadrant-overlay-polygon-zones">
-      {/* The perspective-warped zone borders are only useful once there's an
-          outcome to point at -- otherwise they just clutter the shot. */}
-      {winner !== null && (
+      {highlightedZones.length > 0 && (
         <svg className="zone-shapes" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          {field.zones.map((zone) => (
+          {highlightedZones.map((zone) => (
             <polygon
               key={zone.id}
               className={[
                 "zone-shape",
                 winner === zone.id ? "zone-shape-winner" : "",
-                winner !== zone.id ? "zone-shape-dimmed" : "",
-                highlightRegionIds.includes(zone.id) ? "zone-shape-blink" : "",
+                "zone-shape-blink",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -159,7 +151,6 @@ function PolygonZoneOverlay({
             style={{ left: `${clampPercent(c.x * 100)}%`, top: `${ZONE_LABEL_BOTTOM_PERCENT}%` }}
           >
             <span className="zone-name">{zone.label}</span>
-            {counts !== null && <span className="zone-count">{counts[zone.id] ?? 0}</span>}
           </div>
         );
       })}
@@ -474,12 +465,9 @@ export function QuadrantOverlay({
       ];
 
   if (field.type === "polygon-zones") {
-    const counts =
-      countSource !== null && isPolygonZonesCounts(countSource) ? countSource : null;
     return (
       <PolygonZoneOverlay
         field={field}
-        counts={counts}
         winner={lotterySelected ?? (winner === "tie" || winner === "empty" ? winner : (winner as string | null))}
         lotterySelected={lotterySelected}
         highlightRegionIds={highlighted}

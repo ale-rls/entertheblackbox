@@ -204,9 +204,8 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 
 .quadrant-overlay-polygon-zones { inset: 0; }
 .zone-shapes { position: absolute; inset: 0; width: 100%; height: 100%; }
-.zone-shape { fill: rgb(255 255 255 / 6%); stroke: rgb(255 255 255 / 45%); stroke-width: 0.4; transition: opacity 180ms ease, fill 180ms ease; }
+.zone-shape { fill: transparent; stroke: none; transition: fill 180ms ease; }
 .zone-shape-winner { fill: rgb(255 255 255 / 22%); }
-.zone-shape-dimmed { opacity: .28; }
 .zone-shape-blink { animation: arena-region-blink .55s ease-in-out infinite; }
 .zone-label {
   position: absolute;
@@ -220,8 +219,7 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 }
 .zone-label-dimmed { opacity: .35; }
 .zone-name { font-size: clamp(1.2rem, 3vw, 2.2rem); }
-.zone-count { font-size: clamp(2rem, 7vw, 6rem); font-variant-numeric: tabular-nums; }
-.zone-label-winner .zone-name, .zone-label-winner .zone-count { font-weight: 700; }
+.zone-label-winner .zone-name { font-weight: 700; }
 
 .axis-cross, .axis-track, .axis-divider { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .axis-cross::before, .axis-cross::after, .axis-track::before, .axis-divider::before {
