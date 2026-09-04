@@ -1,5 +1,6 @@
 import type {CSSProperties, ReactNode} from 'react';
-import {AbsoluteFill, Easing, interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
+import {AbsoluteFill, Easing, Html5Audio, interpolate, useCurrentFrame} from 'remotion';
+import creditsMusic from '../../display/src/assets/smartphonocracy-credits-music.mp3';
 
 type CreditProps = {
   label: string;
@@ -16,13 +17,13 @@ const Credit: React.FC<CreditProps> = ({label, children}) => (
 const RollingCredits: React.FC = () => {
   const frame = useCurrentFrame();
   const rollStart = 0;
-  const rollEnd = 1382;
+  const rollEnd = 1440;
   const progress = interpolate(frame, [rollStart, rollEnd], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
     easing: Easing.linear,
   });
-  const y = interpolate(progress, [0, 1], [1140, -3420]);
+  const y = interpolate(progress, [0, 1], [1140, -3820]);
   const style = {transform: `translate3d(0, ${y}px, 0)`} satisfies CSSProperties;
 
   return (
@@ -85,17 +86,23 @@ const RollingCredits: React.FC = () => {
 
 export const Credits: React.FC = () => {
   const frame = useCurrentFrame();
-  const {durationInFrames} = useVideoConfig();
-  const masterOpacity = interpolate(
-    frame,
-    [0, 16, durationInFrames - 20, durationInFrames - 1],
-    [0, 1, 1, 0],
-    {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'},
-  );
+  const masterOpacity = interpolate(frame, [0, 16], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
 
   return (
     <AbsoluteFill className="credits" style={{opacity: masterOpacity}}>
       <RollingCredits />
+      <Html5Audio
+        src={creditsMusic}
+        volume={(audioFrame) =>
+          interpolate(audioFrame, [0, 72], [0, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          })
+        }
+      />
     </AbsoluteFill>
   );
 };

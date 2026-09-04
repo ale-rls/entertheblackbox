@@ -3,7 +3,7 @@ import {Credits} from './Credits';
 import './styles.css';
 
 export const VIDEO = {
-  durationInFrames: 60 * 24,
+  durationInFrames: 5051,
   fps: 24,
   height: 1080,
   width: 1920,

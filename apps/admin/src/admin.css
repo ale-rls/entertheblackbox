@@ -46,6 +46,7 @@
 .admin-next-start strong { font-size: var(--sc-tool-font-size-3); font-weight: var(--sc-tool-font-weight-medium); }
 .admin-time-adjustments { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sc-tool-space-3); margin-block-start: var(--sc-tool-space-5); }
 .admin-time-adjustments .sc-tool-button { width: 100%; }
+.admin-lobby-quick-add { width: 100%; margin-block-start: var(--sc-tool-space-4); }
 .admin-lobby-form { margin-block-start: var(--sc-tool-space-6); }
 .admin-schedule-list, .admin-participant-list { padding: 0; margin: var(--sc-tool-space-5) 0 0; list-style: none; border-block-start: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); }
 .admin-schedule-list li, .admin-participant-list li { display: flex; min-height: var(--sc-tool-density-row-height); align-items: center; gap: var(--sc-tool-space-4); padding-block: var(--sc-tool-space-3); border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); }

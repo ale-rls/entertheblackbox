@@ -206,6 +206,26 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).toContain("Jumped to “Opening film”.");
   });
 
+  it("adds a show start five minutes from now and keeps the scene navigator last", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    const { requests } = createAdminFetch();
+    await renderApp();
+
+    await act(async () => { button("Add show in 5 minutes").click(); });
+    await flush();
+
+    expect(requests).toContainEqual({
+      url: "/api/admin/lobby",
+      method: "POST",
+      body: JSON.stringify({ startTimes: [1_300_000] }),
+    });
+    expect(document.body.textContent).toContain("Show added in 5 minutes.");
+
+    const panels = Array.from(document.querySelectorAll(".admin-grid > section"));
+    expect(panels.at(-1)?.querySelector("#admin-flow-heading")).not.toBeNull();
+  });
+
   it("keeps server-refused actions visible as inline failure feedback", async () => {
     localStorage.setItem("admin-token", "operator-secret");
     createAdminFetch({ rejectAction: "skip" });

@@ -318,6 +318,11 @@ export function App() {
     setNewStartTime("");
   };
 
+  const addLobbyTimeInFiveMinutes = async () => {
+    const startAt = Date.now() + 5 * 60_000;
+    await saveLobbyTimes([...(lobbyInfo?.startTimes ?? []), startAt], "Show added in 5 minutes.");
+  };
+
   const adjustLobby = async (deltaMs: -60000 | -10000 | 10000 | 60000) => {
     setSavingLobby(true);
     setFeedback(null);
@@ -546,36 +551,6 @@ export function App() {
           </div>
         </section>
 
-        <section className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
-          <div className="admin-section-heading">
-            <div><p className="sc-tool-eyebrow">Whole-show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Scene navigator</h2></div>
-            <StatusLabel status={isActive ? "success" : "info"}>{isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
-          </div>
-          <p className="sc-tool-copy admin-flow-intro">The published flow is shown in Studio order. Each node includes its outgoing route; branching scenes expose every possible outcome.</p>
-          {flow?.scenes.length ? <ol className="admin-flow-list" aria-label="Published show scenes">
-            {flow.scenes.map((scene, index) => {
-              const isCurrent = status.phaseId === scene.id;
-              const isEntry = flow.entryPhaseId === scene.id;
-              return <li key={scene.id}>
-                <button
-                  className="admin-flow-node sc-tool-graph-node"
-                  data-sc-tool-domain={scene.kind === "video" ? "video" : "question"}
-                  aria-current={isCurrent ? "step" : undefined}
-                  aria-label={`${isCurrent ? "Current scene, " : ""}${scene.title}${isCurrent ? ", already playing" : ", jump to this scene"}`}
-                  type="button"
-                  disabled={!isActive || busy || isCurrent}
-                  onClick={(event) => requestJump(scene, event.currentTarget)}
-                >
-                  <span className="admin-flow-node-head"><span>{String(index + 1).padStart(2, "0")} · {sceneKindLabel(scene.kind)}</span>{isEntry && <span>Entry</span>}{isCurrent && <span>Now</span>}</span>
-                  <strong>{scene.title}</strong>
-                  <span className="sc-tool-mono admin-flow-node-id">{scene.id}</span>
-                  <span className="admin-flow-routes">{scene.routes.map((route) => <span key={`${route.outcome}:${route.target}`}><b>{route.outcome}</b> → {route.target === "idle" ? "End" : route.target}</span>)}</span>
-                </button>
-              </li>;
-            })}
-          </ol> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}
-        </section>
-
         <section className="sc-tool-panel" aria-labelledby="admin-lobby-heading">
           <div className="admin-section-heading">
             <div><p className="sc-tool-eyebrow">Waiting room timing</p><h2 id="admin-lobby-heading">Lobby schedule</h2></div>
@@ -592,6 +567,9 @@ export function App() {
               </button>
             ))}
           </div>
+          <button className="sc-tool-button admin-lobby-quick-add" data-sc-tool-variant="primary" type="button" disabled={savingLobby} onClick={() => void addLobbyTimeInFiveMinutes()}>
+            {savingLobby ? "Saving…" : "Add show in 5 minutes"}
+          </button>
           <form className="admin-connection-form admin-lobby-form" onSubmit={(event) => void addLobbyTime(event)}>
             <label className="sc-tool-label" htmlFor="lobby-start-time">Add start time
               <input id="lobby-start-time" className="sc-tool-field" type="datetime-local" step="1" value={newStartTime} onChange={(event) => setNewStartTime(event.target.value)} />
@@ -660,6 +638,36 @@ export function App() {
             <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingGhosts || targetAudienceSize === ""}>{savingGhosts ? "Saving…" : "Save"}</button>
           </form>
           <p className="sc-tool-help">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghosts and defers to whatever the published show sets. While a show is running, the change waits until that show ends.</p>
+        </section>
+
+        <section className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
+          <div className="admin-section-heading">
+            <div><p className="sc-tool-eyebrow">Whole-show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Scene navigator</h2></div>
+            <StatusLabel status={isActive ? "success" : "info"}>{isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
+          </div>
+          <p className="sc-tool-copy admin-flow-intro">The published flow is shown in Studio order. Each node includes its outgoing route; branching scenes expose every possible outcome.</p>
+          {flow?.scenes.length ? <ol className="admin-flow-list" aria-label="Published show scenes">
+            {flow.scenes.map((scene, index) => {
+              const isCurrent = status.phaseId === scene.id;
+              const isEntry = flow.entryPhaseId === scene.id;
+              return <li key={scene.id}>
+                <button
+                  className="admin-flow-node sc-tool-graph-node"
+                  data-sc-tool-domain={scene.kind === "video" ? "video" : "question"}
+                  aria-current={isCurrent ? "step" : undefined}
+                  aria-label={`${isCurrent ? "Current scene, " : ""}${scene.title}${isCurrent ? ", already playing" : ", jump to this scene"}`}
+                  type="button"
+                  disabled={!isActive || busy || isCurrent}
+                  onClick={(event) => requestJump(scene, event.currentTarget)}
+                >
+                  <span className="admin-flow-node-head"><span>{String(index + 1).padStart(2, "0")} · {sceneKindLabel(scene.kind)}</span>{isEntry && <span>Entry</span>}{isCurrent && <span>Now</span>}</span>
+                  <strong>{scene.title}</strong>
+                  <span className="sc-tool-mono admin-flow-node-id">{scene.id}</span>
+                  <span className="admin-flow-routes">{scene.routes.map((route) => <span key={`${route.outcome}:${route.target}`}><b>{route.outcome}</b> → {route.target === "idle" ? "End" : route.target}</span>)}</span>
+                </button>
+              </li>;
+            })}
+          </ol> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}
         </section>
 
       </div>}
