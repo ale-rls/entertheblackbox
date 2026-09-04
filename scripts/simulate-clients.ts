@@ -11,6 +11,8 @@ type Options = {
   displayToken: string;
   joinRateLimitMaxAttempts: number;
   joinRateLimitWindowMs: number;
+  continuousMovement: boolean;
+  grant?: string;
 };
 
 type PhoneState = {
@@ -83,6 +85,20 @@ export function parseArgs(argv: string[]): Options {
     // connects from this one machine's address.
     joinRateLimitMaxAttempts: integer("--join-rate-limit-max-attempts", 30, 1, 100_000),
     joinRateLimitWindowMs: integer("--join-rate-limit-window-ms", 60_000, 1_000, 3_600_000),
+    // Ignores real question-phase gating and drags every phone constantly,
+    // regardless of scenario phase -- the server accepts "input" and
+    // updates cursor position any time the session/phaseEpoch match
+    // (phase-engine.ts's "input" case), independent of vote-window timing,
+    // so this exercises display rendering under sustained movement without
+    // needing to time the run against a specific phase's open/close window.
+    continuousMovement: (values.get("--continuous-movement") ?? "false") === "true",
+    // A grant copied from an already-connected real display (its `qr_grant`
+    // message's `url` query param `g`), so this run never opens its own
+    // display_join -- the server allows only one display connection and
+    // force-closes/reloads whichever one held it before (phase-engine.ts's
+    // "display replaced" handling), which would kick a real kiosk/observer
+    // browser mid-test.
+    ...(values.get("--grant") === undefined ? {} : { grant: values.get("--grant")! }),
   };
 }
 
@@ -167,7 +183,12 @@ async function openPhone(options: Options, grant: string, metrics: LoadMetrics, 
     if (message.t === "snapshot" || message.t === "phase") {
       state.sessionId = message.sessionId;
       state.phaseEpoch = message.phaseEpoch;
-      state.questionActive = message.phase?.kind === "position-question";
+      // Real shows use "video-position-question" (a video-backed variant of
+      // "position-question", see packages/scenario/src/schema.ts) for every
+      // interactive phase -- checking only the bare kind meant this script
+      // never sent drag input against real production content.
+      state.questionActive = message.phase?.kind === "position-question"
+        || message.phase?.kind === "video-position-question";
     } else if (message.t === "pong") {
       metrics.latencies.push(Math.max(0, Date.now() - message.echoClientTime));
     }
@@ -177,11 +198,17 @@ async function openPhone(options: Options, grant: string, metrics: LoadMetrics, 
 
 export async function runSimulation(options: Options): Promise<Record<string, number>> {
   const metrics = new LoadMetrics();
-  const display = await openDisplay(options, metrics);
+  // A supplied --grant means an operator is already watching a real display
+  // connection (e.g. to eyeball frontend performance) -- opening a second
+  // display_join here would force-close and reload it (see the --grant
+  // parsing comment above), so skip owning a display connection entirely.
+  const display: { socket: WebSocket | null; grant: string } = options.grant === undefined
+    ? await openDisplay(options, metrics)
+    : { socket: null, grant: options.grant };
   const phones = await Promise.all(Array.from({ length: options.count }, () => openPhone(options, display.grant, metrics)));
   const movement = setInterval(() => {
     phones.forEach((phone, index) => {
-      if (!phone.questionActive) return;
+      if (!phone.questionActive && !options.continuousMovement) return;
       metrics.inputsAttempted += 1;
       if (phone.socket.readyState !== WebSocket.OPEN) return;
       const angle = (phone.seq + index * 7) / 15;
@@ -220,7 +247,7 @@ export async function runSimulation(options: Options): Promise<Record<string, nu
   clearInterval(movement);
   clearInterval(pings);
   for (const phone of phones) phone.socket.close();
-  display.socket.close();
+  display.socket?.close();
   return metrics.summary();
 }
 

@@ -7,6 +7,7 @@ import type {
 import type { ServerClock } from "../lib/serverClock.js";
 import { QuadrantOverlay, questionFieldCenter } from "./QuadrantOverlay.js";
 import { VoteCloseCountdown } from "./VoteCloseCountdown.js";
+import { VideoTitle } from "./VideoTitle.js";
 
 export type VideoQuestionPhase = Extract<PhaseSnapshotMessage, { kind: "video-position-question" }>;
 export type VideoQuestionStage = "hidden" | "shown" | "open" | "closed";
@@ -44,6 +45,7 @@ export function VideoQuestionOverlay({
   }, [clock, phase.id, phase.startedAt]);
 
   const closeAt = phase.startedAt + phase.closeAtMs;
+  const elapsed = now - phase.startedAt;
   const stage = videoQuestionStage(phase, now);
 
   // The overlay's own div fades out (CSS `question-out` animation) once
@@ -61,6 +63,10 @@ export function VideoQuestionOverlay({
   useEffect(() => {
     if (stage !== "hidden") setDisplayStage(stage);
   }, [stage]);
+
+  if (elapsed < phase.showAtMs && phase.title) {
+    return <VideoTitle title={phase.title} layout={undefined} />;
+  }
 
   if (stage === "hidden" && !rendered) return null;
 

@@ -12,6 +12,7 @@ describe("simulate-clients", () => {
       displayToken: "dev-display-token",
       joinRateLimitMaxAttempts: 30,
       joinRateLimitWindowMs: 60_000,
+      continuousMovement: false,
     });
   });
 
@@ -31,6 +32,17 @@ describe("simulate-clients", () => {
     expect(options.count).toBe(300);
     expect(options.joinRateLimitMaxAttempts).toBe(400);
     expect(options.joinRateLimitWindowMs).toBe(60_000);
+  });
+
+  it("omits grant by default and carries it through when supplied, for reusing an already-open display's join grant", () => {
+    expect(parseArgs([])).not.toHaveProperty("grant");
+    expect(parseArgs(["--grant", "copied-from-live-display"]).grant).toBe("copied-from-live-display");
+  });
+
+  it("enables continuous movement only when explicitly requested", () => {
+    expect(parseArgs([]).continuousMovement).toBe(false);
+    expect(parseArgs(["--continuous-movement", "true"]).continuousMovement).toBe(true);
+    expect(parseArgs(["--continuous-movement", "false"]).continuousMovement).toBe(false);
   });
 
   it("reports latency percentiles, reconnects, and send drops", () => {

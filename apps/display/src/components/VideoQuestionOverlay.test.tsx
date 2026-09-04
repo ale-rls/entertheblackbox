@@ -1,9 +1,13 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PROTOCOL_VERSION, type QuestionResolvedMessage } from "@smartphonecracy/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 import { questionFieldCenter } from "./QuadrantOverlay.js";
 import { VideoQuestionOverlay, videoQuestionStage, type VideoQuestionPhase } from "./VideoQuestionOverlay.js";
+
+vi.mock("./VideoTitle.js", () => ({
+  VideoTitle: ({ title }: { title: string }) => <div className="video-title">{title}</div>,
+}));
 
 const phase = {
   kind: "video-position-question",
@@ -67,7 +71,23 @@ describe("videoQuestionStage", () => {
     expect(videoQuestionStage(phase, 42_000)).toBe("hidden");
   });
 
-  it("shows only the question text when an internal title is also present", () => {
+  it("shows the scene title during the lead-in", () => {
+    const html = renderToStaticMarkup(
+      <VideoQuestionOverlay
+        phase={phase}
+        clock={clockAt(15_999)}
+        liveField={null}
+        liveCounts={null}
+        resolution={null}
+      />,
+    );
+
+    expect(html).toContain("Internal curator title");
+    expect(html).toContain("video-title");
+    expect(html).not.toContain("Choose the future you want");
+  });
+
+  it("replaces the scene title with the question when the overlay is visible", () => {
     const clock = {
       now: () => 17_000,
       remainingUntil: (deadlineAt: number) => deadlineAt - 17_000,
