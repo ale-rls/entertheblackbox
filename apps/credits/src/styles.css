@@ -22,27 +22,6 @@ body {
   letter-spacing: 0.025em;
 }
 
-.title-card {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  text-align: center;
-}
-
-.title-card h1 {
-  margin: 0 0 14px;
-  font-size: 104px;
-  font-weight: 400;
-  line-height: 0.95;
-}
-
-.title-card p {
-  margin: 0;
-  font-size: 31px;
-  letter-spacing: 0.14em;
-}
-
 .roll {
   position: absolute;
   top: 0;
@@ -73,7 +52,7 @@ body {
 .credits-block {
   display: flex;
   flex-direction: column;
-  gap: 58px;
+  gap: 78px;
   margin-bottom: 230px;
 }
 
@@ -95,7 +74,7 @@ body {
 }
 
 .credits-production {
-  gap: 80px;
+  gap: 100px;
   margin-bottom: 250px;
 }
 

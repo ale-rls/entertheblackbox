@@ -13,37 +13,17 @@ const Credit: React.FC<CreditProps> = ({label, children}) => (
   </div>
 );
 
-const TitleCard: React.FC = () => {
-  const frame = useCurrentFrame();
-  const opacity = interpolate(frame, [0, 28, 122, 166], [0, 1, 1, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-    easing: Easing.inOut(Easing.cubic),
-  });
-
-  return (
-    <AbsoluteFill className="title-card" style={{opacity}}>
-      <h1>Smartphonocracy</h1>
-      <p>Eine interaktive KI-Performance</p>
-    </AbsoluteFill>
-  );
-};
-
 const RollingCredits: React.FC = () => {
   const frame = useCurrentFrame();
-  const rollStart = 150;
+  const rollStart = 0;
   const rollEnd = 1382;
   const progress = interpolate(frame, [rollStart, rollEnd], [0, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
     easing: Easing.linear,
   });
-  const y = interpolate(progress, [0, 1], [1140, -3270]);
-  const opacity = interpolate(frame, [140, 178, 1360, 1408], [0, 1, 1, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-  const style = {opacity, transform: `translate3d(0, ${y}px, 0)`} satisfies CSSProperties;
+  const y = interpolate(progress, [0, 1], [1140, -3420]);
+  const style = {transform: `translate3d(0, ${y}px, 0)`} satisfies CSSProperties;
 
   return (
     <div className="roll" style={style}>
@@ -64,7 +44,7 @@ const RollingCredits: React.FC = () => {
         <Credit label="Company Management, Kommunikation & Social Media">
           Jack Willenbacher
         </Credit>
-        <Credit label="Freie Mitarbeit Kommunikation">Tina Ebert.</Credit>
+        <Credit label="Freie Mitarbeit Kommunikation">Tina Ebert</Credit>
       </section>
 
       <section className="credits-block credits-production">
@@ -115,7 +95,6 @@ export const Credits: React.FC = () => {
 
   return (
     <AbsoluteFill className="credits" style={{opacity: masterOpacity}}>
-      <TitleCard />
       <RollingCredits />
     </AbsoluteFill>
   );
