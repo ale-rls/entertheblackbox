@@ -173,14 +173,25 @@ describe("scenarioSchema structural rejection", () => {
   it("accepts optional display titles and rejects empty titles", () => {
     const titled = parse((s) => ({
       ...s,
-      phases: s.phases.map((phase) => phase.kind === "idle" ? phase : { ...phase, title: `Title for ${phase.id}` }),
+      phases: s.phases.map((phase) => phase.kind === "idle"
+        ? phase
+        : phase.kind === "video"
+          ? { ...phase, title: `Title for ${phase.id}`, titleLayout: "centered-xl" }
+          : { ...phase, title: `Title for ${phase.id}` }),
     }));
     expect(titled.success).toBe(true);
+    if (titled.success) expect(titled.data.phases.find((phase) => phase.id === "intro")).toMatchObject({ titleLayout: "centered-xl" });
     const empty = parse((s) => ({
       ...s,
       phases: s.phases.map((phase) => phase.id === "intro" ? { ...phase, title: "" } : phase),
     }));
     expect(empty.success).toBe(false);
+
+    const unknownLayout = parse((s) => ({
+      ...s,
+      phases: s.phases.map((phase) => phase.id === "intro" ? { ...phase, title: "Intro", titleLayout: "centered-small" } : phase),
+    }));
+    expect(unknownLayout.success).toBe(false);
   });
 
   it("accepts a timed video position vote and enforces its timeline order", () => {

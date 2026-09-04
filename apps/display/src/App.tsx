@@ -357,7 +357,7 @@ export function App() {
           </div>
         )}
         {phase?.kind === "video" && phase.title && (
-          <div className="video-title">{phase.title}</div>
+          <div className={`video-title${phase.titleLayout === "centered-xl" ? " video-title-centered-xl" : ""}`}>{phase.title}</div>
         )}
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && <PhaseSubtitles phase={phase} clock={connection.clock} />}
         {phase?.kind === "video-position-question" && (

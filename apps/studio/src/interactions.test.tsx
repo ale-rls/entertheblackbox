@@ -541,6 +541,32 @@ describe("Studio feedback and keyboard entry", () => {
     expect(preview.rel).toBe("noreferrer");
   });
 
+  it("offers the centered XL title option for video phases", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "media/new-video.mp4", bytes: 1_000, hash: "video", durationMs: 10_000 },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Video phase").click(); });
+    await act(async () => { button("Cancel").click(); });
+
+    const titlePosition = Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.includes("Title position"))
+      ?.querySelector<HTMLSelectElement>("select")!;
+    expect(titlePosition.value).toBe("top");
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(titlePosition, "centered-xl");
+      titlePosition.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(titlePosition.value).toBe("centered-xl");
+    const compiled = Array.from(document.querySelectorAll("details"))
+      .find((item) => item.querySelector("summary")?.textContent?.includes("Compiled scenario JSON"));
+    expect(compiled?.querySelector("pre")?.textContent).toContain('"titleLayout": "centered-xl"');
+  });
+
   it("copies arena settings from one question to another", async () => {
     await render(<App />);
     await act(async () => { button("New show").click(); });

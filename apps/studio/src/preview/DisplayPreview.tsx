@@ -160,7 +160,7 @@ export function DisplayPreview({ preview }: { preview: ProjectPreview }) {
     <section className="layer layer-ui">
       {snapshot.kind === "idle" && <div className="preview-idle"><span>Idle / end</span></div>}
       {snapshot.kind === "position-question" && <div className="question"><div className="question-copy"><p className="question-text">{snapshot.text}</p></div><QuadrantOverlay field={snapshot.field} liveField={null} liveCounts={null} resolution={resolution} /></div>}
-      {snapshot.kind === "video" && snapshot.title && <div className="video-title">{snapshot.title}</div>}
+      {snapshot.kind === "video" && snapshot.title && <div className={`video-title${snapshot.titleLayout === "centered-xl" ? " video-title-centered-xl" : ""}`}>{snapshot.title}</div>}
       {snapshot.kind === "video-position-question" && <VideoQuestionOverlay phase={snapshot} clock={clock} liveField={null} liveCounts={null} resolution={resolution} />}
     </section>
     <aside className="preview-controls" aria-label="Preview controls">

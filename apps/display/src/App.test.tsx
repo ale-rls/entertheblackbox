@@ -222,4 +222,36 @@ describe("App media-readiness gate", () => {
 
     expect(harness.videoCandidate?.extraAudioSrc).toBe("blob:question-2");
   });
+
+  it("renders an opted-in video title with the centered XL treatment", async () => {
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+
+    await act(async () => {
+      harness.connectionOptions?.onMessage({
+        t: "snapshot",
+        v: PROTOCOL_VERSION,
+        sessionId: "session-1",
+        phaseEpoch: 1,
+        serverTime: 0,
+        phase: {
+          kind: "video",
+          id: "centered-title",
+          title: "A centered statement",
+          titleLayout: "centered-xl",
+          src: "statement.mp4",
+          expectedDurationMs: 10_000,
+          next: "idle",
+          scenarioVersion: "show-1",
+          startedAt: 0,
+          deadlineAt: null,
+        },
+      });
+    });
+
+    const title = document.querySelector(".video-title");
+    expect(title?.textContent).toBe("A centered statement");
+    expect(title?.classList.contains("video-title-centered-xl")).toBe(true);
+  });
 });

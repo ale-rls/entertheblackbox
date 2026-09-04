@@ -250,6 +250,8 @@ export const videoPhaseSchema = z.object({
   kind: z.literal("video"),
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
+  /** Optional display treatment for the title. Omitted titles retain the standard top placement. */
+  titleLayout: z.literal("centered-xl").optional(),
   src: z.string().min(1, "media src must be non-empty"),
   /** When present, src is a still image and this MP3 drives playback/timing. */
   audioSrc: z.string().min(1, "audioSrc must be non-empty").optional(),

@@ -75,6 +75,13 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
     {(phase.kind === "video" || phase.kind === "video-position-question") && <>
       {text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
+      {phase.kind === "video" && <label className="sc-tool-label">{label("Title position", "titleLayout")}<select className="sc-tool-select" value={phase.titleLayout ?? "top"} onChange={(event) => onChange({
+        ...phase,
+        titleLayout: event.target.value === "centered-xl" ? "centered-xl" : undefined,
+      })}>
+        <option value="top">Top (standard)</option>
+        <option value="centered-xl">Centered (XL)</option>
+      </select></label>}
       {phase.audioSrc === undefined
         ? <>
           {mediaPicker("Video", "src", phase.src, "video")}
