@@ -4,6 +4,7 @@ import type { QuestionResolvedMessage } from "../../../../packages/protocol/src/
 import type { PhaseSnapshot } from "../../../../packages/scenario/src/index.js";
 import { QuadrantOverlay } from "../../../display/src/components/QuadrantOverlay.js";
 import { VideoQuestionOverlay } from "../../../display/src/components/VideoQuestionOverlay.js";
+import { VideoTitle } from "../../../display/src/components/VideoTitle.js";
 import { ServerClock } from "../../../display/src/lib/serverClock.js";
 import { advancePreview, continueAfterResolution, currentPhase, forcedOutcomes, resolvePreview, startPreview, type ForcedOutcome, type PreviewResolution } from "./preview.js";
 import type { ProjectPreview } from "./project-preview.js";
@@ -160,7 +161,7 @@ export function DisplayPreview({ preview }: { preview: ProjectPreview }) {
     <section className="layer layer-ui">
       {snapshot.kind === "idle" && <div className="preview-idle"><span>Idle / end</span></div>}
       {snapshot.kind === "position-question" && <div className="question"><div className="question-copy"><p className="question-text">{snapshot.text}</p></div><QuadrantOverlay field={snapshot.field} liveField={null} liveCounts={null} resolution={resolution} /></div>}
-      {snapshot.kind === "video" && snapshot.title && <div className={`video-title${snapshot.titleLayout === "centered-xl" ? " video-title-centered-xl" : ""}`}>{snapshot.title}</div>}
+      {snapshot.kind === "video" && snapshot.title && <VideoTitle title={snapshot.title} layout={snapshot.titleLayout} />}
       {snapshot.kind === "video-position-question" && <VideoQuestionOverlay phase={snapshot} clock={clock} liveField={null} liveCounts={null} resolution={resolution} />}
     </section>
     <aside className="preview-controls" aria-label="Preview controls">

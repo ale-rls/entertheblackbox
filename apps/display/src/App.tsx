@@ -20,6 +20,7 @@ import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
 import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
 import { PhaseSubtitles } from "./components/PhaseSubtitles.js";
+import { VideoTitle } from "./components/VideoTitle.js";
 import { FullscreenControl } from "./components/FullscreenControl.js";
 import { VoteDecisionSound } from "./components/VoteDecisionSound.js";
 
@@ -357,7 +358,7 @@ export function App() {
           </div>
         )}
         {phase?.kind === "video" && phase.title && (
-          <div className={`video-title${phase.titleLayout === "centered-xl" ? " video-title-centered-xl" : ""}`}>{phase.title}</div>
+          <VideoTitle title={phase.title} layout={phase.titleLayout} />
         )}
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && <PhaseSubtitles phase={phase} clock={connection.clock} />}
         {phase?.kind === "video-position-question" && (

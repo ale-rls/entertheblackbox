@@ -41,6 +41,9 @@ type ConsentState = {
 
 const CONSENT_TIMEOUT_MS = 60_000;
 
+const cursorTransform = (value: TrackpadState, surfaceSizePx: number): string =>
+  `translate3d(${value.x * surfaceSizePx}px, ${value.y * surfaceSizePx}px, 0) translate3d(-50%, -50%, 0)`;
+
 function loadParticipantName(): string {
   try { return localStorage.getItem("participant-name") ?? ""; }
   catch { return ""; }
@@ -67,7 +70,9 @@ export function App() {
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
   const position = useRef<TrackpadState>({ ...TRACKPAD_CENTER });
-  const [visiblePosition, setVisiblePosition] = useState<TrackpadState>({ ...TRACKPAD_CENTER });
+  const cursorSurfaceSize = useRef(trackpadSurfaceSize(window.innerWidth, window.innerHeight));
+  const cursorMarker = useRef<HTMLSpanElement | null>(null);
+  const cursorPaintFrame = useRef<number | null>(null);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
   const seq = useRef(0);
   const throttle = useMemo(() => new InputThrottle(), []);
@@ -118,6 +123,12 @@ export function App() {
     connection.start();
     return () => connection.stop();
   }, [connection]);
+
+  useEffect(() => () => {
+    if (cursorPaintFrame.current !== null) {
+      window.cancelAnimationFrame(cursorPaintFrame.current);
+    }
+  }, []);
 
   const join = (event: FormEvent) => {
     event.preventDefault();
@@ -240,8 +251,23 @@ export function App() {
     });
   };
 
+  // Pointer events can arrive faster than Safari can commit React renders.
+  // Keep local feedback on the compositor: retain the latest position and
+  // write one transform per display frame without re-rendering the app.
+  const scheduleCursorPaint = () => {
+    if (cursorPaintFrame.current !== null) return;
+    cursorPaintFrame.current = window.requestAnimationFrame(() => {
+      cursorPaintFrame.current = null;
+      const marker = cursorMarker.current;
+      if (marker === null) return;
+      marker.style.transform = cursorTransform(position.current, cursorSurfaceSize.current);
+    });
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
+    cursorSurfaceSize.current = trackpadSurfaceSize(window.innerWidth, window.innerHeight);
+    scheduleCursorPaint();
     lastPointer.current = { x: e.clientX, y: e.clientY };
   };
 
@@ -249,13 +275,14 @@ export function App() {
     const last = lastPointer.current;
     if (last === null) return;
     const surface = trackpadSurfaceSize(window.innerWidth, window.innerHeight);
+    cursorSurfaceSize.current = surface;
     position.current = applyDelta(
       position.current,
       e.clientX - last.x,
       e.clientY - last.y,
       surface,
     );
-    setVisiblePosition(position.current);
+    scheduleCursorPaint();
     lastPointer.current = { x: e.clientX, y: e.clientY };
     sendPosition();
   };
@@ -319,8 +346,12 @@ export function App() {
           <p className="trackpad-instruction">Wische um deine Cursor zu bewegen</p>
           {state.phoneDisplayText !== null && <p className="phone-phase-text" aria-live="polite">{state.phoneDisplayText}</p>}
           {identity && <div className="live-cursor-field" aria-hidden="true"><span
+              ref={cursorMarker}
               className="live-cursor-dot"
-              style={{ left: `${visiblePosition.x * 100}%`, top: `${visiblePosition.y * 100}%`, backgroundColor: identity.color }}
+              style={{
+                backgroundColor: identity.color,
+                transform: cursorTransform(position.current, cursorSurfaceSize.current),
+              }}
             /></div>}
           {!state.inputOpen && (
             <p className="watch-screen">{state.join.kind === "accepted" ? `${submittedName}, watch the screen` : "Joining…"}</p>
