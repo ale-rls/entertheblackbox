@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PROTOCOL_VERSION,
   type QrGrantMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 import { shouldShowGrant } from "./shouldShowGrant.js";
 import { placementClassName, qrSizePx } from "./placement.js";
 import {

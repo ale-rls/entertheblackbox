@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, type DisplayToServerMessage } from "@smartphonecracy/protocol";
+import { PROTOCOL_VERSION, type DisplayToServerMessage } from "@entertheblackbox/protocol";
 
 /**
  * apps/server issues a QR grant once, at display_join -- refreshing it

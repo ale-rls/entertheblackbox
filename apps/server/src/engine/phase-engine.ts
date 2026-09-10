@@ -6,9 +6,9 @@ import {
   type DisplayPlaybackStatusMessage,
   type PhaseSnapshotMessage,
   type ServerToClientMessage,
-} from "@smartphonecracy/protocol";
-import type { Scenario, Phase } from "@smartphonecracy/scenario";
-import { DEFAULT_INSTALLATION_POLICY } from "@smartphonecracy/shared";
+} from "@entertheblackbox/protocol";
+import type { Scenario, Phase } from "@entertheblackbox/scenario";
+import { DEFAULT_INSTALLATION_POLICY } from "@entertheblackbox/shared";
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { WebSocket } from "ws";

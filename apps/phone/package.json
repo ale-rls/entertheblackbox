@@ -1,5 +1,5 @@
 {
-  "name": "@smartphonecracy/phone",
+  "name": "@entertheblackbox/phone",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -10,9 +10,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@smartphonecracy/protocol": "workspace:*",
-    "@smartphonecracy/scenario": "workspace:^",
-    "@smartphonecracy/shared": "workspace:*",
+    "@entertheblackbox/protocol": "workspace:*",
+    "@entertheblackbox/scenario": "workspace:^",
+    "@entertheblackbox/shared": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

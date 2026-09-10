@@ -3,8 +3,8 @@ import type {
   JoinRejectedMessage,
   ReloadMessage,
   ServerToClientMessage,
-} from "@smartphonecracy/protocol";
-import type { RatingConfig, Subtitle } from "@smartphonecracy/scenario";
+} from "@entertheblackbox/protocol";
+import type { RatingConfig, Subtitle } from "@entertheblackbox/scenario";
 
 /**
  * Phone state reducer. The phone intentionally renders almost nothing

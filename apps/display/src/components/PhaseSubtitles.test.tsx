@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { PhaseSnapshotMessage } from "@smartphonecracy/protocol";
+import type { PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 import { PhaseSubtitles } from "./PhaseSubtitles.js";
 

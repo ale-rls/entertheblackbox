@@ -1,4 +1,4 @@
-import { compileStudioGraph, parseRuntimeScenario } from "@smartphonecracy/studio-adapter";
+import { compileStudioGraph, parseRuntimeScenario } from "@entertheblackbox/studio-adapter";
 import { graphPhases, END_NODE_ID, ENTRY_NODE_ID } from "./canvas/graph.js";
 import { autoLayout, type Draft, type ProductionBaseline, type StudioBackup, type StudioDocument } from "./model.js";
 
@@ -21,7 +21,7 @@ const finiteNumber = (value: unknown): value is number => typeof value === "numb
 function artifactFromContent(value: unknown): ImportArtifact | undefined {
   if (typeof value === "string") return "readme";
   if (!isRecord(value)) return undefined;
-  if (value.format === "smartphonecracy-studio-backup") return "backup";
+  if (value.format === "entertheblackbox-studio-backup") return "backup";
   if ("studioFormatVersion" in value) return "studio";
   if (Array.isArray(value.phases) && "entryPhaseId" in value) return "scenario";
   if (Array.isArray(value.files)) return "manifest";
@@ -164,7 +164,7 @@ export function importStudioPackage(
 
 export function importBackup(raw: unknown): Draft {
   const backup = raw as Partial<StudioBackup>;
-  if (backup.format !== "smartphonecracy-studio-backup" || backup.version !== 1 || !isRecord(backup.draft)) {
+  if (backup.format !== "entertheblackbox-studio-backup" || backup.version !== 1 || !isRecord(backup.draft)) {
     throw new Error("Not a supported Studio backup");
   }
   const draft = backup.draft as unknown as Draft;
@@ -229,5 +229,5 @@ export function exportArtifacts(draft: Draft) {
 }
 
 export function exportBackup(draft: Draft): StudioBackup {
-  return { format: "smartphonecracy-studio-backup", version: 1, draft };
+  return { format: "entertheblackbox-studio-backup", version: 1, draft };
 }

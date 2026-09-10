@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { IncomingMessage } from "node:http";
 import { describe, expect, it, vi } from "vitest";
-import { parseServerMessage, SHOW_ENDED_CLOSE_CODE } from "@smartphonecracy/protocol";
+import { parseServerMessage, SHOW_ENDED_CLOSE_CODE } from "@entertheblackbox/protocol";
 import { z } from "zod";
 import { AdmissionController, InMemoryIpRateLimiter, issueJoinGrant, issueParticipantLease, verifyJoinGrant, verifyParticipantLease } from "./index.js";
 import type { WebSocket } from "ws";

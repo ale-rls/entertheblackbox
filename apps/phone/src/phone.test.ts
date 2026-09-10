@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PROTOCOL_VERSION, SHOW_ENDED_CLOSE_CODE, type ServerToClientMessage } from "@smartphonecracy/protocol";
+import { PROTOCOL_VERSION, SHOW_ENDED_CLOSE_CODE, type ServerToClientMessage } from "@entertheblackbox/protocol";
 import { PhoneConnection } from "./lib/connection.js";
 import { clearLease, loadLease, storeLease } from "./lib/lease.js";
 import { applyDelta, InputThrottle, TRACKPAD_CENTER, trackpadSurfaceSize } from "./lib/trackpad.js";

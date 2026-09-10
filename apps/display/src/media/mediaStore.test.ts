@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { MediaManifest } from "@smartphonecracy/scenario";
+import type { MediaManifest } from "@entertheblackbox/scenario";
 import { MediaStore, type MediaSyncStatus } from "./mediaStore.js";
 
 /** Minimal in-memory CacheStorage double. */
@@ -73,7 +73,7 @@ describe("MediaStore.sync", () => {
     const store = makeStore({ caches, statuses });
     await expect(store.sync(manifest)).resolves.toBe(true);
     expect(statuses.at(-1)).toEqual({ state: "ready" });
-    const cached = stores.get("smartphonecracy-media-v1")!;
+    const cached = stores.get("entertheblackbox-media-v1")!;
     expect(cached.has("/media-cache/hash-a")).toBe(true);
     expect(cached.has("/media-cache/hash-b")).toBe(true);
   });
@@ -86,7 +86,7 @@ describe("MediaStore.sync", () => {
     ] };
     const fetchFn = (async (input: RequestInfo | URL) => new Response(new TextEncoder().encode(String(input).includes("portrait") ? "I" : "A"))) as typeof fetch;
     await makeStore({ caches, fetchFn }).sync(mixed);
-    const cached = stores.get("smartphonecracy-media-v1")!;
+    const cached = stores.get("entertheblackbox-media-v1")!;
     expect(cached.get("/media-cache/hash-i")?.headers.get("content-type")).toBe("image/jpeg");
     expect(cached.get("/media-cache/hash-a")?.headers.get("content-type")).toBe("audio/mpeg");
   });
@@ -156,7 +156,7 @@ describe("MediaStore.sync", () => {
     await makeStore({ caches }).sync(manifest);
     // Corrupt the cached copy of a.mp4: right length, wrong content.
     stores
-      .get("smartphonecracy-media-v1")!
+      .get("entertheblackbox-media-v1")!
       .set(
         "/media-cache/hash-a",
         new Response(new TextEncoder().encode("XXX"), {
@@ -181,7 +181,7 @@ describe("MediaStore.sync", () => {
     await store.sync(manifest);
     const shrunk: MediaManifest = { files: [manifest.files[0]!] };
     await makeStore({ caches }).sync(shrunk);
-    const cached = stores.get("smartphonecracy-media-v1")!;
+    const cached = stores.get("entertheblackbox-media-v1")!;
     expect(cached.has("/media-cache/hash-a")).toBe(true);
     expect(cached.has("/media-cache/hash-b")).toBe(false);
   });
@@ -272,7 +272,7 @@ describe("chunked large-file downloads", () => {
       { range: "bytes=4-7" },
       { range: "bytes=8-11" },
     ]);
-    const cached = stores.get("smartphonecracy-media-v1")!.get("/media-cache/hash-b");
+    const cached = stores.get("entertheblackbox-media-v1")!.get("/media-cache/hash-b");
     expect(await cached?.text()).toBe(bigBody);
   });
 

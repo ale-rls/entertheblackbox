@@ -1,5 +1,5 @@
 {
-  "name": "@smartphonecracy/scenario",
+  "name": "@entertheblackbox/scenario",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@smartphonecracy/shared": "workspace:*",
+    "@entertheblackbox/shared": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

@@ -14,7 +14,7 @@ import {
   type PositionedVote,
   type TwoQuadrant,
 } from "../../../../packages/shared/src/index.js";
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import { diagnostics, type Diagnostic } from "../diagnostics/diagnostics.js";
 
 type Phase = StudioProject["scenario"]["phases"][number];

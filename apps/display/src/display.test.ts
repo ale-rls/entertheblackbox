@@ -3,7 +3,7 @@ import {
   PROTOCOL_VERSION,
   type PhaseSnapshotMessage,
   type ServerToClientMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 import { Backoff } from "./lib/backoff.js";
 import { ServerClock } from "./lib/serverClock.js";
 import {

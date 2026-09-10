@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { PhaseSnapshotMessage } from "@smartphonecracy/protocol";
+import type { PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 
 type MediaPhase = Extract<PhaseSnapshotMessage, { kind: "video" | "video-position-question" }>;

@@ -1,4 +1,4 @@
-# Smartphonecracy tools design system
+# Enter the Blackbox tools design system
 
 Status: Phase 1 authoritative design brief  
 Applies to: Admin and Show Studio  
@@ -65,7 +65,7 @@ purposeful, calm, and slightly tactile—not futuristic, glossy, playful, or lux
 
 ### Shared-style ownership
 
-Both tools load `@smartphonecracy/tool-ui/styles.css`. The shared package owns the
+Both tools load `@entertheblackbox/tool-ui/styles.css`. The shared package owns the
 document baseline and visual semantics: color, typography, controls, fields, panels,
 feedback, and interaction states. Application stylesheets own layout, positioning,
 and app-specific graph or operational presentation; they must not create parallel

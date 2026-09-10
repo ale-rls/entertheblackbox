@@ -1,4 +1,4 @@
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 
 type Phase = StudioProject["scenario"]["phases"][number];
 

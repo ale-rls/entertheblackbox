@@ -2,7 +2,7 @@ import {
   PROTOCOL_VERSION,
   type DisplayHeartbeatMessage,
   type DisplayToServerMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 
 /**
  * display_heartbeat loop (plan §7): tells the server this display is

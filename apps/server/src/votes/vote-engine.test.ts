@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scenarioSchema, type PositionQuestionPhase } from "@smartphonecracy/scenario";
+import { scenarioSchema, type PositionQuestionPhase } from "@entertheblackbox/scenario";
 import { VoteEngine, resolveSnapshot, type FinalVoteSnapshot } from "./vote-engine.js";
 
 const question = scenarioSchema.parse({

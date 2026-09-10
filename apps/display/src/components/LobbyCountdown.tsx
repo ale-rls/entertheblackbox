@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { PhaseSnapshotMessage } from "@smartphonecracy/protocol";
+import type { PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 
 export function formatLobbyCountdown(remainingMs: number): string {

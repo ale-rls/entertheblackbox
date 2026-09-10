@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import { advancePreview, advanceTimer, continueAfterResolution, currentPhase, forcedOutcomes, resolvePreview, startPreview, type ForcedOutcome, type PreviewSession } from "./preview.js";
 
 export function PreviewPanel({ project, onClose }: { project: StudioProject; onClose: () => void }) {

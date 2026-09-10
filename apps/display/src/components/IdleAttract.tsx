@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
-import type { QrGrantMessage } from "@smartphonecracy/protocol";
+import type { QrGrantMessage } from "@entertheblackbox/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 import { shouldShowGrant } from "../qr/shouldShowGrant.js";
 import { ORIGINAL_MARKER_TRACK, type MarkerTrack } from "../idle/markerTrack.js";

@@ -6,7 +6,7 @@ import {
   type MediaManifest,
   type Scenario,
   type ScenarioIssue,
-} from "@smartphonecracy/scenario";
+} from "@entertheblackbox/scenario";
 
 type UnknownRecord = Record<string, unknown>;
 

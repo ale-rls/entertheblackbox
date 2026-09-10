@@ -1,4 +1,4 @@
-import { StatusIcon, type ToolStatus } from "@smartphonecracy/tool-ui";
+import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import PocketBase from "pocketbase";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 

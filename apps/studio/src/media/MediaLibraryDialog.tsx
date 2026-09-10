@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import type { MediaManifest } from "./local.js";
 import { phaseMediaSources, studioMediaKindForSource, type StudioMediaKind } from "./library.js";
 

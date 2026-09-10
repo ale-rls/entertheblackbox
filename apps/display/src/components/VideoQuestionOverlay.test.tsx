@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { PROTOCOL_VERSION, type QuestionResolvedMessage } from "@smartphonecracy/protocol";
+import { PROTOCOL_VERSION, type QuestionResolvedMessage } from "@entertheblackbox/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 import { questionFieldCenter } from "./QuadrantOverlay.js";
 import { VideoQuestionOverlay, videoQuestionStage, type VideoQuestionPhase } from "./VideoQuestionOverlay.js";

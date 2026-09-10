@@ -1,4 +1,4 @@
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 
 export const MEDIA_BUDGET_BYTES = 2 * 1024 * 1024 * 1024;
 export type StudioMediaKind = "video" | "image" | "audio" | "unknown";

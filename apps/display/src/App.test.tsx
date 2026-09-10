@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { PROTOCOL_VERSION, type ServerToClientMessage } from "@smartphonecracy/protocol";
+import { PROTOCOL_VERSION, type ServerToClientMessage } from "@entertheblackbox/protocol";
 import type { PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
 import { App } from "./App.js";
 

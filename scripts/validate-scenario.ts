@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * CLI: validate a scenario file (+ its media manifest) against the
- * @smartphonecracy/scenario Zod schemas and graph/media validators
+ * @entertheblackbox/scenario Zod schemas and graph/media validators
  * (plan §5, STEP-003).
  *
  * Usage:

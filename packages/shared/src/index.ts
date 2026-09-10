@@ -1,5 +1,5 @@
 /**
- * Shared constants for the smartphonecracy installation.
+ * Shared constants for the entertheblackbox installation.
  * Values mirror the locked defaults in the implementation plan (§5).
  * Director-configurable values live in InstallationPolicy at runtime;
  * these are the v1 defaults.

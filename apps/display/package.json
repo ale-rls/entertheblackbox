@@ -1,5 +1,5 @@
 {
-  "name": "@smartphonecracy/display",
+  "name": "@entertheblackbox/display",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -10,9 +10,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@smartphonecracy/protocol": "workspace:*",
-    "@smartphonecracy/scenario": "workspace:^",
-    "@smartphonecracy/shared": "workspace:*",
+    "@entertheblackbox/protocol": "workspace:*",
+    "@entertheblackbox/scenario": "workspace:^",
+    "@entertheblackbox/shared": "workspace:*",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

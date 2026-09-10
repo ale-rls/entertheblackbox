@@ -1,4 +1,4 @@
-# @smartphonecracy/realtime-ws-coolify
+# @entertheblackbox/realtime-ws-coolify
 
 Room-scoped uWebSockets.js cursor relay, packaged in the flat, plain-JS
 layout of [manegame/uwebsocket-server](https://gitlab.com/manegame/uwebsocket-server),
@@ -24,7 +24,7 @@ tarball endpoint without needing `git` in the image. `start.sh` bumps
 ## Usage
 
 ```bash
-pnpm --filter @smartphonecracy/realtime-ws-coolify start   # http://localhost:9001
+pnpm --filter @entertheblackbox/realtime-ws-coolify start   # http://localhost:9001
 ```
 
 Clients connect with
@@ -63,7 +63,7 @@ movement, not felt on a projected display.
 This relay is additive, not a replacement for `packages/protocol`'s `input`
 message. Position-question votes are the *same* normalized (x, y) a phone
 sends while dragging, and the phase engine's `VoteEngine` only trusts input
-recorded over the authoritative `/ws` connection to `@smartphonecracy/server`
+recorded over the authoritative `/ws` connection to `@entertheblackbox/server`
 -- that path is unchanged. This relay is a low-latency side channel purely
 for the display's cursor *visualization*.
 

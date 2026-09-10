@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
-import { PROTOCOL_VERSION } from "@smartphonecracy/protocol";
+import { PROTOCOL_VERSION } from "@entertheblackbox/protocol";
 import { PhoneConnection, type EndedPhoneSession } from "./lib/connection.js";
 import { RealtimeCursorPublisher } from "./lib/realtimeWsClient.js";
 import { loadLease } from "./lib/lease.js";
@@ -312,7 +312,7 @@ export function App() {
       {submittedName === null ? (
         <div className="join-screen">
           <form className="join-card" onSubmit={join}>
-            <p className="join-eyebrow">Smartphonecracy</p>
+            <p className="join-eyebrow">Enter the Blackbox</p>
             <h1>Join the session</h1>
             {state.join.kind === "ended" && <p className="join-message">That show has ended. You can join the next session.</p>}
             <label htmlFor="participant-name">Your name</label>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRuntimeScenario } from "@smartphonecracy/studio-adapter";
+import { parseRuntimeScenario } from "@entertheblackbox/studio-adapter";
 import scenario from "../../../../content/scenarios/dev.json";
 import manifest from "../../../../content/media-manifest.json";
 import { changePhaseKind, componentTypeForPhase, phaseIdError, phaseKindForComponentType, QUESTION_DEFAULTS, renamePhase } from "./model.js";

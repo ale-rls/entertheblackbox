@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRuntimeScenario } from "@smartphonecracy/studio-adapter";
+import { parseRuntimeScenario } from "@entertheblackbox/studio-adapter";
 import { appendCampaignExtension } from "./campaign.js";
 
 describe("campaign extension template", () => {

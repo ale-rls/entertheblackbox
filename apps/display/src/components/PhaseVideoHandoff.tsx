@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import type { DisplayToServerMessage, PhaseSnapshotMessage } from "@smartphonecracy/protocol";
+import type { DisplayToServerMessage, PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import { PhaseVideo } from "./PhaseVideo.js";
 
 type VideoPhase = Extract<

@@ -1,4 +1,4 @@
-import type { QrGrantMessage } from "@smartphonecracy/protocol";
+import type { QrGrantMessage } from "@entertheblackbox/protocol";
 
 export type QrCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 

@@ -6,7 +6,7 @@ import type {
   RatingStatusMessage,
   ReloadMessage,
   ServerToClientMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 import type { ConnectionStatus } from "../lib/connection.js";
 
 /**

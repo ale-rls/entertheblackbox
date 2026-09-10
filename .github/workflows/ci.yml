@@ -24,7 +24,7 @@ jobs:
       - run: pnpm -r test
       - run: pnpm validate-scenario content/scenarios/dev.json
       - name: Build display, phone, and admin bundles
-        run: pnpm --filter @smartphonecracy/display build && pnpm --filter @smartphonecracy/phone build && pnpm --filter @smartphonecracy/admin build
+        run: pnpm --filter @entertheblackbox/display build && pnpm --filter @entertheblackbox/phone build && pnpm --filter @entertheblackbox/admin build
   e2e:
     runs-on: ubuntu-latest
     steps:

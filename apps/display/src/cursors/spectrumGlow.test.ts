@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { PositionField } from "@smartphonecracy/scenario";
+import type { PositionField } from "@entertheblackbox/scenario";
 import { projectOntoSegment, proximityStrength, spectrumSegment } from "./spectrumGlow.js";
 
 const labels = { minLabel: "low", maxLabel: "high" };

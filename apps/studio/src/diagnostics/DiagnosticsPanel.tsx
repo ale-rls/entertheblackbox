@@ -1,4 +1,4 @@
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import { branchMediaBudgets, mediaRows } from "../media/library.js";
 import { diagnosticKey, diagnostics, exportBlocked } from "./diagnostics.js";
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import type { PositionField } from "@smartphonecracy/scenario";
+import type { PositionField } from "@entertheblackbox/scenario";
 import type { ServerClock } from "../lib/serverClock.js";
 import type { CursorField } from "./cursorField.js";
 import { projectOntoSegment, proximityStrength, spectrumSegment } from "./spectrumGlow.js";

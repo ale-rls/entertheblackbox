@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { RatingStatusMessage } from "@smartphonecracy/protocol";
+import type { RatingStatusMessage } from "@entertheblackbox/protocol";
 import { CrowdReactionSounds, pickReactionSample } from "./CrowdReactionSounds.js";
 
 class FakeAudio {

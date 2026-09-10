@@ -1,4 +1,4 @@
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import type { Draft } from "../model.js";
 
 type RuntimeMediaManifest = StudioProject["manifest"];

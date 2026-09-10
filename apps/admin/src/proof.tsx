@@ -1,4 +1,4 @@
-import { StatusIcon, type ToolStatus } from "@smartphonecracy/tool-ui";
+import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 function Status({ status, children }: { status: ToolStatus; children: ReactNode }) {

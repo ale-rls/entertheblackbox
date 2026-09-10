@@ -7,7 +7,7 @@ import {
   validateScenario,
   type MediaManifest,
   type Scenario,
-} from "@smartphonecracy/scenario";
+} from "@entertheblackbox/scenario";
 import type { ServerConfig } from "./config.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 

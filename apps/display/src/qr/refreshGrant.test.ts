@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PROTOCOL_VERSION, type DisplayToServerMessage } from "@smartphonecracy/protocol";
+import { PROTOCOL_VERSION, type DisplayToServerMessage } from "@entertheblackbox/protocol";
 import { startQrGrantRefresh } from "./refreshGrant.js";
 
 describe("startQrGrantRefresh", () => {

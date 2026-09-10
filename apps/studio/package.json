@@ -1,5 +1,5 @@
 {
-  "name": "@smartphonecracy/studio",
+  "name": "@entertheblackbox/studio",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@smartphonecracy/studio-adapter": "workspace:*",
-    "@smartphonecracy/tool-ui": "workspace:*",
+    "@entertheblackbox/studio-adapter": "workspace:*",
+    "@entertheblackbox/tool-ui": "workspace:*",
     "@xyflow/react": "^12.3.6",
     "pocketbase": "^0.27.3",
     "react": "^18.3.1",

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 : "${KIOSK_URL:?Set KIOSK_URL to the production /display/ URL}"
-KIOSK_PROFILE_DIR="${KIOSK_PROFILE_DIR:-${HOME}/.config/smartphonecracy-kiosk}"
+KIOSK_PROFILE_DIR="${KIOSK_PROFILE_DIR:-${HOME}/.config/entertheblackbox-kiosk}"
 NETWORK_ATTEMPTS="${NETWORK_ATTEMPTS:-30}"
 NETWORK_RETRY_SECONDS="${NETWORK_RETRY_SECONDS:-2}"
 

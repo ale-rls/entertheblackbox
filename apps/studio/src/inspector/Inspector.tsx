@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import type { Arena } from "../../../../packages/shared/src/index.js";
 import { compiledJson, componentTypeForPhase, phaseIdError, type AuthorableComponentType, type Phase } from "./model.js";
 import { PolygonEditor, type PolygonEditorMedia } from "./PolygonEditor.js";

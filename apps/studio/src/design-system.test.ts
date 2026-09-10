@@ -10,7 +10,7 @@ describe("production Studio design-system contract", () => {
     const app = source("./App.tsx");
     const preview = source("./preview/PreviewPanel.tsx");
 
-    expect(app).toContain('import "@smartphonecracy/tool-ui/styles.css"');
+    expect(app).toContain('import "@entertheblackbox/tool-ui/styles.css"');
     expect(app.match(/data-sc-tool-root/g)).toHaveLength(2);
     expect(app.match(/data-sc-tool-density="compact"/g)).toHaveLength(2);
     expect(app).toContain('ariaLabel: "Show entry"');

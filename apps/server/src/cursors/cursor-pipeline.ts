@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, type Cursor, type CursorsMessage, type PresenceMessage } from "@smartphonecracy/protocol";
+import { PROTOCOL_VERSION, type Cursor, type CursorsMessage, type PresenceMessage } from "@entertheblackbox/protocol";
 
 export const CURSOR_TICK_INTERVAL_MS = 40;
 

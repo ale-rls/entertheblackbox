@@ -1,5 +1,5 @@
 {
-  "name": "@smartphonecracy/protocol",
+  "name": "@entertheblackbox/protocol",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@smartphonecracy/scenario": "workspace:^",
-    "@smartphonecracy/shared": "workspace:*",
+    "@entertheblackbox/scenario": "workspace:^",
+    "@entertheblackbox/shared": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

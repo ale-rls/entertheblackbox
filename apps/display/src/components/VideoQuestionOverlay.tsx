@@ -3,7 +3,7 @@ import type {
   PhaseSnapshotMessage,
   QuestionResolvedMessage,
   QuestionStatusMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 import { QuadrantOverlay, questionFieldCenter } from "./QuadrantOverlay.js";
 import { VoteCloseCountdown } from "./VoteCloseCountdown.js";

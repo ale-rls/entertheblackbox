@@ -8,8 +8,8 @@ import {
   type IdentityMessage,
   type JoinRejectedMessage,
   type ReloadMessage,
-} from "@smartphonecracy/protocol";
-import { DEFAULT_INSTALLATION_POLICY } from "@smartphonecracy/shared";
+} from "@entertheblackbox/protocol";
+import { DEFAULT_INSTALLATION_POLICY } from "@entertheblackbox/shared";
 import type { RawData, WebSocket } from "ws";
 import {
   issueJoinGrant,

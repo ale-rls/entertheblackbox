@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseRuntimeScenario } from "@smartphonecracy/studio-adapter";
+import { parseRuntimeScenario } from "@entertheblackbox/studio-adapter";
 import { Autosave, recoverDraft, type DraftDatabase } from "./drafts.js";
 import { exportArtifacts, exportBackup, importBackup, importRuntime, importStudioFiles } from "./io.js";
 import { autoLayout, type Draft } from "./model.js";
@@ -38,7 +38,7 @@ describe("Studio shell", () => {
 
   it("round-trips a versioned Studio backup", () => {
     const draft = importRuntime(scenario, manifest);
-    expect(importBackup({ format: "smartphonecracy-studio-backup", version: 1, draft })).toEqual(draft);
+    expect(importBackup({ format: "entertheblackbox-studio-backup", version: 1, draft })).toEqual(draft);
     expect(() => importBackup({ version: 99 })).toThrow("supported Studio backup");
   });
 

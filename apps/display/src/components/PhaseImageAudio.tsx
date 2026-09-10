@@ -3,7 +3,7 @@ import {
   PROTOCOL_VERSION,
   type DisplayToServerMessage,
   type PhaseSnapshotMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 import { useVideoPlaybackDiagnostics } from "../media/useVideoPlaybackDiagnostics.js";
 
 type ImageAudioPhase = Extract<PhaseSnapshotMessage, { kind: "video" | "video-position-question" }> & { audioSrc: string };

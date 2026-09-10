@@ -24,7 +24,7 @@ afterEach(async () => {
 });
 
 async function fixture(invalidScenario = false) {
-  const root = await mkdtemp(join(tmpdir(), "smartphonecracy-server-"));
+  const root = await mkdtemp(join(tmpdir(), "entertheblackbox-server-"));
   const content = join(root, "content");
   const media = join(content, "media");
   await mkdir(media, { recursive: true });

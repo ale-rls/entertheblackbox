@@ -9,7 +9,7 @@ import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
 import type { GhostPool } from "./ghosts/index.js";
 import { MovementConsentManager } from "./movement/index.js";
-import { DEFAULT_INSTALLATION_POLICY } from "@smartphonecracy/shared";
+import { DEFAULT_INSTALLATION_POLICY } from "@entertheblackbox/shared";
 import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
 import { readServerConfigOverride, writeActiveShowId, writeTargetAudienceSize } from "./persistence/installation-config.js";
 import { writeLobbyStartTimes } from "./persistence/lobby-config.js";

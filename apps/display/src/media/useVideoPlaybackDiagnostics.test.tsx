@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { DisplayToServerMessage } from "@smartphonecracy/protocol";
+import type { DisplayToServerMessage } from "@entertheblackbox/protocol";
 import { useVideoPlaybackDiagnostics } from "./useVideoPlaybackDiagnostics.js";
 
 let root: Root | null = null;

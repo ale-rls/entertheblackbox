@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRuntimeScenario } from "@smartphonecracy/studio-adapter";
+import { parseRuntimeScenario } from "@entertheblackbox/studio-adapter";
 import scenario from "../../../../content/scenarios/dev.json";
 import manifest from "../../../../content/media-manifest.json";
 import { acceptsInput, applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, outputHandles, phaseOutputHandles, pruneEdges, reconcilePhaseOutputEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./graph.js";

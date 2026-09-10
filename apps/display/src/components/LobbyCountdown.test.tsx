@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { PhaseSnapshotMessage } from "@smartphonecracy/protocol";
+import type { PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import { ServerClock } from "../lib/serverClock.js";
 import { formatLobbyCountdown, LobbyCountdown } from "./LobbyCountdown.js";
 

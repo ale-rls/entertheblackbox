@@ -1,4 +1,4 @@
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import { END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases } from "./canvas/graph.js";
 
 export type StudioNodeLayout = { id: string; x: number; y: number };
@@ -32,7 +32,7 @@ export type Draft = {
   document: StudioDocument;
 };
 
-export type StudioBackup = { format: "smartphonecracy-studio-backup"; version: 1; draft: Draft };
+export type StudioBackup = { format: "entertheblackbox-studio-backup"; version: 1; draft: Draft };
 
 export function autoLayout(project: StudioProject, showId: string = crypto.randomUUID()): StudioDocument {
   const nodes = graphPhases(project).map((phase, index) => ({

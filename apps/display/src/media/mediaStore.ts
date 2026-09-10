@@ -1,4 +1,4 @@
-import type { MediaManifest } from "@smartphonecracy/scenario";
+import type { MediaManifest } from "@entertheblackbox/scenario";
 
 /**
  * Display media pipeline (plan §9):
@@ -96,7 +96,7 @@ export class MediaStore {
   private stopped = false;
 
   constructor(deps: MediaStoreDeps = {}) {
-    this.cacheName = deps.cacheName ?? "smartphonecracy-media-v1";
+    this.cacheName = deps.cacheName ?? "entertheblackbox-media-v1";
     this.cachesObj = deps.caches ?? caches;
     this.fetchFn = deps.fetchFn ?? fetch.bind(globalThis);
     this.digest = deps.digest ?? sha256Hex;

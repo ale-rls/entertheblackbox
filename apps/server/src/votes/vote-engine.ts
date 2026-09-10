@@ -2,7 +2,7 @@ import type {
   CountablePositionVoteStatus,
   PositionVotePhase,
   PositionVoteStatus,
-} from "@smartphonecracy/scenario";
+} from "@entertheblackbox/scenario";
 import {
   countPositionQuadrants,
   DEFAULT_INSTALLATION_POLICY,
@@ -17,7 +17,7 @@ import {
   type PositionQuadrantCounts,
   type TwoQuadrant,
   type TwoQuadrantField,
-} from "@smartphonecracy/shared";
+} from "@entertheblackbox/shared";
 
 export type VoteParticipantSeed = {
   participantId: string;

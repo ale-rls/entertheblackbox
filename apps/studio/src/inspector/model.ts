@@ -1,4 +1,4 @@
-import { compileStudioGraph, type StudioProject } from "@smartphonecracy/studio-adapter";
+import { compileStudioGraph, type StudioProject } from "@entertheblackbox/studio-adapter";
 
 export type Phase = StudioProject["scenario"]["phases"][number];
 export type PhaseKind = Phase["kind"];

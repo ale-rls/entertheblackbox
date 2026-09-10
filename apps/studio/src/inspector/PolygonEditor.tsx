@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import { REFERENCE_DISPLAY_HEIGHT, REFERENCE_DISPLAY_WIDTH } from "./referenceDisplay.js";
 
 type PositionPhase = Extract<StudioProject["scenario"]["phases"][number], { kind: "position-question" | "video-position-question" }>;

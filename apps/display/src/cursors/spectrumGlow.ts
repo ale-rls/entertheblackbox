@@ -1,5 +1,5 @@
-import type { PositionField } from "@smartphonecracy/scenario";
-import { arenaEllipseSplitY, arenaQuadLandmarks } from "@smartphonecracy/shared";
+import type { PositionField } from "@entertheblackbox/scenario";
+import { arenaEllipseSplitY, arenaQuadLandmarks } from "@entertheblackbox/shared";
 
 export type Point = { x: number; y: number };
 export type Segment = { start: Point; end: Point };

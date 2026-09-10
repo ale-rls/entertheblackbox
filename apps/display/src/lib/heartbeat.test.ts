@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PROTOCOL_VERSION,
   type DisplayHeartbeatMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 import { IDLE_PLACEHOLDER, startHeartbeat } from "./heartbeat.js";
 
 describe("startHeartbeat", () => {

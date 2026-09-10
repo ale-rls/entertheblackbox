@@ -1,9 +1,9 @@
 import type {
   QuestionResolvedMessage,
   QuestionStatusMessage,
-} from "@smartphonecracy/protocol";
-import type { Arena, ArenaEllipse, ArenaQuad, Axis, PolygonZonesField, PositionField } from "@smartphonecracy/scenario";
-import { arenaEllipseSplitY, arenaQuadFourRegions, arenaQuadLandmarks, arenaQuadTwoRegions, centroid } from "@smartphonecracy/shared";
+} from "@entertheblackbox/protocol";
+import type { Arena, ArenaEllipse, ArenaQuad, Axis, PolygonZonesField, PositionField } from "@entertheblackbox/scenario";
+import { arenaEllipseSplitY, arenaQuadFourRegions, arenaQuadLandmarks, arenaQuadTwoRegions, centroid } from "@entertheblackbox/shared";
 
 export type AxisLabels = Axis;
 export type QuestionField = PositionField;

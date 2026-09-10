@@ -3,7 +3,7 @@ import {
   PROTOCOL_VERSION,
   type DisplayPlaybackStatusMessage,
   type DisplayToServerMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 
 type PlaybackStatus = DisplayPlaybackStatusMessage["status"];
 

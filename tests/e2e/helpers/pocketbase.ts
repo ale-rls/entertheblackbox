@@ -13,9 +13,9 @@ import { REPO_ROOT } from "./paths.js";
  */
 export const E2E_POCKETBASE_PORT = 8091;
 export const E2E_POCKETBASE_URL = `http://127.0.0.1:${E2E_POCKETBASE_PORT}`;
-export const E2E_POCKETBASE_ADMIN_EMAIL = "e2e-superuser@smartphonecracy.local";
+export const E2E_POCKETBASE_ADMIN_EMAIL = "e2e-superuser@entertheblackbox.local";
 export const E2E_POCKETBASE_ADMIN_PASSWORD = "e2e-superuser-password-12345";
-export const E2E_OPERATOR_EMAIL = "e2e-operator@smartphonecracy.local";
+export const E2E_OPERATOR_EMAIL = "e2e-operator@entertheblackbox.local";
 export const E2E_OPERATOR_PASSWORD = "e2e-operator-password-12345";
 
 const DATA_DIR = `${REPO_ROOT}/pocketbase/.e2e-data`;

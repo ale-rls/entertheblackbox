@@ -1,5 +1,5 @@
 {
-  "name": "smartphonecracy",
+  "name": "entertheblackbox",
   "private": true,
   "packageManager": "pnpm@9.12.2",
   "engines": {
@@ -8,7 +8,7 @@
   "scripts": {
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "test:e2e": "pnpm --filter @smartphonecracy/display build && pnpm --filter @smartphonecracy/phone build && pnpm --filter @smartphonecracy/admin build && playwright test --config tests/e2e/playwright.config.ts",
+    "test:e2e": "pnpm --filter @entertheblackbox/display build && pnpm --filter @entertheblackbox/phone build && pnpm --filter @entertheblackbox/admin build && playwright test --config tests/e2e/playwright.config.ts",
     "validate-scenario": "tsx scripts/validate-scenario.ts",
     "build-media-manifest": "tsx scripts/build-media-manifest.ts",
     "generate-idle-marker-tracks": "python3 scripts/generate-idle-marker-tracks.py",

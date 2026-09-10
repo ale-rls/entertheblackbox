@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { DisplayToServerMessage, PhaseSnapshotMessage } from "@smartphonecracy/protocol";
+import type { DisplayToServerMessage, PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import { PhaseImageAudio } from "./PhaseImageAudio.js";
 
 const phase: Extract<PhaseSnapshotMessage, { kind: "video" }> & { audioSrc: string } = {

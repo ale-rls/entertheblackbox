@@ -1,4 +1,4 @@
-import { PROTOCOL_VERSION, type QrGrantMessage, type QrHiddenMessage } from "@smartphonecracy/protocol";
+import { PROTOCOL_VERSION, type QrGrantMessage, type QrHiddenMessage } from "@entertheblackbox/protocol";
 import type { JoinGrantClaims } from "./tokens.js";
 
 export type QrLifecycle = "idle" | "lobby" | "active";

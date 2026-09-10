@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { QuestionResolvedMessage } from "@smartphonecracy/protocol";
+import type { QuestionResolvedMessage } from "@entertheblackbox/protocol";
 
 export const VOTE_DECISION_SOUND_SRC = "/display/sfx/please%20cut%20me%20only%20the%20beginning%207%20seconds.mp3";
 export const VOTE_DECISION_SOUND_DURATION_MS = 7_000;

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DISPLAY_REPLACED_CLOSE_CODE } from "@smartphonecracy/protocol";
+import { DISPLAY_REPLACED_CLOSE_CODE } from "@entertheblackbox/protocol";
 import { Backoff } from "./backoff.js";
 import { DisplayConnection, type ConnectionStatus } from "./connection.js";
 

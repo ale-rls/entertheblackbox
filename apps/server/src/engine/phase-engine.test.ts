@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
-import { scenarioSchema } from "@smartphonecracy/scenario";
+import { scenarioSchema } from "@entertheblackbox/scenario";
 import type { WebSocket } from "ws";
 import { ParticipantRegistry } from "../admission/index.js";
 import type {

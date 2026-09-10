@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { QuestionResolvedMessage } from "@smartphonecracy/protocol";
+import type { QuestionResolvedMessage } from "@entertheblackbox/protocol";
 import {
   SPECTRUM_DECISION_PLAYBACK_RATE,
   VOTE_DECISION_SOUND_DURATION_MS,

@@ -8,14 +8,14 @@
 #
 # Env:
 #   POCKETBASE_URL (default http://127.0.0.1:8090)
-#   POCKETBASE_ADMIN_EMAIL (default dev@smartphonecracy.local)
+#   POCKETBASE_ADMIN_EMAIL (default dev@entertheblackbox.local)
 #   POCKETBASE_ADMIN_PASSWORD (default dev-pocketbase-password)
 set -euo pipefail
 
 EMAIL="${1:?usage: create-operator.sh <email> <password>}"
 PASSWORD="${2:?usage: create-operator.sh <email> <password>}"
 URL="${POCKETBASE_URL:-http://127.0.0.1:8090}"
-ADMIN_EMAIL="${POCKETBASE_ADMIN_EMAIL:-dev@smartphonecracy.local}"
+ADMIN_EMAIL="${POCKETBASE_ADMIN_EMAIL:-dev@entertheblackbox.local}"
 ADMIN_PASSWORD="${POCKETBASE_ADMIN_PASSWORD:-dev-pocketbase-password}"
 
 TOKEN=$(curl -sf -X POST "${URL}/api/collections/_superusers/auth-with-password" \

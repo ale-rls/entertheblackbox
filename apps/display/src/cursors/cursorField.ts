@@ -1,4 +1,4 @@
-import type { Cursor, CursorsMessage } from "@smartphonecracy/protocol";
+import type { Cursor, CursorsMessage } from "@entertheblackbox/protocol";
 
 /**
  * Cursor interpolation model (plan §9): the display renders cursor

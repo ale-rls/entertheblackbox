@@ -5,7 +5,7 @@ import {
   PROTOCOL_VERSION,
   type DisplayToServerMessage,
   type ServerToClientMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 import { Backoff } from "./backoff.js";
 import { ServerClock } from "./serverClock.js";
 

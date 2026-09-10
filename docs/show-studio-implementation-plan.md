@@ -4,7 +4,7 @@
 
 Status: ready for engineering handoff
 
-Purpose: build a visual node-based interface for creating and editing Smartphonecracy shows without rewriting or replacing the existing installation runtime.
+Purpose: build a visual node-based interface for creating and editing Enter the Blackbox shows without rewriting or replacing the existing installation runtime.
 
 ## 1. Core constraint
 

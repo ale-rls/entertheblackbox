@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import type { DisplayToServerMessage } from "@smartphonecracy/protocol";
+import type { DisplayToServerMessage } from "@entertheblackbox/protocol";
 import { CursorField } from "./cursors/cursorField.js";
 import { CursorCanvas } from "./cursors/CursorCanvas.js";
 import { SpectrumGlowCanvas } from "./cursors/SpectrumGlowCanvas.js";

@@ -6,7 +6,7 @@
  */
 
 const keyFor = (installationId: string) =>
-  `smartphonecracy:lease:${installationId}`;
+  `entertheblackbox:lease:${installationId}`;
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 

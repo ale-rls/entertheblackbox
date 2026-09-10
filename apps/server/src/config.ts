@@ -37,7 +37,7 @@ const envSchema = z.object({
   ADMIN_DIST_DIR: z.string().min(1).optional(),
   STUDIO_DIST_DIR: z.string().min(1).optional(),
   POCKETBASE_URL: z.string().url().default("http://127.0.0.1:8090"),
-  POCKETBASE_ADMIN_EMAIL: z.string().email().default("dev@smartphonecracy.local"),
+  POCKETBASE_ADMIN_EMAIL: z.string().email().default("dev@entertheblackbox.local"),
   POCKETBASE_ADMIN_PASSWORD: z.string().min(8).default(DEVELOPMENT_POCKETBASE_ADMIN_PASSWORD),
 });
 

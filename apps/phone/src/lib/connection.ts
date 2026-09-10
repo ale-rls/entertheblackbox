@@ -5,7 +5,7 @@ import {
   SHOW_ENDED_CLOSE_CODE,
   type PhoneToServerMessage,
   type ServerToClientMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 import { clearLease, loadLease, storeLease } from "./lease.js";
 
 /**

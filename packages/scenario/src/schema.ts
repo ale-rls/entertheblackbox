@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@smartphonecracy/shared";
+import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
 import { extraAudioCombinationError, mediaCombinationError } from "./media-kind.js";
 
 const unitCoordinateSchema = z.number().min(0).max(1);
@@ -64,7 +64,7 @@ export const polygonPointSchema = z.object({
  * surface's four corners as they actually appear in the shot, in on-screen
  * order starting top-left. Preferred over the ellipse when the filmed
  * floor is visibly skewed by camera angle -- see arenaQuadLandmarks in
- * @smartphonecracy/shared for how the split lines are derived from it.
+ * @entertheblackbox/shared for how the split lines are derived from it.
  */
 export const arenaQuadSchema = z.object({
   type: z.literal("quad"),

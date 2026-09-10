@@ -1,4 +1,4 @@
-import { validateStudioProject, type StudioProject } from "@smartphonecracy/studio-adapter";
+import { validateStudioProject, type StudioProject } from "@entertheblackbox/studio-adapter";
 import { MEDIA_BUDGET_BYTES, distinctReferencedBytes, phaseMediaSources } from "../media/library.js";
 
 export type Diagnostic = { severity: "error" | "warning" | "info"; code: string; message: string; phaseId?: string; acknowledgementRequired?: boolean };

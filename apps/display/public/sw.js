@@ -8,7 +8,7 @@
  * hashed /assets/ files are cache-first (immutable).
  */
 
-const SHELL_CACHE = "smartphonecracy-shell-v1";
+const SHELL_CACHE = "entertheblackbox-shell-v1";
 
 // The SW is served from the bundle mount (e.g. /display/sw.js), so the
 // app shell's hashed assets live under <mount>/assets/, not /assets/.
@@ -24,7 +24,7 @@ self.addEventListener("activate", (event) => {
       const names = await caches.keys();
       await Promise.all(
         names
-          .filter((n) => n.startsWith("smartphonecracy-shell-") && n !== SHELL_CACHE)
+          .filter((n) => n.startsWith("entertheblackbox-shell-") && n !== SHELL_CACHE)
           .map((n) => caches.delete(n)),
       );
       await self.clients.claim();

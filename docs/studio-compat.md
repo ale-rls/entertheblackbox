@@ -1,6 +1,6 @@
 # Show Studio runtime compatibility
 
-The checked-in `@smartphonecracy/scenario` schemas and validators are the
+The checked-in `@entertheblackbox/scenario` schemas and validators are the
 authoritative import/export contract. The Studio adapter imports those schemas;
 it does not maintain a second runtime schema.
 
@@ -38,5 +38,5 @@ An incompatible change to a known field still fails canonical parsing; it is
 not disguised as an extension. `compileStudioGraph()` reparses both artifacts
 and finishes with the existing graph/media-reference validator. Invalid runtime
 output is rejected. A future runtime schema version should first update
-`@smartphonecracy/scenario`; the adapter then adopts it through that dependency
+`@entertheblackbox/scenario`; the adapter then adopts it through that dependency
 and adds a compatibility fixture before Studio exposes the new fields for edit.

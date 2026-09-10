@@ -11,7 +11,7 @@
  *
  * Env:
  *   POCKETBASE_URL (default http://127.0.0.1:8090)
- *   POCKETBASE_ADMIN_EMAIL (default dev@smartphonecracy.local)
+ *   POCKETBASE_ADMIN_EMAIL (default dev@entertheblackbox.local)
  *   POCKETBASE_ADMIN_PASSWORD (default dev-pocketbase-password)
  */
 
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
 
   const pb = new PocketBase(process.env.POCKETBASE_URL ?? "http://127.0.0.1:8090");
   await pb.collection("_superusers").authWithPassword(
-    process.env.POCKETBASE_ADMIN_EMAIL ?? "dev@smartphonecracy.local",
+    process.env.POCKETBASE_ADMIN_EMAIL ?? "dev@entertheblackbox.local",
     process.env.POCKETBASE_ADMIN_PASSWORD ?? "dev-pocketbase-password",
   );
 

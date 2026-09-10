@@ -1,4 +1,4 @@
-import type { QrGrantMessage } from "@smartphonecracy/protocol";
+import type { QrGrantMessage } from "@entertheblackbox/protocol";
 
 /**
  * Pure visibility rule for the QR badge (plan §7/§9): the display renders

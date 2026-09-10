@@ -1,5 +1,5 @@
 {
-  "name": "@smartphonecracy/server",
+  "name": "@entertheblackbox/server",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -9,9 +9,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@smartphonecracy/protocol": "workspace:*",
-    "@smartphonecracy/scenario": "workspace:*",
-    "@smartphonecracy/shared": "workspace:*",
+    "@entertheblackbox/protocol": "workspace:*",
+    "@entertheblackbox/scenario": "workspace:*",
+    "@entertheblackbox/shared": "workspace:*",
     "eventsource": "^5.1.1",
     "fastify": "^5.1.0",
     "pocketbase": "^0.27.3",

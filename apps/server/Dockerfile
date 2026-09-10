@@ -51,10 +51,10 @@ ENV REALTIME_WS_URL=$REALTIME_WS_URL
 ARG DISPLAY_TOKEN
 ENV DISPLAY_TOKEN=$DISPLAY_TOKEN
 
-RUN pnpm --filter @smartphonecracy/display build \
-  && pnpm --filter @smartphonecracy/phone build \
-  && pnpm --filter @smartphonecracy/admin build \
-  && pnpm --filter @smartphonecracy/studio build
+RUN pnpm --filter @entertheblackbox/display build \
+  && pnpm --filter @entertheblackbox/phone build \
+  && pnpm --filter @entertheblackbox/admin build \
+  && pnpm --filter @entertheblackbox/studio build
 
 FROM node:22-bookworm-slim
 

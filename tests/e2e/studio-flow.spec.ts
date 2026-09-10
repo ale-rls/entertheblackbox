@@ -137,7 +137,7 @@ test.describe("Show Studio v1", () => {
 
   test("restores node positions and connections after saving and reopening a show", async ({ page }) => {
     const savedEdgeCount = () => page.evaluate(() => new Promise<number>((resolve, reject) => {
-      const open = indexedDB.open("smartphonecracy-studio", 1);
+      const open = indexedDB.open("entertheblackbox-studio", 1);
       open.onerror = () => reject(open.error);
       open.onsuccess = () => {
         const read = open.result.transaction("drafts").objectStore("drafts").getAll();

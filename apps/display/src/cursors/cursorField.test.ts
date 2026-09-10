@@ -3,7 +3,7 @@ import {
   PROTOCOL_VERSION,
   type CursorsMessage,
   type ServerToClientMessage,
-} from "@smartphonecracy/protocol";
+} from "@entertheblackbox/protocol";
 import { CursorField, RENDER_DELAY_MS } from "./cursorField.js";
 import { displayReducer, initialDisplayState, type DisplayState } from "../state/store.js";
 

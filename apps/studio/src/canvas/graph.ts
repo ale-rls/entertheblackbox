@@ -1,4 +1,4 @@
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import type { Connection, Edge } from "@xyflow/react";
 
 export const ENTRY_NODE_ID = "__studio_entry__";

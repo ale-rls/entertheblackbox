@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { mediaManifestSchema } from "@smartphonecracy/scenario";
+import { mediaManifestSchema } from "@entertheblackbox/scenario";
 import { MediaStore, type MediaSyncStatus } from "./mediaStore.js";
 
 /**

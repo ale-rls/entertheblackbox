@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { RatingStatusMessage } from "@smartphonecracy/protocol";
+import type { RatingStatusMessage } from "@entertheblackbox/protocol";
 
 export const CROWD_REACTION_SAMPLES = {
   applause: [

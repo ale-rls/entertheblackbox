@@ -37,10 +37,10 @@ Use Chrome or Chromium in kiosk mode with a dedicated profile:
 --autoplay-policy=no-user-gesture-required
 ```
 
-Install `scripts/kiosk/smartphonecracy-kiosk.service` and copy
-`scripts/kiosk/kiosk.env.example` to `/etc/smartphonecracy/kiosk.env`, replacing
+Install `scripts/kiosk/entertheblackbox-kiosk.service` and copy
+`scripts/kiosk/kiosk.env.example` to `/etc/entertheblackbox/kiosk.env`, replacing
 the example URL with the authenticated local display URL. Install the repository
-at `/opt/smartphonecracy`, then enable the service after the local application
+at `/opt/entertheblackbox`, then enable the service after the local application
 server is configured to start at boot.
 
 The browser service restarts Chromium after a crash, prevents duplicate kiosk

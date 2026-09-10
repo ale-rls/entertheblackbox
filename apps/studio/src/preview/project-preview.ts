@@ -1,6 +1,6 @@
-import type { StudioProject } from "@smartphonecracy/studio-adapter";
+import type { StudioProject } from "@entertheblackbox/studio-adapter";
 
-const STORAGE_PREFIX = "smartphonecracy:studio-preview:";
+const STORAGE_PREFIX = "entertheblackbox:studio-preview:";
 
 export type ProjectPreview = {
   version: 1;

@@ -14,7 +14,7 @@ afterEach(async () => {
 });
 
 async function bundleApp(): Promise<FastifyInstance> {
-  const root = await mkdtemp(join(tmpdir(), "smartphonecracy-bundle-"));
+  const root = await mkdtemp(join(tmpdir(), "entertheblackbox-bundle-"));
   const assets = join(root, "assets");
   roots.push(root);
   await mkdir(assets);

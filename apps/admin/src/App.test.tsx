@@ -119,7 +119,7 @@ describe("Admin operations UI", () => {
   it("signs in via PocketBase, stores the resulting token, fetches status, and polls every two seconds", async () => {
     pocketbaseAuth.authWithPassword.mockResolvedValue({
       token: "pb-operator-token",
-      record: { id: "op1", email: "operator@smartphonecracy.local", role: "operator" },
+      record: { id: "op1", email: "operator@entertheblackbox.local", role: "operator" },
     });
     const { requests } = createAdminFetch();
     const intervalSpy = vi.spyOn(window, "setInterval");
@@ -129,7 +129,7 @@ describe("Admin operations UI", () => {
     const password = document.querySelector<HTMLInputElement>("#admin-password")!;
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     await act(async () => {
-      setter?.call(email, "operator@smartphonecracy.local");
+      setter?.call(email, "operator@entertheblackbox.local");
       email.dispatchEvent(new Event("input", { bubbles: true }));
       setter?.call(password, "operator-secret");
       password.dispatchEvent(new Event("input", { bubbles: true }));
@@ -137,7 +137,7 @@ describe("Admin operations UI", () => {
     await act(async () => { button("Sign in").click(); });
     await flush();
 
-    expect(pocketbaseAuth.authWithPassword).toHaveBeenCalledWith("operator@smartphonecracy.local", "operator-secret");
+    expect(pocketbaseAuth.authWithPassword).toHaveBeenCalledWith("operator@entertheblackbox.local", "operator-secret");
     expect(localStorage.getItem("admin-token")).toBe("pb-operator-token");
     expect(requests).toContainEqual({ url: "/api/admin/status", method: "GET" });
     expect(requests.some(({ url }) => url === "/api/admin/errors")).toBe(false);

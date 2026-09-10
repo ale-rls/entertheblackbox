@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
-import type { QrGrantMessage } from "@smartphonecracy/protocol";
+import type { QrGrantMessage } from "@entertheblackbox/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 import { shouldShowGrant } from "../qr/shouldShowGrant.js";
 import { placementClassName, qrSizePx, type QrCorner } from "../qr/placement.js";

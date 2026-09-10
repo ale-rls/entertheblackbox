@@ -24,7 +24,7 @@ import { studioMediaKindForSource, type StudioMediaKind } from "./media/library.
 import { appendCampaignExtension } from "./templates/campaign.js";
 import { productionDraftFromArtifact, type PublishedProductionArtifact } from "./production.js";
 import { projectPreviewUrl, storeProjectPreview } from "./preview/project-preview.js";
-import "@smartphonecracy/tool-ui/styles.css";
+import "@entertheblackbox/tool-ui/styles.css";
 import "./style.css";
 
 const download = (name: string, value: unknown) => {
@@ -744,7 +744,7 @@ export function App() {
   };
 
   if (!draft) return <main className="home" data-sc-tool-density="compact" data-sc-tool-root>
-    <header className="home-heading"><p className="sc-tool-eyebrow">Authoring workspace</p><h1 ref={homeHeadingRef} tabIndex={-1}>Show Studio</h1><p className="sc-tool-copy lede">Create and safely round-trip Smartphonecracy shows.</p></header>
+    <header className="home-heading"><p className="sc-tool-eyebrow">Authoring workspace</p><h1 ref={homeHeadingRef} tabIndex={-1}>Show Studio</h1><p className="sc-tool-copy lede">Create and safely round-trip Enter the Blackbox shows.</p></header>
     {showLifecycle === "active" && <LiveShowWarning />}
     <div className="home-actions">
       <button className="sc-tool-button" data-sc-tool-variant="primary" onClick={createShow}>New show</button>

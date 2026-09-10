@@ -26,13 +26,13 @@ importers:
 
   apps/admin:
     dependencies:
-      '@smartphonecracy/protocol':
+      '@entertheblackbox/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@smartphonecracy/shared':
+      '@entertheblackbox/shared':
         specifier: workspace:*
         version: link:../../packages/shared
-      '@smartphonecracy/tool-ui':
+      '@entertheblackbox/tool-ui':
         specifier: workspace:*
         version: link:../../packages/tool-ui
       pocketbase:
@@ -96,13 +96,13 @@ importers:
 
   apps/display:
     dependencies:
-      '@smartphonecracy/protocol':
+      '@entertheblackbox/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@smartphonecracy/scenario':
+      '@entertheblackbox/scenario':
         specifier: workspace:^
         version: link:../../packages/scenario
-      '@smartphonecracy/shared':
+      '@entertheblackbox/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       qrcode:
@@ -139,13 +139,13 @@ importers:
 
   apps/phone:
     dependencies:
-      '@smartphonecracy/protocol':
+      '@entertheblackbox/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@smartphonecracy/scenario':
+      '@entertheblackbox/scenario':
         specifier: workspace:^
         version: link:../../packages/scenario
-      '@smartphonecracy/shared':
+      '@entertheblackbox/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       react:
@@ -182,13 +182,13 @@ importers:
 
   apps/server:
     dependencies:
-      '@smartphonecracy/protocol':
+      '@entertheblackbox/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@smartphonecracy/scenario':
+      '@entertheblackbox/scenario':
         specifier: workspace:*
         version: link:../../packages/scenario
-      '@smartphonecracy/shared':
+      '@entertheblackbox/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       eventsource:
@@ -225,10 +225,10 @@ importers:
 
   apps/studio:
     dependencies:
-      '@smartphonecracy/studio-adapter':
+      '@entertheblackbox/studio-adapter':
         specifier: workspace:*
         version: link:../../packages/studio-adapter
-      '@smartphonecracy/tool-ui':
+      '@entertheblackbox/tool-ui':
         specifier: workspace:*
         version: link:../../packages/tool-ui
       '@xyflow/react':
@@ -268,10 +268,10 @@ importers:
 
   packages/protocol:
     dependencies:
-      '@smartphonecracy/scenario':
+      '@entertheblackbox/scenario':
         specifier: workspace:^
         version: link:../scenario
-      '@smartphonecracy/shared':
+      '@entertheblackbox/shared':
         specifier: workspace:*
         version: link:../shared
       zod:
@@ -287,7 +287,7 @@ importers:
 
   packages/scenario:
     dependencies:
-      '@smartphonecracy/shared':
+      '@entertheblackbox/shared':
         specifier: workspace:*
         version: link:../shared
       zod:
@@ -312,7 +312,7 @@ importers:
 
   packages/studio-adapter:
     dependencies:
-      '@smartphonecracy/scenario':
+      '@entertheblackbox/scenario':
         specifier: workspace:*
         version: link:../scenario
     devDependencies:

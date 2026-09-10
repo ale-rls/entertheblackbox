@@ -1,4 +1,4 @@
-import { MEDIA_BUDGET_BYTES } from "@smartphonecracy/shared";
+import { MEDIA_BUDGET_BYTES } from "@entertheblackbox/shared";
 import type { MediaManifest } from "./schema.js";
 
 /**

@@ -11,8 +11,8 @@ const adminStyles = read("../../../apps/admin/src/admin.css");
 
 describe("shared tool style ownership", () => {
   it("loads the same public stylesheet in Studio and Admin", () => {
-    expect(studioApp).toContain('import "@smartphonecracy/tool-ui/styles.css"');
-    expect(adminMain).toContain('import "@smartphonecracy/tool-ui/styles.css"');
+    expect(studioApp).toContain('import "@entertheblackbox/tool-ui/styles.css"');
+    expect(adminMain).toContain('import "@entertheblackbox/tool-ui/styles.css"');
   });
 
   it("uses shared semantic text roles in both applications", () => {

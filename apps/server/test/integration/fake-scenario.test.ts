@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { scenarioSchema } from "@smartphonecracy/scenario";
+import { scenarioSchema } from "@entertheblackbox/scenario";
 import type { WebSocket } from "ws";
 import { AdmissionController } from "../../src/admission/index.js";
 import { PhaseEngine, type PhaseCheckpoint } from "../../src/engine/phase-engine.js";

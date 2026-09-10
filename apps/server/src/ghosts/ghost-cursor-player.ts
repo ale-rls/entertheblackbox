@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { Cursor } from "@smartphonecracy/protocol";
+import type { Cursor } from "@entertheblackbox/protocol";
 import { IDENTITY_COLORS } from "../admission/registry.js";
 
 export const GHOST_TICK_INTERVAL_MS = 40;

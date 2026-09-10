@@ -1,5 +1,5 @@
 import { SCENARIO_SCHEMA_VERSION } from "../../../../packages/scenario/src/index.js";
-import { compileStudioGraph } from "@smartphonecracy/studio-adapter";
+import { compileStudioGraph } from "@entertheblackbox/studio-adapter";
 import type { Draft } from "../model.js";
 import { diagnosticKey, diagnostics, exportBlocked, type Diagnostic } from "../diagnostics/diagnostics.js";
 import { distinctReferencedBytes } from "../media/library.js";
@@ -97,7 +97,7 @@ export function assembleDeploymentPackage(
     branchSmoke,
   };
   const readme = [
-    "Smartphonecracy deployment export",
+    "Enter the Blackbox deployment export",
     `Generated: ${report.generatedAt}`,
     `Studio build: ${report.studioBuild}`,
     `Runtime schema: ${report.runtimeSchemaVersion}`,

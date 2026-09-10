@@ -1,6 +1,6 @@
-# Smartphonecracy Runner
+# Enter the Blackbox Studio
 
-Smartphonecracy Runner is the runtime and visual authoring toolkit for a browser-based, multiplayer installation. Visitors scan a QR code, use their phones as cursors, and collectively navigate questions and video branches on a shared display.
+Enter the Blackbox Studio is the runtime and visual authoring toolkit for a browser-based, multiplayer installation. Visitors scan a QR code, use their phones as cursors, and collectively navigate questions and video branches on a shared display.
 
 The server is authoritative: it manages admission, room state, timed vote snapshots, branch resolution, recovery, and the operational admin API. Shows are versioned scenario graphs rather than hard-coded application flows.
 
@@ -24,7 +24,7 @@ Shared runtime contracts live in `packages/protocol`, `packages/scenario`, `pack
 From a fresh clone, run all commands from the repository root:
 
 ```bash
-cd smartphonecracy
+cd entertheblackbox-studio
 corepack enable
 pnpm install
 ```
@@ -53,9 +53,9 @@ Sign in at `/admin/` with that email/password. See [pocketbase/README.md](pocket
 Build the three installation clients once (and rebuild them after frontend changes):
 
 ```bash
-pnpm --filter @smartphonecracy/display build
-pnpm --filter @smartphonecracy/phone build
-pnpm --filter @smartphonecracy/admin build
+pnpm --filter @entertheblackbox/display build
+pnpm --filter @entertheblackbox/phone build
+pnpm --filter @entertheblackbox/admin build
 ```
 
 Then start the installation server and leave it running:
@@ -198,7 +198,7 @@ The application and Show Studio v1 are implemented and tested. A venue launch st
 
 ## Project status
 
-Open work is tracked in [GitHub issues](https://github.com/ale-rls/smartphonecracy-runner/issues); the agent process is described in [docs/agent-workflow.md](docs/agent-workflow.md). Historical implementation and verification records (steps 000–048) are preserved in [steps.md](steps.md), now retired. Director policy decisions live in [docs/director-decisions.md](docs/director-decisions.md). The only deferred Studio feature is the post-v1 multi-participant drag simulator; outcome shortcuts cover the same resolution branches in v1.
+Open work is tracked in [GitHub issues](https://github.com/ale-rls/entertheblackbox-studio/issues); the agent process is described in [docs/agent-workflow.md](docs/agent-workflow.md). Historical implementation and verification records (steps 000–048) are preserved in [steps.md](steps.md), now retired. Director policy decisions live in [docs/director-decisions.md](docs/director-decisions.md). The only deferred Studio feature is the post-v1 multi-participant drag simulator; outcome shortcuts cover the same resolution branches in v1.
 
 ## License
 
