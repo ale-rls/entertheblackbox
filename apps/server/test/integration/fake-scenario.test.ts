@@ -268,3 +268,75 @@ describe("fake scenario server integration", () => {
     ]);
   });
 });
+
+describe("trackingbox positions", () => {
+  /**
+   * Drive the fake scenario to `question-quadrant`, which is the first
+   * question whose branch actually depends on the vote: a plurality winner
+   * goes to `question-two-quadrant`, an empty result goes to `idle`. The
+   * earlier `question-fixed` resolves to the same target either way, so
+   * asserting on it would prove nothing.
+   */
+  const atQuadrantQuestion = async () => {
+    const h = createHarness();
+    const display = h.display();
+    await h.phone(1);
+    h.advance(100);
+    display.message({
+      t: "video_ended", v: 2, sessionId: h.engine.currentSessionId, phaseId: "intro-video",
+      phaseEpoch: h.engine.currentPhaseEpoch, mediaId: "intro.mp4",
+    });
+    h.advance(20_000);
+    h.advance(3_000);
+    expect(h.engine.currentPhaseId).toBe("question-quadrant");
+    return { h, display };
+  };
+
+  it("resolves a plurality question from floor positions alone", async () => {
+    const { h, display } = await atQuadrantQuestion();
+    // A tracked body has no socket, no lease and no name; the phone that
+    // joined never sends input. Only the floor position votes here.
+    h.engine.applyTrackingActions([
+      { type: "join", gid: 17 },
+      { type: "position", gid: 17, x: 0.8, y: 0.2 },
+    ]);
+    await Promise.resolve();
+    h.advance(20_000);
+    expect(last(display, "question_resolved")).toMatchObject({
+      winner: "q1", resolvedTarget: "question-two-quadrant",
+    });
+  });
+
+  it("resolves empty without tracking input, so the test above is not vacuous", async () => {
+    const { h, display } = await atQuadrantQuestion();
+    h.advance(20_000);
+    expect(last(display, "question_resolved")).toMatchObject({ resolvedTarget: "idle" });
+  });
+
+  it("keeps the vote of a body that disappears mid-question", async () => {
+    const { h, display } = await atQuadrantQuestion();
+    h.engine.applyTrackingActions([
+      { type: "join", gid: 3 },
+      { type: "position", gid: 3, x: 0.8, y: 0.2 },
+      // Occlusion, or someone stepping behind a pillar. This scenario counts
+      // disconnected votes, so it must not discard what they already chose.
+      { type: "leave", gid: 3 },
+    ]);
+    await Promise.resolve();
+    h.advance(20_000);
+    expect(last(display, "question_resolved")).toMatchObject({
+      winner: "q1", resolvedTarget: "question-two-quadrant",
+    });
+  });
+
+  it("ignores tracking input outside an active question", () => {
+    const h = createHarness();
+    h.display();
+    expect(h.engine.lifecycleState).toBe("idle");
+    h.engine.applyTrackingActions([
+      { type: "join", gid: 1 },
+      { type: "position", gid: 1, x: 0.5, y: 0.5 },
+    ]);
+    expect(h.engine.lifecycleState).toBe("idle");
+  });
+});

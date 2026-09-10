@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
+import { TrackingClient } from "./tracking/client.js";
 import { z } from "zod";
 import { AdmissionController, InMemoryIpRateLimiter } from "./admission/index.js";
 import { verifyParticipantLease } from "./admission/tokens.js";
@@ -48,6 +49,7 @@ export type ServerRuntime = {
   webSockets: WebSocketServer;
   admission: AdmissionController;
   engine: PhaseEngine | null;
+  tracking: TrackingClient | undefined;
   startedAt: number;
 };
 
@@ -297,14 +299,31 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   webSocketKeepAliveInterval.unref();
 
   // Upgraded sockets are not managed by Fastify's HTTP connection tracker.
+  // TrackingBox is optional and off unless TRACKINGBOX_URL is set, so the
+  // phone-trackpad path that ran the Frankfurt show is untouched by default.
+  let tracking: TrackingClient | undefined;
+  if (config.trackingBoxUrl !== null && engine !== null) {
+    const activeEngine = engine;
+    tracking = new TrackingClient({
+      url: config.trackingBoxUrl,
+      onActions: (actions) => activeEngine.applyTrackingActions(actions),
+      onError: (error) => {
+        app.log.warn({ error }, "trackingbox stream error");
+      },
+    });
+    tracking.start();
+    app.log.info({ url: config.trackingBoxUrl }, "trackingbox position source enabled");
+  }
+
   // Close them before Fastify waits for the underlying server to drain.
   app.addHook("preClose", async () => {
     clearInterval(webSocketKeepAliveInterval);
     movementConsent?.stop();
+    tracking?.stop();
     engine?.stop();
     for (const socket of webSockets.clients) socket.terminate();
     await new Promise<void>((resolve) => webSockets.close(() => resolve()));
   });
 
-  return { app, config, readiness, webSockets, admission, engine, startedAt };
+  return { app, config, readiness, webSockets, admission, engine, tracking, startedAt };
 }

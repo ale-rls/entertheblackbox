@@ -27,6 +27,9 @@ const envSchema = z.object({
   JOIN_GRANT_SECRET: z.string().min(16).default(DEVELOPMENT_JOIN_GRANT_SECRET),
   TRUST_PROXY: z.enum(["true", "false"]).default("false"),
   ALLOW_LATE_JOIN: z.enum(["true", "false"]).default("true"),
+  // Absent by default: without it the server behaves exactly as it did for
+  // the Frankfurt run, with the phone trackpad as the only position source.
+  TRACKINGBOX_URL: z.string().url().optional(),
   PHONE_JOIN_BASE_URL: z.string().url().default("http://localhost:5174/"),
   SHOW_PHONE_JOIN_BASE_URL: z.enum(["true", "false"]).default("true"),
   SCENARIO_PATH: z.string().min(1).optional(),
@@ -64,6 +67,8 @@ export type ServerConfig = {
   joinGrantSecret: string;
   trustProxy: boolean;
   allowLateJoin: boolean;
+  /** TrackingBox `/ws` URL, or null when no camera position source is configured. */
+  trackingBoxUrl: string | null;
   phoneJoinBaseUrl: string;
   showPhoneJoinBaseUrl: boolean;
   scenarioPath: string;
@@ -134,6 +139,7 @@ export function loadConfig(
     joinGrantSecret: value.JOIN_GRANT_SECRET,
     trustProxy: value.TRUST_PROXY === "true",
     allowLateJoin: value.ALLOW_LATE_JOIN === "true",
+    trackingBoxUrl: value.TRACKINGBOX_URL ?? null,
     phoneJoinBaseUrl: value.PHONE_JOIN_BASE_URL,
     showPhoneJoinBaseUrl: value.SHOW_PHONE_JOIN_BASE_URL === "true",
     scenarioPath: fromRoot(value.SCENARIO_PATH, "content/scenarios/dev.json"),
