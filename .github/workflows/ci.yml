@@ -38,4 +38,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      # The e2e global setup spawns a local PocketBase; the binary is
+      # gitignored, so every runner fetches its own pinned copy.
+      - run: pnpm pocketbase:download
       - run: pnpm test:e2e

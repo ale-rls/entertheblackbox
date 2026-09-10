@@ -55,8 +55,10 @@ pnpm validate-scenario content/scenarios/dev.json --manifest content/media-manif
 
 - Work discovered mid-PR becomes a **new issue**, not silent scope expansion.
   If you find a second bug while fixing the first, file it and keep going.
-- Director and policy decisions are recorded in
-  [director-decisions.md](director-decisions.md), not buried in PR threads.
+- Director and policy decisions are recorded on the issue they affect, not
+  buried in a PR thread where the next thread will not find them. Show-wide
+  choices (durations, player cap, late join) belong in the scenario itself and
+  its issue.
 - No agent approves its own work where a review is owed. High-failure-potential
   changes — grant/lease crypto, vote and resolution correctness, admission
   security, runtime privacy, and any data-loss path — get a second pass from a
