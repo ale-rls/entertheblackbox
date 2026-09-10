@@ -259,6 +259,28 @@ export class VoteEngine {
     return true;
   }
 
+  /**
+   * Move a vote from one participant id to another, keeping the position
+   * already cast. Used when a tracked body turns out to belong to a phone: the
+   * person has not moved, so their answer should follow their identity rather
+   * than being counted once anonymously and again under their own id.
+   *
+   * A no-op if the source never voted. If the target already has a vote, the
+   * source's position wins, since both describe the same body and the source
+   * is the one the tracker has been following.
+   */
+  transferVote(fromParticipantId: string, toParticipantId: string, now: number): boolean {
+    const question = this.question;
+    if (!question || question.finalized !== null) return false;
+    const from = question.votes.get(fromParticipantId);
+    if (!from) return false;
+    question.votes.delete(fromParticipantId);
+    this.heartbeatTimes.delete(fromParticipantId);
+    question.votes.set(toParticipantId, { ...from, participantId: toParticipantId });
+    this.rememberHeartbeat(toParticipantId, now);
+    return true;
+  }
+
   setConnected(participantId: string, connected: boolean, now: number): boolean {
     const question = this.question;
     if (!question || question.finalized !== null || now >= question.phaseDeadline) return false;

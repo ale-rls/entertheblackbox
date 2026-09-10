@@ -250,12 +250,20 @@ pnpm simulate-clients -- --count 300 --duration-ms 180000 \
 - `content/media-manifests/showtest1.json` — media inventory for `showtest1`
 - `content/media/` — locally served media assets
 
-**The production show cannot run yet.** It has no media manifest, because every
-entry needs the byte length and hash of a real file. Put its audio and the
-narration still image into `content/media`, run `pnpm build-media-manifest`, and
-re-run the importer so the narration durations come from the real recordings
-rather than the placeholder. Its 16 spoken questions also have nowhere to live
-until per-phase audio exists.
+**The production show cannot run yet.** Two things are missing.
+
+It has no media manifest, because every entry needs the byte length and hash of
+a real file. Put its audio and the narration still image into `content/media`,
+then run `pnpm build-media-manifest`.
+
+Its narration durations are placeholders. The server abandons a narration
+`expectedDurationMs` plus five seconds after it starts, so a placeholder that is
+shorter than the recording cuts it off mid-sentence. The importer measures each
+narration MP3 with `ffprobe` when the file is in `content/media`, so put the
+audio in place **before** re-running it. It exits non-zero and names every
+narration that fell back, so this cannot ship silently.
+
+Its 16 spoken questions have nowhere to live until per-phase audio exists.
 
 Scenarios and manifests are validated at startup and before Studio deployment export. Visual Studio layout metadata remains separate from runtime JSON.
 

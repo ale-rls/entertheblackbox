@@ -3,10 +3,21 @@ import { BindingError, BindingRegistry } from "./binding.js";
 
 const at = (x: number, y: number) => ({ x, y });
 
+/**
+ * Report a body the way the adapter actually does: a `join` carrying no
+ * position, then a `position`. Calling gidSeen once with a position is a shape
+ * the phase engine never produces, and testing that way hid a bug where
+ * auto-rebind could not fire at all through the real path.
+ */
+function sight(registry: BindingRegistry, gid: number, position: { x: number; y: number }, now: number) {
+  registry.gidSeen(gid, null, now);
+  return registry.gidSeen(gid, position, now);
+}
+
 /** Registry with a body already visible at a known spot. */
 function withVisibleGid(gid: number, position: { x: number; y: number }, now = 1_000) {
   const registry = new BindingRegistry();
-  registry.gidSeen(gid, position, now);
+  sight(registry, gid, position, now);
   return registry;
 }
 
@@ -27,7 +38,7 @@ describe("BindingRegistry", () => {
 
   it("refuses a second claim so a double-submit cannot hijack a live binding", () => {
     const registry = withVisibleGid(7, at(0.5, 0.5));
-    registry.gidSeen(8, at(0.9, 0.9), 1_000);
+    sight(registry, 8, at(0.9, 0.9), 1_000);
     registry.claim("phone-a", 7, 1_000);
     expect(() => registry.claim("phone-a", 8, 1_100)).toThrow(BindingError);
   });
@@ -52,15 +63,15 @@ describe("BindingRegistry", () => {
     registry.gidLeft(7, 2_000);
 
     // TrackingBox gives the same person a new gid after an occlusion.
-    const event = registry.gidSeen(12, at(0.52, 0.51), 3_000);
+    const event = sight(registry, 12, at(0.52, 0.51), 3_000);
     expect(event).toMatchObject({ participantId: "phone-a", gid: 12, reason: "auto-rebind" });
     expect(registry.participantForGid(12)).toBe("phone-a");
   });
 
   it("refuses to guess when two lost players are both plausible", () => {
     const registry = new BindingRegistry();
-    registry.gidSeen(1, at(0.50, 0.50), 1_000);
-    registry.gidSeen(2, at(0.52, 0.50), 1_000);
+    sight(registry, 1, at(0.50, 0.50), 1_000);
+    sight(registry, 2, at(0.52, 0.50), 1_000);
     registry.claim("phone-a", 1, 1_000);
     registry.claim("phone-b", 2, 1_000);
     registry.gidLeft(1, 2_000);
@@ -68,7 +79,7 @@ describe("BindingRegistry", () => {
 
     // A new body between the two. Binding either one has a 50% chance of
     // sending someone else's audio to the wrong person, so bind neither.
-    expect(registry.gidSeen(3, at(0.51, 0.50), 2_500)).toBeNull();
+    expect(sight(registry, 3, at(0.51, 0.50), 2_500)).toBeNull();
     expect(registry.plausibleRebindCandidates(3, 2_500)).toEqual(["phone-a", "phone-b"]);
     expect(registry.participantForGid(3)).toBeNull();
     expect(registry.stateOf("phone-a")).toBe("lost");
@@ -78,14 +89,14 @@ describe("BindingRegistry", () => {
     const registry = withVisibleGid(7, at(0.1, 0.1));
     registry.claim("phone-a", 7, 1_000);
     registry.gidLeft(7, 2_000);
-    expect(registry.gidSeen(12, at(0.9, 0.9), 2_500)).toBeNull();
+    expect(sight(registry, 12, at(0.9, 0.9), 2_500)).toBeNull();
   });
 
   it("does not rebind after too long a gap, even if the body is close", () => {
     const registry = withVisibleGid(7, at(0.5, 0.5));
     registry.claim("phone-a", 7, 1_000);
     registry.gidLeft(7, 2_000);
-    expect(registry.gidSeen(12, at(0.5, 0.5), 2_000 + 9_000)).toBeNull();
+    expect(sight(registry, 12, at(0.5, 0.5), 2_000 + 9_000)).toBeNull();
   });
 
   it("does not treat an already-bound gid as a rebind candidate", () => {
@@ -94,6 +105,29 @@ describe("BindingRegistry", () => {
     registry.claim("phone-a", 7, 1_000);
     expect(registry.gidSeen(7, at(0.5, 0.5), 1_500)).toBeNull();
     expect(registry.participantForGid(7)).toBe("phone-a");
+  });
+
+  it("auto-rebinds through the adapter's join-then-position sequence", () => {
+    // Regression: the arrival carries no position, so matching only on first
+    // sighting could never measure distance and rebinding never fired at all.
+    const registry = withVisibleGid(7, at(0.5, 0.5));
+    registry.claim("phone-a", 7, 1_000);
+    registry.gidLeft(7, 2_000);
+
+    expect(registry.gidSeen(12, null, 2_500)).toBeNull();
+    expect(registry.gidSeen(12, at(0.51, 0.50), 2_500)).toMatchObject({
+      participantId: "phone-a", gid: 12, reason: "auto-rebind",
+    });
+  });
+
+  it("tries the rebind match once per gid, not on every heartbeat", () => {
+    const registry = withVisibleGid(7, at(0.9, 0.9));
+    registry.claim("phone-a", 7, 1_000);
+    registry.gidLeft(7, 2_000);
+    // Far away on arrival, so no match; a later position must not re-open it.
+    sight(registry, 12, at(0.1, 0.1), 2_500);
+    expect(registry.gidSeen(12, at(0.9, 0.9), 2_600)).toBeNull();
+    expect(registry.stateOf("phone-a")).toBe("lost");
   });
 
   it("orphans a player who stays lost past the threshold", () => {
@@ -123,7 +157,7 @@ describe("BindingRegistry", () => {
 
   it("lists everyone currently unbound for the operator dashboard", () => {
     const registry = withVisibleGid(7, at(0.5, 0.5));
-    registry.gidSeen(8, at(0.9, 0.9), 1_000);
+    sight(registry, 8, at(0.9, 0.9), 1_000);
     registry.claim("phone-a", 7, 1_000);
     registry.claim("phone-b", 8, 1_000);
     expect(registry.unboundParticipants()).toEqual([]);

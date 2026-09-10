@@ -750,6 +750,20 @@ export class PhaseEngine {
   }
 
   /**
+   * A phone claims the tracked body it is standing in.
+   *
+   * Goes through the engine rather than the registry directly so the vote
+   * follows the identity: the body may already have voted anonymously this
+   * question, and leaving that vote behind would count one person twice.
+   */
+  claimTrackedBody(participantId: string, gid: number, now = this.now()): void {
+    const anonymousId = participantIdForGid(gid);
+    this.bindings.claim(participantId, gid, now);
+    this.votes.transferVote(anonymousId, participantId, now);
+    this.queueQuestionStatus(now);
+  }
+
+  /**
    * Who a tracked body votes as. A body whose phone has claimed it votes as
    * that participant, so its answer joins the rest of that person's session.
    * An unclaimed body votes anonymously, which is the normal case on the
