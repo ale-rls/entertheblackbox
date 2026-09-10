@@ -34,9 +34,14 @@ Required variables:
 ```env
 ICECAST_SOURCE_PASSWORD=<generated-long-secret>
 ICECAST_ADMIN_PASSWORD=<generated-long-secret>
+ICECAST_HOSTNAME=audio.example.org
 BRIDGE_TOKEN=<generated-long-secret>
 PUBLIC_STREAM_BASE=https://audio.example.org
 ```
+
+`ICECAST_HOSTNAME` is the hostname only—do not include `https://`, a path, or
+a port. Coolify treats it as Compose-managed, so update its value rather than
+trying to delete the variable.
 
 Optional variables:
 
