@@ -45,8 +45,8 @@ pnpm pocketbase:download   # once
 pnpm test:e2e
 ```
 
-Several of those specs are quarantined with `test.fixme` because they assert
-Studio text that no longer exists (#9). Do not treat a green e2e run as broad
+Several Studio specs are quarantined with `test.fixme` because they assert UI
+text the Studio no longer renders. Do not treat a green e2e run as broad
 coverage.
 
 Touching the scenario schema, a scenario, or a media manifest:

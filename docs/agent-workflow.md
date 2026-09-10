@@ -42,7 +42,8 @@ That is what CI runs. There is deliberately no end-to-end job: the real check
 for a change to runtime client or server behaviour is running the show, not a
 headless browser. The Playwright specs remain in `tests/e2e` and can be run by
 hand before a venue date (`pnpm pocketbase:download` once, then
-`pnpm test:e2e`), with the caveat that several are quarantined (#9).
+`pnpm test:e2e`), with the caveat that several Studio specs are quarantined
+with `test.fixme` because they assert UI text that no longer exists.
 
 Add scenario validation when the change touches the scenario schema, a
 scenario file, or a media manifest:
