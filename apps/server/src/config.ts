@@ -7,6 +7,7 @@ const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const DEVELOPMENT_DISPLAY_TOKEN = "dev-display-token";
 const DEVELOPMENT_JOIN_GRANT_SECRET = "dev-join-grant-secret-please-change";
 const DEVELOPMENT_POCKETBASE_ADMIN_PASSWORD = "dev-pocketbase-password";
+const optionalUrl = z.preprocess((input) => input === "" ? undefined : input, z.string().url().optional());
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -32,7 +33,8 @@ const envSchema = z.object({
   AUDIO_BRIDGE_URL: z.string().url().optional(),
   AUDIO_BRIDGE_TOKEN: z.string().min(1).optional(),
   AUDIO_PUBLIC_URL: z.string().url().optional(),
-  TRACKINGBOX_URL: z.string().url().optional(),
+  REQUIRE_PHONE_AUDIO: z.enum(["true", "false"]).default("false"),
+  TRACKINGBOX_URL: optionalUrl,
   PHONE_JOIN_BASE_URL: z.string().url().default("http://localhost:5174/"),
   SHOW_PHONE_JOIN_BASE_URL: z.enum(["true", "false"]).default("true"),
   SCENARIO_PATH: z.string().min(1).optional(),
@@ -107,10 +109,22 @@ export function loadConfig(
   }
 
   const value = parsed.data;
-  if (value.AUDIO_BRIDGE_URL && (!value.AUDIO_BRIDGE_TOKEN || !value.AUDIO_PUBLIC_URL)) {
-    throw new ConfigError("AUDIO_BRIDGE_URL requires AUDIO_BRIDGE_TOKEN and a phone-reachable AUDIO_PUBLIC_URL");
+  const audioValues = [value.AUDIO_BRIDGE_URL, value.AUDIO_BRIDGE_TOKEN, value.AUDIO_PUBLIC_URL];
+  const configuredAudioValues = audioValues.filter((item) => item !== undefined).length;
+  if (configuredAudioValues !== 0 && configuredAudioValues !== audioValues.length) {
+    throw new ConfigError("AUDIO_BRIDGE_URL, AUDIO_BRIDGE_TOKEN, and AUDIO_PUBLIC_URL must be set together");
+  }
+  if (value.REQUIRE_PHONE_AUDIO === "true" && configuredAudioValues === 0) {
+    throw new ConfigError("REQUIRE_PHONE_AUDIO=true requires AUDIO_BRIDGE_URL, AUDIO_BRIDGE_TOKEN, and AUDIO_PUBLIC_URL");
+  }
+  if (value.NODE_ENV === "production" && value.AUDIO_PUBLIC_URL && !value.AUDIO_PUBLIC_URL.startsWith("https://")) {
+    throw new ConfigError("AUDIO_PUBLIC_URL must use HTTPS in production");
   }
   if (value.NODE_ENV === "production") {
+    const joinUrl = new URL(value.PHONE_JOIN_BASE_URL);
+    if (joinUrl.protocol !== "https:" || !joinUrl.pathname.endsWith("/phone/")) {
+      throw new ConfigError("PHONE_JOIN_BASE_URL must use HTTPS and end in /phone/ in production");
+    }
     const defaultSecret = [
       ["JOIN_GRANT_SECRET", value.JOIN_GRANT_SECRET, DEVELOPMENT_JOIN_GRANT_SECRET],
       ["DISPLAY_TOKEN", value.DISPLAY_TOKEN, DEVELOPMENT_DISPLAY_TOKEN],

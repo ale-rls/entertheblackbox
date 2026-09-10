@@ -8,6 +8,13 @@ set -eu
 : "${ICECAST_MAX_CLIENTS:=400}"
 : "${ICECAST_MAX_SOURCES:=120}"
 
+case "$ICECAST_HOSTNAME" in
+  *://*|*/*|*:*)
+    echo "ICECAST_HOSTNAME must be a hostname without scheme, path, or port" >&2
+    exit 1
+    ;;
+esac
+
 export ICECAST_SOURCE_PASSWORD ICECAST_ADMIN_PASSWORD ICECAST_RELAY_PASSWORD \
     ICECAST_HOSTNAME ICECAST_MAX_CLIENTS ICECAST_MAX_SOURCES
 

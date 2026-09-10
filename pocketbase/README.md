@@ -1,9 +1,8 @@
 # PocketBase (local persistence)
 
-Local PocketBase instance backing the persistence layer. Runs standalone
-(SQLite-backed, single Go binary) so no external services are required for
-development. A hosted PocketBase instance will replace this for production
-later — this folder only holds the local dev/reference setup.
+PocketBase instance backing the persistence layer. It runs standalone for
+local development and is built by the combined Coolify deployment for
+production. Runtime data stays in the persistent `/pb/pb_data` volume.
 
 ## Usage
 
@@ -44,3 +43,12 @@ pocketbase/scripts/create-operator.sh <email> <password>
   collection from `_superusers`: an operator who can start/stop a show
   should not also get full database access to every collection. Only a
   superuser can create operator records (`createRule: null`).
+
+## Coolify
+
+Use [`deploy/coolify/docker-compose.yml`](../deploy/coolify/docker-compose.yml)
+for the production repository replacement and follow the
+[`Coolify replacement guide`](../deploy/coolify/README.md). The Compose file
+keeps the existing `pocketbase` service and `pocketbase-data` volume names.
+Back up that volume before switching repositories and never recreate it as
+part of a routine deploy.

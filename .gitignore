@@ -5,6 +5,7 @@ dist-proof/
 .steps.lock/
 .env
 .env.*
+!deploy/coolify/.env.example
 *.log
 .DS_Store
 # Real show media stays out of git (production media is externally hosted);

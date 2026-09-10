@@ -1,5 +1,5 @@
 # build context is the repo root (see docker-compose.yml)
-FROM python:3.12-alpine
+FROM python:3.12-alpine3.24
 
 WORKDIR /app
 COPY bridge/pyproject.toml ./

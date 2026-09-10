@@ -1,12 +1,13 @@
 # blackbox-icecast
 
 Personal audio streams for up to 100 audience phones — one Icecast mount slot
-per concurrent player, fed by Liquidsoap, controlled through a small REST bridge. Built for
-[blackbox-runner](../blackbox-runner/); the full rationale (why streaming,
+per concurrent player, fed by Liquidsoap, controlled through a small REST
+bridge. The canonical installation server owns registration and cues; the full
+rationale (why streaming,
 why not cue files or HLS, screen-lock behavior) is in **[SPEC.md](SPEC.md)**.
 
 ```
-blackbox-runner ── POST /players/{id}/play ──▶ bridge ── telnet ──▶ liquidsoap
+Fastify server ─── POST /players/{id}/play ──▶ bridge ── telnet ──▶ liquidsoap
                                                  │                     │ 100 sources
                                                  └── polls admin ──▶ icecast
                                                                        │ /p/{id}.mp3
@@ -60,8 +61,9 @@ cannot allocate finite stream slots. The gateway proxies the corresponding
 Icecast mount, allowing generated `seat-…` ids to work with the fixed pool of
 Liquidsoap encoders without exposing internal mount ids.
 
-`file` must be a bare filename inside the mounted audio dir (blackbox-runner's
-`content/audio` in production — set `AUDIO_DIR` in `.env`). A *flagged*
+`file` must be a bare filename inside the mounted audio directory. In the
+combined deployment, the canonical server uploads Studio media through the
+bridge API into the shared `audio-data` volume. A *flagged*
 player is one that's active but has had no listener on their mount for
 `FLAG_AFTER_S` (default 20 s) — the "we lost them" light (SPEC §8).
 
@@ -119,3 +121,11 @@ Liquidsoap have no host ports.
   the Icecast Alpine build are untested until Phase 0 runs. Pinned image:
   `savonet/liquidsoap:v2.2.5`.
 - Latency numbers and `burst-size` need venue calibration (SPEC §10 T4).
+
+The Alpine-based images use the supported 3.24 release line, PocketBase is
+pinned to 0.39.11, and the server uses the maintained Node 22 Bookworm image.
+Liquidsoap remains pinned to 2.2.5 because the current control script was
+written and unit-tested against that command surface. Liquidsoap 2.4 changes
+minor-version APIs; upgrade it only in staging with the locked-phone soak test,
+then change both `services/audio/liquidsoap/Dockerfile` and the local Compose
+image together.

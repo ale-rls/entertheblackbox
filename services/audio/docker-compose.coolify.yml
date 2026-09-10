@@ -3,7 +3,7 @@ name: blackbox-personal-audio
 # Coolify deployment boundary:
 # - bridge is the only public service; assign its domain to container port 8090
 # - Icecast and Liquidsoap are reachable only on this Compose network
-# - runner uploads MP3s into audio-data through the authenticated bridge API
+# - the canonical server uploads MP3s through the authenticated bridge API
 services:
   icecast:
     build: ./services/audio/icecast

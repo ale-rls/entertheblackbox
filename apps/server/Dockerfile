@@ -1,7 +1,7 @@
 # Build context is the repo root (this is a pnpm workspace: apps/server
 # depends on packages/protocol, packages/scenario, packages/shared as raw
 # TS source -- see each package's `exports` field -- and on the built
-# static bundles of apps/display, apps/phone, apps/admin).
+# static bundles of apps/display, apps/phone, apps/admin, and apps/studio).
 #
 # Coolify: Base Directory `.`, Dockerfile Location `apps/server/Dockerfile`.
 
@@ -27,10 +27,10 @@ ENV VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL
 # (apps/display/vite.config.ts) and sends it as clientVersion on every
 # display_join; the server rejects/reloads a display whose clientVersion
 # doesn't match its own runtime BUILD_VERSION (plan §7 reload-on-mismatch).
-# Coolify auto-injects SOURCE_COMMIT as a build ARG on every deploy, so
-# deriving BUILD_VERSION from it here -- and again in the runtime stage
-# below -- keeps both sides identical without anyone having to remember to
-# set/update a BUILD_VERSION env var by hand each deploy.
+# Coolify can inject SOURCE_COMMIT as a build ARG when "Include Source Commit
+# in Build" is enabled. Deriving BUILD_VERSION from it here -- and again in
+# the runtime stage below -- keeps both sides identical. Without that Coolify
+# option, both stages deliberately use the same `dev` fallback.
 ARG SOURCE_COMMIT=dev
 ENV BUILD_VERSION=$SOURCE_COMMIT
 
@@ -51,6 +51,14 @@ ENV REALTIME_WS_URL=$REALTIME_WS_URL
 ARG DISPLAY_TOKEN
 ENV DISPLAY_TOKEN=$DISPLAY_TOKEN
 
+# These three values are part of the public client bundles. Fail the image
+# build before Vite can bake localhost/empty fallbacks into a production image.
+RUN test -n "$VITE_POCKETBASE_URL" \
+  && test -n "$REALTIME_WS_URL" \
+  && test -n "$DISPLAY_TOKEN" \
+  && case "$VITE_POCKETBASE_URL" in https://*) true ;; *) false ;; esac \
+  && case "$REALTIME_WS_URL" in wss://*) true ;; *) false ;; esac
+
 RUN pnpm --filter @entertheblackbox/display build \
   && pnpm --filter @entertheblackbox/phone build \
   && pnpm --filter @entertheblackbox/admin build \
@@ -65,7 +73,7 @@ RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 # tsx runs the server's TypeScript directly at runtime (no compile step),
 # so the runtime image needs the full workspace: source, node_modules
 # (pnpm's symlinked structure ties packages/* into apps/server's
-# resolution), and the three built client bundles.
+# resolution), and the four built client bundles.
 COPY --from=build /app /app
 
 # Must match the build stage's BUILD_VERSION (see comment there) --
@@ -75,5 +83,8 @@ ARG SOURCE_COMMIT=dev
 ENV BUILD_VERSION=$SOURCE_COMMIT
 ENV NODE_ENV=production
 EXPOSE 3000
+
+HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=20s \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
 CMD ["node", "--import", "tsx", "apps/server/src/index.ts"]

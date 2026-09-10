@@ -229,6 +229,22 @@ listeners. HTTPS phone pages require an HTTPS `AUDIO_PUBLIC_URL`.
 
 See [the Studio curator guide](docs/studio-guide.md) and [runtime compatibility notes](docs/studio-compat.md).
 
+## Coolify production deployment
+
+The production replacement entry point is
+[`deploy/coolify/docker-compose.yml`](deploy/coolify/docker-compose.yml). It
+keeps the current Coolify service and volume names while replacing the old
+static frontend with the canonical server and its built phone, display, admin,
+and Studio clients. It also deploys PocketBase and the personal-audio stack.
+
+Before changing the Git repository in Coolify, back up the existing
+`pocketbase-data` volume and follow the complete environment, pruning,
+domain, and verification sequence in the
+[`Coolify replacement guide`](deploy/coolify/README.md). Phone audio is a
+required production dependency in that Compose file; missing bridge variables
+or a non-HTTPS public stream URL stop deployment instead of silently disabling
+headphones.
+
 ## Validate and test
 
 ```bash

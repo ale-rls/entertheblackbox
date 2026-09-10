@@ -3,7 +3,7 @@
 # pb_data (SQLite + uploaded files) is NOT baked into the image -- it must
 # be a persistent volume mounted at /pb/pb_data, or every redeploy wipes
 # the database.
-FROM alpine:3.20
+FROM alpine:3.24
 
 ARG PB_VERSION=0.39.11
 ARG PB_ARCH=amd64

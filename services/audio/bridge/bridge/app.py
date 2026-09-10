@@ -17,7 +17,7 @@ from typing import Literal, Optional
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -201,7 +201,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @app.put("/audio/{file}", dependencies=[Depends(require_token)])
     async def upload_audio(file: str, request: Request) -> dict:
-        """Store an MP3 sent by the private venue runner.
+        """Store an MP3 sent by the canonical installation server.
 
         Coolify hosts the delivery stack on a different machine, so it cannot
         mount the runner's local content directory. The authenticated upload
@@ -309,7 +309,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         }
 
     @app.get("/health")
-    async def health() -> dict:
+    async def health() -> JSONResponse:
         now = time.time()
         liq_ok, liq_err = True, None
         try:
@@ -318,13 +318,14 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             liq_ok, liq_err = False, str(exc)
         poll_age = (now - registry.last_poll_at) if registry.last_poll_at else None
         icecast_ok = poll_age is not None and poll_age < settings.poll_interval_s * 3
-        return {
+        payload = {
             "ok": liq_ok and icecast_ok,
             "liquidsoap": {"ok": liq_ok, "error": liq_err},
             "icecast": {"ok": icecast_ok, "poll_age_s": poll_age},
             "players": len(registry.players),
             "capacity": registry.capacity(),
         }
+        return JSONResponse(payload, status_code=200 if payload["ok"] else 503)
 
     @app.get(
         "/metrics",

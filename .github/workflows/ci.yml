@@ -35,9 +35,13 @@ jobs:
         with:
           node-version: 22.17.0
           cache: pnpm
+      - name: Validate Coolify Compose
+        run: docker compose --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml config --quiet
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r typecheck
       - run: pnpm -r test
       - run: pnpm validate-scenario content/scenarios/dev.json
-      - name: Build display, phone, and admin bundles
-        run: pnpm --filter @entertheblackbox/display build && pnpm --filter @entertheblackbox/phone build && pnpm --filter @entertheblackbox/admin build
+      - name: Build production client bundles
+        run: pnpm --filter @entertheblackbox/display build && pnpm --filter @entertheblackbox/phone build && pnpm --filter @entertheblackbox/admin build && pnpm --filter @entertheblackbox/studio build
+      - name: Build Coolify images
+        run: docker compose --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml build

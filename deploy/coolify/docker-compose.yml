@@ -1,0 +1,155 @@
+name: enter-the-blackbox
+
+# Drop-in replacement for the existing enter-the-blackbox Coolify Compose
+# resource. Service and volume names stay stable so domains and persistent
+# PocketBase/audio data can be retained when the Git repository is changed.
+services:
+  frontend:
+    build:
+      context: ../..
+      dockerfile: apps/server/Dockerfile
+      args:
+        VITE_POCKETBASE_URL: ${VITE_POCKETBASE_URL:?set to the public PocketBase HTTPS URL}
+        REALTIME_WS_URL: ${REALTIME_WS_URL:?set to the public WSS relay URL}
+        DISPLAY_TOKEN: ${DISPLAY_TOKEN:?set in Coolify}
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+      bridge:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "80"
+      INSTALLATION_ID: ${INSTALLATION_ID:?set in Coolify}
+      ROOM_ID: ${ROOM_ID:-main}
+      SHOW_ID: ${SHOW_ID:-entertheblackbox}
+      DISPLAY_TOKEN: ${DISPLAY_TOKEN:?set in Coolify}
+      JOIN_GRANT_SECRET: ${JOIN_GRANT_SECRET:?set in Coolify}
+      TRUST_PROXY: "true"
+      ALLOW_LATE_JOIN: ${ALLOW_LATE_JOIN:-true}
+      PHONE_JOIN_BASE_URL: ${PHONE_JOIN_BASE_URL:?set to the public frontend URL ending in /phone/}
+      SHOW_PHONE_JOIN_BASE_URL: ${SHOW_PHONE_JOIN_BASE_URL:-true}
+      MAX_PARTICIPANTS: ${MAX_PARTICIPANTS:-100}
+      MAX_WEBSOCKET_CONNECTIONS: ${MAX_WEBSOCKET_CONNECTIONS:-300}
+      JOIN_RATE_LIMIT_MAX_ATTEMPTS: ${JOIN_RATE_LIMIT_MAX_ATTEMPTS:-30}
+      JOIN_RATE_LIMIT_WINDOW_MS: ${JOIN_RATE_LIMIT_WINDOW_MS:-60000}
+      POCKETBASE_URL: http://pocketbase:8090
+      POCKETBASE_ADMIN_EMAIL: ${POCKETBASE_ADMIN_EMAIL:?set in Coolify}
+      POCKETBASE_ADMIN_PASSWORD: ${POCKETBASE_ADMIN_PASSWORD:?set in Coolify}
+      REQUIRE_PHONE_AUDIO: "true"
+      AUDIO_BRIDGE_URL: http://bridge:8090
+      AUDIO_BRIDGE_TOKEN: ${BRIDGE_TOKEN:?set in Coolify}
+      AUDIO_PUBLIC_URL: ${PUBLIC_STREAM_BASE:?set to the public audio HTTPS URL}
+      TRACKINGBOX_URL: ${TRACKINGBOX_URL:-}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:80/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+
+  pocketbase:
+    build:
+      context: ../../pocketbase
+      dockerfile: Dockerfile
+      args:
+        PB_VERSION: ${PB_VERSION:-0.39.11}
+        PB_ARCH: ${PB_ARCH:-amd64}
+    restart: unless-stopped
+    expose:
+      - "8090"
+    volumes:
+      - pocketbase-data:/pb/pb_data
+    healthcheck:
+      test: ["CMD", "wget", "-qO/dev/null", "http://127.0.0.1:8090/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+
+  icecast:
+    build:
+      context: ../../services/audio/icecast
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?set in Coolify}
+      ICECAST_ADMIN_PASSWORD: ${ICECAST_ADMIN_PASSWORD:?set in Coolify}
+      ICECAST_RELAY_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?set in Coolify}
+      ICECAST_HOSTNAME: ${ICECAST_HOSTNAME:?set to the audio hostname without scheme or path}
+      ICECAST_MAX_CLIENTS: ${ICECAST_MAX_CLIENTS:-400}
+      ICECAST_MAX_SOURCES: ${ICECAST_MAX_SOURCES:-120}
+    healthcheck:
+      test: ["CMD", "wget", "-qO/dev/null", "http://127.0.0.1:8000/status-json.xsl"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+
+  liquidsoap:
+    build:
+      context: ../../services/audio
+      dockerfile: liquidsoap/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "1234"
+    depends_on:
+      icecast:
+        condition: service_healthy
+    environment:
+      ICECAST_HOST: icecast
+      ICECAST_PORT: "8000"
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?set in Coolify}
+      PLAYERS: ${PLAYERS:-100}
+      PLAYER_IDS: ${PLAYER_IDS:-}
+      BEDS_DIR: /beds
+    volumes:
+      - audio-data:/audio:ro
+
+  bridge:
+    build:
+      context: ../../services/audio
+      dockerfile: bridge/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8090"
+    depends_on:
+      liquidsoap:
+        condition: service_started
+    environment:
+      LIQUIDSOAP_HOST: liquidsoap
+      LIQUIDSOAP_PORT: "1234"
+      ICECAST_HOST: icecast
+      ICECAST_PORT: "8000"
+      ICECAST_ADMIN_USER: admin
+      ICECAST_ADMIN_PASSWORD: ${ICECAST_ADMIN_PASSWORD:?set in Coolify}
+      AUDIO_DIR: /audio
+      BEDS_DIR: /beds
+      LIQ_AUDIO_DIR: /audio
+      LIQ_BEDS_DIR: /beds
+      PLAYERS: ${PLAYERS:-100}
+      PLAYER_IDS: ${PLAYER_IDS:-}
+      BRIDGE_TOKEN: ${BRIDGE_TOKEN:?set in Coolify}
+      PUBLIC_STREAM_BASE: ${PUBLIC_STREAM_BASE:?set to the public audio HTTPS URL}
+      FLAG_AFTER_S: ${FLAG_AFTER_S:-20}
+      MAX_AUDIO_UPLOAD_MB: ${MAX_AUDIO_UPLOAD_MB:-20}
+      ENABLE_DOCS: "false"
+      WEB_DIR: /disabled
+    volumes:
+      - audio-data:/audio
+    healthcheck:
+      test: ["CMD", "wget", "-qO/dev/null", "http://127.0.0.1:8090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+volumes:
+  pocketbase-data:
+  audio-data:

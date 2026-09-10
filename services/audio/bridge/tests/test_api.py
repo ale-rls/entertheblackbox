@@ -82,8 +82,11 @@ async def test_auth_required(env):
         "/players/1/play", json={"file": "intro.mp3"}, headers={"Authorization": ""}
     )
     assert r.status_code == 401
-    # health stays open for compose healthchecks
-    assert (await client.get("/health", headers={"Authorization": ""})).status_code == 200
+    # Health stays unauthenticated for Compose. This fixture has no Icecast,
+    # so dependency-aware readiness must be a failing HTTP status.
+    health = await client.get("/health", headers={"Authorization": ""})
+    assert health.status_code == 503
+    assert health.json()["ok"] is False
 
 
 async def test_bed_switch(env):
