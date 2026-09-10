@@ -14,6 +14,33 @@ The server is authoritative: it manages admission, room state, timed vote snapsh
 
 Shared runtime contracts live in `packages/protocol`, `packages/scenario`, `packages/shared`, and `packages/studio-adapter`.
 
+## Services
+
+Vendored as git subtrees. They are not pnpm workspace members (`pnpm-workspace.yaml`
+covers only `apps/*` and `packages/*`), so `pnpm install`, typecheck, and CI ignore
+them entirely. They are here so both the code and the agents working on it can see
+the whole piece in one place.
+
+- `services/trackingbox` — camera-based anonymous audience tracking, from
+  [ale-rls/TrackingBox](https://github.com/ale-rls/TrackingBox), pinned at
+  `95d092864ff8e24a2af9c33e662e547262692b04`. It emits persistent anonymous
+  GIDs with normalized floor coordinates over REST and WebSocket. Treat it as a
+  read-only sensor.
+- `services/audio` — Icecast, Liquidsoap, and an authenticated bridge, for
+  personal audio to each participant's headphones.
+
+**Edit these upstream, not here.** Change TrackingBox in its own repository and
+bring it down with `git subtree pull -P services/trackingbox <remote> <commit>`.
+Editing inside the subtree means the vendored copy silently forks from upstream,
+because pushing changes back out is awkward enough that nobody does it. Update
+the pinned commit above whenever it moves, and re-validate the show.
+
+### Which machine runs what
+
+The venue runs two computers. The tracking machine runs `services/trackingbox`
+with the camera and a GPU. The installation machine runs the server and the
+display. They talk over the venue network.
+
 ## Requirements
 
 - Node.js 22 or newer
