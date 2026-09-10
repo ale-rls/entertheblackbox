@@ -1,0 +1,80 @@
+{
+  "detector": {
+    "model_path": "yolo11m.pt",
+    "confidence_threshold": 0.30,
+    "image_size": 1280
+  },
+  "tracker": {
+    "track_activation_threshold": 0.25,
+    "lost_track_buffer": 30,
+    "minimum_matching_threshold": 0.80,
+    "frame_rate": 30
+  },
+  "reid": {
+    "enabled": true,
+    "model_name": "osnet_x1_0",
+    "update_every": 5,
+    "similarity_threshold": 0.60,
+    "embedding_alpha": 0.10
+  },
+  "identity": {
+    "lost_timeout_seconds": 8.0,
+    "forget_timeout_seconds": 300.0
+  },
+  "overlay": {
+    "debug": false
+  },
+  "logging": {
+    "enabled": true,
+    "frame_log_path": "logs/frames.jsonl"
+  },
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "ws_heartbeat_interval_s": 10.0
+  },
+  "camera": {
+    "device_index": 0,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30
+  },
+  "lens_calibration": {
+    "enabled": false,
+    "model": "fisheye",
+    "image_size": [1920, 1080],
+    "camera_matrix": [],
+    "distortion_coeffs": []
+  },
+  "calibration": {
+    "enabled": false,
+    "anchor": "bottom_center",
+    "floor_space": "normalized",
+    "image_points": [],
+    "floor_points": [],
+    "smoothing_alpha": 0.35
+  },
+  "capture_agent": {
+    "server_url": "wss://your-app.modal.run/ingest",
+    "token": "",
+    "jpeg_quality": 85,
+    "status_host": "127.0.0.1",
+    "status_port": 9000,
+    "reconnect_initial_s": 0.5,
+    "reconnect_max_s": 30.0
+  },
+  "ingest": {
+    "token": "",
+    "queue_size": 3,
+    "frame_timeout_s": 1.0
+  },
+  "pipeline": {
+    "source": "0",
+    "backend": "auto",
+    "device": "auto",
+    "render_overlay": true,
+    "stream_overlay": true,
+    "run_pipeline": true,
+    "mock_people": 24
+  }
+}
