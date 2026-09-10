@@ -128,20 +128,25 @@ test.describe("full scenario flow", () => {
       .poll(async () => (await adminStatus(server.baseUrl)).phaseId, { timeout: 20_000 })
       .toBe("question-two-quadrant");
     await expect(display.locator(".question-text")).toHaveText(/automated decisions/);
+    // Both variants render the min/max regions; only "split" draws
+    // .axis-divider, while "spectrum" draws .axis-track instead. Read whichever
+    // the scenario actually produced rather than assuming the split layout.
     const split = await display.locator(".quadrant-overlay-two-quadrant").evaluate((overlay) => {
       const min = overlay.querySelector<HTMLElement>("[data-quadrant=min]")!;
       const max = overlay.querySelector<HTMLElement>("[data-quadrant=max]")!;
-      const divider = overlay.querySelector<HTMLElement>(".axis-divider")!;
+      const divider = overlay.querySelector<HTMLElement>(".axis-divider");
+      const track = overlay.querySelector<HTMLElement>(".axis-track");
       return {
         overlayPosition: getComputedStyle(overlay).position,
         minPosition: getComputedStyle(min).position,
         maxPosition: getComputedStyle(max).position,
         minRight: min.getBoundingClientRect().right,
         maxLeft: max.getBoundingClientRect().left,
-        dividerRule: getComputedStyle(divider, "::before").content,
+        variant: divider === null ? "spectrum" : "split",
+        axisRule: getComputedStyle((divider ?? track)!, "::before").content,
       };
     });
-    expect(split).toMatchObject({ overlayPosition: "absolute", minPosition: "absolute", maxPosition: "absolute", dividerRule: '\"\"' });
+    expect(split).toMatchObject({ overlayPosition: "absolute", minPosition: "absolute", maxPosition: "absolute", axisRule: '\"\"' });
     expect(Math.abs(split.minRight - split.maxLeft)).toBeLessThan(1);
     await dragTrackpad(phone);
 
