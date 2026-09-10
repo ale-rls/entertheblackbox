@@ -6,7 +6,7 @@ name: blackbox-personal-audio
 # - runner uploads MP3s into audio-data through the authenticated bridge API
 services:
   icecast:
-    build: ./icecast
+    build: ./services/audio/icecast
     restart: unless-stopped
     expose:
       - "8000"
@@ -26,7 +26,7 @@ services:
 
   liquidsoap:
     build:
-      context: .
+      context: ./services/audio
       dockerfile: liquidsoap/Dockerfile
     restart: unless-stopped
     expose:
@@ -49,7 +49,7 @@ services:
 
   bridge:
     build:
-      context: .
+      context: ./services/audio
       dockerfile: bridge/Dockerfile
     restart: unless-stopped
     expose:

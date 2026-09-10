@@ -24,7 +24,7 @@ service, preserve and back up `/pb/pb_data` first. See
 ## Create the resource
 
 1. In Coolify, create a Docker Compose application from this repository.
-2. Set the Compose location to `/docker-compose.coolify.yml`.
+2. Set the Compose location to `/services/audio/docker-compose.coolify.yml`.
 3. Assign an HTTPS domain to the `bridge` service and internal port `8090`,
    for example `https://audio.example.org:8090`.
 4. Set the variables below, then deploy.
