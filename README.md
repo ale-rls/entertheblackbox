@@ -122,7 +122,11 @@ Keep the authenticated display open on the Mac as above, then scan its QR code. 
 
 The display prints `PHONE_JOIN_BASE_URL` at the bottom of the lobby by default and keeps a corner QR available during active play for late joining. Set `SHOW_PHONE_JOIN_BASE_URL=false` to hide the printed URL or `ALLOW_LATE_JOIN=false` to restore lobby-only admission.
 
-The onboarding attract playlist automatically bundles every MP4 in `apps/display/src/assets/`. The display chooses clips randomly and never plays the same clip twice in a row. With one MP4, that file loops normally. Each clip has its own generated perspective QR track. After adding or replacing an attract MP4, run `pnpm generate-idle-marker-tracks` (requires Python, OpenCV, and NumPy) and commit the updated `apps/display/src/idle/markerTracks.generated.ts`.
+The onboarding attract playlist bundles every MP4 named `attract-*.mp4` in `apps/display/src/assets/`. The prefix matters: that directory also holds the rendered credits video and other non-lobby media, which must stay out of the playlist. Clips play in filename order, and the **first one is the A/hold clip** — it returns on every other beat, so three clips run A-B-A-C-A-B-A-C. With one clip, that file loops normally. With none, the lobby shows a static centred join QR on black.
+
+Attract clips are show content and are gitignored, so a fresh clone has an empty playlist. Drop the files in locally; the glob picks them up with no code change.
+
+Each clip can have a generated perspective QR track, which makes the join code appear fixed to a surface in the shot. Without one it falls back to a static centred square. After adding or replacing an attract MP4, run `pnpm generate-idle-marker-tracks` (requires Python, OpenCV, and NumPy) and commit the updated `apps/display/src/idle/markerTracks.generated.ts` — that file is generated code, not media, so it is tracked.
 
 To run `showtest1` and accept physical phones at the same time, combine both sets of environment variables:
 

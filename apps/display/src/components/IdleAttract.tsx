@@ -18,19 +18,23 @@ const CHECK_INTERVAL_MS = 1000;
 const QR_RENDER_SIZE_PX = 512;
 type AttractVideo = { url: string; markerTrack: MarkerTrack | null };
 type VideoSlot = 0 | 1;
-const ATTRACT_A_FILENAME = "1.0_25_c_advert.mp4";
-
+/**
+ * Lobby attract clips, bundled from `apps/display/src/assets/attract-*.mp4`.
+ *
+ * The `attract-` prefix is required: that directory also holds the rendered
+ * credits video and other non-lobby media, which must not join the playlist.
+ * Clips play in filename order and the first one is the designated A/hold clip
+ * (see attractIndexAt), so a leading `a-`/`b-`/`c-` puts them in show order.
+ * The files themselves are gitignored show content; the glob picks up whatever
+ * is present locally, with no code change needed.
+ */
 const bundledIdleAttractVideos: readonly AttractVideo[] = Object.entries(import.meta.glob<string>(
-  "../assets/1.0_25_*.mp4",
+  "../assets/attract-*.mp4",
   { eager: true, query: "?url", import: "default" },
 ))
-  .sort(([left], [right]) => {
-    const leftFilename = left.split("/").at(-1)!;
-    const rightFilename = right.split("/").at(-1)!;
-    if (leftFilename === ATTRACT_A_FILENAME) return -1;
-    if (rightFilename === ATTRACT_A_FILENAME) return 1;
-    return leftFilename.localeCompare(rightFilename);
-  })
+  .sort(([left], [right]) =>
+    left.split("/").at(-1)!.localeCompare(right.split("/").at(-1)!),
+  )
   .map(([path, url]) => {
     const filename = path.split("/").at(-1)!;
     // A clip with no generated track still gets the static centred placement,
