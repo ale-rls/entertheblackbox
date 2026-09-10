@@ -28,7 +28,8 @@ async def env(tmp_path: Path):
         beds_dir=tmp_path / "beds",
         token="secret",
         player_ids=("1", "2", "alpha"),
-        public_stream_base="http://venue:8000",
+        public_stream_base="http://venue:8300",
+        max_audio_upload_bytes=8,
         # icecast poller will fail harmlessly against nothing; keep it slow
         icecast_port=1,
         poll_interval_s=60.0,
@@ -66,8 +67,11 @@ async def test_play_queue_mode_uses_narration_queue(env):
 
 
 async def test_play_rejects_unknown_player_and_file(env):
-    client, _ = env
-    assert (await client.post("/players/999/play", json={"file": "intro.mp3"})).status_code == 404
+    client, fake = env
+    # Arbitrary phone-generated ids are allocated a free pre-built mount.
+    fake.responses["int_1.push /audio/intro.mp3"] = "11"
+    r = await client.post("/players/seat-random/play", json={"file": "intro.mp3"})
+    assert r.status_code == 200
     assert (await client.post("/players/1/play", json={"file": "nope.mp3"})).status_code == 404
     assert (await client.post("/players/1/play", json={"file": "../intro.mp3"})).status_code == 400
 
@@ -99,7 +103,54 @@ async def test_status_includes_stream_url_and_flags(env):
     body = r.json()
     p1 = next(p for p in body["players"] if p["player_id"] == "1")
     assert p1["active"] is True
-    assert p1["stream_url"] == "http://venue:8000/p/1.mp3"
+    assert p1["stream_url"] == "http://venue:8300/stream/1"
+
+
+async def test_dynamic_registration_and_public_gateway_url(env):
+    client, _ = env
+    r = await client.post("/players/seat-abc/register")
+    assert r.status_code == 200
+    assert r.json()["player_id"] == "seat-abc"
+    assert r.json()["stream_url"] == "http://venue:8300/stream/seat-abc"
+
+
+async def test_public_stream_cannot_allocate_an_unknown_player(env):
+    client, _ = env
+    before = (await client.get("/status")).json()["capacity"]
+    r = await client.get("/stream/not-registered", headers={"Authorization": ""})
+    assert r.status_code == 404
+    assert (await client.get("/status")).json()["capacity"] == before
+
+
+async def test_authenticated_audio_upload_is_immediately_playable(env):
+    client, fake = env
+    r = await client.put("/audio/live-message.mp3", content=b"ID3new")
+    assert r.status_code == 200
+    assert r.json()["bytes"] == 6
+    fake.responses["int_1.push /audio/live-message.mp3"] = "12"
+    played = await client.post("/players/1/play", json={"file": "live-message.mp3"})
+    assert played.status_code == 200
+
+    unauthorized = await client.put(
+        "/audio/nope.mp3",
+        content=b"x",
+        headers={"Authorization": ""},
+    )
+    assert unauthorized.status_code == 401
+    too_large = await client.put("/audio/too-large.mp3", content=b"123456789")
+    assert too_large.status_code == 413
+    assert (
+        await client.post("/players/1/play", json={"file": "too-large.mp3"})
+    ).status_code == 404
+
+
+async def test_deactivating_unknown_historical_player_does_not_consume_capacity(env):
+    client, _ = env
+    before = (await client.get("/status")).json()["capacity"]
+    r = await client.put("/players/old-seat/active", json={"active": False})
+    assert r.status_code == 200
+    assert r.json()["registered"] is False
+    assert (await client.get("/status")).json()["capacity"] == before
 
 
 async def test_metrics_plaintext(env):
@@ -107,3 +158,6 @@ async def test_metrics_plaintext(env):
     r = await client.get("/metrics")
     assert r.status_code == 200
     assert "blackbox_players_active" in r.text
+    assert (
+        await client.get("/metrics", headers={"Authorization": ""})
+    ).status_code == 401

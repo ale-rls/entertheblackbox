@@ -7,6 +7,7 @@ def make() -> Registry:
 
 def test_inactive_player_never_flagged():
     r = make()
+    r.register("1")
     r.update_listeners({}, now=1000.0)
     snap = r.snapshot("1", now=2000.0)
     assert snap["flagged"] is False and snap["connected"] is False
@@ -44,3 +45,21 @@ def test_explicit_deactivate():
     r.mark_active("1", False)
     r.update_listeners({}, now=100.0)
     assert r.snapshot("1", now=200.0)["flagged"] is False
+
+
+def test_dynamic_player_gets_free_stream_slot():
+    r = make()
+    player = r.register("seat-abc")
+    assert player.stream_id == "1"
+    assert r.register("seat-abc") is player
+    assert r.register("seat-def").stream_id == "2"
+    assert r.capacity() == {"total": 2, "assigned": 2, "available": 0}
+
+
+def test_listener_counts_are_mapped_from_mount_to_player():
+    r = make()
+    r.register("seat-abc")
+    r.update_listeners({"1": 1}, now=10.0)
+    snap = r.snapshot("seat-abc", now=10.0)
+    assert snap["connected"] is True
+    assert snap["stream_id"] == "1"

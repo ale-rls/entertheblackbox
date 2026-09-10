@@ -5,7 +5,7 @@ services:
     build: ./icecast
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${ICECAST_PUBLIC_PORT:-8200}:8000"
     environment:
       ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?set in .env}
       ICECAST_ADMIN_PASSWORD: ${ICECAST_ADMIN_PASSWORD:?set in .env}
@@ -45,7 +45,7 @@ services:
       dockerfile: bridge/Dockerfile
     restart: unless-stopped
     ports:
-      - "8090:8090"
+      - "${BRIDGE_PUBLIC_PORT:-8300}:8090"
     depends_on:
       - liquidsoap
     environment:
@@ -64,8 +64,9 @@ services:
       BRIDGE_TOKEN: ${BRIDGE_TOKEN:-}
       PUBLIC_STREAM_BASE: ${PUBLIC_STREAM_BASE:-}
       FLAG_AFTER_S: ${FLAG_AFTER_S:-20}
+      MAX_AUDIO_UPLOAD_MB: ${MAX_AUDIO_UPLOAD_MB:-20}
     volumes:
-      - ${AUDIO_DIR:-./audio}:/audio:ro
+      - ${AUDIO_DIR:-./audio}:/audio
       - ${BEDS_DIR:-./beds}:/beds:ro
     healthcheck:
       test: ["CMD", "wget", "-qO/dev/null", "http://127.0.0.1:8090/health"]

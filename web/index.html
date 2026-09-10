@@ -37,7 +37,7 @@
 
   <div>
     <label for="base">Stream base (icecast)</label>
-    <input id="base" placeholder="http://192.168.1.10:8000">
+    <input id="base" placeholder="http://192.168.1.10:8200">
   </div>
   <div>
     <label for="pid">Player id</label>
@@ -73,7 +73,7 @@ const params = new URLSearchParams(location.search);
 $("pid").value = params.get("player") || $("pid").value;
 $("base").value = params.get("base")
   || localStorage.getItem("bb_base")
-  || `${location.protocol}//${location.hostname}:8000`;
+  || `${location.protocol}//${location.hostname}:8200`;
 
 let started = false;
 let retries = 0;

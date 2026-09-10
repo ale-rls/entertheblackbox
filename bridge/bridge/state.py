@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 @dataclass
 class PlayerState:
     player_id: str
+    stream_id: str
     active: bool = False
     activated_at: float | None = None
     listeners: int = 0
@@ -33,11 +34,43 @@ class Registry:
 
     def __init__(self, player_ids: tuple[str, ...] | list[str], flag_after_s: float) -> None:
         self.flag_after_s = flag_after_s
-        self.players = {pid: PlayerState(pid) for pid in player_ids}
+        # Liquidsoap still creates a fixed number of mounts at boot, but the
+        # public player ids are dynamic (the phone app creates seat-<random>).
+        # Assign those ids to free mount slots on first use.  The mapping is
+        # stable for the lifetime of the bridge and the runner re-registers
+        # every persisted player after a bridge/server restart.
+        self.stream_ids = tuple(player_ids)
+        self.players = {}
+        self._by_stream: dict[str, str] = {}
         self.last_poll_at = None
 
+    def register(self, pid: str) -> PlayerState:
+        existing = self.players.get(pid)
+        if existing is not None:
+            return existing
+
+        # Prefer a same-named mount for fixed-id installations, otherwise
+        # allocate the first free slot in configured order.
+        preferred = pid if pid in self.stream_ids and pid not in self._by_stream else None
+        stream_id = preferred or next(
+            (slot for slot in self.stream_ids if slot not in self._by_stream), None
+        )
+        if stream_id is None:
+            raise OverflowError("no personal audio stream slots available")
+        state = PlayerState(player_id=pid, stream_id=stream_id)
+        self.players[pid] = state
+        self._by_stream[stream_id] = pid
+        return state
+
+    def get(self, pid: str) -> PlayerState | None:
+        return self.players.get(pid)
+
+    def assigned_for_stream(self, stream_id: str) -> PlayerState | None:
+        pid = self._by_stream.get(stream_id)
+        return self.players.get(pid) if pid is not None else None
+
     def mark_active(self, pid: str, active: bool, now: float | None = None) -> None:
-        p = self.players[pid]
+        p = self.register(pid)
         if active and not p.active:
             p.activated_at = now if now is not None else time.time()
         p.active = active
@@ -46,20 +79,20 @@ class Registry:
 
     def record_push(self, pid: str, file: str, mode: str, now: float | None = None) -> None:
         now = now if now is not None else time.time()
-        p = self.players[pid]
+        p = self.register(pid)
         p.last_file = file
         p.last_mode = mode
         p.last_push_at = now
         self.mark_active(pid, True, now=now)
 
     def record_bed(self, pid: str, bed: str) -> None:
-        self.players[pid].bed = bed
+        self.register(pid).bed = bed
 
     def update_listeners(self, counts: dict[str, int], now: float | None = None) -> None:
         now = now if now is not None else time.time()
         self.last_poll_at = now
-        for pid, p in self.players.items():
-            p.listeners = counts.get(pid, 0)
+        for p in self.players.values():
+            p.listeners = counts.get(p.stream_id, 0)
             if p.listeners > 0:
                 p.last_listener_at = now
 
@@ -78,6 +111,7 @@ class Registry:
         p = self.players[pid]
         return {
             "player_id": p.player_id,
+            "stream_id": p.stream_id,
             "active": p.active,
             "connected": p.listeners > 0,
             "listeners": p.listeners,
@@ -92,3 +126,10 @@ class Registry:
     def snapshot_all(self, now: float | None = None) -> list[dict]:
         now = now if now is not None else time.time()
         return [self.snapshot(pid, now) for pid in self.players]
+
+    def capacity(self) -> dict[str, int]:
+        return {
+            "total": len(self.stream_ids),
+            "assigned": len(self.players),
+            "available": len(self.stream_ids) - len(self.players),
+        }

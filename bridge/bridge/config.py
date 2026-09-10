@@ -41,12 +41,16 @@ class Settings:
     # where LIQUIDSOAP sees the same files (for push URIs)
     liq_audio_dir: str = "/audio"
     liq_beds_dir: str = "/beds"
-    # public base URL phones use for mounts, e.g. http://10.0.0.2:8000
+    # public bridge URL phones use for gateway streams, e.g. http://10.0.0.2:8300
     public_stream_base: str = ""
     token: str = ""  # empty = auth disabled (dev only)
     poll_interval_s: float = 5.0
     # claimed player with zero listeners for longer than this => flagged
     flag_after_s: float = 20.0
+    # Bound authenticated uploads so a bad caller cannot fill the volume or
+    # exhaust bridge memory. ElevenLabs narration files are normally far smaller.
+    max_audio_upload_bytes: int = 20 * 1024 * 1024
+    enable_docs: bool = True
     player_ids: tuple[str, ...] = field(default_factory=tuple)
 
     @classmethod
@@ -66,5 +70,10 @@ class Settings:
             token=os.environ.get("BRIDGE_TOKEN", ""),
             poll_interval_s=float(os.environ.get("POLL_INTERVAL_S", cls.poll_interval_s)),
             flag_after_s=float(os.environ.get("FLAG_AFTER_S", cls.flag_after_s)),
+            max_audio_upload_bytes=int(
+                float(os.environ.get("MAX_AUDIO_UPLOAD_MB", "20")) * 1024 * 1024
+            ),
+            enable_docs=os.environ.get("ENABLE_DOCS", "true").lower()
+            in {"1", "true", "yes", "on"},
             player_ids=tuple(_player_ids()),
         )

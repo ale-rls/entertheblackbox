@@ -5,7 +5,7 @@ set -eu
 PLAYER="${1:?usage: push.sh <player_id> <file> [mode]}"
 FILE="${2:?usage: push.sh <player_id> <file> [mode]}"
 MODE="${3:-interrupt}"
-BRIDGE="${BRIDGE:-http://localhost:8090}"
+BRIDGE="${BRIDGE:-http://localhost:8300}"
 
 curl -s -X POST "$BRIDGE/players/$PLAYER/play" \
     ${BRIDGE_TOKEN:+-H "Authorization: Bearer $BRIDGE_TOKEN"} \

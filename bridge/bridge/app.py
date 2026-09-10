@@ -10,17 +10,19 @@ import asyncio
 import logging
 import os
 import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal, Optional
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import icecast
-from .config import BED_NAME_RE, Settings
+from .config import BED_NAME_RE, PLAYER_ID_RE, Settings
 from .liq import LiquidsoapClient, LiquidsoapError
 from .state import Registry
 
@@ -80,7 +82,13 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             poller.cancel()
             await liq.close()
 
-    app = FastAPI(title="blackbox-icecast bridge", lifespan=lifespan)
+    app = FastAPI(
+        title="blackbox-icecast bridge",
+        lifespan=lifespan,
+        docs_url="/docs" if settings.enable_docs else None,
+        redoc_url="/redoc" if settings.enable_docs else None,
+        openapi_url="/openapi.json" if settings.enable_docs else None,
+    )
     app.state.settings = settings
     app.state.registry = registry
     app.state.liq = liq
@@ -94,18 +102,29 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         if header != f"Bearer {settings.token}":
             raise HTTPException(401, "missing or invalid bearer token")
 
-    def known_player(player_id: str) -> str:
-        if player_id not in registry.players:
-            raise HTTPException(404, f"unknown player: {player_id}")
-        return player_id
+    def validate_player_id(player_id: str) -> None:
+        if not PLAYER_ID_RE.match(player_id):
+            raise HTTPException(400, f"player id must match {PLAYER_ID_RE.pattern}")
+
+    def assigned_player(player_id: str):
+        validate_player_id(player_id)
+        try:
+            return registry.register(player_id)
+        except OverflowError as exc:
+            raise HTTPException(503, str(exc)) from exc
 
     # -- control ------------------------------------------------------------
 
     @app.post("/players/{player_id}/play", dependencies=[Depends(require_token)])
     async def play(player_id: str, body: PlayRequest) -> dict:
-        pid = known_player(player_id)
         resolve_audio_file(settings.audio_dir, body.file)
-        queue = f"int_{pid}" if body.mode == "interrupt" else f"nar_{pid}"
+        player = assigned_player(player_id)
+        pid = player.player_id
+        queue = (
+            f"int_{player.stream_id}"
+            if body.mode == "interrupt"
+            else f"nar_{player.stream_id}"
+        )
         uri = f"{settings.liq_audio_dir}/{body.file}"
         try:
             rid = await liq.push(queue, uri)
@@ -117,10 +136,13 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @app.post("/players/{player_id}/bed", dependencies=[Depends(require_token)])
     async def set_bed(player_id: str, body: BedRequest) -> dict:
-        pid = known_player(player_id)
         resolve_bed_dir(settings.beds_dir, body.bed)
+        player = assigned_player(player_id)
+        pid = player.player_id
         try:
-            await liq.set_bed(f"bed_{pid}", f"{settings.liq_beds_dir}/{body.bed}")
+            await liq.set_bed(
+                f"bed_{player.stream_id}", f"{settings.liq_beds_dir}/{body.bed}"
+            )
         except LiquidsoapError as exc:
             raise HTTPException(502, str(exc)) from exc
         registry.record_bed(pid, body.bed)
@@ -129,9 +151,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @app.post("/players/{player_id}/skip", dependencies=[Depends(require_token)])
     async def skip(player_id: str) -> dict:
-        pid = known_player(player_id)
+        player = assigned_player(player_id)
+        pid = player.player_id
         try:
-            await liq.skip(f"out_{pid}")
+            await liq.skip(f"out_{player.stream_id}")
         except LiquidsoapError as exc:
             raise HTTPException(502, str(exc)) from exc
         log.info("skip player=%s", pid)
@@ -139,25 +162,114 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @app.put("/players/{player_id}/active", dependencies=[Depends(require_token)])
     async def set_active(player_id: str, body: ActiveRequest) -> dict:
-        pid = known_player(player_id)
+        validate_player_id(player_id)
+        player = registry.get(player_id)
+        # Startup reconciliation includes historical/left player records. Do
+        # not let an inactive record consume one of the finite encoder slots.
+        if not body.active and player is None:
+            return {"player_id": player_id, "active": False, "registered": False}
+        pid = (player or assigned_player(player_id)).player_id
         registry.mark_active(pid, body.active)
-        return registry.snapshot(pid)
+        return _with_urls(registry.snapshot(pid))
+
+    @app.post("/players/{player_id}/register", dependencies=[Depends(require_token)])
+    async def register(player_id: str) -> dict:
+        """Allocate a stable pre-provisioned mount to an arbitrary player id."""
+        player = assigned_player(player_id)
+        return _with_urls(registry.snapshot(player.player_id))
+
+    @app.put("/audio/{file}", dependencies=[Depends(require_token)])
+    async def upload_audio(file: str, request: Request) -> dict:
+        """Store an MP3 sent by the private venue runner.
+
+        Coolify hosts the delivery stack on a different machine, so it cannot
+        mount the runner's local content directory. The authenticated upload
+        keeps that deployment boundary explicit and writes atomically into the
+        volume Liquidsoap reads.
+        """
+        if not file or Path(file).name != file or Path(file).suffix.lower() != ".mp3":
+            raise HTTPException(400, "file must be a bare .mp3 filename")
+        settings.audio_dir.mkdir(parents=True, exist_ok=True)
+        target = settings.audio_dir / file
+        temporary = settings.audio_dir / f".{file}.{uuid.uuid4().hex}.upload"
+        size = 0
+        try:
+            with temporary.open("wb") as output:
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > settings.max_audio_upload_bytes:
+                        raise HTTPException(
+                            413,
+                            f"audio exceeds {settings.max_audio_upload_bytes} byte upload limit",
+                        )
+                    output.write(chunk)
+            if size == 0:
+                raise HTTPException(400, "audio upload is empty")
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
+        log.info("audio uploaded file=%s bytes=%d", file, size)
+        return {"ok": True, "file": file, "bytes": size}
 
     # -- status ---------------------------------------------------------------
 
     def _with_urls(snap: dict) -> dict:
         if settings.public_stream_base:
             snap["stream_url"] = (
-                f"{settings.public_stream_base}/p/{snap['player_id']}.mp3"
+                f"{settings.public_stream_base}/stream/{snap['player_id']}"
             )
         return snap
 
+    @app.get("/stream/{player_id}")
+    async def player_stream(player_id: str) -> StreamingResponse:
+        """Public phone entrypoint: proxy an authenticated runner registration.
+
+        The bearer token is intentionally not required here; it contains no
+        control capability and is the URL placed in the phone's audio element.
+        Proxying (instead of redirecting) ensures a bridge restart closes the
+        phone connection too. Its watchdog retries while the runner's periodic
+        registration reconciliation restores the remote mapping.
+        """
+        validate_player_id(player_id)
+        player = registry.get(player_id)
+        if player is None:
+            # Public requests must never allocate finite encoder capacity.
+            raise HTTPException(404, f"personal stream is not registered: {player_id}")
+        upstream = httpx.AsyncClient(timeout=httpx.Timeout(None, connect=5.0))
+        request = upstream.build_request(
+            "GET",
+            f"http://{settings.icecast_host}:{settings.icecast_port}/p/{player.stream_id}.mp3",
+        )
+        try:
+            response = await upstream.send(request, stream=True)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            await upstream.aclose()
+            raise HTTPException(502, f"personal stream unavailable: {exc}") from exc
+
+        async def chunks():
+            try:
+                async for chunk in response.aiter_raw():
+                    yield chunk
+            finally:
+                await response.aclose()
+                await upstream.aclose()
+
+        return StreamingResponse(
+            chunks(),
+            media_type=response.headers.get("content-type", "audio/mpeg"),
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        )
+
     @app.get("/players/{player_id}/status", dependencies=[Depends(require_token)])
     async def player_status(player_id: str) -> dict:
-        pid = known_player(player_id)
+        player = registry.get(player_id)
+        if player is None:
+            raise HTTPException(404, f"unknown player: {player_id}")
+        pid = player.player_id
         snap = _with_urls(registry.snapshot(pid))
         try:
-            snap["queued"] = await liq.queue_length(f"nar_{pid}")
+            snap["queued"] = await liq.queue_length(f"nar_{player.stream_id}")
         except LiquidsoapError:
             snap["queued"] = None
         return snap
@@ -170,6 +282,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             "poll_age_s": (now - registry.last_poll_at) if registry.last_poll_at else None,
             "players": players,
             "flagged": [p["player_id"] for p in players if p["flagged"]],
+            "capacity": registry.capacity(),
         }
 
     @app.get("/health")
@@ -187,9 +300,14 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             "liquidsoap": {"ok": liq_ok, "error": liq_err},
             "icecast": {"ok": icecast_ok, "poll_age_s": poll_age},
             "players": len(registry.players),
+            "capacity": registry.capacity(),
         }
 
-    @app.get("/metrics", response_class=PlainTextResponse)
+    @app.get(
+        "/metrics",
+        response_class=PlainTextResponse,
+        dependencies=[Depends(require_token)],
+    )
     async def metrics() -> str:
         now = time.time()
         snaps = registry.snapshot_all(now)

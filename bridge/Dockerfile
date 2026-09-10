@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir .
 
 # test player page served at /test/ (SPEC §10 T1)
 COPY web /web
+COPY beds /beds
 ENV WEB_DIR=/web
 
 EXPOSE 8090
