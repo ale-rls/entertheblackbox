@@ -150,11 +150,29 @@ function circle(id: string, label: string, radius: number, steps = 24) {
   return { id, label, points };
 }
 
+/** Zone names collected during a run that no form knew how to read. */
+const unmatchedZones: Array<{ round: string; zone: string }> = [];
+
 function fieldFor(round: Round): Record<string, unknown> {
   const labels = round.form_labels ?? {};
   const options = round.options ?? [];
-  const labelFor = (zone: string, fallback: string) =>
-    options.find((option) => option.zone === zone)?.label || fallback;
+  const consumed = new Set<string>();
+  /**
+   * Label for one of his zone names, falling back to `form_labels` and then to
+   * a literal. Zone names are part of his format rather than free text, but
+   * they are still his convention: anything this importer does not recognise is
+   * reported at the end rather than silently replaced by a fallback, which is
+   * how `ring_outer` first slipped through as `ring_edge`.
+   */
+  const labelFor = (zone: string, fallback: string) => {
+    consumed.add(zone);
+    return options.find((option) => option.zone === zone)?.label || fallback;
+  };
+  const reportUnmatched = () => {
+    for (const option of options) {
+      if (!consumed.has(option.zone)) unmatchedZones.push({ round: round.id, zone: option.zone });
+    }
+  };
 
   switch (round.form) {
     case "scale":
@@ -162,8 +180,8 @@ function fieldFor(round: Round): Record<string, unknown> {
         type: "two-quadrant", axis: "x", variant: "spectrum",
         labels: { minLabel: labels.left ?? "min", maxLabel: labels.right ?? "max" },
       };
-    case "scale3":
-      return {
+    case "scale3": {
+      const field = {
         type: "polygon-zones",
         zones: [
           band("scale-left", labelFor("scale_left", labels.left ?? "left"), 0, 1 / 3),
@@ -171,18 +189,24 @@ function fieldFor(round: Round): Record<string, unknown> {
           band("scale-right", labelFor("scale_right", labels.right ?? "right"), 2 / 3, 1),
         ],
       };
-    case "rings":
+      reportUnmatched();
+      return field;
+    }
+    case "rings": {
       // Innermost first. zoneOfPolygons returns the first zone containing the
       // point, so a centre position matches the inner disc before the outer
       // one. Reordering these silently inverts the question.
-      return {
+      const field = {
         type: "polygon-zones",
         zones: [
           circle("ring-center", labelFor("ring_center", labels.center ?? "centre"), 0.17),
           circle("ring-mid", labelFor("ring_mid", "middle"), 0.34),
-          circle("ring-edge", labelFor("ring_edge", labels.edge ?? "edge"), 0.5),
+          circle("ring-edge", labelFor("ring_outer", labels.edge ?? "edge"), 0.5),
         ],
       };
+      reportUnmatched();
+      return field;
+    }
     case "quadrants": {
       // Four separately labelled fields, not two named axes. four-quadrant can
       // only carry an x and a y label pair, which would silently drop two of
@@ -194,7 +218,7 @@ function fieldFor(round: Round): Record<string, unknown> {
           { x: x0 + 0.5, y: y0 + 0.5 }, { x: x0, y: y0 + 0.5 },
         ],
       });
-      return {
+      const field = {
         type: "polygon-zones",
         zones: [
           quadrant("field-top-left", "cross_tl", 0, 0),
@@ -203,6 +227,8 @@ function fieldFor(round: Round): Record<string, unknown> {
           quadrant("field-bottom-right", "cross_br", 0.5, 0.5),
         ],
       };
+      reportUnmatched();
+      return field;
     }
     case "cross":
     default:
@@ -284,6 +310,14 @@ function main(): void {
   console.log(`\nrequired media, to be placed in content/media:`);
   for (const src of [...media].sort()) console.log(`  ${src}`);
   console.log(`\nthen: pnpm build-media-manifest`);
+
+  if (unmatchedZones.length > 0) {
+    // A zone his file defines that no form here reads. Usually means his
+    // format moved and this importer is quietly dropping a label.
+    console.warn(`\nWARNING: ${unmatchedZones.length} zone(s) not read by any form mapping:`);
+    for (const { round, zone } of unmatchedZones) console.warn(`  ${round}: ${zone}`);
+    process.exitCode = 1;
+  }
 }
 
 main();
