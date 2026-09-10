@@ -329,6 +329,29 @@ describe("trackingbox positions", () => {
     });
   });
 
+  it("attributes a claimed body's position to the phone, not to gid:<n>", async () => {
+    const { h, display } = await atQuadrantQuestion();
+
+    // Same physical body throughout, positioned once before the claim and
+    // once after. Before, it votes anonymously as gid:42; after, as phone-1.
+    // Two distinct voters in q1 is only possible if attribution switched --
+    // if it had not, both positions would land on one id and count once.
+    h.engine.applyTrackingActions([
+      { type: "join", gid: 42 },
+      { type: "position", gid: 42, x: 0.8, y: 0.2 },
+    ]);
+    h.engine.bindings.claim("phone-1", 42, h.now());
+    expect(h.engine.bindings.participantForGid(42)).toBe("phone-1");
+    h.engine.applyTrackingActions([{ type: "position", gid: 42, x: 0.8, y: 0.2 }]);
+
+    await Promise.resolve();
+    h.advance(20_000);
+    expect(last(display, "question_resolved")).toMatchObject({
+      winner: "q1",
+      quadrantCounts: { q1: 2 },
+    });
+  });
+
   it("ignores tracking input outside an active question", () => {
     const h = createHarness();
     h.display();
