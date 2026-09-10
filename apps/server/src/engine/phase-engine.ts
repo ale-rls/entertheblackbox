@@ -16,6 +16,8 @@ import type { ParticipantRecord, ParticipantRegistry } from "../admission/index.
 import { QrGrantPushLoop, type QrGrantPushLoopOptions } from "../admission/qr.js";
 import { CursorPipeline } from "../cursors/index.js";
 import { GhostCursorPlayer, type GhostPool } from "../ghosts/index.js";
+import type { TrackingAction } from "../tracking/audience.js";
+import { participantIdForGid } from "../tracking/protocol.js";
 import {
   MovementRecorder,
   type MovementBatchFlushed,
@@ -692,6 +694,38 @@ export class PhaseEngine {
     }
     this.lastInputAt = now;
     return true;
+  }
+
+  /**
+   * Apply a batch of TrackingBox actions (see apps/server/src/tracking).
+   *
+   * A tracked body is a vote participant with no socket, no lease, and no
+   * name: people on the stage side walk in rather than joining. Its id is
+   * namespaced `gid:<n>` so it can never collide with a phone's clientId.
+   *
+   * Positions arrive in the same normalized 0..1 space the trackpad produces,
+   * so they go through the ordinary recordInput path and every field type,
+   * zone test and plurality rule applies unchanged.
+   */
+  applyTrackingActions(actions: readonly TrackingAction[], now = this.now()): void {
+    for (const action of actions) {
+      const participantId = participantIdForGid(action.gid);
+      switch (action.type) {
+        case "join":
+          this.votes.addParticipant({ participantId, connected: true, lastHeartbeatAt: now }, now);
+          break;
+        case "position":
+          this.recordInput(now, participantId, action.x, action.y);
+          break;
+        case "leave":
+          // Mirrors a phone dropping off: the vote already cast still counts
+          // under the scenario's countedStatuses, which is what we want for
+          // someone briefly occluded mid-question.
+          this.votes.setConnected(participantId, false, now);
+          break;
+      }
+    }
+    this.queueQuestionStatus(now);
   }
 
   setDisplayConnected(connected: boolean, now = this.now()): void {

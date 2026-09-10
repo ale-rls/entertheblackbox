@@ -41,6 +41,23 @@ The venue runs two computers. The tracking machine runs `services/trackingbox`
 with the camera and a GPU. The installation machine runs the server and the
 display. They talk over the venue network.
 
+### Camera positions (optional)
+
+Set `TRACKINGBOX_URL` to TrackingBox's WebSocket endpoint and the server will
+also take positions from tracked bodies, so standing in a floor zone resolves a
+question exactly as a swiped cursor does:
+
+```bash
+env TRACKINGBOX_URL=ws://192.168.1.40:8000/ws ... node --import tsx apps/server/src/index.ts
+```
+
+Unset, nothing changes: the phone trackpad remains the only position source.
+Each tracked body becomes a vote participant with no socket, lease, or name,
+identified as `gid:<n>`, since people on the stage side walk in rather than
+joining. A tracking outage degrades to nobody standing anywhere; it never stops
+the show. Floor zones are authored in the scenario, not in TrackingBox's own
+zone config, so there is one source of truth.
+
 ## Requirements
 
 - Node.js 22 or newer
