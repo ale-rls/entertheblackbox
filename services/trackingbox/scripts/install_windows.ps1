@@ -182,10 +182,11 @@ if ($doctorExit -eq 0) {
 
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Cyan
-Write-Host "  1) Start the service (service owns the camera, ReID off):"
-Write-Host "       scripts\run_windows.bat"
-Write-Host "     or directly:"
-Write-Host "       .venv\Scripts\audience-tracker serve --backend real --device cuda --source 0 --no-reid"
-Write-Host "  2) Wire up TouchDesigner: see the 'Run on Windows with TouchDesigner' section in README.md"
-Write-Host "  3) Re-check anytime:  .venv\Scripts\audience-tracker doctor"
+Write-Host "  1) In TouchDesigner, open the camera with a Video Device In TOP."
+Write-Host "  2) Publish it from a Video Stream Out TOP as:"
+Write-Host "       rtsp://127.0.0.1:8554/audience"
+Write-Host "  3) Start TrackingBox (from the monorepo root):"
+Write-Host "       services\trackingbox\scripts\run_windows.bat --config C:\show\venue-config.json"
+Write-Host "  4) Follow services\trackingbox\docs\touchdesigner.md for /ws and presets."
+Write-Host "  5) Re-check anytime: services\trackingbox\.venv\Scripts\audience-tracker doctor"
 exit $doctorExit

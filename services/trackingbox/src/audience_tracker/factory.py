@@ -52,7 +52,12 @@ def open_source(cfg: Config, simulator=None, max_frames: int | None = None, inge
         return ingest_source
     if simulator is not None:
         return SimulatorFrameSource(simulator, max_frames=max_frames)
-    return OpenCVFrameSource(cfg.pipeline.source, max_frames=max_frames, camera=cfg.camera)
+    source = OpenCVFrameSource(cfg.pipeline.source, max_frames=max_frames, camera=cfg.camera)
+    if str(cfg.pipeline.source).lower().startswith(("rtsp://", "rtsps://")):
+        from .ingestion.frame_source import LatestFrameSource
+
+        return LatestFrameSource(source)
+    return source
 
 
 def build_components(cfg: Config, num_people: int = 24) -> dict:

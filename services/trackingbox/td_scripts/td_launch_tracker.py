@@ -8,10 +8,10 @@
 #   tracker_presets
 #
 # Header row can use these columns:
-#   name, source, backend, device, port, reid, confidence, image_size, debug
+#   name, source, backend, device, port, reid, confidence, image_size, debug, config
 #
 # Useful example row:
-#   HDMI USB Camera, 0, real, cuda, 8000, 0, 0.15, 1280, 0
+#   TD RTSP, rtsp://127.0.0.1:8554/audience, real, cuda, 8000, 1, 0.15, 1280, 0, apps\runner\dev\trackingbox.config.json
 #
 # Button callbacks:
 #   mod('td_launch_tracker').launch_selected()
@@ -24,9 +24,9 @@ import subprocess
 PRESETS_TABLE = 'tracker_presets'
 STATUS_DAT = 'tracker_status'
 SELECTED_PRESET = 'selected_preset'
+REPO_ROOT_DAT = 'enter_blackbox_root'
 
-REPO_ROOT = r'C:\Users\Interrobang\Documents\Enter The Blackbox\TrackingBox'
-TRACKER_EXE = os.path.join(REPO_ROOT, '.venv', 'Scripts', 'audience-tracker.exe')
+DEFAULT_RTSP_SOURCE = 'rtsp://127.0.0.1:8554/audience'
 
 _state = {'process': None}
 
@@ -48,6 +48,24 @@ def _text(value, default=''):
 
 def _truthy(value):
     return _text(value).lower() in ('1', 'true', 'yes', 'on', 'enabled')
+
+
+def _repo_root():
+    """Resolve the monorepo without baking one operator's Windows path in."""
+    root_dat = op(REPO_ROOT_DAT)
+    if root_dat is not None and root_dat.numRows and root_dat.numCols:
+        value = _text(root_dat[0, 0])
+        if value:
+            return os.path.abspath(os.path.expandvars(value))
+
+    value = _text(os.environ.get('ENTER_BLACKBOX_ROOT'))
+    if value:
+        return os.path.abspath(os.path.expandvars(value))
+
+    raise RuntimeError(
+        'Set ENTER_BLACKBOX_ROOT or create a one-cell DAT named {} containing '
+        'the enter-the-blackbox monorepo path.'.format(REPO_ROOT_DAT)
+    )
 
 
 def _table_rows(table):
@@ -100,20 +118,30 @@ def _env_with_preset(preset):
     return env
 
 
-def _command_from_preset(preset):
-    source = preset.get('source') or preset.get('camera') or preset.get('index') or '0'
+def _command_from_preset(preset, repo_root, tracker_exe):
+    source = preset.get('source') or DEFAULT_RTSP_SOURCE
     backend = preset.get('backend') or 'real'
     device = preset.get('device') or 'cuda'
     port = preset.get('port') or '8000'
 
     cmd = [
-        TRACKER_EXE,
+        tracker_exe,
         'serve',
+    ]
+
+    config = _text(preset.get('config'))
+    if config:
+        config = os.path.expandvars(config)
+        if not os.path.isabs(config):
+            config = os.path.join(repo_root, config)
+        cmd.extend(['--config', os.path.normpath(config)])
+
+    cmd.extend([
         '--backend', backend,
         '--device', device,
         '--source', source,
         '--port', port,
-    ]
+    ])
 
     if not _truthy(preset.get('reid')):
         cmd.append('--no-reid')
@@ -131,11 +159,16 @@ def launch_selected(name=''):
         _status('Already running')
         return
 
-    if not os.path.exists(TRACKER_EXE):
-        raise RuntimeError('Missing tracker executable. Run scripts\\install_windows.bat first.')
+    repo_root = _repo_root()
+    tracker_root = os.path.join(repo_root, 'services', 'trackingbox')
+    tracker_exe = os.path.join(tracker_root, '.venv', 'Scripts', 'audience-tracker.exe')
+    if not os.path.exists(tracker_exe):
+        raise RuntimeError(
+            'Missing tracker executable. Run services\\trackingbox\\scripts\\install_windows.bat first.'
+        )
 
     preset = _preset_by_name(name)
-    cmd = _command_from_preset(preset)
+    cmd = _command_from_preset(preset, repo_root, tracker_exe)
     env = _env_with_preset(preset)
 
     creationflags = 0
@@ -144,14 +177,14 @@ def launch_selected(name=''):
 
     process = subprocess.Popen(
         cmd,
-        cwd=REPO_ROOT,
+        cwd=tracker_root,
         env=env,
         creationflags=creationflags,
     )
     _state['process'] = process
     _status('Launched {} on source {} port {}'.format(
         preset.get('name', 'preset'),
-        preset.get('source', '0'),
+        preset.get('source', DEFAULT_RTSP_SOURCE),
         preset.get('port', '8000'),
     ))
 

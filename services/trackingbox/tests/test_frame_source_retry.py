@@ -23,12 +23,13 @@ IMG = np.zeros((4, 4, 3), dtype=np.uint8)
 class FakeCapture:
     """Scriptable cv2.VideoCapture: read() pops an image or None (= failure)."""
 
-    def __init__(self, reads):
+    def __init__(self, reads, opened=True):
         self._reads = list(reads)
+        self._opened = opened
         self.released = False
 
     def isOpened(self):
-        return True
+        return self._opened
 
     def set(self, prop, value):
         pass
@@ -49,8 +50,15 @@ def fake_cv2(captures):
     mod.CAP_PROP_FRAME_WIDTH = 3
     mod.CAP_PROP_FRAME_HEIGHT = 4
     mod.CAP_PROP_FPS = 5
+    mod.CAP_FFMPEG = 1900
+    mod.CAP_PROP_OPEN_TIMEOUT_MSEC = 53
+    mod.CAP_PROP_READ_TIMEOUT_MSEC = 54
+    mod.calls = []
     pending = list(captures)
-    mod.VideoCapture = lambda src: pending.pop(0)
+    def capture(*args):
+        mod.calls.append(args)
+        return pending.pop(0)
+    mod.VideoCapture = capture
     return mod
 
 
@@ -78,6 +86,38 @@ def test_live_camera_reopens_after_repeated_failures(monkeypatch):
     assert dead.released is True           # reopened after _REOPEN_AFTER failures
     assert src.next_frame() is not None    # the new capture delivers
     assert src.exhausted is False
+
+
+def test_live_rtsp_can_start_before_publisher_and_reconnect(monkeypatch):
+    missing = FakeCapture([], opened=False)
+    live = FakeCapture([IMG])
+    src = make_source(monkeypatch, [missing, live], "rtsp://127.0.0.1:8554/audience")
+
+    assert src.next_frame() is None
+    assert missing.released is True
+    assert src.next_frame() is not None
+    assert src.exhausted is False
+    cv2 = sys.modules["cv2"]
+    assert cv2.calls[0][1:] == (cv2.CAP_FFMPEG, [
+        cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 4000,
+        cv2.CAP_PROP_READ_TIMEOUT_MSEC, 4000,
+    ])
+
+
+def test_rtsp_stall_reopens_on_first_failed_read(monkeypatch):
+    stalled = FakeCapture([IMG, None])
+    fresh = FakeCapture([IMG])
+    src = make_source(monkeypatch, [stalled, fresh], "rtsp://localhost/audience")
+    assert src.next_frame().frame_id == 0
+    assert src.next_frame() is None
+    assert stalled.released
+    assert src.next_frame().frame_id == 1
+
+
+def test_missing_file_still_fails_at_startup(monkeypatch):
+    monkeypatch.setitem(sys.modules, "cv2", fake_cv2([FakeCapture([], opened=False)]))
+    with pytest.raises(RuntimeError, match="Could not open video source"):
+        OpenCVFrameSource("missing.mp4")
 
 
 def test_file_source_read_failure_means_eof(monkeypatch):

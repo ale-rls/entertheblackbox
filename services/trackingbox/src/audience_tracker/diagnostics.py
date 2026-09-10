@@ -19,7 +19,7 @@ from typing import Optional
 CAPABILITIES: dict[str, list[str]] = {
     "serve": ["fastapi", "uvicorn", "websockets"],          # REST/WS API + mock
     "detect": ["numpy", "cv2", "ultralytics", "supervision", "torch", "torchvision"],
-    "reid": ["torchreid"],                                   # OSNet x1.0
+    "reid": ["torchreid", "gdown"],                         # OSNet x1.0 + weights
     "agent": ["numpy", "cv2", "websockets"],                 # venue Capture Agent
     "deploy": ["modal"],
 }

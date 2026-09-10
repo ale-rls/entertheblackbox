@@ -10,6 +10,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from audience_tracker import diagnostics as dx  # noqa: E402
 
 
+def test_reid_capability_includes_runtime_weight_downloader():
+    assert "gdown" in dx.CAPABILITIES["reid"]
+
+
 def test_report_shape_and_never_raises():
     rep = dx.report()
     assert rep["python_ok"] is True  # tests run on >= 3.10
@@ -53,6 +57,7 @@ def test_doctor_require_exit_codes():
 
 
 if __name__ == "__main__":
+    test_reid_capability_includes_runtime_weight_downloader()
     test_report_shape_and_never_raises()
     test_serve_capability_available_in_test_env()
     test_format_report_is_readable()

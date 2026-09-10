@@ -8,6 +8,7 @@ supervision>=0.20       # ByteTrack
 torch>=2.2
 torchvision>=0.17
 torchreid>=0.2.5        # OSNet x1.0
+gdown>=4.7              # downloads pretrained OSNet weights
 
 # Deployment
 modal>=0.64

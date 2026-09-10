@@ -35,6 +35,7 @@ image = (
         "torch>=2.2",
         "torchvision>=0.17",
         "torchreid>=0.2.5",
+        "gdown>=4.7",
     )
     # Pre-download YOLO11m so cold starts don't pay for it.
     .run_commands("python -c \"from ultralytics import YOLO; YOLO('yolo11m.pt')\"")

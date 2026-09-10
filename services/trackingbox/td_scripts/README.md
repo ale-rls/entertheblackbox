@@ -13,21 +13,29 @@ not imported by the Python package.
 | `td_receive_state.py` | WebSocket callbacks that keep the `audience` table in sync. |
 | `td_fetch_zone_counts.py` | Polls `/api/zones/counts` into a `zone_counts` table. |
 
-The service owns the camera; TouchDesigner consumes output with:
+TouchDesigner owns the camera. Branch its Video Device In TOP directly into the
+visuals and into a Video Stream Out TOP configured as an RTSP Server on port
+`8554`, stream name `audience`, using H.264. TrackingBox reads
+`rtsp://127.0.0.1:8554/audience`; TouchDesigner consumes its state with:
 
-* **Video Stream In TOP**: `http://localhost:8000/video`
 * **WebSocket DAT**: `ws://localhost:8000/ws`
 * **Callbacks DAT**: `td_receive_state.py`
 * **Zone counts**: call `mod('td_fetch_zone_counts').poll()`
+
+The optional annotated diagnostic feed remains available at
+`http://localhost:8000/video`.
 
 `td_launch_tracker.py` expects a Table DAT named `tracker_presets`. Add one row
 per camera/server preset:
 
 ```text
-name,source,backend,device,port,reid,confidence,image_size,debug
-HDMI USB Camera,0,real,cuda,8000,0,0.15,1280,0
-Mock Test,0,mock,auto,8000,0,0.30,960,0
+name,source,backend,device,port,reid,confidence,image_size,debug,config
+TD RTSP,rtsp://127.0.0.1:8554/audience,real,cuda,8000,1,0.15,1280,0,C:\show\venue-config.json
+Mock Test,0,mock,auto,8000,0,0.30,960,0,apps\runner\dev\trackingbox.config.json
 ```
+
+Create a one-cell DAT named `enter_blackbox_root` with the monorepo's absolute
+Windows path, or set `ENTER_BLACKBOX_ROOT` before launching TouchDesigner.
 
 Optional helper DATs:
 

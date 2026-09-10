@@ -85,6 +85,7 @@ class OpenCVFrameSource(_FiniteFrameSource):
         self._exhausted = False
         self._next_id = 0
         self._is_device = str(source).isdigit()
+        self._is_rtsp = str(source).lower().startswith(("rtsp://", "rtsps://"))
         if live is None:
             s = str(source).lower()
             live = self._is_device or s.startswith(self._LIVE_SCHEMES) or s.startswith("/dev/")
@@ -92,12 +93,25 @@ class OpenCVFrameSource(_FiniteFrameSource):
         self._failures = 0
         self._cap = self._open()
         if not self._cap.isOpened():
-            raise RuntimeError(f"Could not open video source: {source!r}")
+            if not self._live:
+                raise RuntimeError(f"Could not open video source: {source!r}")
+            # A live publisher (notably TouchDesigner's RTSP TOP) may come up a
+            # moment after this service. Keep the pipeline alive; next_frame()
+            # will periodically reopen the source until it becomes available.
+            log.warning("Live video source %r is not ready — waiting and retrying", source)
 
     def _open(self):
         import cv2  # local import: only the venue/GPU box has OpenCV
 
-        cap = cv2.VideoCapture(int(self._source) if self._is_device else self._source)
+        if self._is_rtsp:
+            # Set timeouts at open time: FFmpeg ignores post-open timeout sets.
+            # A stalled publisher must not block each retry for 30 seconds.
+            cap = cv2.VideoCapture(self._source, cv2.CAP_FFMPEG, [
+                cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 4000,
+                cv2.CAP_PROP_READ_TIMEOUT_MSEC, 4000,
+            ])
+        else:
+            cap = cv2.VideoCapture(int(self._source) if self._is_device else self._source)
         if self._camera is not None and self._is_device:
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._camera.width)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._camera.height)
@@ -116,7 +130,7 @@ class OpenCVFrameSource(_FiniteFrameSource):
                 self._exhausted = True  # end of file
                 return None
             self._failures += 1
-            if self._failures % self._REOPEN_AFTER == 0:
+            if self._is_rtsp or self._failures % self._REOPEN_AFTER == 0:
                 log.warning(
                     "Video source %r: %d consecutive failed reads — reopening",
                     self._source,
@@ -174,6 +188,56 @@ class SimulatorFrameSource(_FiniteFrameSource):
 
     def release(self) -> None:
         self._exhausted = True
+
+
+class LatestFrameSource(_FiniteFrameSource):
+    """Drain live video independently of inference, retaining only the newest frame.
+
+    Pausing RTSP reads during inference can overflow the publisher/decoder's
+    buffers. A dedicated reader preserves decoding continuity without building
+    an increasingly delayed queue. Only that reader releases the capture, so
+    shutdown never races OpenCV's native read operation.
+    """
+
+    def __init__(self, source) -> None:
+        self._source = source
+        self._queue = QueueFrameSource(maxsize=1)
+        self._stop = threading.Event()
+        self._error: Exception | None = None
+        self._thread = threading.Thread(target=self._pump, name="rtsp-capture", daemon=True)
+        self._thread.start()
+
+    def _pump(self) -> None:
+        try:
+            while not self._stop.is_set():
+                frame = self._source.next_frame(timeout=1.0)
+                if frame is not None:
+                    self._queue.push(frame)
+                elif self._source.exhausted:
+                    break
+        except Exception as exc:
+            self._error = exc
+            log.exception("Live video capture failed")
+        finally:
+            try:
+                self._source.release()
+            finally:
+                self._queue.release()
+
+    def next_frame(self, timeout: Optional[float] = None) -> Optional[Frame]:
+        frame = self._queue.next_frame(timeout)
+        if frame is None and self._error is not None:
+            raise RuntimeError("Live video capture failed") from self._error
+        return frame
+
+    @property
+    def exhausted(self) -> bool:
+        return self._queue.exhausted
+
+    def release(self) -> None:
+        self._stop.set()
+        self._queue.release()
+        self._thread.join(timeout=1.0)
 
 
 class QueueFrameSource:

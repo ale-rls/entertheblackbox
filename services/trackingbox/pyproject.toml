@@ -35,7 +35,10 @@ detect = [
 ]
 # Optional ReID (OSNet x1.0). The system runs without it (`--no-reid`): GIDs
 # persist per track, only cross-occlusion recovery is lost.
-reid = ["torchreid>=0.2.5"]
+reid = [
+    "torchreid>=0.2.5",
+    "gdown>=4.7",           # torchreid uses this to fetch pretrained OSNet weights
+]
 # Full real stack = detection/tracking + ReID (e.g. the Modal GPU worker).
 ml = [
     "numpy>=1.24",
@@ -45,6 +48,7 @@ ml = [
     "torch>=2.2",
     "torchvision>=0.17",
     "torchreid>=0.2.5",      # provides OSNet x1.0
+    "gdown>=4.7",             # downloads pretrained OSNet weights
 ]
 # Venue-side Capture Agent: read a camera + JPEG-encode + stream over WebSocket.
 agent = ["numpy>=1.24", "opencv-python-headless>=4.9"]
