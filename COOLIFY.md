@@ -10,14 +10,16 @@ Deployment topology:
 | Component | Location | Public? |
 |---|---|---|
 | Phone frontend | Coolify (or existing Netlify site) | HTTPS |
-| PocketBase | Existing Coolify service | HTTPS |
+| PocketBase | Versioned monorepo Coolify service | HTTPS |
 | Audio bridge | This Coolify stack | HTTPS |
 | Icecast + Liquidsoap | This Coolify stack | No |
 | Runner + TrackingBox | Venue machine | No; outbound connections only |
 
-PocketBase is not duplicated by this Compose stack. Keep its existing
-persistent volume and domain; on a fresh instance, run the runner repository's
-`scripts/pocketbase_bootstrap.py` once before importing show content.
+PocketBase is not duplicated by this service-specific Compose stack. Deploy it
+from the monorepo's `/services/pocketbase/docker-compose.coolify.yml`, or use
+the combined `/deploy/coolify/docker-compose.yml`. If replacing an existing
+service, preserve and back up `/pb/pb_data` first. See
+`services/pocketbase/README.md`.
 
 ## Create the resource
 
