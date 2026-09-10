@@ -1,48 +1,65 @@
-# Two-agent workflow (PR-based)
+# Agent workflow (issue + PR based)
 
-How the two agents — **claude** (Claude Code) and **codex** (Codex CLI) — work
-on this repo since 2026-07-14. This replaces the `steps.md` step-claiming
-protocol; that file is retained as a historical record of steps 000–048.
+How parallel agent threads work on this repo without running over each other.
+Inherited from the smartphonecracy production and adapted here.
+
+## The rule that matters
+
+**One issue, one branch, one PR, one thread.** Two threads must never be
+editing the same working tree or the same branch. Everything below exists to
+enforce that.
 
 ## Flow
 
-1. **Backlog lives in GitHub issues.** One issue per unit of work. An agent
-   picks up an issue (or a direct user request), never an unwritten task from
-   another agent's notes.
-2. **Each agent works on its own branch**: `codex/<topic>` or
-   `claude/<topic>`, branched from `main`. Agents never commit to `main`
-   directly and never push to another lane's branch. Branch isolation replaces
-   the old `.steps.lock` / file-reservation machinery.
-3. **Every change lands via a PR** with verification results (typecheck, tests,
-   builds actually run) stated in the PR description.
-4. **The user merges.** Agents do not merge their own PRs.
+1. **The backlog lives in GitHub issues.** One issue per unit of work. A thread
+   picks up an issue (or a direct request from the director), never an
+   unwritten task from another thread's notes or scrollback.
 
-## Review tiering (carried over from the steps.md protocol, user-directed 2026-07-12)
+2. **Claim before you touch anything.** Assign the issue to yourself and add a
+   comment saying you're starting. If an issue is already assigned or has an
+   open PR, pick a different one — do not "help" with it.
 
-- **Cheap/medium implementation work defaults to codex** (larger credit
-  budget). Claude handles complex or high-risk work.
-- **Frontier claude (Fable) reviews only high-failure-potential changes**:
-  crypto (grants/leases), vote/resolution correctness, local runtime
-  integrity/privacy, admission security, and data-loss paths.
-- **Codex-authored low-risk PRs self-verify** (tests + typecheck + build in the
-  PR description); claude-authored PRs are cross-reviewed by codex.
-- **No agent ever approves its own work** where a review is owed.
+3. **Each thread works on its own branch**, `claude/<topic>`, branched fresh
+   from `main`. Never commit to `main` directly. Never push to a branch another
+   thread opened. Branch isolation is what keeps concurrent threads safe; there
+   is no locking mechanism beyond it.
+
+4. **Every change lands via a PR** that states the verification actually run
+   (see below) and closes its issue with `Closes #N`.
+
+5. **The director merges.** Agents do not merge their own PRs.
+
+## Verification is mandatory
+
+A PR states exactly what was run and what the results were. "Should pass" is
+not verification. Run before opening:
+
+```bash
+pnpm -r typecheck && pnpm -r test
+```
+
+Add end-to-end when the change touches runtime client or server behavior:
+
+```bash
+pnpm test:e2e
+```
+
+Add scenario validation when the change touches the scenario schema, a
+scenario file, or a media manifest:
+
+```bash
+pnpm validate-scenario content/scenarios/dev.json --manifest content/media-manifest.json --media-dir content/media
+```
 
 ## Conventions
 
-- Verification is mandatory: a PR states exactly what was run and the results.
-  "Should pass" is not verification.
-- Work discovered mid-PR becomes a new issue, not silent scope expansion.
-- The full test suite (`pnpm -r typecheck && pnpm -r test`) runs before a PR is
-  opened; e2e (`pnpm test:e2e`) when the change touches runtime client/server
-  behavior.
-- Director/policy decisions are recorded in
-  [director-decisions.md](director-decisions.md), not in PR threads.
-
-## Retired machinery
-
-- `steps.md` — historical record only; do not claim steps or edit statuses.
-- `.steps.lock/` protocol — obsolete (branch isolation supersedes it).
-- `scripts/resume-work.sh` watchdog — retired; it exits immediately with a
-  pointer here. Autonomous lane resumption, if wanted again, should be rebuilt
-  around GitHub issues + PRs.
+- Work discovered mid-PR becomes a **new issue**, not silent scope expansion.
+  If you find a second bug while fixing the first, file it and keep going.
+- Director and policy decisions are recorded in
+  [director-decisions.md](director-decisions.md), not buried in PR threads.
+- No agent approves its own work where a review is owed. High-failure-potential
+  changes — grant/lease crypto, vote and resolution correctness, admission
+  security, runtime privacy, and any data-loss path — get a second pass from a
+  different thread before merge.
+- Show content (scenarios, media manifests, Studio drafts) follows the same
+  flow as code. A scenario edit is a PR.

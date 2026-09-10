@@ -1,15 +1,19 @@
-# Director decisions (Phase 0)
+# Director decisions
 
-Authoritative record of the policy decisions the director (Ale) made for the
-production installation, plus the Phase 0 deliverables that are still open.
-Originally recorded in `steps.md` under STEP-000 (2026-07-12); moved here when
-that file was retired as the process record.
+Authoritative record of the policy decisions the director (Ale) makes for the
+production installation, plus the deliverables still open before launch.
+
+**Inherited defaults.** The table below carries over from the smartphonecracy
+production, where these values were tested on real hardware with a real
+audience. They are a starting point for Enter the Blackbox, not a decision —
+every row needs confirming or changing against the new script, and the
+durations in particular are tied to that show's pacing.
 
 These values must be reflected in `content/scenarios/production.json` when it
 is authored. Engineering work validates against the fake dev scenario
 (`content/scenarios/dev.json`) until then.
 
-## Decided (group a — recorded 2026-07-12)
+## Inherited from smartphonecracy (recorded 2026-07-12, needs re-confirming)
 
 | Policy | Decision |
 | --- | --- |

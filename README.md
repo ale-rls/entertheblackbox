@@ -198,7 +198,9 @@ The application and Show Studio v1 are implemented and tested. A venue launch st
 
 ## Project status
 
-Open work is tracked in [GitHub issues](https://github.com/ale-rls/entertheblackbox-studio/issues); the agent process is described in [docs/agent-workflow.md](docs/agent-workflow.md). Historical implementation and verification records (steps 000–048) are preserved in [steps.md](steps.md), now retired. Director policy decisions live in [docs/director-decisions.md](docs/director-decisions.md). The only deferred Studio feature is the post-v1 multi-participant drag simulator; outcome shortcuts cover the same resolution branches in v1.
+Open work is tracked in [GitHub issues](https://github.com/ale-rls/entertheblackbox-studio/issues); the agent process is described in [docs/agent-workflow.md](docs/agent-workflow.md). Director policy decisions live in [docs/director-decisions.md](docs/director-decisions.md).
+
+This repository forked from the smartphonecracy production, which supplied the runtime, Show Studio, and venue tooling. The two shows are independent and do not share fixes. The engine and Show Studio v1 are implemented and tested; what Enter the Blackbox still needs is its own content — scenario graph, media, and director decisions. The only deferred Studio feature is the post-v1 multi-participant drag simulator; outcome shortcuts cover the same resolution branches in v1.
 
 ## License
 
