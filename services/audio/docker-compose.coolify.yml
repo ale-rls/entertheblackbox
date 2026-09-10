@@ -1,0 +1,89 @@
+name: blackbox-personal-audio
+
+# Coolify deployment boundary:
+# - bridge is the only public service; assign its domain to container port 8090
+# - Icecast and Liquidsoap are reachable only on this Compose network
+# - runner uploads MP3s into audio-data through the authenticated bridge API
+services:
+  icecast:
+    build: ./services/audio/icecast
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?set in Coolify}
+      ICECAST_ADMIN_PASSWORD: ${ICECAST_ADMIN_PASSWORD:?set in Coolify}
+      ICECAST_RELAY_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?set in Coolify}
+      ICECAST_HOSTNAME: ${ICECAST_HOSTNAME:-localhost}
+      ICECAST_MAX_CLIENTS: ${ICECAST_MAX_CLIENTS:-400}
+      ICECAST_MAX_SOURCES: ${ICECAST_MAX_SOURCES:-120}
+    healthcheck:
+      test: ["CMD", "wget", "-qO/dev/null", "http://127.0.0.1:8000/status-json.xsl"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+
+  liquidsoap:
+    build:
+      context: ./services/audio
+      dockerfile: liquidsoap/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "1234"
+    depends_on:
+      icecast:
+        condition: service_healthy
+    environment:
+      ICECAST_HOST: icecast
+      ICECAST_PORT: "8000"
+      ICECAST_SOURCE_PASSWORD: ${ICECAST_SOURCE_PASSWORD:?set in Coolify}
+      PLAYERS: ${PLAYERS:-100}
+      PLAYER_IDS: ${PLAYER_IDS:-}
+      BEDS_DIR: /beds
+    volumes:
+      - audio-data:/audio:ro
+    # The bridge healthcheck verifies Liquidsoap's control socket and Icecast
+    # together, so this worker does not need a separate public health probe.
+    exclude_from_hc: true
+
+  bridge:
+    build:
+      context: ./services/audio
+      dockerfile: bridge/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8090"
+    depends_on:
+      - liquidsoap
+    environment:
+      LIQUIDSOAP_HOST: liquidsoap
+      LIQUIDSOAP_PORT: "1234"
+      ICECAST_HOST: icecast
+      ICECAST_PORT: "8000"
+      ICECAST_ADMIN_USER: admin
+      ICECAST_ADMIN_PASSWORD: ${ICECAST_ADMIN_PASSWORD:?set in Coolify}
+      AUDIO_DIR: /audio
+      BEDS_DIR: /beds
+      LIQ_AUDIO_DIR: /audio
+      LIQ_BEDS_DIR: /beds
+      PLAYERS: ${PLAYERS:-100}
+      PLAYER_IDS: ${PLAYER_IDS:-}
+      BRIDGE_TOKEN: ${BRIDGE_TOKEN:?set in Coolify}
+      PUBLIC_STREAM_BASE: ${PUBLIC_STREAM_BASE:?set to the public HTTPS bridge URL}
+      FLAG_AFTER_S: ${FLAG_AFTER_S:-20}
+      MAX_AUDIO_UPLOAD_MB: ${MAX_AUDIO_UPLOAD_MB:-20}
+      ENABLE_DOCS: "false"
+      # Do not expose the soak-test page on the public deployment.
+      WEB_DIR: /disabled
+    volumes:
+      - audio-data:/audio
+    healthcheck:
+      test: ["CMD", "wget", "-qO/dev/null", "http://127.0.0.1:8090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+
+volumes:
+  audio-data:

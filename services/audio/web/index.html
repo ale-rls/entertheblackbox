@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>blackbox stream test</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font-family: -apple-system, system-ui, sans-serif;
+         background: #0b0b0f; color: #eee; display: flex; flex-direction: column;
+         min-height: 100vh; }
+  main { flex: 1; display: flex; flex-direction: column; gap: 1rem;
+         padding: 1.2rem; max-width: 32rem; margin: 0 auto; width: 100%;
+         box-sizing: border-box; }
+  h1 { font-size: 1.1rem; margin: 0; color: #9ad; }
+  label { font-size: .85rem; color: #999; display: block; margin-bottom: .2rem; }
+  input { width: 100%; box-sizing: border-box; padding: .55rem .7rem;
+          border-radius: .5rem; border: 1px solid #333; background: #16161c;
+          color: #eee; font-size: 1rem; }
+  button { padding: .9rem; border-radius: .7rem; border: 0; font-size: 1.05rem;
+           font-weight: 700; background: #2b6; color: #041; cursor: pointer; }
+  button:disabled { background: #333; color: #777; }
+  #state { display: flex; gap: .8rem; align-items: baseline; }
+  #dot { width: .8rem; height: .8rem; border-radius: 50%; background: #a33;
+         display: inline-block; align-self: center; }
+  #dot.ok { background: #3c6; } #dot.warn { background: #ca3; }
+  #stats { font-variant-numeric: tabular-nums; color: #aaa; font-size: .9rem; }
+  #log { flex: 1; background: #111; border: 1px solid #222; border-radius: .5rem;
+         padding: .6rem; font: .78rem/1.5 ui-monospace, monospace; overflow-y: auto;
+         min-height: 10rem; max-height: 40vh; white-space: pre-wrap; }
+  .hint { color: #777; font-size: .85rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>blackbox — personal stream test (T1)</h1>
+
+  <div>
+    <label for="base">Stream base (icecast)</label>
+    <input id="base" placeholder="http://192.168.1.10:8200">
+  </div>
+  <div>
+    <label for="pid">Player id</label>
+    <input id="pid" value="1">
+  </div>
+
+  <button id="start">▶ Start listening</button>
+  <p class="hint">After audio starts: lock the phone, pocket it. Every gap and
+  reconnect is logged below with timestamps — check after unlocking.</p>
+
+  <div id="state">
+    <span id="dot"></span>
+    <span id="status">idle</span>
+    <span id="stats"></span>
+  </div>
+
+  <div id="log"></div>
+  <audio id="stream" preload="none"></audio>
+</main>
+
+<script>
+"use strict";
+// Reference implementation of the client playback contract (SPEC §5):
+// single <audio> element (never Web Audio — the iOS mute switch must not
+// silence us), one unlock gesture, Media Session, watchdog + backoff
+// reconnect, reconnect-on-resume, reconnect-on-visibility.
+
+const $ = (id) => document.getElementById(id);
+const audio = $("stream");
+const logEl = $("log");
+
+const params = new URLSearchParams(location.search);
+$("pid").value = params.get("player") || $("pid").value;
+$("base").value = params.get("base")
+  || localStorage.getItem("bb_base")
+  || `${location.protocol}//${location.hostname}:8200`;
+
+let started = false;
+let retries = 0;
+let lastTime = -1;
+let stallTicks = 0;
+let gapStartedAt = null;
+let gapCount = 0;
+
+function log(msg) {
+  const t = new Date().toISOString().slice(11, 19);
+  logEl.textContent += `[${t}] ${msg}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setState(cls, text) {
+  $("dot").className = cls;
+  $("status").textContent = text;
+}
+
+function streamUrl() {
+  const base = $("base").value.replace(/\/+$/, "");
+  const pid = encodeURIComponent($("pid").value.trim());
+  // cache-buster: never let a proxy or the media stack resume a stale buffer
+  return `${base}/p/${pid}.mp3?t=${Date.now()}`;
+}
+
+function connect(reason) {
+  log(`connect (${reason})`);
+  audio.src = streamUrl();
+  audio.load();
+  audio.play().then(() => {
+    retries = 0;
+    if (gapStartedAt !== null) {
+      gapCount += 1;
+      log(`recovered after ${((Date.now() - gapStartedAt) / 1000).toFixed(1)}s gap (#${gapCount})`);
+      gapStartedAt = null;
+    }
+    setState("ok", "playing");
+  }).catch((err) => {
+    log(`play() rejected: ${err.name}`);
+    scheduleReconnect("play-rejected");
+  });
+}
+
+let reconnectTimer = null;
+function scheduleReconnect(reason) {
+  if (!started || reconnectTimer) return;
+  if (gapStartedAt === null) gapStartedAt = Date.now();
+  const delay = Math.min(500 * 2 ** retries, 8000); // 0.5s -> 8s cap
+  retries += 1;
+  setState("warn", `reconnecting in ${(delay / 1000).toFixed(1)}s (${reason})`);
+  log(`stream down (${reason}); retry #${retries} in ${delay}ms`);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect(`retry-${retries}`);
+  }, delay);
+}
+
+// -- element events ---------------------------------------------------------
+for (const ev of ["error", "stalled", "ended", "abort"]) {
+  audio.addEventListener(ev, () => { if (started) scheduleReconnect(ev); });
+}
+audio.addEventListener("playing", () => setState("ok", "playing"));
+
+// -- watchdog: currentTime must advance -------------------------------------
+setInterval(() => {
+  if (!started) return;
+  if (audio.paused) { stallTicks = 0; return; }
+  if (audio.currentTime === lastTime) {
+    stallTicks += 1;
+    if (stallTicks >= 4) { // ~8s frozen
+      stallTicks = 0;
+      scheduleReconnect("watchdog-stall");
+    }
+  } else {
+    stallTicks = 0;
+  }
+  lastTime = audio.currentTime;
+  $("stats").textContent =
+    `t=${audio.currentTime.toFixed(0)}s gaps=${gapCount} retries=${retries}`;
+}, 2000);
+
+// -- lock screen / background recovery ---------------------------------------
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && started && audio.paused) {
+    log("visible again and paused -> reconnect");
+    connect("visibility");
+  }
+});
+
+// -- media session (lock-screen UI) ------------------------------------------
+function setupMediaSession() {
+  if (!("mediaSession" in navigator)) return;
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: `Player ${$("pid").value}`,
+    artist: "blackbox",
+    album: "personal narrative stream",
+  });
+  // live stream: resume = fresh connect, never resume a paused buffer
+  navigator.mediaSession.setActionHandler("play", () => connect("mediasession-play"));
+  navigator.mediaSession.setActionHandler("pause", () => {
+    audio.pause();
+    setState("warn", "paused by user");
+    log("paused via media session");
+  });
+  for (const a of ["seekbackward", "seekforward", "seekto", "previoustrack", "nexttrack"]) {
+    try { navigator.mediaSession.setActionHandler(a, null); } catch (e) { /* ok */ }
+  }
+}
+
+// -- the one gesture (SPEC R4) ------------------------------------------------
+$("start").addEventListener("click", () => {
+  started = true;
+  localStorage.setItem("bb_base", $("base").value);
+  $("start").disabled = true;
+  $("base").disabled = $("pid").disabled = true;
+  setupMediaSession();
+  connect("start");
+});
+</script>
+</body>
+</html>
