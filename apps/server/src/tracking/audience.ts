@@ -63,15 +63,22 @@ export class TrackedAudience {
     const seen = new Set<number>();
 
     for (const body of bodies) {
-      if (!body.visible) continue;
-      seen.add(body.gid);
-      actions.push(...this.applyBody(body));
+      if (body.visible) seen.add(body.gid);
     }
 
+    // TrackingBox can report a replacement GID and the disappearance of the
+    // old GID in one snapshot. Apply departures first so the binding registry
+    // can see the old participant as lost before it tries to auto-rebind the
+    // replacement.
     const departed = [...this.present].filter((gid) => !seen.has(gid));
     for (const gid of departed) {
       this.present.delete(gid);
       actions.push({ type: "leave", gid });
+    }
+
+    for (const body of bodies) {
+      if (!body.visible) continue;
+      actions.push(...this.applyBody(body));
     }
     return actions;
   }

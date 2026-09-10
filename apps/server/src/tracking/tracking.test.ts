@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseTrackingMessage, participantIdForGid } from "./protocol.js";
-import { TrackedAudience } from "./audience.js";
+import { TrackedAudience, type TrackingAction } from "./audience.js";
+import { BindingRegistry } from "./binding.js";
 
 /**
  * Frames copied from the shapes TrackingBox actually emits — see
@@ -101,12 +102,33 @@ describe("TrackedAudience", () => {
     // would attribute gid 1's position to a different person.
     const actions = audience.ingest(snapshotFrame([person(3, [0.3, 0.3])]));
     expect(actions).toEqual([
-      { type: "join", gid: 3 },
-      { type: "position", gid: 3, x: 0.3, y: 0.3 },
       { type: "leave", gid: 1 },
       { type: "leave", gid: 2 },
+      { type: "join", gid: 3 },
+      { type: "position", gid: 3, x: 0.3, y: 0.3 },
     ]);
     expect(audience.gids()).toEqual([3]);
+  });
+
+  it("lets a replacement gid rebind when it replaces an old gid in one snapshot", () => {
+    const audience = new TrackedAudience();
+    const bindings = new BindingRegistry();
+    const apply = (actions: readonly TrackingAction[], now: number) => {
+      for (const action of actions) {
+        if (action.type === "join") bindings.gidSeen(action.gid, null, now);
+        if (action.type === "position") bindings.gidSeen(action.gid, { x: action.x, y: action.y }, now);
+        if (action.type === "leave") bindings.gidLeft(action.gid, now);
+      }
+    };
+
+    apply(audience.ingest(snapshotFrame([person(7, [0.5, 0.5])])), 1_000);
+    bindings.claim("phone-a", 7, 1_000);
+
+    apply(audience.ingest(snapshotFrame([person(12, [0.52, 0.51])])), 2_000);
+
+    expect(bindings.gidForParticipant("phone-a")).toBe(12);
+    expect(bindings.participantForGid(12)).toBe("phone-a");
+    expect(bindings.stateOf("phone-a")).toBe("bound");
   });
 
   it("leaves a body once, not on every repeat of the gone event", () => {
