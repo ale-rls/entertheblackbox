@@ -1,6 +1,6 @@
-# Enter the Blackbox Studio
+# Enter the Blackbox
 
-Enter the Blackbox Studio is the runtime and visual authoring toolkit for a browser-based, multiplayer installation. Visitors scan a QR code, use their phones as cursors, and collectively navigate questions and video branches on a shared display.
+Enter the Blackbox is the runtime and visual authoring toolkit for the piece of the same name. Visitors scan a QR code, use their phones as cursors, and collectively navigate questions and video branches on a shared display.
 
 The server is authoritative: it manages admission, room state, timed vote snapshots, branch resolution, recovery, and the operational admin API. Shows are versioned scenario graphs rather than hard-coded application flows.
 
@@ -24,7 +24,7 @@ Shared runtime contracts live in `packages/protocol`, `packages/scenario`, `pack
 From a fresh clone, run all commands from the repository root:
 
 ```bash
-cd entertheblackbox-studio
+cd entertheblackbox
 corepack enable
 pnpm install
 ```
@@ -217,7 +217,7 @@ The application and Show Studio v1 are implemented and tested. A venue launch st
 
 ## Project status
 
-Open work is tracked in [GitHub issues](https://github.com/ale-rls/entertheblackbox-studio/issues); the agent process is described in [CLAUDE.md](CLAUDE.md) and, in full, [docs/agent-workflow.md](docs/agent-workflow.md).
+Open work is tracked in [GitHub issues](https://github.com/ale-rls/entertheblackbox/issues); the agent process is described in [CLAUDE.md](CLAUDE.md) and, in full, [docs/agent-workflow.md](docs/agent-workflow.md).
 
 This repository forked from the smartphonecracy production, which supplied the runtime, Show Studio, and venue tooling. The two shows are independent and do not share fixes. The engine and Show Studio v1 are implemented and tested; what Enter the Blackbox still needs is its own content — scenario graph, media, and director decisions. The only deferred Studio feature is the post-v1 multi-participant drag simulator; outcome shortcuts cover the same resolution branches in v1.
 
