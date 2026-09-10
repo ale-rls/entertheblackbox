@@ -242,11 +242,20 @@ pnpm simulate-clients -- --count 300 --duration-ms 180000 \
 
 ## Content
 
-- `content/scenarios/dev.json` — example development show
-- `content/scenarios/showtest1.json` — checked-in `showtest1` show
+- `content/scenarios/entertheblackbox.json` — this production's show, imported
+  from the sibling runner's `show.yaml` with `pnpm import-show-yaml <path>`
+- `content/scenarios/dev.json` — fake development show, used by the tests and CI
+- `content/scenarios/showtest1.json` — generic test show
 - `content/media-manifest.json` — development media inventory
 - `content/media-manifests/showtest1.json` — media inventory for `showtest1`
 - `content/media/` — locally served media assets
+
+**The production show cannot run yet.** It has no media manifest, because every
+entry needs the byte length and hash of a real file. Put its audio and the
+narration still image into `content/media`, run `pnpm build-media-manifest`, and
+re-run the importer so the narration durations come from the real recordings
+rather than the placeholder. Its 16 spoken questions also have nowhere to live
+until per-phase audio exists.
 
 Scenarios and manifests are validated at startup and before Studio deployment export. Visual Studio layout metadata remains separate from runtime JSON.
 
