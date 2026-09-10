@@ -64,6 +64,13 @@ export class BindingRegistry {
   private readonly byGid = new Map<number, string>();
   /** GIDs currently visible, with their last known position. */
   private readonly liveGids = new Map<number, { x: number; y: number } | null>();
+  /**
+   * GIDs already offered to the rebind matcher. The adapter reports a body as
+   * `join` with no position and only then a `position`, so "first sighting" is
+   * not the moment a match is possible; the first sighting *with a position*
+   * is. Cleared when the GID leaves.
+   */
+  private readonly rebindAttempted = new Set<number>();
 
   private readonly rebindMaxDistance: number;
   private readonly rebindMaxGapMs: number;
@@ -150,16 +157,21 @@ export class BindingRegistry {
       return null;
     }
 
-    // Only a genuinely new GID is a rebind candidate. A heartbeat snapshot
-    // resends every visible GID, so treating each one as an arrival would
-    // retry the match on every beat.
-    if (known) return null;
+    // Match on the first sighting that carries a usable position. Matching on
+    // arrival alone can never work: the arrival has no position, so there is
+    // nothing to measure distance against. Attempted once per GID so a
+    // heartbeat snapshot, which resends every visible GID, does not retry the
+    // match on every beat.
+    void known;
+    if (position === null || this.rebindAttempted.has(gid)) return null;
+    this.rebindAttempted.add(gid);
     return this.tryAutoRebind(gid, now);
   }
 
   /** A tracked body disappeared. Its player, if any, goes lost. */
   gidLeft(gid: number, now: number): BindingEvent | null {
     this.liveGids.delete(gid);
+    this.rebindAttempted.delete(gid);
     const participantId = this.byGid.get(gid);
     if (participantId === undefined) return null;
     const player = this.players.get(participantId);

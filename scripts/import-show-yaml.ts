@@ -24,7 +24,8 @@
  *                                               zoneOfPolygons returns the
  *                                               first match, so order matters)
  */
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 type Round = {
@@ -43,12 +44,39 @@ type Round = {
 /** Still image behind every narration cue; the MP3 drives the timing. */
 const NARRATION_IMAGE = "narration.png";
 /**
- * Narration length is unknown until the real recordings exist: his file carries
- * `duration_s: 0` for them because his engine plays until the audio ends, while
- * ours needs a number up front. Regenerate with `pnpm build-media-manifest`
- * once the final audio is in content/media, then update these.
+ * Used only when a narration's length cannot be established. His engine plays
+ * until the audio ends, so his file carries `duration_s: 0`; ours needs a
+ * number up front, and the server abandons a video phase `expectedDurationMs`
+ * plus five seconds after it starts. A narration longer than this value is
+ * therefore cut off mid-sentence, which is why falling back to it is a
+ * warning and a non-zero exit rather than a silent default.
  */
 const PLACEHOLDER_NARRATION_MS = 60_000;
+
+/** Narrations that fell back to the placeholder, reported at the end. */
+const unknownDurations: string[] = [];
+
+/**
+ * Real length of a narration MP3, in milliseconds, or null.
+ *
+ * The media manifest cannot answer this: it records src, bytes and hash only.
+ * So the file itself is measured, which needs ffprobe. Without it, or without
+ * the audio present, the caller falls back and is told loudly.
+ */
+function audioDurationMs(mediaDir: string, file: string): number | null {
+  const path = join(mediaDir, file);
+  if (!existsSync(path)) return null;
+  try {
+    const out = execFileSync("ffprobe", [
+      "-v", "error", "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1", path,
+    ], { encoding: "utf8" });
+    const seconds = Number.parseFloat(out.trim());
+    return Number.isFinite(seconds) && seconds > 0 ? Math.round(seconds * 1_000) : null;
+  } catch {
+    return null;
+  }
+}
 const CONNECTION_STALE_AFTER_MS = 5_000;
 
 function parseShowYaml(text: string): Round[] {
@@ -261,6 +289,14 @@ function fieldFor(round: Round): Record<string, unknown> {
   }
 }
 
+function narrationDurationMs(round: Round, mediaDir: string): number {
+  if ((round.duration_s ?? 0) > 0) return (round.duration_s ?? 0) * 1_000;
+  const measured = round.audio === undefined ? null : audioDurationMs(mediaDir, round.audio);
+  if (measured !== null) return measured;
+  unknownDurations.push(round.id);
+  return PLACEHOLDER_NARRATION_MS;
+}
+
 function main(): void {
   const [source, ...rest] = process.argv.slice(2);
   if (source === undefined) {
@@ -270,6 +306,7 @@ function main(): void {
   const outDirIndex = rest.indexOf("--out-dir");
   const outDir = resolve(outDirIndex === -1 ? "content" : rest[outDirIndex + 1] ?? "content");
 
+  const mediaDir = resolve("content/media");
   const rounds = parseShowYaml(readFileSync(source, "utf8"));
   if (rounds.length === 0) throw new Error(`no rounds parsed from ${source}`);
 
@@ -286,9 +323,7 @@ function main(): void {
         ...(round.question === undefined ? {} : { title: round.question }),
         src: NARRATION_IMAGE,
         audioSrc: round.audio ?? "missing-audio.mp3",
-        expectedDurationMs: (round.duration_s ?? 0) > 0
-          ? (round.duration_s ?? 0) * 1_000
-          : PLACEHOLDER_NARRATION_MS,
+        expectedDurationMs: narrationDurationMs(round, mediaDir),
         next,
       });
       return;
@@ -330,6 +365,17 @@ function main(): void {
   console.log(`\nrequired media, to be placed in content/media:`);
   for (const src of [...media].sort()) console.log(`  ${src}`);
   console.log(`\nthen: pnpm build-media-manifest`);
+
+  if (unknownDurations.length > 0) {
+    console.warn(
+      `\nWARNING: ${unknownDurations.length} narration(s) fell back to a ` +
+      `${PLACEHOLDER_NARRATION_MS / 1_000}s placeholder because their audio is not in ` +
+      `${mediaDir} (or ffprobe is unavailable): ${unknownDurations.join(", ")}.` +
+      `\nThe server abandons a narration ${PLACEHOLDER_NARRATION_MS / 1_000}s + 5s after it starts, ` +
+      `so anything longer is cut off mid-sentence. Add the audio and re-run.`,
+    );
+    process.exitCode = 1;
+  }
 
   if (unmatchedZones.length > 0) {
     // A zone his file defines that no form here reads. Usually means his
