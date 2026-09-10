@@ -175,11 +175,19 @@ function fieldFor(round: Round): Record<string, unknown> {
   };
 
   switch (round.form) {
-    case "scale":
+    case "scale": {
+      // A continuum, not three buckets: the script says "Ordne dich auf der
+      // rosa Skala ein". His scale_left/right labels duplicate form_labels
+      // exactly in every round, and scale_mid is the positional word "Mitte",
+      // so nothing is lost by reading the axis labels instead. Marked consumed
+      // so a genuinely new zone name still gets reported.
+      for (const zone of ["scale_left", "scale_mid", "scale_right"]) consumed.add(zone);
+      reportUnmatched();
       return {
         type: "two-quadrant", axis: "x", variant: "spectrum",
         labels: { minLabel: labels.left ?? "min", maxLabel: labels.right ?? "max" },
       };
+    }
     case "scale3": {
       const field = {
         type: "polygon-zones",
@@ -231,7 +239,13 @@ function fieldFor(round: Round): Record<string, unknown> {
       return field;
     }
     case "cross":
-    default:
+    default: {
+      // Two named axes. The four cross_* labels here are readable combinations
+      // of those axes ("sinnvoll für mich, wenig für andere"), unlike the
+      // `quadrants` form where they are independent content, so mapping to
+      // axes loses nothing.
+      for (const zone of ["cross_tl", "cross_tr", "cross_bl", "cross_br"]) consumed.add(zone);
+      reportUnmatched();
       return {
         type: "four-quadrant",
         xAxis: {
@@ -243,6 +257,7 @@ function fieldFor(round: Round): Record<string, unknown> {
           maxLabel: labels.y_bottom ?? labelFor("cross_br", "bottom"),
         },
       };
+    }
   }
 }
 
@@ -280,7 +295,12 @@ function main(): void {
     }
     phases.push({
       kind: "position-question", id: round.id,
-      text: round.text ?? round.question ?? round.id,
+      // `question` is the short form for the screen; `text` is the script the
+      // MP3 was voiced from, and it reads the axis labels aloud. Putting the
+      // spoken version on the display would duplicate labels the overlay
+      // already draws. The spoken script has no home in this schema until
+      // per-phase audio exists.
+      text: round.question ?? round.text ?? round.id,
       durationMs: (round.duration_s ?? 45) * 1_000,
       freezeMs: (round.grace_s ?? 5) * 1_000,
       connectionStaleAfterMs: CONNECTION_STALE_AFTER_MS,

@@ -12,6 +12,12 @@ dist-proof/
 # clones work (CI runs validate-scenario against dev.json).
 content/media/*
 !content/media/intro.mp4
+# ...except this production's own narration audio and stills, which are small,
+# needed to run the show, and ours to publish. Video stays out: it is large and
+# externally hosted.
+!content/media/*.mp3
+!content/media/*.png
+!content/media/*.jpg
 
 # Script drafts and other written show content stay out of git. This is a
 # public repository; an unproduced script does not belong in it.
