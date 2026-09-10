@@ -39,6 +39,16 @@ def mkplayer(pid) =
   interrupt_q = request.queue(id="int_#{pid}")
   narration_q = request.queue(id="nar_#{pid}")
 
+  # Clear pending and currently playing narration without stopping the bed.
+  def reset_narration(_) =
+    interrupt_q.set_queue([])
+    narration_q.set_queue([])
+    interrupt_q.skip()
+    narration_q.skip()
+    "OK"
+  end
+  server.register(namespace="player_#{pid}", description="Clear narration", "reset", reset_narration)
+
   # Per-player bed. The bridge retargets it with:
   #   bed_{id}.uri <dir>  then  bed_{id}.reload
   bed = playlist(

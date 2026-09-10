@@ -115,7 +115,7 @@ export function App() {
   const [showDiagnostics, setShowDiagnostics] = useState(true);
   const [localManifest, setLocalManifest] = useState<MediaManifest>();
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
-  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; target: "src" | "audioSrc" | "extraAudioSrc"; mediaKind: Exclude<StudioMediaKind, "unknown">; trigger: HTMLButtonElement | null }>();
+  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; target: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc"; mediaKind: Exclude<StudioMediaKind, "unknown">; trigger: HTMLButtonElement | null }>();
   const [mediaUploading, setMediaUploading] = useState(false);
   const [importFeedback, setImportFeedback] = useState<InlineFeedback>();
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
@@ -421,7 +421,7 @@ export function App() {
     setMediaPicker(undefined);
     setMediaLibraryOpen(true);
   };
-  const openMediaPicker = (phaseId: string, target: "src" | "audioSrc" | "extraAudioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement | null = null) => {
+  const openMediaPicker = (phaseId: string, target: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement | null = null) => {
     setMediaLibraryOpen(false);
     setMediaPicker({ phaseId, target, mediaKind, trigger });
   };
@@ -514,6 +514,11 @@ export function App() {
   const selectMedia = (row: MediaLibraryRow) => {
     if (!draft || !mediaPicker) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === mediaPicker.phaseId);
+    if (phase && phase.kind !== "idle" && mediaPicker.target === "phoneAudioSrc") {
+      updatePhase({ ...phase, phoneAudioSrc: row.src });
+      closeMediaPicker();
+      return;
+    }
     if (!phase || (phase.kind !== "video" && phase.kind !== "video-position-question")) {
       closeMediaPicker();
       return;
@@ -865,7 +870,9 @@ export function App() {
   const mediaPickerPhase = mediaPicker
     ? draft.project.scenario.phases.find((phase) => phase.id === mediaPicker.phaseId)
     : undefined;
-  const mediaPickerSelectedSrc = mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
+  const mediaPickerSelectedSrc = mediaPicker?.target === "phoneAudioSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle"
+    ? mediaPickerPhase.phoneAudioSrc ?? ""
+    : mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
     ? mediaPicker?.target === "audioSrc"
       ? mediaPickerPhase.audioSrc ?? ""
       : mediaPicker?.target === "extraAudioSrc"

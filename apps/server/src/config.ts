@@ -29,6 +29,9 @@ const envSchema = z.object({
   ALLOW_LATE_JOIN: z.enum(["true", "false"]).default("true"),
   // Absent by default: without it the server behaves exactly as it did for
   // the Frankfurt run, with the phone trackpad as the only position source.
+  AUDIO_BRIDGE_URL: z.string().url().optional(),
+  AUDIO_BRIDGE_TOKEN: z.string().min(1).optional(),
+  AUDIO_PUBLIC_URL: z.string().url().optional(),
   TRACKINGBOX_URL: z.string().url().optional(),
   PHONE_JOIN_BASE_URL: z.string().url().default("http://localhost:5174/"),
   SHOW_PHONE_JOIN_BASE_URL: z.enum(["true", "false"]).default("true"),
@@ -69,6 +72,7 @@ export type ServerConfig = {
   allowLateJoin: boolean;
   /** TrackingBox `/ws` URL, or null when no camera position source is configured. */
   trackingBoxUrl: string | null;
+  audio?: { url: string; token: string; publicUrl: string };
   phoneJoinBaseUrl: string;
   showPhoneJoinBaseUrl: boolean;
   scenarioPath: string;
@@ -103,6 +107,9 @@ export function loadConfig(
   }
 
   const value = parsed.data;
+  if (value.AUDIO_BRIDGE_URL && (!value.AUDIO_BRIDGE_TOKEN || !value.AUDIO_PUBLIC_URL)) {
+    throw new ConfigError("AUDIO_BRIDGE_URL requires AUDIO_BRIDGE_TOKEN and a phone-reachable AUDIO_PUBLIC_URL");
+  }
   if (value.NODE_ENV === "production") {
     const defaultSecret = [
       ["JOIN_GRANT_SECRET", value.JOIN_GRANT_SECRET, DEVELOPMENT_JOIN_GRANT_SECRET],
@@ -140,6 +147,7 @@ export function loadConfig(
     trustProxy: value.TRUST_PROXY === "true",
     allowLateJoin: value.ALLOW_LATE_JOIN === "true",
     trackingBoxUrl: value.TRACKINGBOX_URL ?? null,
+    ...(value.AUDIO_BRIDGE_URL ? { audio: { url: value.AUDIO_BRIDGE_URL, token: value.AUDIO_BRIDGE_TOKEN!, publicUrl: value.AUDIO_PUBLIC_URL! } } : {}),
     phoneJoinBaseUrl: value.PHONE_JOIN_BASE_URL,
     showPhoneJoinBaseUrl: value.SHOW_PHONE_JOIN_BASE_URL === "true",
     scenarioPath: fromRoot(value.SCENARIO_PATH, "content/scenarios/dev.json"),

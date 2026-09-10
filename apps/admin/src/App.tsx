@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 export type Status = {
+  audio?: { configured: boolean; error?: string | null; poll_age_s?: number | null; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number }> };
   healthy: boolean;
   ready: boolean;
   uptimeMs: number;
@@ -584,6 +585,17 @@ export function App() {
           </ol> : <p className="sc-tool-copy">The lobby waits until an operator presses Start show.</p>}
         </section>
 
+        <section className="sc-tool-panel" aria-label="Headphone streams">
+          <h2>Headphone streams</h2>
+          {!status.audio?.configured ? <p>Audio bridge is not configured.</p> : <>
+            {status.audio.error && <p role="alert">{status.audio.error}</p>}
+            {status.audio.poll_age_s == null || status.audio.poll_age_s > 15 ? <p role="alert">Listener status is unavailable or stale.</p> : null}
+            <ul className="admin-participant-list">{status.audio.players.map((player) => <li key={player.player_id}>
+              <strong>{player.name ?? player.player_id}</strong>
+              <span>{player.connected ? `${player.listeners} listener(s)` : player.flagged ? "No listener — check headphones" : "Waiting for listener"}</span>
+            </li>)}</ul>
+          </>}
+        </section>
         <section className="sc-tool-panel" aria-labelledby="admin-participants-heading">
           <div className="admin-section-heading">
             <div><p className="sc-tool-eyebrow">Who has joined</p><h2 id="admin-participants-heading">Participants</h2></div>

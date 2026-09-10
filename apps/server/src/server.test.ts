@@ -21,6 +21,7 @@ afterEach(async () => {
   await Promise.all(runtimes.splice(0).map(async ({ app }) => {
     if (app.server.listening) await app.close();
   }));
+  vi.unstubAllGlobals();
 });
 
 async function fixture(invalidScenario = false) {
@@ -135,7 +136,7 @@ async function joinParticipant(client: WebSocket, runtime: ServerRuntime): Promi
 describe("configuration", () => {
   it("resolves paths from the supplied root and rejects invalid values", async () => {
     const config = await fixture();
-    expect(config.scenarioPath).toMatch(/content\/scenario\.json$/);
+    expect(config.scenarioPath).toMatch(/content[\\/]scenario\.json$/);
     expect(config.adminRateLimit).toEqual({
       maxAuthenticatedRequests: 600,
       maxAuthenticationFailures: 30,
@@ -209,6 +210,47 @@ describe("HTTP readiness and bundles", () => {
     expect(response.body).not.toContain("question");
     expect(response.body).not.toContain("scenario-internal-marker");
     expect(response.body).not.toContain("video-internal-marker");
+  });
+
+  it("registers a phone stream only for a current signed participant lease", async () => {
+    const bridgeCalls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      bridgeCalls.push(String(input));
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const config = {
+      ...await fixture(),
+      audio: { url: "http://bridge:8090", token: "secret", publicUrl: "https://audio.example" },
+    };
+    const runtime = await buildServer({ config });
+    runtimes.push(runtime);
+    expect((await runtime.app.inject({ url: "/api/join-config" })).json()).toMatchObject({ audioEnabled: true });
+
+    const phone = await openWebSocket(await listen(runtime));
+    const identityPromise = new Promise<{ clientId: string; participantLease: string }>((resolve) => {
+      phone.once("message", (raw) => resolve(JSON.parse(raw.toString()) as { clientId: string; participantLease: string }));
+    });
+    phone.send(JSON.stringify({
+      t: "join", v: 2, clientVersion: "dev",
+      installationId: runtime.config.installationId,
+      roomId: runtime.config.roomId,
+      name: "Ada",
+      joinGrant: runtime.admission.issueJoinGrant().token,
+    }));
+    const identity = await identityPromise;
+
+    expect((await runtime.app.inject({
+      method: "POST", url: "/api/audio/register",
+      payload: { participantLease: "not-a-signed-lease" },
+    })).statusCode).toBe(401);
+    const registered = await runtime.app.inject({
+      method: "POST", url: "/api/audio/register",
+      payload: { participantLease: identity.participantLease },
+    });
+    expect(registered.statusCode).toBe(200);
+    expect(registered.json()).toEqual({ streamUrl: `https://audio.example/stream/${identity.clientId}` });
+    expect(bridgeCalls).toContain(`http://bridge:8090/players/${identity.clientId}/active`);
+    phone.close();
   });
 
   it("accepts signed end-of-show movement consent and rejects another lease", async () => {

@@ -2,7 +2,7 @@
  * Scenario types, validation, and graph utilities (plan §5).
  */
 
-export const SCENARIO_SCHEMA_VERSION = 3;
+export const SCENARIO_SCHEMA_VERSION = 4;
 
 export {
   arenaEllipseSchema,

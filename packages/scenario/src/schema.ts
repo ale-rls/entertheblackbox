@@ -28,6 +28,8 @@ export const countablePositionVoteStatusSchema = z.enum([
   "disconnected",
 ]);
 
+const phoneAudioSrcSchema = z.string().min(1).regex(/^(?![\\/])(?!.*(?:^|[\\/])\.\.(?:[\\/]|$))[^:?#]+\.mp3$/i, "Phone audio must reference a local MP3").optional();
+
 const phaseIdSchema = z.string().min(1, "phase id must be non-empty");
 
 export const axisSchema = z.object({
@@ -248,6 +250,8 @@ export const subtitleSchema = z.object({
 
 export const videoPhaseSchema = z.object({
   kind: z.literal("video"),
+  /** MP3 injected into each participant’s continuous phone stream on phase entry. */
+  phoneAudioSrc: phoneAudioSrcSchema,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
   /** Optional display treatment for the title. Omitted titles retain the standard top placement. */
@@ -281,6 +285,8 @@ export const videoPhaseSchema = z.object({
 
 const positionQuestionBaseSchema = z.object({
   kind: z.literal("position-question"),
+  /** MP3 injected into each participant’s continuous phone stream on phase entry. */
+  phoneAudioSrc: phoneAudioSrcSchema,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
   text: z.string().min(1, "question text must be non-empty"),
@@ -327,6 +333,8 @@ const canonicalPositionQuestionPhaseSchema = z.union([
 
 const videoPositionQuestionBaseSchema = z.object({
   kind: z.literal("video-position-question"),
+  /** MP3 injected into each participant’s continuous phone stream on phase entry. */
+  phoneAudioSrc: phoneAudioSrcSchema,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
   src: z.string().min(1, "media src must be non-empty"),

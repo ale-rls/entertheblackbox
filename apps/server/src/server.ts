@@ -1,3 +1,4 @@
+import { PersonalAudio } from "./audio/personal-audio.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
@@ -90,6 +91,9 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         ...(options.movementConsentTimeoutMs === undefined ? {} : { timeoutMs: options.movementConsentTimeoutMs }),
         onError: (error) => app.log.error({ error }, "failed to delete unconsented movement recording"),
       });
+  const audio = config.audio ? new PersonalAudio(config.audio, config.mediaDir, (error) => app.log.error({ error }, "personal audio failed")) : null;
+  audio?.start();
+  if (readiness.ready) audio?.prepare(readiness.scenario.phases);
   let engine: PhaseEngine | null = null;
   const admission = options.admission ?? new AdmissionController({
     installationId: config.installationId,
@@ -128,11 +132,18 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       },
       onSessionEnded: (event) => {
         const { sessionId, endedAt } = event;
+        audio?.endSession();
         movementConsent?.endSession(sessionId);
         admission.endParticipantSession(endedAt);
         options.onSessionEnded?.(event);
       },
-      onCheckpoint: (checkpoint) => adminData?.recordCheckpoint?.(checkpoint),
+      onCheckpoint: (checkpoint) => {
+        adminData?.recordCheckpoint?.(checkpoint);
+        if (checkpoint.kind === "transition") {
+          const phase = readiness.scenario.phases.find((p) => p.id === checkpoint.phaseId);
+          if (phase) audio?.transition(phase);
+        }
+      },
       onVoteSnapshotEnqueued: (snapshot) => adminData?.recordVoteSnapshot?.(snapshot),
       onMovementRecordingStarted: (event) => {
         movementConsent?.track(event.sessionId, event.participantId);
@@ -176,7 +187,19 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   app.get("/api/join-config", async () => ({
     installationId: config.installationId,
     roomId: config.roomId,
+    audioEnabled: audio !== null,
   }));
+  app.post<{ Body: unknown }>("/api/audio/register", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!audio) return reply.code(503).send({ error: "audio_not_configured" });
+    const body = z.object({ participantLease: z.string().min(1).max(4096) }).safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "invalid_request" });
+    const lease = verifyParticipantLease(body.data.participantLease, { secret: config.joinGrantSecret, installationId: config.installationId });
+    const participant = admission.registry.get(body.data.participantLease);
+    if (!lease || !participant || participant.clientId !== lease.clientId) return reply.code(401).send({ error: "invalid_participant_lease" });
+    try { return { streamUrl: await audio.register(participant) }; }
+    catch { return reply.code(503).send({ error: "audio_unavailable" }); }
+  });
   const movementConsentBodySchema = z.object({
     sessionId: z.string().min(1).max(200),
     participantLease: z.string().min(1).max(4_096),
@@ -230,6 +253,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     startedAt,
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,
+    audioStatus: () => audio?.status() ?? Promise.resolve({ configured: false, players: [] }),
     ...(adminData === undefined ? {} : { data: adminData }),
     ...(options.pocketbase === undefined ? {} : {
       showConfig: {
@@ -317,6 +341,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
 
   // Close them before Fastify waits for the underlying server to drain.
   app.addHook("preClose", async () => {
+    await audio?.stop();
     clearInterval(webSocketKeepAliveInterval);
     movementConsent?.stop();
     tracking?.stop();

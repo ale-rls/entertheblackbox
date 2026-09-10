@@ -346,3 +346,7 @@ body {
   line-height: 1.4;
   text-align: center;
 }
+
+.phone-audio { position: fixed; z-index: 30; left: 1rem; right: 1rem; bottom: 4rem; padding: 1rem; background: #111; color: white; border: 1px solid #777; border-radius: 12px; text-align: center; }
+.phone-audio p { margin: 0 0 .75rem; }
+.phone-audio button { padding: .7rem 1rem; font: inherit; }

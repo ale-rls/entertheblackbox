@@ -90,5 +90,10 @@ class LiquidsoapClient:
         await self.command(f"{playlist_id}.uri {uri}")
         await self.command(f"{playlist_id}.reload")
 
+    async def reset_player(self, stream_id: str) -> None:
+        result = (await self.command(f"player_{stream_id}.reset")).strip()
+        if result != "OK":
+            raise LiquidsoapError(f"unexpected reset response: {result!r}")
+
     async def uptime(self) -> str:
         return (await self.command("uptime")).strip()

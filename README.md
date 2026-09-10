@@ -22,18 +22,20 @@ them entirely. They are here so both the code and the agents working on it can s
 the whole piece in one place.
 
 - `services/trackingbox` — camera-based anonymous audience tracking, from
-  [ale-rls/TrackingBox](https://github.com/ale-rls/TrackingBox), pinned at
-  `95d092864ff8e24a2af9c33e662e547262692b04`. It emits persistent anonymous
+  [ale-rls/TrackingBox](https://github.com/ale-rls/TrackingBox), based on
+  `95d092864ff8e24a2af9c33e662e547262692b04` plus the venue RTSP, ReID setup,
+  and continuous-capture fixes migrated from `enter-the-blackbox` commits
+  `f214a1c`, `a2b0cc4`, and `b6b3464`. It emits persistent anonymous
   GIDs with normalized floor coordinates over REST and WebSocket. Treat it as a
   read-only sensor.
 - `services/audio` — Icecast, Liquidsoap, and an authenticated bridge, for
   personal audio to each participant's headphones.
 
-**Edit these upstream, not here.** Change TrackingBox in its own repository and
+Future TrackingBox changes should be made upstream and
 bring it down with `git subtree pull -P services/trackingbox <remote> <commit>`.
 Editing inside the subtree means the vendored copy silently forks from upstream,
 because pushing changes back out is awkward enough that nobody does it. Update
-the pinned commit above whenever it moves, and re-validate the show.
+the provenance above whenever it moves, and re-validate the show.
 
 ### Which machine runs what
 
@@ -192,7 +194,38 @@ pnpm --filter studio dev
 
 Run this in a second terminal while the installation server remains running, then open <http://localhost:5173>.
 
-Studio supports graph editing, typed transitions, media diagnostics, runtime validation, branch preview, local draft recovery, and versioned deployment exports. It does not publish directly to a running installation.
+Studio supports graph editing, typed transitions, media diagnostics, runtime validation, branch preview, local draft recovery, versioned deployment exports, and authenticated publishing to PocketBase. A publish never interrupts an active session.
+
+For headphone narration, put MP3 files in `content/media`, refresh Studio's
+media library, select a scene, and choose the file under **Phone headphones →
+Stream narration (MP3)**. This field is independent from display video/audio:
+the server uploads the MP3 to the personal-audio bridge and injects it into
+every joined phone stream when the scene starts. Silent scenes clear any
+previous narration. Studio includes these MP3s in media validation and in its
+published media manifest.
+
+To exercise phone streams locally, copy `services/audio/.env.example` to
+`services/audio/.env`, set its passwords, set `BRIDGE_TOKEN`, and set
+`PUBLIC_STREAM_BASE` to a URL phones can reach, such as
+`http://192.168.1.23:8300`. Then start the stack:
+
+```bash
+docker compose --env-file services/audio/.env -f services/audio/docker-compose.yml up --build
+```
+
+Start the installation server with matching audio settings:
+
+```bash
+env AUDIO_BRIDGE_URL=http://127.0.0.1:8300 \
+  AUDIO_BRIDGE_TOKEN='<same BRIDGE_TOKEN>' \
+  AUDIO_PUBLIC_URL=http://192.168.1.23:8300 \
+  ... node --import tsx apps/server/src/index.ts
+```
+
+After joining, each participant taps **Start headphones** once, waits for
+**Headphones playing**, and can then lock the phone. The native audio stream
+continues while locked; the Admin page reports connected, waiting, and missing
+listeners. HTTPS phone pages require an HTTPS `AUDIO_PUBLIC_URL`.
 
 See [the Studio curator guide](docs/studio-guide.md) and [runtime compatibility notes](docs/studio-compat.md).
 
@@ -250,7 +283,7 @@ pnpm simulate-clients -- --count 300 --duration-ms 180000 \
 - `content/media-manifests/showtest1.json` — media inventory for `showtest1`
 - `content/media/` — locally served media assets
 
-**The production show cannot run yet.** Two things are missing.
+**The imported production show still needs its real media before it can run.**
 
 It has no media manifest, because every entry needs the byte length and hash of
 a real file. Put its audio and the narration still image into `content/media`,
@@ -263,7 +296,9 @@ narration MP3 with `ffprobe` when the file is in `content/media`, so put the
 audio in place **before** re-running it. It exits non-zero and names every
 narration that fell back, so this cannot ship silently.
 
-Its 16 spoken questions have nowhere to live until per-phase audio exists.
+The imported narration and question MP3s populate each phase's
+`phoneAudioSrc`. They can also be created or replaced directly in Studio with
+the **Phone headphones** control.
 
 Scenarios and manifests are validated at startup and before Studio deployment export. Visual Studio layout metadata remains separate from runtime JSON.
 

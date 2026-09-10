@@ -41,4 +41,13 @@ describe("production secret configuration", () => {
       SHOW_PHONE_JOIN_BASE_URL: "false",
     })).toMatchObject({ allowLateJoin: false, showPhoneJoinBaseUrl: false });
   });
+
+  it("requires a token and phone-reachable public URL with the audio bridge", () => {
+    expect(() => loadConfig({ AUDIO_BRIDGE_URL: "http://bridge:8090" })).toThrow(ConfigError);
+    expect(loadConfig({
+      AUDIO_BRIDGE_URL: "http://bridge:8090",
+      AUDIO_BRIDGE_TOKEN: "secret",
+      AUDIO_PUBLIC_URL: "https://audio.example",
+    }).audio).toEqual({ url: "http://bridge:8090", token: "secret", publicUrl: "https://audio.example" });
+  });
 });

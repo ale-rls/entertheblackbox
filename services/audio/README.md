@@ -86,22 +86,27 @@ make test                      # bridge unit tests (venv: pip install -e './brid
 N=100 make loadtest            # T2: 100 concurrent listeners (curl)
 ```
 
-## blackbox-runner integration
+## entertheblackbox integration
 
-The runner and separate Svelte phone app now implement this contract:
+The canonical Fastify server and React phone app implement this contract:
 
-1. Starting a round calls `POST /players/{id}/play` for every bound player.
-2. The phone starts `/stream/{player-id}` on the claim tap and retries a lost
-   stream; cue-file playback remains available as fallback.
-3. Generated `seat-…` ids are dynamically assigned to the fixed encoder pool.
-4. The admin dashboard shows delivery status and can generate an ad-hoc
-   ElevenLabs message and inject it into selected streams.
+1. Joining registers the server-issued participant ID against one fixed stream
+   slot; the signed participant lease prevents another browser claiming it.
+2. A phase's Studio-authored `phoneAudioSrc` is uploaded once and injected into
+   every registered stream on phase entry.
+3. The phone starts `/stream/{player-id}` on one explicit headphone tap and
+   retries a lost stream while keeping the native media pipeline active under
+   screen lock.
+4. Silent transitions clear narration, and ending a session clears queues,
+   terminates old stream responses, and releases every slot.
+5. The Admin dashboard shows current listeners and flags an active stream that
+   has gone unheard for longer than `FLAG_AFTER_S`.
 
-For a same-machine install, mount `blackbox-runner/content/audio` via
-`AUDIO_DIR`. A remote runner automatically uploads each MP3 through the bridge
-before cueing it. The runner's `AUDIO_BRIDGE_TOKEN` must match this repo's `BRIDGE_TOKEN`, and its
-`AUDIO_PUBLIC_URL` (plus the frontend's `VITE_AUDIO_STREAM_BASE`) must point to
-the browser-reachable bridge base.
+The server automatically uploads each MP3 from its synced `content/media`
+directory before cueing it. `AUDIO_BRIDGE_TOKEN` must match this service's
+`BRIDGE_TOKEN`, and `AUDIO_PUBLIC_URL` must point to the browser-reachable
+bridge base. The phone learns that URL through its authenticated registration;
+there is no phone build variable.
 
 For the public deployment, use [`docker-compose.coolify.yml`](docker-compose.coolify.yml)
 and follow [`COOLIFY.md`](COOLIFY.md). Only the bridge is public; Icecast and
@@ -109,7 +114,7 @@ Liquidsoap have no host ports.
 
 ## Not yet verified
 
-- The compose stack has not been booted on this machine (no Docker here):
+- The compose stack still needs a real-device venue run:
   Liquidsoap script syntax, the `bed_{id}.uri/.reload` telnet commands, and
   the Icecast Alpine build are untested until Phase 0 runs. Pinned image:
   `savonet/liquidsoap:v2.2.5`.

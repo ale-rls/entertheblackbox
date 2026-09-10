@@ -114,6 +114,17 @@ async def test_dynamic_registration_and_public_gateway_url(env):
     assert r.json()["stream_url"] == "http://venue:8300/stream/seat-abc"
 
 
+async def test_reset_and_release_clear_narration_before_reusing_mount(env):
+    client, fake = env
+    fake.responses["player_1.reset"] = "OK"
+    await client.post("/players/seat-abc/register")
+    assert (await client.post("/players/seat-abc/reset")).status_code == 200
+    assert (await client.delete("/players/seat-abc")).status_code == 200
+    replacement = await client.post("/players/seat-def/register")
+    assert replacement.json()["stream_id"] == "1"
+    assert fake.commands.count("player_1.reset") == 2
+
+
 async def test_public_stream_cannot_allocate_an_unknown_player(env):
     client, _ = env
     before = (await client.get("/status")).json()["capacity"]

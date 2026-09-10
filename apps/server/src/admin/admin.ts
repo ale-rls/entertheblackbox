@@ -28,6 +28,7 @@ export type RegisterAdminOptions = {
   verifyToken: (token: string) => Promise<boolean>;
   engine: () => PhaseEngine | null;
   ready: boolean;
+  audioStatus?: () => Promise<unknown>;
   startedAt: number;
   data?: AdminDataSource;
   trustProxy?: boolean;
@@ -118,6 +119,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
     admin.get("/status", async () => {
       const engine = options.engine();
       return {
+        audio: await options.audioStatus?.() ?? { configured: false, players: [] },
         healthy: true,
         ready: options.ready,
         uptimeMs: Date.now() - options.startedAt,

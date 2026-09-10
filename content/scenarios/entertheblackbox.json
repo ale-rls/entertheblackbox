@@ -9,24 +9,27 @@
     },
     {
       "kind": "video",
+      "phoneAudioSrc": "k2_intro.mp3",
       "id": "k2_intro",
       "title": "Modell-Intro",
       "src": "narration.png",
       "audioSrc": "k2_intro.mp3",
-      "expectedDurationMs": 60000,
+      "expectedDurationMs": 166661,
       "next": "k3_intro"
     },
     {
       "kind": "video",
+      "phoneAudioSrc": "k3_intro.mp3",
       "id": "k3_intro",
       "title": "Trainingsepoche: Arbeit",
       "src": "narration.png",
       "audioSrc": "k3_intro.mp3",
-      "expectedDurationMs": 60000,
+      "expectedDurationMs": 54779,
       "next": "arbeit_1"
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "arbeit_1.mp3",
       "id": "arbeit_1",
       "text": "Wie fühlt sich deine bisherige Arbeit für dich an?",
       "durationMs": 45000,
@@ -49,6 +52,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "arbeit_2.mp3",
       "id": "arbeit_2",
       "text": "Wie sinnvoll ist deine bisherige Arbeit für dich selbst und wie sinnvoll ist sie für andere?",
       "durationMs": 45000,
@@ -73,6 +77,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "arbeit_3.mp3",
       "id": "arbeit_3",
       "text": "Wie frei bist du in deinen Arbeitsentscheidungen?",
       "durationMs": 45000,
@@ -95,6 +100,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "arbeit_4.mp3",
       "id": "arbeit_4",
       "text": "Wie angemessen wurdest du für deine bisherige Arbeit bezahlt?",
       "durationMs": 45000,
@@ -179,6 +185,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "arbeit_5.mp3",
       "id": "arbeit_5",
       "text": "Wie groß ist deine Sorge, in deiner Arbeit durch andere Menschen ersetzt zu werden?",
       "durationMs": 45000,
@@ -263,6 +270,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "arbeit_6.mp3",
       "id": "arbeit_6",
       "text": "Wie verbunden fühlst du dich mit den Menschen, mit denen du bisher gearbeitet hast?",
       "durationMs": 45000,
@@ -587,6 +595,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "arbeit_7.mp3",
       "id": "arbeit_7",
       "text": "Wie groß ist deine Sorge, in deiner Arbeit durch andere Menschen ersetzt zu werden?",
       "durationMs": 45000,
@@ -609,6 +618,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "arbeit_8.mp3",
       "id": "arbeit_8",
       "text": "Wie groß ist deine Sorge, in deiner Arbeit durch Maschinen oder KI-Systeme ersetzt zu werden?",
       "durationMs": 45000,
@@ -631,24 +641,27 @@
     },
     {
       "kind": "video",
+      "phoneAudioSrc": "k3_1_abschluss.mp3",
       "id": "k3_1_abschluss",
       "title": "Abschluss Trainingsstrecke Arbeit",
       "src": "narration.png",
       "audioSrc": "k3_1_abschluss.mp3",
-      "expectedDurationMs": 60000,
+      "expectedDurationMs": 25731,
       "next": "k4_intro"
     },
     {
       "kind": "video",
+      "phoneAudioSrc": "k4_intro.mp3",
       "id": "k4_intro",
       "title": "Trainingsepoche: Mensch–Maschine",
       "src": "narration.png",
       "audioSrc": "k4_intro.mp3",
-      "expectedDurationMs": 60000,
+      "expectedDurationMs": 13322,
       "next": "mensch_maschine_1"
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "mensch_maschine_1.mp3",
       "id": "mensch_maschine_1",
       "text": "Wie lange könntest du im Alltag deine Verbindung zum Netz trennen, ohne Angst zu haben, etwas Wichtiges zu verpassen?",
       "durationMs": 45000,
@@ -671,6 +684,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "mensch_maschine_2.mp3",
       "id": "mensch_maschine_2",
       "text": "Wer weiß mehr über dich?",
       "durationMs": 45000,
@@ -693,6 +707,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "mensch_maschine_3.mp3",
       "id": "mensch_maschine_3",
       "text": "Was von dir würdest du niemals mit einer Maschine teilen?",
       "durationMs": 45000,
@@ -799,6 +814,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "mensch_maschine_4.mp3",
       "id": "mensch_maschine_4",
       "text": "Wie wichtig ist es dir, dass es Bereiche deines Lebens gibt, die kein digitales System kennen kann?",
       "durationMs": 45000,
@@ -1123,6 +1139,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "mensch_maschine_5.mp3",
       "id": "mensch_maschine_5",
       "text": "Wie werden Menschen und Maschinen in zwanzig Jahren zusammenleben?",
       "durationMs": 45000,
@@ -1147,6 +1164,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "mensch_maschine_6.mp3",
       "id": "mensch_maschine_6",
       "text": "Wie möchtest du selbst in Zukunft mit Maschinen zusammenleben?",
       "durationMs": 45000,
@@ -1171,6 +1189,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "mensch_maschine_7.mp3",
       "id": "mensch_maschine_7",
       "text": "Wie gut könntest du dein heutiges Leben ohne digitale und KI-basierte Systeme organisieren?",
       "durationMs": 45000,
@@ -1193,6 +1212,7 @@
     },
     {
       "kind": "position-question",
+      "phoneAudioSrc": "mensch_maschine_8.mp3",
       "id": "mensch_maschine_8",
       "text": "Wie weit möchtest du dich digitalen und KI-basierten Systemen entziehen?",
       "durationMs": 45000,

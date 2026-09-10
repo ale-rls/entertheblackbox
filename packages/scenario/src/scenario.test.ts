@@ -138,6 +138,33 @@ describe("scenarioSchema structural rejection", () => {
     }).success).toBe(false);
   });
 
+  it("accepts phone narration on every active phase and validates its media", () => {
+    const withPhoneAudio = {
+      ...baseScenario,
+      phases: baseScenario.phases.map((phase) => phase.id === "q1"
+        ? { ...phase, phoneAudioSrc: "question.mp3" }
+        : phase),
+    };
+    const parsed = scenarioSchema.safeParse(withPhoneAudio);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(validateScenario(parsed.data, { files: [
+      { src: "intro.mp4", bytes: 10, hash: "video" },
+      { src: "question.mp3", bytes: 20, hash: "phone" },
+    ] }).ok).toBe(true);
+    expect(validateScenario(parsed.data, { files: [
+      { src: "intro.mp4", bytes: 10, hash: "video" },
+    ] }).errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing-media", message: expect.stringContaining("question.mp3") }),
+    ]));
+    expect(scenarioSchema.safeParse({
+      ...withPhoneAudio,
+      phases: withPhoneAudio.phases.map((phase) => phase.id === "q1"
+        ? { ...phase, phoneAudioSrc: "../secret.mp3" }
+        : phase),
+    }).success).toBe(false);
+  });
+
   it("accepts optional targetAudienceSize and per-phase display effects", () => {
     const result = parse((s) => ({
       ...s,

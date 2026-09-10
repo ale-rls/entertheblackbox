@@ -12,8 +12,11 @@ export function studioMediaKindForSource(src: string): StudioMediaKind {
 }
 
 export function phaseMediaSources(phase: StudioProject["scenario"]["phases"][number]): string[] {
-  if (phase.kind !== "video" && phase.kind !== "video-position-question") return [];
+  if (phase.kind === "idle") return [];
+  const phone = phase.phoneAudioSrc ? [phase.phoneAudioSrc] : [];
+  if (phase.kind === "position-question") return phone;
   return [
+    ...phone,
     phase.src,
     ...(phase.audioSrc === undefined ? [] : [phase.audioSrc]),
     ...(phase.extraAudioSrc === undefined ? [] : [phase.extraAudioSrc]),

@@ -160,6 +160,27 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         log.info("skip player=%s", pid)
         return {"player_id": pid, "skipped": True}
 
+    @app.post("/players/{player_id}/reset", dependencies=[Depends(require_token)])
+    async def reset_player(player_id: str) -> dict:
+        player = assigned_player(player_id)
+        try:
+            await liq.reset_player(player.stream_id)
+        except LiquidsoapError as exc:
+            raise HTTPException(502, str(exc)) from exc
+        return {"ok": True}
+
+    @app.delete("/players/{player_id}", dependencies=[Depends(require_token)])
+    async def release_player(player_id: str) -> dict:
+        validate_player_id(player_id)
+        player = registry.get(player_id)
+        if player is not None:
+            try:
+                await liq.reset_player(player.stream_id)
+            except LiquidsoapError as exc:
+                raise HTTPException(502, str(exc)) from exc
+            registry.release(player_id)
+        return {"ok": True}
+
     @app.put("/players/{player_id}/active", dependencies=[Depends(require_token)])
     async def set_active(player_id: str, body: ActiveRequest) -> dict:
         validate_player_id(player_id)
@@ -250,6 +271,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         async def chunks():
             try:
                 async for chunk in response.aiter_raw():
+                    if registry.get(player_id) is not player:
+                        break
                     yield chunk
             finally:
                 await response.aclose()

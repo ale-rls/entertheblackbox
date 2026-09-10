@@ -71,11 +71,9 @@ The runner uploads each MP3 before issuing per-player play commands. No shared
 filesystem, inbound tunnel to the venue, or public TrackingBox endpoint is
 needed.
 
-Set the phone frontend's build variable to the same public URL:
-
-```env
-VITE_AUDIO_STREAM_BASE=https://audio.example.org
-```
+The phone needs no audio build variable. After it presents a valid signed
+participant lease, the canonical server returns the configured
+`AUDIO_PUBLIC_URL` for that participant's registered stream.
 
 ## Verify
 

@@ -62,6 +62,11 @@ class Registry:
         self._by_stream[stream_id] = pid
         return state
 
+    def release(self, pid: str) -> None:
+        player = self.players.pop(pid, None)
+        if player is not None:
+            self._by_stream.pop(player.stream_id, None)
+
     def get(self, pid: str) -> PlayerState | None:
         return self.players.get(pid)
 

@@ -63,3 +63,12 @@ def test_listener_counts_are_mapped_from_mount_to_player():
     snap = r.snapshot("seat-abc", now=10.0)
     assert snap["connected"] is True
     assert snap["stream_id"] == "1"
+
+
+def test_release_makes_stream_slot_reusable():
+    r = make()
+    first = r.register("first")
+    r.release("first")
+    second = r.register("second")
+    assert first.stream_id == second.stream_id == "1"
+    assert r.get("first") is None

@@ -1,6 +1,6 @@
 # Show Studio curator guide
 
-Show Studio is a local authoring tool. It cannot publish to, or change, a running installation. Deployment remains the existing engineer-reviewed repository and CI workflow.
+Show Studio is the visual authoring tool for production scenarios and their media manifests. An authenticated operator can publish an immutable version to PocketBase. Publishing during a live session is deferred until that session ends and the server restarts safely.
 
 ## Create or import
 
@@ -10,6 +10,14 @@ Choose **New show** for a minimal idle-only project, or import `scenario.json` a
 
 Use the node palette to add phases, connect their typed handles, and select a node to edit its properties. The End node means “return to idle/attract”; the required runtime `idle` phase stays in the exported scenario without appearing as a duplicate canvas node. A position question can use four quadrants (both X and Y axes) or two quadrants (one active axis). Four-quadrant outputs are q2 top-left, q1 top-right, q3 bottom-left, and q4 bottom-right; the exact center belongs to q4. Two-quadrant X questions divide left/right and Y questions divide top/bottom; their stable outputs are `min` and `max`, and exactly 0.5 belongs to max (right or bottom). Studio labels these outputs with their spatial position and authored endpoint text. Runtime IDs must be unique. Undo is available for inspector changes, including destructive phase-type, transition, and quadrant-layout changes.
 
+Every active phase has a **Phone headphones** field. Choose an MP3 there to
+send that recording to all joined personal streams when the phase begins. This
+is separate from the display's video, still-image narration, or extra audio,
+so the room and headphones can carry different sound. The phase duration must
+leave enough time for the full phone recording plus the venue's measured
+stream buffer. Removing the field makes the phase silent on headphones and
+stops narration left over from the preceding phase.
+
 ## Validate and preview
 
 The Validation and media panel lists blocking errors, warnings, media references, and per-branch budgets. Fix every error. Review and explicitly acknowledge each required warning; acknowledgement is a deliberate sign-off, not a way to make an error exportable.
@@ -18,7 +26,7 @@ Preview starts at the configured entry phase. Advance video and question timers 
 
 ## Export and hand off
 
-**Export for deployment** is enabled only after validation and warning acknowledgement. It emits a versioned set containing `scenario.json`, `media-manifest.json`, `.studio.json`, `validation-report.json`, and `README.txt`. Keep all five files together. The complete set can be selected in **Import** to resume editing with its saved layout. The report records the runtime schema, Studio build, media total, warnings, and branch-smoke results. An engineer reviews the package and puts the runtime files through the normal repository/CI deployment process.
+**Export for deployment** is enabled only after validation and warning acknowledgement. It emits a versioned set containing `scenario.json`, `media-manifest.json`, `.studio.json`, `validation-report.json`, and `README.txt`. Keep all five files together. The complete set can be selected in **Import** to resume editing with its saved layout. The report records the runtime schema, Studio build, media total, warnings, and branch-smoke results. An authenticated operator may instead use **Publish** to upload the validated scenario and referenced media to PocketBase; the server syncs those media files locally before activating the published show.
 
 Use **Backup** for a restorable working draft. Browser storage is convenient, not an archival system; export a backup at each curator handoff.
 

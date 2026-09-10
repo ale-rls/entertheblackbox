@@ -90,6 +90,14 @@ async def test_set_bed_sends_uri_then_reload(fake):
     await client.close()
 
 
+async def test_reset_player_clears_pending_and_current_narration(fake):
+    fake.responses["player_3.reset"] = "OK"
+    client = LiquidsoapClient("127.0.0.1", fake.port)
+    await client.reset_player("3")
+    assert fake.commands == ["player_3.reset"]
+    await client.close()
+
+
 async def test_reconnects_after_server_restart(fake):
     client = LiquidsoapClient("127.0.0.1", fake.port)
     await client.command("uptime")

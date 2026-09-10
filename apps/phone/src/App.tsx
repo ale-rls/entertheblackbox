@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
+import { PhoneAudio } from "./PhoneAudio.js";
 import { PROTOCOL_VERSION } from "@entertheblackbox/protocol";
 import { PhoneConnection, type EndedPhoneSession } from "./lib/connection.js";
 import { RealtimeCursorPublisher } from "./lib/realtimeWsClient.js";
@@ -30,7 +31,7 @@ const baseConfig = {
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };
 
-type JoinConfig = { installationId: string; roomId: string };
+type JoinConfig = { installationId: string; roomId: string; audioEnabled?: boolean };
 type ConsentStatus = "prompt" | "submitting" | "granted" | "deleted";
 type ConsentState = {
   session: EndedPhoneSession;
@@ -66,6 +67,7 @@ export function App() {
   const [name, setName] = useState(loadParticipantName);
   const [submittedName, setSubmittedName] = useState<string | null>(null);
   const [joinConfig, setJoinConfig] = useState<JoinConfig | null>(null);
+  const [audioIdentity, setAudioIdentity] = useState<{ clientId: string; participantLease: string } | null>(null);
   const [configError, setConfigError] = useState("");
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
@@ -103,10 +105,14 @@ export function App() {
         ...baseConfig,
         ...joinConfig,
         name: submittedName,
-        onMessage: (message) => dispatch({ type: "server-message", message, receivedAtMs: Date.now() }),
+        onMessage: (message) => {
+          if (message.t === "identity") setAudioIdentity(message);
+          dispatch({ type: "server-message", message, receivedAtMs: Date.now() });
+        },
         onSocketOpen: () => dispatch({ type: "socket-open" }),
         onSocketLost: () => dispatch({ type: "socket-lost" }),
         onSessionEnded: (session) => {
+          setAudioIdentity(null);
           if (session !== null && session.sessionId !== "idle" && session.sessionId !== "lobby") {
             setConsent({ session, deadlineAt: Date.now() + CONSENT_TIMEOUT_MS, status: "prompt", error: null });
           } else {
@@ -387,6 +393,7 @@ export function App() {
         </div>
       )}
 
+      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} />}
       <footer className="hud">
         {identity && (
           <span

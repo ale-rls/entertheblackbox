@@ -1,0 +1,109 @@
+{
+  "files": [
+    {
+      "src": "arbeit_1.mp3",
+      "bytes": 171407,
+      "hash": "3478d7909083f3f45b42d6312a7eaef17a7563ed037ee43e05f0fa22141a0f30"
+    },
+    {
+      "src": "arbeit_2.mp3",
+      "bytes": 746937,
+      "hash": "f3998de95c2ad850f303ce93d66ed3023ddc0d8c34fc6697cba9b65e7e504556"
+    },
+    {
+      "src": "arbeit_3.mp3",
+      "bytes": 215711,
+      "hash": "46557bf69ff9516ce1ad6e1de5dab3d0bc56e1471fad8a9767aec89d463919dc"
+    },
+    {
+      "src": "arbeit_4.mp3",
+      "bytes": 210695,
+      "hash": "db88c2e6a6bb923ac5a9f09830f7eba8a68e37d205a072a22580932ce97c1bf3"
+    },
+    {
+      "src": "arbeit_5.mp3",
+      "bytes": 177258,
+      "hash": "2fdb324ba188b3011a0da38583a0f60f2396282785e5696ea545f295b98c54d0"
+    },
+    {
+      "src": "arbeit_6.mp3",
+      "bytes": 233683,
+      "hash": "50fbd381fafc5ce12fae2fb5934dad3c45c5434808027433c4717284079bb770"
+    },
+    {
+      "src": "arbeit_7.mp3",
+      "bytes": 211531,
+      "hash": "c38a8fad1b6609b5ddb9dce36287be34b9af2dd3685daf1ca99320810c3fe956"
+    },
+    {
+      "src": "arbeit_8.mp3",
+      "bytes": 183946,
+      "hash": "fd37f780b99f9c1c1b63404b5e6eeb27c26f3b58ae3c8876a16c65ed85e9a9d2"
+    },
+    {
+      "src": "k2_intro.mp3",
+      "bytes": 2667041,
+      "hash": "b0947ddb4ff7bc24202f17639f85622a30116d0fe90a3caceb17abd9fb46abd8"
+    },
+    {
+      "src": "k3_1_abschluss.mp3",
+      "bytes": 412151,
+      "hash": "41d6ba000d8a7426658ad2b5f2a11967d491f901cf6a8420720490bdf1ed1e65"
+    },
+    {
+      "src": "k3_intro.mp3",
+      "bytes": 876922,
+      "hash": "069176c5348bc449a9df037e95ccd27f32de838db98ce45a0dec92de727d7555"
+    },
+    {
+      "src": "k4_intro.mp3",
+      "bytes": 213621,
+      "hash": "bbc8913992ef7ab38d767c019cbbbc03295c8f7e4782cd3f562ca299369041b3"
+    },
+    {
+      "src": "mensch_maschine_1.mp3",
+      "bytes": 205262,
+      "hash": "d8797fec548c7f8e5507faa0d3a11364e106f8dd6fe702ac1b5bfa9abdc7fd8a"
+    },
+    {
+      "src": "mensch_maschine_2.mp3",
+      "bytes": 186035,
+      "hash": "3be5c1555b0c5c4f4b2453102457cee4f4fe0190e6f3938bc178000d0a177a7b"
+    },
+    {
+      "src": "mensch_maschine_3.mp3",
+      "bytes": 334829,
+      "hash": "1632ce791dc71be135ba3e7bc07ce8c1283dbaad2873377a82c63b4396436dbb"
+    },
+    {
+      "src": "mensch_maschine_4.mp3",
+      "bytes": 240370,
+      "hash": "f9a4297395f2cee8d7cc41f2c743ee4c74ea9e501a7962fb1d60560bab61b790"
+    },
+    {
+      "src": "mensch_maschine_5.mp3",
+      "bytes": 473591,
+      "hash": "2cc310de8197093fd4b6a84f106b6aaa074830a831cc2eff7085d23c31da98c7"
+    },
+    {
+      "src": "mensch_maschine_6.mp3",
+      "bytes": 385402,
+      "hash": "040363ab04c2702ab3eee3c32aa622c2ed9823caf348d2a82d36263ad967746f"
+    },
+    {
+      "src": "mensch_maschine_7.mp3",
+      "bytes": 210695,
+      "hash": "9ac5045f8697c6b184c282fc6af99ae6417bfbea8b29332e82d38af91e43d389"
+    },
+    {
+      "src": "mensch_maschine_8.mp3",
+      "bytes": 211949,
+      "hash": "20f71904aed435fa0f1fa1af4d32153522745304c97a4b51c0cbd75580990608"
+    },
+    {
+      "src": "narration.png",
+      "bytes": 10143,
+      "hash": "a5d8fab8a2f28589ebac021211379ffee5bedd8c2066bb6a9b192ec87b51d1a9"
+    }
+  ]
+}

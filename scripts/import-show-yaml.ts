@@ -95,7 +95,9 @@ function parseShowYaml(text: string): Round[] {
   // fixed two-level shape, and adding a YAML dependency to the workspace for a
   // one-way import tool is not worth it. Fails loudly on anything unexpected.
   const rounds: Round[] = [];
-  const lines = text.split("\n");
+  // Git checks this authoring file out with CRLF on Windows; remove the CR so
+  // the indentation-anchored grammar behaves identically on every platform.
+  const lines = text.split(/\r?\n/);
   let current: Round | null = null;
   let blockKey: string | null = null;
   let blockLines: string[] = [];
@@ -349,13 +351,16 @@ function main(): number {
         ...(round.question === undefined ? {} : { title: round.question }),
         src: NARRATION_IMAGE,
         audioSrc: round.audio ?? "missing-audio.mp3",
+        ...(round.audio ? { phoneAudioSrc: round.audio } : {}),
         expectedDurationMs: narrationDurationMs(round, mediaDir, diagnostics),
         next,
       });
       return;
     }
+    if (round.audio) media.add(round.audio);
     phases.push({
       kind: "position-question", id: round.id,
+      ...(round.audio ? { phoneAudioSrc: round.audio } : {}),
       // `question` is the short form for the screen; `text` is the script the
       // MP3 was voiced from, and it reads the axis labels aloud. Putting the
       // spoken version on the display would duplicate labels the overlay

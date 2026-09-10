@@ -9,6 +9,7 @@ it does not maintain a second runtime schema.
 | Runtime area | Implemented shape | Adapter behavior |
 | --- | --- | --- |
 | Scenario version | Non-empty string | Preserved; no Studio-specific version coercion |
+| Phone stream narration | Optional local MP3 `phoneAudioSrc` on every non-idle phase | Preserved and included in media validation; runtime schema 4 |
 | Entry and cycles | `entryPhaseId` plus scenario-level `cyclesAllowed` | Preserved and graph-validated |
 | Idle | `{ kind: "idle", id: "idle" }` | Preserved |
 | Video transition | `next` is a phase-ID string | Preserved; no hypothetical transition object |

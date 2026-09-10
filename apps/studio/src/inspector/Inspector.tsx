@@ -14,7 +14,7 @@ type Props = {
   localMedia: Array<{ src: string; durationMs?: number; previewUrl?: string }>;
   onRename: (nextId: string) => void;
   onChange: (phase: Phase) => void;
-  onChooseMedia: (phaseId: string, target: "src" | "audioSrc" | "extraAudioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
+  onChooseMedia: (phaseId: string, target: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
   onComponentTypeChange: (type: AuthorableComponentType, trigger: HTMLSelectElement) => void;
   onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
   onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x-split" | "two-quadrant-x-spectrum" | "two-quadrant-y-split" | "two-quadrant-y-spectrum" | "three-candidate-zones", trigger: HTMLSelectElement) => void;
@@ -55,7 +55,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   const label = (plain: string, runtime: string) => <span>{plain}<small>{runtime}</small></span>;
   const text = (plain: string, runtime: string, value: string, change: (value: string) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" value={value} onChange={(event) => change(event.target.value)} /></label>;
   const number = (plain: string, runtime: string, value: number, change: (value: number) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" type="number" min="0" value={value} onChange={(event) => change(numberValue(event.target.value, value))} /></label>;
-  const mediaPicker = (plain: string, runtime: "src" | "audioSrc" | "extraAudioSrc", src: string, kind: Exclude<StudioMediaKind, "unknown">) => <>
+  const mediaPicker = (plain: string, runtime: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc", src: string, kind: Exclude<StudioMediaKind, "unknown">) => <>
     <div className="sc-tool-label media-source-field">{label(plain, runtime)}<button className="sc-tool-button media-source-picker" data-sc-tool-variant="secondary" type="button" aria-label={`Choose ${kind} for ${phase.id}. Current media: ${src}`} onClick={(event) => onChooseMedia(phase.id, runtime, kind, event.currentTarget)}>
       <span className="sc-tool-mono">{src}</span><span>Browse library…</span>
     </button></div>
@@ -154,6 +154,11 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, subtitles: [...(phase.subtitles ?? []), { text: "New subtitle", startAtMs: 0, endAtMs: Math.min(phase.expectedDurationMs, 5_000) }] })}>Add subtitle</button>
       </fieldset>
     </>}
+    {phase.kind !== "idle" && <fieldset><legend>Phone headphones</legend>
+      {mediaPicker("Stream narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}
+      {phase.phoneAudioSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, phoneAudioSrc: undefined })}>Remove phone narration</button>}
+      <p className="sc-tool-copy field-hint">Plays through every joined phone’s continuous stream when this scene starts. Allow time for the full recording and stream buffering before the next scene.</p>
+    </fieldset>}
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
