@@ -5,6 +5,10 @@ import {
 } from "@smartphonecracy/protocol";
 import { shouldShowGrant } from "./shouldShowGrant.js";
 import { placementClassName, qrSizePx } from "./placement.js";
+import {
+  TRACKED_QR_ERROR_CORRECTION_LEVEL,
+  TRACKED_QR_MARGIN_MODULES,
+} from "../idle/qrPresentation.js";
 
 const grant = (overrides: Partial<QrGrantMessage> = {}): QrGrantMessage => ({
   t: "qr_grant",
@@ -60,5 +64,12 @@ describe("placementClassName", () => {
 describe("qrSizePx", () => {
   it("renders larger during idle/lobby than during corner placement", () => {
     expect(qrSizePx("large")).toBeGreaterThan(qrSizePx("corner"));
+  });
+});
+
+describe("tracked QR presentation", () => {
+  it("uses stronger correction and a standard quiet zone for projection", () => {
+    expect(TRACKED_QR_ERROR_CORRECTION_LEVEL).toBe("Q");
+    expect(TRACKED_QR_MARGIN_MODULES).toBe(4);
   });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseRuntimeScenario } from "@smartphonecracy/studio-adapter";
 import scenario from "../../../../content/scenarios/dev.json";
 import manifest from "../../../../content/media-manifest.json";
-import { acceptsInput, applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, outputHandles, phaseOutputHandles, pruneEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./graph.js";
+import { acceptsInput, applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, outputHandles, phaseOutputHandles, pruneEdges, reconcilePhaseOutputEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./graph.js";
 
 const project = () => parseRuntimeScenario(structuredClone(scenario), manifest);
 
@@ -42,6 +42,57 @@ describe("Studio canvas graph", () => {
     expect(phaseOutputHandles(phases.find((phase) => phase.id === "question-fixed"))).toEqual(["next"]);
   });
 
+  it("round-trips polygon-zone outputs by their authored zone IDs", () => {
+    const value = project();
+    const election = {
+      kind: "position-question" as const,
+      id: "statue-election",
+      text: "Choose a statue",
+      field: {
+        type: "polygon-zones" as const,
+        zones: [
+          { id: "openapollo", label: "OpenApollo", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }, { x: 0, y: 1 }] },
+          { id: "dionysos69", label: "Dionysos69", points: [{ x: 0.35, y: 0 }, { x: 0.65, y: 0 }, { x: 0.65, y: 1 }, { x: 0.35, y: 1 }] },
+          { id: "kassandra", label: "Kassandra", points: [{ x: 0.7, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0.7, y: 1 }] },
+        ],
+      },
+      durationMs: 90_000,
+      freezeMs: 10_000,
+      connectionStaleAfterMs: 10_000,
+      showLiveCounts: false,
+      next: {
+        type: "quadrant-plurality" as const,
+        map: { openapollo: "intro-video", dionysos69: "question-fixed", kassandra: "idle" },
+        tie: "idle",
+        empty: "idle",
+        countedStatuses: ["valid" as const, "stale" as const, "disconnected" as const],
+      },
+    };
+    const withElection = parseRuntimeScenario({
+      ...value.scenario,
+      phases: [...value.scenario.phases, election],
+    }, value.manifest);
+    const handles = outputHandles(withElection, election.id);
+    expect(handles).toEqual(["openapollo", "dionysos69", "kassandra", "tie", "empty"]);
+    const edges = graphEdges(withElection);
+    expect(edges.filter((edge) => edge.source === election.id).map((edge) => edge.sourceHandle)).toEqual(handles);
+    expect(applyEdges(withElection, edges).scenario.phases.find((phase) => phase.id === election.id)).toEqual(election);
+
+    const addedZone = { id: "sokrates", label: "Sokrates", points: [{ x: 0.4, y: 0.2 }, { x: 0.6, y: 0.2 }, { x: 0.5, y: 0.5 }] };
+    const expanded = { ...election, field: { ...election.field, zones: [...election.field.zones, addedZone] }, next: { ...election.next, map: { ...election.next.map, sokrates: "idle" } } };
+    const expandedProject = parseRuntimeScenario({ ...withElection.scenario, phases: withElection.scenario.phases.map((phase) => phase.id === election.id ? expanded : phase) }, withElection.manifest);
+    const expandedPhase = expandedProject.scenario.phases.find((phase) => phase.id === election.id)!;
+    const expandedEdges = reconcilePhaseOutputEdges(edges, expandedPhase);
+    expect(expandedEdges.find((edge) => edge.sourceHandle === "openapollo")?.target).toBe("intro-video");
+    expect(expandedEdges.find((edge) => edge.sourceHandle === "sokrates")?.target).toBe(END_NODE_ID);
+
+    const reduced = { ...expanded, field: { ...expanded.field, zones: [addedZone] }, next: { ...expanded.next, map: { sokrates: "idle" } } };
+    const reducedProject = parseRuntimeScenario({ ...expandedProject.scenario, phases: expandedProject.scenario.phases.map((phase) => phase.id === election.id ? reduced : phase) }, expandedProject.manifest);
+    const reducedPhase = reducedProject.scenario.phases.find((phase) => phase.id === election.id)!;
+    const reducedEdges = reconcilePhaseOutputEdges(expandedEdges, reducedPhase);
+    expect(reducedEdges.filter((edge) => edge.source === election.id).map((edge) => edge.sourceHandle)).toEqual(["sokrates", "tie", "empty"]);
+  });
+
   it("preserves tie and empty routes when replacing only spatial layout outputs", () => {
     const value = project();
     const original = value.scenario.phases.find((phase) => phase.id === "question-quadrant");
@@ -57,7 +108,7 @@ describe("Studio canvas graph", () => {
     };
     const switched = {
       ...routed,
-      field: { type: "two-quadrant" as const, axis: "x" as const, labels },
+      field: { type: "two-quadrant" as const, axis: "x" as const, variant: "spectrum" as const, labels },
       next: { ...routed.next, map: { min: "idle", max: "idle" } },
     };
     const switchedProject = {

@@ -1,4 +1,5 @@
 import {
+  DISPLAY_REPLACED_CLOSE_CODE,
   encodeMessage,
   parseServerMessage,
   PROTOCOL_VERSION,
@@ -114,10 +115,20 @@ export class DisplayConnection {
       this.options.onMessage(parsed.message);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       this.clearTimers();
       this.ws = null;
       if (this.stopped) return;
+      if (event.code === DISPLAY_REPLACED_CLOSE_CODE) {
+        // A newer display connection took over this slot -- reconnecting
+        // would just replace it right back. If two displays are both
+        // open, auto-reconnecting here turns a one-time handoff into an
+        // infinite kick-each-other-out loop, which is indistinguishable
+        // from a broken connection to whoever is watching either screen.
+        this.stopped = true;
+        this.setStatus("closed");
+        return;
+      }
       this.setStatus("reconnecting");
       this.reconnectTimer = setTimeout(
         () => this.connect("reconnecting"),

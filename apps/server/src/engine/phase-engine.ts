@@ -1,4 +1,5 @@
 import {
+  DISPLAY_REPLACED_CLOSE_CODE,
   encodeMessage,
   PROTOCOL_VERSION,
   type ClientToServerMessage,
@@ -14,7 +15,15 @@ import type { WebSocket } from "ws";
 import type { ParticipantRecord, ParticipantRegistry } from "../admission/index.js";
 import { QrGrantPushLoop, type QrGrantPushLoopOptions } from "../admission/qr.js";
 import { CursorPipeline } from "../cursors/index.js";
+import { GhostCursorPlayer, type GhostPool } from "../ghosts/index.js";
 import {
+  MovementRecorder,
+  type MovementBatchFlushed,
+  type MovementRecordingFinalized,
+  type MovementRecordingStarted,
+} from "../movement/index.js";
+import {
+  RatingEngine,
   VoteEngine,
   type FinalVoteSnapshot,
   type VoteParticipantSeed,
@@ -29,7 +38,6 @@ export type PhaseEnginePolicy = {
   interactiveIdleTimeoutMs: number;
   maxSessionDurationMs: number;
   displayDisconnectTimeoutMs: number;
-  noParticipantGraceMs: number;
 };
 
 export const DEFAULT_PHASE_ENGINE_POLICY: PhaseEnginePolicy = {
@@ -37,7 +45,6 @@ export const DEFAULT_PHASE_ENGINE_POLICY: PhaseEnginePolicy = {
   interactiveIdleTimeoutMs: 180_000,
   maxSessionDurationMs: 1_800_000,
   displayDisconnectTimeoutMs: 30_000,
-  noParticipantGraceMs: 120_000,
 };
 
 const QUESTION_STATUS_INTERVAL_MS = 250;
@@ -71,6 +78,7 @@ export type PhaseEngineOptions = {
   registry: ParticipantRegistry;
   installationId: string;
   roomId: string;
+  showId: string;
   displayToken: string;
   participantLeaseTtlMs?: number;
   policy?: Partial<PhaseEnginePolicy>;
@@ -79,7 +87,19 @@ export type PhaseEngineOptions = {
   onCheckpoint?: (checkpoint: PhaseCheckpoint) => void;
   onPhaseDeadline?: (event: PhaseDeadlineEvent) => void;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
-  onSessionEnded?: (event: { reason: string; endedAt: number }) => void;
+  onSessionEnded?: (event: { reason: string; sessionId: string; endedAt: number }) => void;
+  onMovementRecordingStarted?: (event: MovementRecordingStarted) => void;
+  onMovementBatchFlushed?: (event: MovementBatchFlushed) => void;
+  onMovementRecordingFinalized?: (event: MovementRecordingFinalized) => void;
+  /** Past completed recordings for this showId, replayed as ghost cursors. Defaults to an empty pool. */
+  ghostPool?: GhostPool;
+  /** Operator-set ghost fill cap (apps/admin) -- takes precedence over the published scenario's own targetAudienceSize when set. */
+  targetAudienceSizeOverride?: number;
+  /** Absolute Unix timestamps for one-off automatic show starts. */
+  scheduledStartTimes?: readonly number[];
+  onLobbyScheduleChanged?: (startTimes: readonly number[]) => void;
+  /** Legacy/test compatibility; production disables participant-count auto-start. */
+  autoStartOnFirstParticipant?: boolean;
   qr?: Omit<QrGrantPushLoopOptions, "send" | "lifecycle" | "hasDisplay" | "now">;
 };
 
@@ -92,6 +112,42 @@ export type DisplayPlaybackIssue = {
   reportedAt: number;
 };
 
+export type ParticipantPresence = {
+  clientId: string;
+  name: string;
+  color: string;
+  connected: boolean;
+  joinedAt: number;
+  lastSeenAt: number;
+};
+
+export type AdminFlowRoute = {
+  outcome: string;
+  target: string;
+};
+
+export type AdminFlowScene = {
+  id: string;
+  kind: Exclude<Phase["kind"], "idle">;
+  title: string;
+  routes: AdminFlowRoute[];
+};
+
+export type AdminFlow = {
+  entryPhaseId: string;
+  scenes: AdminFlowScene[];
+};
+
+function adminRoutesForPhase(phase: Exclude<Phase, { kind: "idle" }>): AdminFlowRoute[] {
+  if (phase.kind === "video") return [{ outcome: "next", target: phase.next }];
+  if (phase.next.type === "fixed") return [{ outcome: "next", target: phase.next.target }];
+  return [
+    ...Object.entries(phase.next.map).map(([outcome, target]) => ({ outcome, target })),
+    { outcome: "tie", target: phase.next.tie },
+    { outcome: "empty", target: phase.next.empty },
+  ];
+}
+
 function isOpen(socket: WebSocket): boolean {
   return socket.readyState === undefined || socket.readyState === 0 || socket.readyState === 1;
 }
@@ -101,15 +157,19 @@ export class PhaseEngine {
   private readonly registry: ParticipantRegistry;
   private readonly installationId: string;
   private readonly roomId: string;
+  private readonly showId: string;
   private readonly displayToken: string;
   private readonly policy: PhaseEnginePolicy;
   private readonly now: () => number;
   private readonly sessionIdFactory: () => string;
   private readonly onCheckpoint: ((checkpoint: PhaseCheckpoint) => void) | undefined;
   private readonly onPhaseDeadline: ((event: PhaseDeadlineEvent) => void) | undefined;
-  private readonly onSessionEnded: ((event: { reason: string; endedAt: number }) => void) | undefined;
+  private readonly onSessionEnded: ((event: { reason: string; sessionId: string; endedAt: number }) => void) | undefined;
   private readonly votes: VoteEngine;
+  private readonly ratings = new RatingEngine();
   private readonly cursors: CursorPipeline;
+  private readonly movement: MovementRecorder;
+  private readonly ghosts: GhostCursorPlayer;
   private readonly video = new VideoPhaseHandler();
   private readonly qr: QrGrantPushLoop | null;
   private readonly clients = new Set<WebSocket>();
@@ -123,7 +183,6 @@ export class PhaseEngine {
   private deadlineAt: number | null = null;
   private sessionStartedAt: number | null = null;
   private lastInputAt: number | null = null;
-  private noParticipantSince: number | null = null;
   private displayDisconnectedAt: number | null = null;
   private displayHeartbeatAt: number | null = null;
   private displayPlaybackIssue: DisplayPlaybackIssue | null = null;
@@ -132,19 +191,29 @@ export class PhaseEngine {
   private readonly participantIds = new Map<WebSocket, string>();
   private questionFreezeUntil: number | null = null;
   private questionResolutionTarget: string | null = null;
+  private compositeVideoCompleted = false;
   private questionStatusDirty = false;
   private lastQuestionStatusAt: number | null = null;
+  private ratingStatusDirty = false;
+  private lastRatingStatusAt: number | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private scheduledStartTimes: number[];
+  private readonly autoStartOnFirstParticipant: boolean;
+  private readonly onLobbyScheduleChanged: ((startTimes: readonly number[]) => void) | undefined;
 
   constructor(options: PhaseEngineOptions) {
     this.scenario = options.scenario;
     this.registry = options.registry;
     this.installationId = options.installationId;
     this.roomId = options.roomId;
+    this.showId = options.showId;
     this.displayToken = options.displayToken;
     this.policy = { ...DEFAULT_PHASE_ENGINE_POLICY, ...options.policy };
     this.now = options.now ?? (() => Date.now());
     this.sessionIdFactory = options.sessionIdFactory ?? (() => `session-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    this.scheduledStartTimes = this.normalizeStartTimes(options.scheduledStartTimes ?? []).filter((time) => time > this.now());
+    this.autoStartOnFirstParticipant = options.autoStartOnFirstParticipant ?? true;
+    this.onLobbyScheduleChanged = options.onLobbyScheduleChanged;
     this.onCheckpoint = options.onCheckpoint;
     this.onPhaseDeadline = options.onPhaseDeadline;
     this.onSessionEnded = options.onSessionEnded;
@@ -159,6 +228,23 @@ export class PhaseEngine {
       sendCursors: (message) => this.sendToDisplay(message),
       sendPresence: (message) => this.broadcast(message),
       canSendCursors: () => this.displaySocket !== undefined,
+    });
+    this.movement = new MovementRecorder({
+      showId: this.showId,
+      scenarioVersion: this.scenario.version,
+      installationId: this.installationId,
+      roomId: this.roomId,
+      onRecordingStarted: (event) => options.onMovementRecordingStarted?.(event),
+      onBatchFlushed: (event) => options.onMovementBatchFlushed?.(event),
+      onRecordingFinalized: (event) => options.onMovementRecordingFinalized?.(event),
+    });
+    this.ghosts = new GhostCursorPlayer({
+      pool: options.ghostPool ?? { tracks: [] },
+      targetAudienceSize: () => options.targetAudienceSizeOverride ?? this.scenario.targetAudienceSize ?? 0,
+      liveConnectedCount: () => this.registry.connectedCount,
+      sessionStartedAt: () => this.sessionStartedAt,
+      onFrame: (frame) => this.cursors.setGhostCursors(frame),
+      now: this.now,
     });
     this.qr = options.qr === undefined ? null : new QrGrantPushLoop({
       ...options.qr,
@@ -187,6 +273,20 @@ export class PhaseEngine {
     return this.phaseEpoch;
   }
 
+  get adminFlow(): AdminFlow {
+    return {
+      entryPhaseId: this.scenario.entryPhaseId,
+      scenes: this.scenario.phases
+        .filter((phase): phase is Exclude<Phase, { kind: "idle" }> => phase.kind !== "idle")
+        .map((phase) => ({
+          id: phase.id,
+          kind: phase.kind,
+          title: phase.title ?? (phase.kind === "video" ? phase.id : phase.text),
+          routes: adminRoutesForPhase(phase),
+        })),
+    };
+  }
+
   get isDisplayConnected(): boolean {
     return this.displaySocket !== undefined;
   }
@@ -199,6 +299,42 @@ export class PhaseEngine {
 
   get currentDisplayPlaybackIssue(): DisplayPlaybackIssue | null {
     return this.displayPlaybackIssue;
+  }
+
+  get participantPresence(): ParticipantPresence[] {
+    return this.registry.values().map((participant) => ({
+      clientId: participant.clientId,
+      name: participant.name,
+      color: participant.color,
+      connected: participant.socket !== undefined && isOpen(participant.socket),
+      joinedAt: participant.joinedAt,
+      lastSeenAt: participant.lastSeenAt,
+    }));
+  }
+
+  get lobbyStartTimes(): readonly number[] {
+    return this.scheduledStartTimes;
+  }
+
+  get nextLobbyStartAt(): number | null {
+    return this.scheduledStartTimes[0] ?? null;
+  }
+
+  setLobbyStartTimes(startTimes: readonly number[], now = this.now()): TransitionResult {
+    this.scheduledStartTimes = this.normalizeStartTimes(startTimes).filter((time) => time > now);
+    this.syncLobbyDeadline(now, "lobby-schedule-updated");
+    return { ok: true };
+  }
+
+  adjustLobbyStart(deltaMs: number, now = this.now()): TransitionResult {
+    const next = this.scheduledStartTimes[0];
+    if (next === undefined || !Number.isSafeInteger(deltaMs) || deltaMs === 0) {
+      return { ok: false, reason: "wrong-phase" };
+    }
+    this.scheduledStartTimes[0] = Math.max(now + 1_000, next + deltaMs);
+    this.scheduledStartTimes = this.normalizeStartTimes(this.scheduledStartTimes);
+    this.syncLobbyDeadline(now, "lobby-time-adjusted");
+    return { ok: true };
   }
 
   adminStart(now = this.now()): TransitionResult {
@@ -218,6 +354,14 @@ export class PhaseEngine {
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
     const phase = this.currentPhase();
     if (phase.kind === "video") return this.advanceTo(phase.next, now, "admin-skip");
+    if (phase.kind === "video-position-question") {
+      this.beginCompositeVoteIfDue(now, phase, true);
+      this.resolveCompositeQuestion(now, phase);
+      const target = this.questionResolutionTarget;
+      return target === null
+        ? { ok: false, reason: "wrong-phase" }
+        : this.advanceTo(target, now, "admin-skip");
+    }
     if (phase.kind === "position-question") {
       if (this.questionResolutionTarget !== null) {
         return this.advanceTo(this.questionResolutionTarget, now, "admin-skip");
@@ -228,10 +372,24 @@ export class PhaseEngine {
     return { ok: false, reason: "wrong-phase" };
   }
 
+  adminJump(target: string, now = this.now()): TransitionResult {
+    if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
+    const phase = this.scenario.phases.find((candidate) => candidate.id === target);
+    if (!phase || phase.kind === "idle") return { ok: false, reason: "invalid-target" };
+    return this.advanceTo(target, now, "admin-jump");
+  }
+
   adminRestart(now = this.now()): TransitionResult {
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
+    // A restart ends the current session's data collection early (as
+    // "completed", not "abandoned" — it's a deliberate operator action, not
+    // a dropped connection) before starting a fresh sessionId, so movement
+    // recordings stay correctly bounded to one live playthrough each.
+    this.movement.finalizeSession(now);
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
+    this.joinMovementRecordingForConnectedParticipants();
+    this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "admin-restart");
     return { ok: true };
   }
@@ -265,6 +423,8 @@ export class PhaseEngine {
     if (this.timer !== null) return;
     this.timer = setInterval(() => this.tick(), 250);
     this.cursors.start();
+    this.movement.start();
+    this.ghosts.start();
     this.qr?.start();
   }
 
@@ -272,12 +432,17 @@ export class PhaseEngine {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.cursors.stop();
+    this.movement.stop();
+    this.ghosts.stop();
     this.qr?.stop();
   }
 
   tick(now = this.now()): void {
     this.expireStaleDisplay(now);
-    if (this.lifecycle === "idle") return;
+    if (this.lifecycle === "idle") {
+      if (this.displaySocket !== undefined && this.nextLobbyStartAt !== null) this.startLobby(now);
+      return;
+    }
 
     if (this.displaySocket === undefined) {
       this.displayDisconnectedAt ??= now;
@@ -289,25 +454,16 @@ export class PhaseEngine {
       this.displayDisconnectedAt = null;
     }
 
-    if (this.registry.connectedCount === 0) {
-      this.noParticipantSince ??= now;
-      if (now - this.noParticipantSince >= this.policy.noParticipantGraceMs) {
-        this.abortToIdle("no-participants", now);
-        return;
-      }
-    } else {
-      this.noParticipantSince = null;
-    }
-
     if (this.lifecycle === "lobby") {
       if (this.deadlineAt !== null && now >= this.deadlineAt) {
         if (this.displaySocket !== undefined && this.registry.connectedCount > 0) {
           this.startSession(now);
         } else {
-          this.abortToIdle("lobby-precondition-lost", now);
+          this.consumeScheduledStart(this.deadlineAt);
+          this.syncLobbyDeadline(now, "lobby-start-missed");
         }
       }
-      if (this.lifecycle === "lobby" && this.interactiveIdleTimedOut(now)) {
+      if (this.lifecycle === "lobby" && this.autoStartOnFirstParticipant && this.interactiveIdleTimedOut(now)) {
         this.abortToIdle("interactive-idle-timeout", now);
         return;
       }
@@ -322,6 +478,7 @@ export class PhaseEngine {
     const phase = this.currentPhase();
 
     if (phase.kind === "video") {
+      if (phase.rating) this.broadcastRatingStatus(now);
       const fallback = this.video.consumeFallback(now);
       if (fallback !== null && this.matches(fallback.sessionId, fallback.phaseId, fallback.phaseEpoch)) {
         this.onPhaseDeadline?.({
@@ -332,6 +489,39 @@ export class PhaseEngine {
           deadlineAt: this.deadlineAt!,
         });
         this.advanceTo(phase.next, now, "video-fallback");
+      }
+      return;
+    }
+
+    if (phase.kind === "video-position-question") {
+      if (phase.rating) this.broadcastRatingStatus(now);
+      this.beginCompositeVoteIfDue(now, phase);
+      if (this.votes.currentQuestion() !== null && this.questionResolutionTarget === null) {
+        this.broadcastQuestionStatus(now);
+      }
+      if (now >= this.phaseStartedAt + phase.closeAtMs && this.questionResolutionTarget === null) {
+        this.resolveCompositeQuestion(now, phase);
+        if (this.compositeVideoCompleted && this.questionResolutionTarget !== null) {
+          this.advanceTo(this.questionResolutionTarget, now, "video-complete");
+          return;
+        }
+      }
+      const fallback = this.video.consumeFallback(now);
+      if (fallback !== null && this.matches(fallback.sessionId, fallback.phaseId, fallback.phaseEpoch)) {
+        this.onPhaseDeadline?.({
+          sessionId: this.sessionId,
+          phaseId: this.phaseId,
+          phaseEpoch: this.phaseEpoch,
+          phase,
+          deadlineAt: this.deadlineAt!,
+        });
+        if (this.questionResolutionTarget === null) {
+          this.beginCompositeVoteIfDue(now, phase, true);
+          this.resolveCompositeQuestion(now, phase);
+        }
+        if (this.questionResolutionTarget !== null) {
+          this.advanceTo(this.questionResolutionTarget, now, "video-fallback");
+        }
       }
       return;
     }
@@ -371,6 +561,7 @@ export class PhaseEngine {
     if (_participant !== undefined) {
       this.participantIds.set(socket, _participant.clientId);
       this.cursors.join(_participant.clientId, _participant.color);
+      if (this.lifecycle === "active") this.movement.join(_participant.clientId, _participant.name, this.sessionId, this.now());
       this.votes.addParticipant({
         participantId: _participant.clientId,
         connected: true,
@@ -393,6 +584,7 @@ export class PhaseEngine {
       if (![...this.participantIds.values()].includes(participantId)) {
         this.votes.setConnected(participantId, false, this.now());
         this.cursors.leave(participantId);
+        this.movement.leave(participantId, this.now());
       }
       this.queueQuestionStatus();
     }
@@ -401,7 +593,7 @@ export class PhaseEngine {
       this.displayDisconnectedAt = this.now();
       this.displayHeartbeatAt = null;
     }
-    if (this.lifecycle === "lobby" && this.registry.connectedCount === 0) {
+    if (this.lifecycle === "lobby" && this.registry.connectedCount === 0 && this.nextLobbyStartAt === null) {
       this.abortToIdle("lobby-empty", this.now());
     }
   }
@@ -444,19 +636,40 @@ export class PhaseEngine {
           this.completeVideo(message.sessionId, message.phaseId, message.phaseEpoch);
         }
         return;
-      case "input":
+      case "reaction":
         if (
           this.participantSockets.has(socket) &&
           this.lifecycle === "active" &&
           this.matches(message.sessionId, this.phaseId, message.phaseEpoch)
         ) {
+          if (this.ratings.recordReaction(message.sessionId, message.phaseEpoch, message.kind)) {
+            this.queueRatingStatus();
+          }
+        }
+        return;
+      case "input":
+        if (
+          this.participantSockets.has(socket) &&
+          (this.lifecycle === "lobby" || this.lifecycle === "active") &&
+          this.matches(message.sessionId, this.phaseId, message.phaseEpoch)
+        ) {
           const participantId = this.participantIds.get(socket);
           if (participantId !== undefined) {
             if (this.cursors.recordInput(participantId, message.seq, message.x, message.y)) {
-              // Video movement updates only the projected cursor. Votes and
-              // question activity remain scoped to position-question phases.
-              if (this.currentPhase().kind === "position-question") {
-                this.recordInput(this.now(), participantId, message.x, message.y);
+              // Lobby movement is projected so visitors see their cursors in
+              // the waiting room, but recordings, votes, and question
+              // activity remain scoped to an active show session.
+              if (this.lifecycle === "active") {
+                this.movement.recordSample(participantId, message.x, message.y, this.now());
+                const activePhase = this.currentPhase();
+                if (
+                  activePhase.kind === "position-question" ||
+                  (activePhase.kind === "video-position-question" &&
+                    this.now() >= this.phaseStartedAt + activePhase.openAtMs &&
+                    this.now() < this.phaseStartedAt + activePhase.closeAtMs)
+                ) {
+                  this.recordInput(this.now(), participantId, message.x, message.y);
+                }
               }
             }
           }
@@ -468,7 +681,11 @@ export class PhaseEngine {
   }
 
   recordInput(now = this.now(), participantId?: string, x?: number, y?: number): boolean {
-    if (this.lifecycle !== "active" || this.currentPhase().kind !== "position-question") return false;
+    const phase = this.currentPhase();
+    if (
+      this.lifecycle !== "active" ||
+      (phase.kind !== "position-question" && phase.kind !== "video-position-question")
+    ) return false;
     if (participantId !== undefined && x !== undefined && y !== undefined) {
       if (!this.votes.recordInput(participantId, x, y, now)) return false;
       this.queueQuestionStatus(now);
@@ -487,10 +704,15 @@ export class PhaseEngine {
 
   completeVideo(sessionId: string, phaseId: string, phaseEpoch: number, now = this.now()): TransitionResult {
     const phase = this.currentPhase();
-    if (phase.kind !== "video") return { ok: false, reason: "wrong-phase" };
+    if (phase.kind !== "video" && phase.kind !== "video-position-question") return { ok: false, reason: "wrong-phase" };
     if (!this.matches(sessionId, phaseId, phaseEpoch)) return { ok: false, reason: "stale" };
     if (!this.video.complete({ sessionId, phaseId, phaseEpoch })) return { ok: false, reason: "stale" };
-    return this.advanceTo(phase.next, now, "video-complete");
+    if (phase.kind === "video") return this.advanceTo(phase.next, now, "video-complete");
+    if (this.questionResolutionTarget !== null) {
+      return this.advanceTo(this.questionResolutionTarget, now, "video-complete");
+    }
+    this.compositeVideoCompleted = true;
+    return { ok: true };
   }
 
   resolveQuestion(
@@ -531,7 +753,7 @@ export class PhaseEngine {
         level: "warning",
         message: "This display connection was replaced.",
       });
-      this.close(this.displaySocket, 4002, "display replaced");
+      this.close(this.displaySocket, DISPLAY_REPLACED_CLOSE_CODE, "display replaced");
     }
     this.displaySocket = socket;
     this.cursors.requestSnapshot();
@@ -541,7 +763,12 @@ export class PhaseEngine {
     this.displayDisconnectedAt = null;
     this.send(socket, this.getSnapshotMessage());
     this.send(socket, { t: "presence", v: PROTOCOL_VERSION, count: this.registry.connectedCount });
-    if (this.lifecycle === "idle" && this.registry.connectedCount >= 1) {
+    const phase = this.currentPhase();
+    const resolution = this.votes.currentResolution();
+    if (phase.kind === "video-position-question" && resolution !== null) {
+      this.emitQuestionResolved(resolution, phase, this.now());
+    }
+    if (this.lifecycle === "idle" && (this.registry.connectedCount >= 1 || this.nextLobbyStartAt !== null)) {
       this.startLobby(this.now());
     } else {
       this.qr?.push();
@@ -565,27 +792,39 @@ export class PhaseEngine {
   }
 
   private startLobby(now: number): void {
-    if (this.lifecycle !== "idle" || this.displaySocket === undefined || this.registry.connectedCount < 1) return;
+    if (
+      this.lifecycle !== "idle" ||
+      this.displaySocket === undefined ||
+      (this.registry.connectedCount < 1 && this.nextLobbyStartAt === null)
+    ) return;
     this.lifecycle = "lobby";
     this.sessionId = "lobby";
     this.phaseId = "idle";
     this.phaseStartedAt = now;
-    this.deadlineAt = now + this.policy.lobbyCountdownMs;
+    this.deadlineAt = this.nextLobbyStartAt ?? (this.autoStartOnFirstParticipant ? now + this.policy.lobbyCountdownMs : null);
     this.phaseEpoch += 1;
     this.sessionStartedAt = null;
     this.lastInputAt = now;
-    this.noParticipantSince = null;
     this.deadlineNotified = false;
     this.transition("lobby-start");
   }
 
   private startSession(now: number): void {
+    if (this.deadlineAt !== null) this.consumeScheduledStart(this.deadlineAt);
     this.lifecycle = "active";
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
     this.lastInputAt = null;
-    this.noParticipantSince = null;
+    this.joinMovementRecordingForConnectedParticipants();
+    this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "session-start");
+  }
+
+  private joinMovementRecordingForConnectedParticipants(): void {
+    for (const participant of this.registry.values()) {
+      if (participant.socket === undefined || !isOpen(participant.socket)) continue;
+      this.movement.join(participant.clientId, participant.name, this.sessionId, this.now());
+    }
   }
 
   private advanceTo(target: string, now: number, reason: string): TransitionResult {
@@ -597,16 +836,25 @@ export class PhaseEngine {
   private enterPhase(target: string, now: number, reason: string): void {
     const phase = this.requirePhase(target);
     const sessionEnded = this.lifecycle !== "idle" && phase.kind === "idle";
+    const endedSessionId = sessionEnded ? this.sessionId : null;
+    if (sessionEnded) {
+      this.movement.finalizeSession(now);
+      this.ghosts.clear();
+    }
     this.votes.clearQuestion();
     this.questionStatusDirty = false;
     this.lastQuestionStatusAt = null;
+    this.ratings.clear();
+    this.ratingStatusDirty = false;
+    this.lastRatingStatusAt = null;
     this.questionFreezeUntil = null;
     this.questionResolutionTarget = null;
+    this.compositeVideoCompleted = false;
     this.displayPlaybackIssue = null;
     this.phaseId = target;
     this.phaseStartedAt = now;
     this.video.cancel();
-    this.deadlineAt = phase.kind === "video"
+    this.deadlineAt = phase.kind === "video" || phase.kind === "video-position-question"
       ? this.video.begin({ sessionId: this.sessionId, phaseId: target, phaseEpoch: this.phaseEpoch + 1 }, phase.expectedDurationMs, now)
       : phase.kind === "position-question"
         ? now + phase.durationMs
@@ -620,23 +868,22 @@ export class PhaseEngine {
       this.lastInputAt = null;
     } else {
       this.lifecycle = "active";
-      this.lastInputAt = phase.kind === "position-question" ? now : null;
+      this.lastInputAt = phase.kind === "position-question" || phase.kind === "video-position-question" ? now : null;
     }
-    this.transition(reason, sessionEnded ? { reason, endedAt: now } : undefined);
-    if (phase.kind === "position-question") {
-      const participants: VoteParticipantSeed[] = this.registry.values().map((participant) => ({
-        participantId: participant.clientId,
-        connected: participant.socket !== undefined,
-        lastHeartbeatAt: participant.lastSeenAt,
-      }));
-      this.votes.beginQuestion({
+    this.ghosts.onPhaseChanged(now);
+    this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
+    if ((phase.kind === "video" || phase.kind === "video-position-question") && phase.rating) {
+      this.ratings.begin({
         sessionId: this.sessionId,
-        question: phase,
+        phaseId: target,
         phaseEpoch: this.phaseEpoch,
-        phaseStartedAt: this.phaseStartedAt,
-        phaseDeadline: this.deadlineAt!,
-        participants,
+        candidateLabel: phase.rating.candidateLabel,
       });
+      this.ratingStatusDirty = true;
+      this.broadcastRatingStatus(now, true);
+    }
+    if (phase.kind === "position-question") {
+      this.beginPositionVote(phase, this.phaseStartedAt, this.deadlineAt!);
       this.questionStatusDirty = true;
       this.broadcastQuestionStatus(now, true);
     }
@@ -644,14 +891,13 @@ export class PhaseEngine {
 
   private abortToIdle(reason: string, now: number): void {
     this.enterPhase("idle", now, reason);
-    this.noParticipantSince = null;
     this.displayDisconnectedAt = this.displaySocket === undefined ? now : null;
   }
 
   private recordDisplayPlaybackStatus(message: DisplayPlaybackStatusMessage): void {
     const phase = this.currentPhase();
     if (
-      phase.kind !== "video" ||
+      (phase.kind !== "video" && phase.kind !== "video-position-question") ||
       phase.src !== message.mediaId ||
       !this.matches(message.sessionId, message.phaseId, message.phaseEpoch)
     ) return;
@@ -665,8 +911,11 @@ export class PhaseEngine {
         };
   }
 
-  private transition(reason: string, sessionEnded?: { reason: string; endedAt: number }): void {
+  private transition(reason: string, sessionEnded?: { reason: string; sessionId: string; endedAt: number }): void {
     this.emitCheckpoint("transition", reason);
+    // Hide the join QR before the active phase frame reaches the display,
+    // avoiding even a one-message flash over the opening shot.
+    this.qr?.push();
     this.broadcast({
       t: "phase",
       v: PROTOCOL_VERSION,
@@ -676,7 +925,6 @@ export class PhaseEngine {
       serverTime: this.now(),
     });
     if (sessionEnded !== undefined) this.onSessionEnded?.(sessionEnded);
-    this.qr?.push();
   }
 
   private emitCheckpoint(kind: "transition" | "recovery", reason: string): void {
@@ -696,8 +944,31 @@ export class PhaseEngine {
   }
 
   private interactiveIdleTimedOut(now: number): boolean {
-    const interactive = this.lifecycle === "lobby" || this.currentPhase().kind === "position-question";
+    const kind = this.currentPhase().kind;
+    const interactive = (this.lifecycle === "lobby" && this.autoStartOnFirstParticipant) || kind === "position-question" || kind === "video-position-question";
     return interactive && this.lastInputAt !== null && now - this.lastInputAt >= this.policy.interactiveIdleTimeoutMs;
+  }
+
+  private normalizeStartTimes(startTimes: readonly number[]): number[] {
+    return [...new Set(startTimes.filter((time) => Number.isSafeInteger(time) && time > 0))].sort((a, b) => a - b);
+  }
+
+  private consumeScheduledStart(startAt: number): void {
+    const updated = this.scheduledStartTimes.filter((time) => time !== startAt);
+    if (updated.length === this.scheduledStartTimes.length) return;
+    this.scheduledStartTimes = updated;
+    this.onLobbyScheduleChanged?.(this.scheduledStartTimes);
+  }
+
+  private syncLobbyDeadline(now: number, reason: string): void {
+    if (this.lifecycle === "active") return;
+    if (this.lifecycle === "idle") {
+      if (this.nextLobbyStartAt !== null && this.displaySocket !== undefined) this.startLobby(now);
+      return;
+    }
+    this.deadlineAt = this.nextLobbyStartAt;
+    this.deadlineNotified = false;
+    this.transition(reason);
   }
 
   private resolveQuestionAtDeadline(now: number, phase: Extract<Phase, { kind: "position-question" }>): void {
@@ -714,9 +985,52 @@ export class PhaseEngine {
     }
   }
 
+  private beginPositionVote(
+    phase: Extract<Phase, { kind: "position-question" | "video-position-question" }>,
+    phaseStartedAt: number,
+    phaseDeadline: number,
+  ): void {
+    const participants: VoteParticipantSeed[] = this.registry.values().map((participant) => ({
+      participantId: participant.clientId,
+      connected: participant.socket !== undefined,
+      lastHeartbeatAt: participant.lastSeenAt,
+    }));
+    this.votes.beginQuestion({
+      sessionId: this.sessionId,
+      question: phase,
+      phaseEpoch: this.phaseEpoch,
+      phaseStartedAt,
+      phaseDeadline,
+      participants,
+    });
+  }
+
+  private beginCompositeVoteIfDue(
+    now: number,
+    phase: Extract<Phase, { kind: "video-position-question" }>,
+    force = false,
+  ): void {
+    if (this.votes.currentQuestion() !== null || this.questionResolutionTarget !== null) return;
+    const opensAt = this.phaseStartedAt + phase.openAtMs;
+    if (!force && now < opensAt) return;
+    this.beginPositionVote(phase, opensAt, this.phaseStartedAt + phase.closeAtMs);
+    this.questionStatusDirty = true;
+    this.broadcastQuestionStatus(now, true);
+  }
+
+  private resolveCompositeQuestion(
+    now: number,
+    phase: Extract<Phase, { kind: "video-position-question" }>,
+  ): void {
+    const resolution = this.votes.finalize(now);
+    if (!resolution) return;
+    this.questionResolutionTarget = resolution.resolvedTarget;
+    this.emitQuestionResolved(resolution, phase, now);
+  }
+
   private emitQuestionResolved(
     resolution: VoteResolution,
-    phase: Extract<Phase, { kind: "position-question" }>,
+    phase: Extract<Phase, { kind: "position-question" | "video-position-question" }>,
     now: number,
   ): void {
     this.sendToDisplay({
@@ -725,10 +1039,13 @@ export class PhaseEngine {
       sessionId: this.sessionId,
       phaseEpoch: this.phaseEpoch,
       resolvedTarget: resolution.resolvedTarget,
-      freezeUntil: now + phase.freezeMs,
+      freezeUntil: phase.kind === "position-question"
+        ? now + phase.freezeMs
+        : this.phaseStartedAt + phase.hideAtMs,
       field: resolution.field,
       quadrantCounts: resolution.quadrantCounts,
       winner: resolution.winner,
+      ...(resolution.tieBreak === undefined ? {} : { tieBreak: resolution.tieBreak }),
     } as Extract<ServerToClientMessage, { t: "question_resolved" }>);
   }
 
@@ -739,7 +1056,7 @@ export class PhaseEngine {
 
   private broadcastQuestionStatus(now = this.now(), force = false): void {
     const phase = this.currentPhase();
-    if (phase.kind !== "position-question") return;
+    if (phase.kind !== "position-question" && phase.kind !== "video-position-question") return;
     if (!force && !this.questionStatusDirty) return;
     if (
       !force &&
@@ -760,6 +1077,35 @@ export class PhaseEngine {
     } as Extract<ServerToClientMessage, { t: "question_status" }>);
     this.questionStatusDirty = false;
     this.lastQuestionStatusAt = now;
+  }
+
+  private queueRatingStatus(now = this.now()): void {
+    this.ratingStatusDirty = true;
+    this.broadcastRatingStatus(now);
+  }
+
+  private broadcastRatingStatus(now = this.now(), force = false): void {
+    const phase = this.currentPhase();
+    if ((phase.kind !== "video" && phase.kind !== "video-position-question") || !phase.rating) return;
+    if (!force && !this.ratingStatusDirty) return;
+    if (
+      !force &&
+      this.lastRatingStatusAt !== null &&
+      now - this.lastRatingStatusAt < QUESTION_STATUS_INTERVAL_MS
+    ) return;
+    const status = this.ratings.liveStatus();
+    if (!status) return;
+    this.sendToDisplay({
+      t: "rating_status",
+      v: PROTOCOL_VERSION,
+      sessionId: this.sessionId,
+      phaseEpoch: this.phaseEpoch,
+      candidateLabel: status.candidateLabel,
+      applause: status.applause,
+      boo: status.boo,
+    });
+    this.ratingStatusDirty = false;
+    this.lastRatingStatusAt = now;
   }
 
   private requirePhase(id: string): Phase {

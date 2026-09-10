@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PROTOCOL_VERSION, SHOW_ENDED_CLOSE_CODE, type ServerToClientMessage } from "@smartphonecracy/protocol";
 import { PhoneConnection } from "./lib/connection.js";
 import { clearLease, loadLease, storeLease } from "./lib/lease.js";
-import { applyDelta, InputThrottle, TRACKPAD_CENTER } from "./lib/trackpad.js";
+import { applyDelta, InputThrottle, TRACKPAD_CENTER, trackpadSurfaceSize } from "./lib/trackpad.js";
 import {
   initialPhoneState,
   phoneReducer,
@@ -88,7 +88,7 @@ describe("PhoneConnection", () => {
       clientVersion: "test",
       installationId: "inst-a",
       roomId: "room-a",
-      joinGrant: "grant-a",
+      name: "Ada",
       storage,
       onMessage: vi.fn(),
       onSessionEnded,
@@ -106,9 +106,50 @@ describe("PhoneConnection", () => {
 
     expect(loadLease("inst-a", storage)).toBeNull();
     expect(onSessionEnded).toHaveBeenCalledOnce();
+    expect(onSessionEnded).toHaveBeenCalledWith(null);
     expect(onSocketLost).not.toHaveBeenCalled();
     expect(sockets).toHaveLength(1);
     connection.stop();
+  });
+
+  it("retains the completed active session identity for the consent prompt", () => {
+    class FakeWebSocket {
+      static readonly OPEN = 1;
+      readyState = FakeWebSocket.OPEN;
+      onopen: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      onclose: ((event: CloseEvent) => void) | null = null;
+      onerror: ((event: Event) => void) | null = null;
+      send(): void {}
+      close(): void { this.readyState = 3; }
+    }
+    vi.stubGlobal("WebSocket", FakeWebSocket);
+    const socket = new FakeWebSocket();
+    const onSessionEnded = vi.fn();
+    const connection = new PhoneConnection({
+      url: "ws://example.test/ws",
+      clientVersion: "test",
+      installationId: "inst-a",
+      roomId: "room-a",
+      name: "Ada",
+      storage: memoryStorage(),
+      onMessage: vi.fn(),
+      onSessionEnded,
+      webSocketFactory: () => socket as unknown as WebSocket,
+    });
+
+    connection.start();
+    socket.onmessage?.({ data: JSON.stringify({
+      t: "identity", v: PROTOCOL_VERSION, clientId: "c1", color: "#fff", sessionId: "lobby",
+      participantLease: "lease-a", leaseExpiresAt: 99,
+    }) } as MessageEvent);
+    socket.onmessage?.({ data: JSON.stringify(phase("video", 1, "show-1")) } as MessageEvent);
+    socket.onmessage?.({ data: JSON.stringify(phase("idle", 2, "idle")) } as MessageEvent);
+    socket.onclose?.({ code: SHOW_ENDED_CLOSE_CODE } as CloseEvent);
+
+    expect(onSessionEnded).toHaveBeenCalledWith({
+      sessionId: "show-1", clientId: "c1", participantLease: "lease-a",
+    });
   });
 });
 
@@ -127,6 +168,11 @@ describe("trackpad", () => {
 
   it("ignores a zero-sized surface", () => {
     expect(applyDelta(TRACKPAD_CENTER, 10, 10, 0)).toEqual(TRACKPAD_CENTER);
+  });
+
+  it("uses a centered square surface so normalized marker coordinates are not stretched", () => {
+    expect(trackpadSurfaceSize(390, 844)).toBe(390);
+    expect(trackpadSurfaceSize(844, 390)).toBe(390);
   });
 
   it("throttles to ~25 Hz, latest-wins", () => {
@@ -156,11 +202,11 @@ describe("trackpad", () => {
   });
 });
 
-const apply = (state: PhoneState, message: ServerToClientMessage) =>
-  phoneReducer(state, { type: "server-message", message });
+const apply = (state: PhoneState, message: ServerToClientMessage, receivedAtMs?: number) =>
+  phoneReducer(state, { type: "server-message", message, ...(receivedAtMs === undefined ? {} : { receivedAtMs }) });
 
 const phase = (
-  kind: "video" | "position-question",
+  kind: "idle" | "video" | "position-question" | "video-position-question",
   epoch: number,
   sessionId = "s1",
 ): ServerToClientMessage => ({
@@ -170,7 +216,15 @@ const phase = (
   phaseEpoch: epoch,
   serverTime: 0,
   phase:
-    kind === "video"
+    kind === "idle"
+      ? {
+          kind: "idle",
+          id: "idle",
+          scenarioVersion: "dev",
+          startedAt: 0,
+          deadlineAt: 10_000,
+        }
+      : kind === "video"
       ? {
           kind: "video",
           id: "v",
@@ -181,7 +235,8 @@ const phase = (
           startedAt: 0,
           deadlineAt: null,
         }
-      : {
+      : kind === "position-question"
+      ? {
           kind: "position-question",
           id: "q",
           text: "t",
@@ -194,16 +249,36 @@ const phase = (
           scenarioVersion: "dev",
           startedAt: 0,
           deadlineAt: 60_000,
+        }
+      : {
+          kind: "video-position-question",
+          id: "vq",
+          src: "vq.mp4",
+          expectedDurationMs: 40_000,
+          text: "t",
+          field: { type: "four-quadrant", xAxis: { minLabel: "a", maxLabel: "b" }, yAxis: { minLabel: "c", maxLabel: "d" } },
+          showAtMs: 5_000,
+          openAtMs: 10_000,
+          closeAtMs: 30_000,
+          hideAtMs: 35_000,
+          connectionStaleAfterMs: 30_000,
+          showLiveCounts: false,
+          next: { type: "fixed", target: "idle" },
+          scenarioVersion: "dev",
+          startedAt: 0,
+          deadlineAt: 45_000,
         },
 });
 
 describe("phoneReducer", () => {
-  it("opens cursor input during videos and position questions", () => {
-    let s = apply(initialPhoneState, phase("video", 1));
+  it("opens cursor input during the waiting room, videos, and position questions", () => {
+    let s = apply(initialPhoneState, phase("idle", 1, "lobby"));
     expect(s.inputOpen).toBe(true);
-    s = apply(s, phase("position-question", 2));
+    s = apply(s, phase("video", 2));
     expect(s.inputOpen).toBe(true);
-    s = apply(s, phase("video", 3));
+    s = apply(s, phase("position-question", 3));
+    expect(s.inputOpen).toBe(true);
+    s = apply(s, phase("video-position-question", 4));
     expect(s.inputOpen).toBe(true);
   });
 
@@ -235,6 +310,71 @@ describe("phoneReducer", () => {
     expect(s.join.kind).toBe("accepted");
     s = apply(s, { t: "join_rejected", v: PROTOCOL_VERSION, reason: "rate_limited", retryAfterMs: 2000 });
     expect(s.join).toEqual({ kind: "rejected", reason: "rate_limited", retryAfterMs: 2000 });
+  });
+
+  it("surfaces the reaction subject for videos and timed spectrum questions", () => {
+    let s = apply(initialPhoneState, phase("video", 1));
+    expect(s.ratingCandidateLabel).toBeNull();
+
+    s = apply(s, {
+      t: "phase",
+      v: PROTOCOL_VERSION,
+      sessionId: "s1",
+      phaseEpoch: 2,
+      serverTime: 0,
+      phase: {
+        kind: "video",
+        id: "v2",
+        src: "v2.mp4",
+        expectedDurationMs: 1000,
+        next: "q",
+        rating: { candidateLabel: "OpenApollo" },
+        scenarioVersion: "dev",
+        startedAt: 0,
+        deadlineAt: null,
+      },
+    });
+    expect(s.ratingCandidateLabel).toBe("OpenApollo");
+
+    const spectrum = phase("video-position-question", 3);
+    if (spectrum.t !== "phase" || spectrum.phase.kind !== "video-position-question") throw new Error("fixture mismatch");
+    spectrum.phase.rating = { candidateLabel: "Dionysos69" };
+    s = apply(s, spectrum);
+    expect(s.ratingCandidateLabel).toBe("Dionysos69");
+
+    s = apply(s, phase("position-question", 4));
+    expect(s.ratingCandidateLabel).toBeNull();
+  });
+
+  it("shows reaction controls only inside configured windows", () => {
+    const message = phase("video", 1);
+    if (message.t !== "phase" || message.phase.kind !== "video") throw new Error("fixture mismatch");
+    message.serverTime = 10_000;
+    message.phase.startedAt = 0;
+    message.phase.expectedDurationMs = 30_000;
+    message.phase.rating = { candidateLabel: "OpenApollo", windows: [{ startAtMs: 15_000, endAtMs: 20_000 }] };
+
+    let s = apply(initialPhoneState, message, 10_000);
+    expect(s.ratingCandidateLabel).toBeNull();
+    s = phoneReducer(s, { type: "clock-tick", nowMs: 15_000 });
+    expect(s.ratingCandidateLabel).toBe("OpenApollo");
+    s = phoneReducer(s, { type: "clock-tick", nowMs: 20_000 });
+    expect(s.ratingCandidateLabel).toBeNull();
+  });
+
+  it("shows the scene title except while a subtitle is active", () => {
+    const message = phase("video", 1);
+    if (message.t !== "phase" || message.phase.kind !== "video") throw new Error("fixture mismatch");
+    message.phase.title = "Scene title";
+    message.phase.expectedDurationMs = 5_000;
+    message.phase.subtitles = [{ text: "Spoken subtitle", startAtMs: 1_000, endAtMs: 2_000 }];
+
+    let s = apply(initialPhoneState, message, 0);
+    expect(s.phoneDisplayText).toBe("Scene title");
+    s = phoneReducer(s, { type: "clock-tick", nowMs: 1_000 });
+    expect(s.phoneDisplayText).toBe("Spoken subtitle");
+    s = phoneReducer(s, { type: "clock-tick", nowMs: 2_000 });
+    expect(s.phoneDisplayText).toBe("Scene title");
   });
 
   it("closes input when the socket drops", () => {

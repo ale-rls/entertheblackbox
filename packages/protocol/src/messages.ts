@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   fourQuadrantFieldSchema,
   phaseSchema,
+  polygonZonesFieldSchema,
   quadrantSchema,
   twoQuadrantFieldSchema,
   twoQuadrantSchema,
@@ -16,6 +17,16 @@ export const PROTOCOL_VERSION = 2;
 
 /** Private WebSocket close code: the visit ended and the phone must scan a fresh QR. */
 export const SHOW_ENDED_CLOSE_CODE = 4003;
+
+/**
+ * Private WebSocket close code: a newer display connection has taken over
+ * the single authenticated display slot. The replaced side must NOT
+ * auto-reconnect on this code -- doing so would immediately replace the
+ * new connection right back, and if two displays are both open (e.g. two
+ * tabs/devices), each side's own reconnect would perpetually kick the
+ * other in an infinite loop.
+ */
+export const DISPLAY_REPLACED_CLOSE_CODE = 4002;
 
 const v = z.literal(PROTOCOL_VERSION);
 const nonEmpty = z.string().min(1);
@@ -42,6 +53,8 @@ export const cursorSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
   color: nonEmpty,
+  /** Set only for a replayed past-participant cursor (see apps/server/src/ghosts). Omitted for live cursors. */
+  ghost: z.boolean().optional(),
 });
 
 export const fourQuadrantCountsSchema = z.object({
@@ -59,6 +72,8 @@ export const twoQuadrantCountsSchema = z.object({
 /** Compatibility name for the original four-quadrant counts schema. */
 export const quadrantCountsSchema = fourQuadrantCountsSchema;
 
+export const polygonZonesCountsSchema = z.record(z.string().min(1), z.number().int().nonnegative());
+
 // ---------------------------------------------------------------- phone → server
 
 export const joinSchema = z.object({
@@ -67,7 +82,15 @@ export const joinSchema = z.object({
   clientVersion: nonEmpty,
   installationId: nonEmpty,
   roomId: nonEmpty,
-  joinGrant: nonEmpty,
+  name: z.string().trim().min(1).max(40),
+  // Deliberately not nonEmpty: a returning participant with a still-valid
+  // participantLease doesn't need a grant at all (admission/controller.ts's
+  // returningParticipant bypass), and an empty/garbage grant otherwise
+  // already gets a graceful join_rejected from verifyJoinGrant (which
+  // safely returns null on malformed input) -- rejecting the whole
+  // message here instead would turn either case into a silent
+  // close-and-retry loop with no user-facing explanation.
+  joinGrant: z.string().optional(),
   participantLease: nonEmpty.optional(),
 });
 
@@ -90,10 +113,24 @@ export const pingSchema = z.object({
   clientTime: timestamp,
 });
 
+/**
+ * Applause/boo tap during a rating-enabled video phase (plan §7 extension).
+ * Unlimited per participant -- each tap increments a live server-side
+ * counter, it never replaces a prior vote the way `input` positions do.
+ */
+export const reactionSchema = z.object({
+  t: z.literal("reaction"),
+  v,
+  sessionId: nonEmpty,
+  phaseEpoch: z.number().int().nonnegative(),
+  kind: z.enum(["applause", "boo"]),
+});
+
 export const phoneToServerSchema = z.discriminatedUnion("t", [
   joinSchema,
   inputSchema,
   pingSchema,
+  reactionSchema,
 ]);
 
 // -------------------------------------------------------------- display → server
@@ -154,6 +191,7 @@ export const clientToServerSchema = z.discriminatedUnion("t", [
   joinSchema,
   inputSchema,
   pingSchema,
+  reactionSchema,
   displayJoinSchema,
   videoEndedSchema,
   displayHeartbeatSchema,
@@ -230,9 +268,15 @@ export const twoQuadrantQuestionStatusSchema = questionStatusBaseSchema.extend({
   quadrantCounts: twoQuadrantCountsSchema.optional(),
 });
 
+export const polygonZonesQuestionStatusSchema = questionStatusBaseSchema.extend({
+  field: polygonZonesFieldSchema,
+  quadrantCounts: polygonZonesCountsSchema.optional(),
+});
+
 export const questionStatusSchema = z.union([
   fourQuadrantQuestionStatusSchema,
   twoQuadrantQuestionStatusSchema,
+  polygonZonesQuestionStatusSchema,
 ]);
 
 const questionResolvedBaseSchema = z.object({
@@ -242,6 +286,11 @@ const questionResolvedBaseSchema = z.object({
   phaseEpoch: z.number().int().nonnegative(),
   resolvedTarget: nonEmpty,
   freezeUntil: timestamp,
+  tieBreak: z.object({
+    type: z.literal("kleroterion"),
+    candidates: z.array(nonEmpty).min(2),
+    selected: nonEmpty,
+  }).optional(),
 });
 
 const nonQuadrantWinnerSchema = z.enum(["tie", "empty", "fixed"]);
@@ -259,10 +308,28 @@ export const twoQuadrantQuestionResolvedSchema = questionResolvedBaseSchema.exte
   winner: z.union([twoQuadrantSchema, nonQuadrantWinnerSchema]),
 });
 
+export const polygonZonesQuestionResolvedSchema = questionResolvedBaseSchema.extend({
+  field: polygonZonesFieldSchema,
+  quadrantCounts: polygonZonesCountsSchema,
+  winner: z.union([z.string().min(1), nonQuadrantWinnerSchema]),
+});
+
 export const questionResolvedSchema = z.union([
   fourQuadrantQuestionResolvedSchema,
   twoQuadrantQuestionResolvedSchema,
+  polygonZonesQuestionResolvedSchema,
 ]);
+
+/** Live applause/boo tally broadcast while a rating-enabled video plays. */
+export const ratingStatusSchema = z.object({
+  t: z.literal("rating_status"),
+  v,
+  sessionId: nonEmpty,
+  phaseEpoch: z.number().int().nonnegative(),
+  candidateLabel: nonEmpty,
+  applause: z.number().int().nonnegative(),
+  boo: z.number().int().nonnegative(),
+});
 
 export const qrGrantSchema = z.object({
   t: z.literal("qr_grant"),
@@ -270,6 +337,8 @@ export const qrGrantSchema = z.object({
   url: nonEmpty,
   expiresAt: timestamp,
   placement: z.enum(["large", "corner"]),
+  /** Whether the display should print the stable join URL during the lobby. */
+  showJoinUrl: z.boolean().optional(),
 });
 
 export const qrHiddenSchema = z.object({
@@ -327,6 +396,7 @@ export const serverToClientSchema = z.union([
   cursorsSchema,
   questionStatusSchema,
   questionResolvedSchema,
+  ratingStatusSchema,
   qrGrantSchema,
   qrHiddenSchema,
   displayNoticeSchema,
@@ -343,10 +413,12 @@ export type Cursor = z.infer<typeof cursorSchema>;
 export type QuadrantCounts = z.infer<typeof quadrantCountsSchema>;
 export type FourQuadrantCounts = z.infer<typeof fourQuadrantCountsSchema>;
 export type TwoQuadrantCounts = z.infer<typeof twoQuadrantCountsSchema>;
+export type PolygonZonesCounts = z.infer<typeof polygonZonesCountsSchema>;
 
 export type JoinMessage = z.infer<typeof joinSchema>;
 export type InputMessage = z.infer<typeof inputSchema>;
 export type PingMessage = z.infer<typeof pingSchema>;
+export type ReactionMessage = z.infer<typeof reactionSchema>;
 export type PhoneToServerMessage = z.infer<typeof phoneToServerSchema>;
 
 export type DisplayJoinMessage = z.infer<typeof displayJoinSchema>;
@@ -365,6 +437,7 @@ export type ReloadMessage = z.infer<typeof reloadSchema>;
 export type CursorsMessage = z.infer<typeof cursorsSchema>;
 export type QuestionStatusMessage = z.infer<typeof questionStatusSchema>;
 export type QuestionResolvedMessage = z.infer<typeof questionResolvedSchema>;
+export type RatingStatusMessage = z.infer<typeof ratingStatusSchema>;
 export type QrGrantMessage = z.infer<typeof qrGrantSchema>;
 export type QrHiddenMessage = z.infer<typeof qrHiddenSchema>;
 export type DisplayNoticeMessage = z.infer<typeof displayNoticeSchema>;

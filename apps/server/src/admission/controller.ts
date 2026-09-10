@@ -38,6 +38,8 @@ export type AdmissionControllerOptions = {
   trustProxy?: boolean;
   disconnectGraceMs?: number;
   buildVersion?: string;
+  /** Allows a visitor to join from the stable public URL without a signed QR query token. */
+  allowPublicJoin?: boolean;
   isNewParticipantAllowed?: () => boolean;
   onClientMessage?: (message: ClientToServerMessage, socket: WebSocket, request: IncomingMessage) => void;
   onParticipantJoin?: (participant: ParticipantRecord, socket: WebSocket) => void;
@@ -179,6 +181,7 @@ export class AdmissionController {
     const clientMessageResult = this.options.onClientMessage?.(parsed.message, socket, request) as unknown;
     if (isPromiseLike(clientMessageResult)) await clientMessageResult;
     if (parsed.message.t === "ping") {
+      this.registry.touchSocket(socket, this.now());
       this.send(socket, {
         t: "pong",
         v: PROTOCOL_VERSION,
@@ -228,16 +231,18 @@ export class AdmissionController {
     const returningParticipant = knownLease !== undefined ||
       (lease !== null && (this.lastVisitEndedAt === null || lease.issuedAt > this.lastVisitEndedAt));
     if (!returningParticipant) {
-      const grant = verifyJoinGrant(parsed.message.joinGrant, {
-        secret: this.options.secret,
-        installationId: this.options.installationId,
-        roomId: this.options.roomId,
-        now,
-      });
-      this.pruneGrantTracking(now);
-      if (!grant || this.revokedJoinGrants.has(grant.nonce)) {
-        this.send(socket, { t: "join_rejected", v: PROTOCOL_VERSION, reason: "expired_grant" });
-        return;
+      if (!this.options.allowPublicJoin) {
+        const grant = verifyJoinGrant(parsed.message.joinGrant ?? "", {
+          secret: this.options.secret,
+          installationId: this.options.installationId,
+          roomId: this.options.roomId,
+          now,
+        });
+        this.pruneGrantTracking(now);
+        if (!grant || this.revokedJoinGrants.has(grant.nonce)) {
+          this.send(socket, { t: "join_rejected", v: PROTOCOL_VERSION, reason: "expired_grant" });
+          return;
+        }
       }
       if (this.options.isNewParticipantAllowed?.() === false) {
         this.send(socket, { t: "join_rejected", v: PROTOCOL_VERSION, reason: "show_in_progress" });
@@ -262,6 +267,7 @@ export class AdmissionController {
     const admitted = this.registry.admit({
       participantLease: issuedLease.token,
       clientId,
+      name: parsed.message.name,
       leaseExpiresAt: issuedLease.claims.expiresAt,
       socket,
       now,

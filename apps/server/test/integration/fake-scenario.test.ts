@@ -45,7 +45,7 @@ function last(socket: TestSocket, type: string): any {
 }
 
 function createHarness(
-  policy: { noParticipantGraceMs?: number } = {},
+  policy: { allowLateJoin?: boolean } = {},
   testScenario: typeof scenario = scenario,
 ) {
   let now = 1_000;
@@ -61,7 +61,7 @@ function createHarness(
     disconnectGraceMs: 50,
     policy: { maxParticipants: 30, joinGrantTtlMs: 120_000, participantLeaseTtlMs: 7_200_000 },
     sessionId: () => engine.currentSessionId,
-    isNewParticipantAllowed: () => engine.lifecycleState !== "active",
+    isNewParticipantAllowed: () => policy.allowLateJoin !== false || engine.lifecycleState !== "active",
     onClientMessage: (message, socket, req) => engine.handleClientMessage(message, socket, req),
     onParticipantJoin: (participant, socket) => engine.participantJoined(socket, participant),
     onSocketClosed: (socket) => engine.socketClosed(socket),
@@ -71,6 +71,7 @@ function createHarness(
     registry: admission.registry,
     installationId: "inst-1",
     roomId: "room-1",
+    showId: "show-1",
     displayToken: "display-secret",
     now: () => now,
     sessionIdFactory: () => `session-${++sessionCounter}`,
@@ -79,7 +80,6 @@ function createHarness(
       interactiveIdleTimeoutMs: 60_000,
       maxSessionDurationMs: 120_000,
       displayDisconnectTimeoutMs: 500,
-      noParticipantGraceMs: policy.noParticipantGraceMs ?? 500,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
   });
@@ -101,7 +101,7 @@ function createHarness(
     const socket = new TestSocket();
     connect(socket, `198.51.100.${suffix}`);
     socket.message({
-      t: "join", v: 2, clientVersion: "test", installationId: "inst-1", roomId: "room-1",
+      t: "join", v: 2, clientVersion: "test", installationId: "inst-1", roomId: "room-1", name: `Player ${suffix}`,
       joinGrant: admission.issueJoinGrant(now).token,
       ...(participantLease === undefined ? {} : { participantLease }),
     });
@@ -211,7 +211,7 @@ describe("fake scenario server integration", () => {
     ]));
   });
 
-  it("rejects a late join, reconnects an existing lease, and completes the scenario", async () => {
+  it("admits a late join during active play and completes the scenario", async () => {
     const h = createHarness();
     const display = h.display();
     const first = await h.phone(1);
@@ -222,7 +222,8 @@ describe("fake scenario server integration", () => {
       phaseEpoch: h.engine.currentPhaseEpoch, mediaId: "intro.mp4",
     });
     const late = await h.phone(2);
-    expect(last(late, "join_rejected")).toMatchObject({ reason: "show_in_progress" });
+    expect(last(late, "identity")).toMatchObject({ sessionId: h.engine.currentSessionId });
+    expect(last(late, "snapshot")).toMatchObject({ phase: { id: "question-fixed" } });
     first.close();
     const reconnected = await h.phone(3, firstLease);
     expect(last(reconnected, "snapshot")).toMatchObject({ phase: { id: "question-fixed" } });
@@ -230,7 +231,7 @@ describe("fake scenario server integration", () => {
     await Promise.resolve();
     h.advance(20_000);
     expect(last(display, "question_resolved")).toMatchObject({ winner: "fixed" });
-    expect(h.admission.registry.connectedCount).toBe(1);
+    expect(h.admission.registry.connectedCount).toBe(2);
     h.advance(3_000);
     h.input(reconnected, 2, 0.2, 0.2);
     await Promise.resolve();
@@ -244,18 +245,16 @@ describe("fake scenario server integration", () => {
     expect(h.engine.lifecycleState).toBe("idle");
   });
 
-  it("abandons a solo session after disconnect grace and recovers active state after a crash", async () => {
-    const abandoned = createHarness({ noParticipantGraceMs: 200 });
-    abandoned.display();
-    const solo = await abandoned.phone(1);
-    abandoned.advance(100);
-    expect(abandoned.engine.lifecycleState).toBe("active");
+  it("keeps a solo session playing after disconnect and recovers active state after a crash", async () => {
+    const continuing = createHarness();
+    continuing.display();
+    const solo = await continuing.phone(1);
+    continuing.advance(100);
+    expect(continuing.engine.lifecycleState).toBe("active");
     solo.close();
-    abandoned.advance(200);
-    expect(abandoned.engine.lifecycleState).toBe("active");
-    abandoned.advance(200);
-    expect(abandoned.engine.lifecycleState).toBe("idle");
-    expect(abandoned.checkpoints.at(-1)?.reason).toBe("no-participants");
+    continuing.advance(1_000);
+    expect(continuing.engine.lifecycleState).toBe("active");
+    expect(continuing.checkpoints.at(-1)?.reason).toBe("session-start");
 
     const recovered = createHarness();
     recovered.display();

@@ -97,4 +97,27 @@ describe("CursorPipeline", () => {
     pipeline.tick();
     expect(ticks).toEqual([0, 1]);
   });
+
+  it("merges ghost cursors into the broadcast without affecting live/presence tracking", () => {
+    const batches: unknown[] = [];
+    const counts: number[] = [];
+    const pipeline = new CursorPipeline({
+      sendCursors: (message) => batches.push(message),
+      sendPresence: (message) => counts.push(message.count),
+    });
+    pipeline.join("p1", "red");
+    pipeline.setGhostCursors([{ clientId: "ghost:rec-1", x: 0.1, y: 0.9, color: "blue", ghost: true }]);
+    pipeline.tick();
+    expect(batches).toEqual([{ t: "cursors", v: 2, tick: 0, cursors: [
+      { clientId: "p1", color: "red", x: 0.5, y: 0.5 },
+      { clientId: "ghost:rec-1", color: "blue", x: 0.1, y: 0.9, ghost: true },
+    ] }]);
+    // Ghosts are not live participants -- presence only reflects joins/leaves.
+    expect(counts).toEqual([1]);
+
+    pipeline.setGhostCursors([]);
+    pipeline.tick();
+    expect(batches).toHaveLength(2);
+    expect((batches[1] as { cursors: unknown[] }).cursors).toEqual([{ clientId: "p1", color: "red", x: 0.5, y: 0.5 }]);
+  });
 });

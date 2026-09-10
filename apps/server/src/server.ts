@@ -1,15 +1,24 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
-import { AdmissionController } from "./admission/index.js";
+import { z } from "zod";
+import { AdmissionController, InMemoryIpRateLimiter } from "./admission/index.js";
+import { verifyParticipantLease } from "./admission/tokens.js";
 import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
-import { loadScenarioReadiness, type ScenarioReadiness } from "./readiness.js";
+import type { GhostPool } from "./ghosts/index.js";
+import { MovementConsentManager } from "./movement/index.js";
+import { DEFAULT_INSTALLATION_POLICY } from "@smartphonecracy/shared";
+import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
+import { readServerConfigOverride, writeActiveShowId, writeTargetAudienceSize } from "./persistence/installation-config.js";
+import { writeLobbyStartTimes } from "./persistence/lobby-config.js";
+import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
+import { getLatestPublishedShow, listPublishedShows, loadScenarioReadiness, publishShow, type ScenarioReadiness } from "./readiness.js";
 import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
 export const WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024;
-export const DEFAULT_MAX_WEBSOCKET_CONNECTIONS = 64;
+export const DEFAULT_MAX_WEBSOCKET_CONNECTIONS = 300;
 export const DEFAULT_WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
 
 type HeartbeatWebSocket = WebSocket & { isAlive: boolean };
@@ -20,8 +29,16 @@ export type BuildServerOptions = {
   onWebSocketConnection?: (socket: WebSocket) => void;
   admission?: AdmissionController;
   adminData?: AdminDataSource;
+  pocketbase?: PocketBaseClient;
+  ghostPool?: GhostPool;
+  targetAudienceSizeOverride?: number;
+  scheduledStartTimes?: readonly number[];
+  verifyOperatorToken?: (token: string) => Promise<boolean>;
   maxWebSocketConnections?: number;
   webSocketKeepAliveIntervalMs?: number;
+  movementConsentTimeoutMs?: number;
+  /** Notifies the process host after an active session has safely reached idle. */
+  onSessionEnded?: (event: { reason: string; sessionId: string; endedAt: number }) => void;
 };
 
 export type ServerRuntime = {
@@ -44,6 +61,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     maxPayload: WEBSOCKET_MAX_PAYLOAD_BYTES,
   });
   const maxWebSocketConnections = options.maxWebSocketConnections
+    ?? config.maxWebSocketConnections
     ?? DEFAULT_MAX_WEBSOCKET_CONNECTIONS;
   if (!Number.isSafeInteger(maxWebSocketConnections) || maxWebSocketConnections < 1) {
     throw new Error("maxWebSocketConnections must be a positive integer");
@@ -56,18 +74,30 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   const publicVideoPhases = readiness.ready
     ? Object.fromEntries(
         readiness.scenario.phases
-          .filter((phase) => phase.kind === "video")
+          .filter((phase) => phase.kind === "video" || phase.kind === "video-position-question")
           .map((phase) => [phase.id, phase.src]),
       )
     : null;
   const adminData = options.adminData;
+  const movementConsent = adminData?.deleteMovementRecordings === undefined
+    ? null
+    : new MovementConsentManager({
+        deleteMovementRecordings: (sessionId, participantId) =>
+          adminData.deleteMovementRecordings!(sessionId, participantId),
+      }, {
+        ...(options.movementConsentTimeoutMs === undefined ? {} : { timeoutMs: options.movementConsentTimeoutMs }),
+        onError: (error) => app.log.error({ error }, "failed to delete unconsented movement recording"),
+      });
   let engine: PhaseEngine | null = null;
   const admission = options.admission ?? new AdmissionController({
     installationId: config.installationId,
     roomId: config.roomId,
     secret: config.joinGrantSecret,
+    policy: { ...DEFAULT_INSTALLATION_POLICY, maxParticipants: config.maxParticipants },
+    rateLimiter: new InMemoryIpRateLimiter(config.joinRateLimit),
     trustProxy: config.trustProxy,
     buildVersion: config.buildVersion,
+    allowPublicJoin: true,
     isNewParticipantAllowed: () => config.allowLateJoin || engine?.lifecycleState !== "active",
     onClientMessage: (message, socket, request) => engine?.handleClientMessage(message, socket, request),
     onParticipantJoin: (participant, socket) => engine?.participantJoined(socket, participant),
@@ -84,14 +114,39 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       registry: admission.registry,
       installationId: config.installationId,
       roomId: config.roomId,
+      showId: readiness.showId,
       displayToken: config.displayToken,
       participantLeaseTtlMs: admission.participantLeaseTtlMs,
+      autoStartOnFirstParticipant: false,
       qr: {
         phoneJoinBaseUrl: config.phoneJoinBaseUrl,
         issueGrant: (now) => admission.issueJoinGrant(now),
         allowLateJoin: config.allowLateJoin,
+        showPhoneJoinBaseUrl: config.showPhoneJoinBaseUrl,
       },
-      onSessionEnded: ({ endedAt }) => admission.endParticipantSession(endedAt),
+      onSessionEnded: (event) => {
+        const { sessionId, endedAt } = event;
+        movementConsent?.endSession(sessionId);
+        admission.endParticipantSession(endedAt);
+        options.onSessionEnded?.(event);
+      },
+      onCheckpoint: (checkpoint) => adminData?.recordCheckpoint?.(checkpoint),
+      onVoteSnapshotEnqueued: (snapshot) => adminData?.recordVoteSnapshot?.(snapshot),
+      onMovementRecordingStarted: (event) => {
+        movementConsent?.track(event.sessionId, event.participantId);
+        adminData?.recordMovementStarted?.(event);
+      },
+      onMovementBatchFlushed: (event) => adminData?.recordMovementBatch?.(event),
+      onMovementRecordingFinalized: (event) => adminData?.recordMovementFinalized?.(event),
+      ...(options.ghostPool === undefined ? {} : { ghostPool: options.ghostPool }),
+      ...(options.targetAudienceSizeOverride === undefined ? {} : { targetAudienceSizeOverride: options.targetAudienceSizeOverride }),
+      ...(options.scheduledStartTimes === undefined ? {} : { scheduledStartTimes: options.scheduledStartTimes }),
+      ...(options.pocketbase === undefined ? {} : {
+        onLobbyScheduleChanged: (startTimes: readonly number[]) => {
+          void writeLobbyStartTimes(options.pocketbase!, startTimes)
+            .catch((error: unknown) => app.log.error({ error }, "failed to persist consumed lobby start"));
+        },
+      }),
     });
     engine.start();
   }
@@ -109,12 +164,41 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     buildVersion: config.buildVersion,
     installationId: config.installationId,
     roomId: config.roomId,
+    showLifecycle: engine?.lifecycleState ?? null,
     scenarioVersion: readiness.ready ? readiness.scenario.version : null,
     scenarioWarnings: readiness.warnings,
     webSocketClients: webSockets.clients.size,
     startedAt,
     uptimeMs: Date.now() - startedAt,
   }));
+  app.get("/api/join-config", async () => ({
+    installationId: config.installationId,
+    roomId: config.roomId,
+  }));
+  const movementConsentBodySchema = z.object({
+    sessionId: z.string().min(1).max(200),
+    participantLease: z.string().min(1).max(4_096),
+    granted: z.boolean(),
+  });
+  app.post<{ Body: unknown }>("/api/movement-consent", async (request, reply) => {
+    if (movementConsent === null) return reply.code(503).send({ error: "persistence_unavailable" });
+    const parsed = movementConsentBodySchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+    const lease = verifyParticipantLease(parsed.data.participantLease, {
+      secret: config.joinGrantSecret,
+      installationId: config.installationId,
+    });
+    if (lease === null) return reply.code(401).send({ error: "invalid_participant_lease" });
+
+    const result = await movementConsent.respond(
+      parsed.data.sessionId,
+      lease.clientId,
+      parsed.data.granted,
+    );
+    if (result === "not-found") return reply.code(404).send({ error: "recording_not_found" });
+    if (result === "conflict") return reply.code(409).send({ error: "consent_already_resolved" });
+    return { ok: true };
+  });
   app.get("/api/phases", async (_request, reply) => {
     if (!readiness.ready) {
       return reply.code(503).send({ error: "scenario_unavailable" });
@@ -122,20 +206,51 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
 
     return publicVideoPhases;
   });
+  // Must reflect whatever scenario is actually active, not a static local
+  // file -- display's MediaStore (apps/display/src/media/mediaStore.ts)
+  // treats this as the list of files to sync, so a manifest that doesn't
+  // match the running show means display silently never downloads/plays
+  // its videos.
+  app.get("/media-manifest.json", async (_request, reply) => {
+    if (!readiness.ready) {
+      return reply.code(503).send({ error: "media_manifest_not_found" });
+    }
+    reply.header("cache-control", "no-cache");
+    return readiness.mediaManifest;
+  });
   app.addHook("onError", async (request, _reply, error) => {
     adminData?.recordError?.({ message: error.message, at: new Date().toISOString(), path: request.url });
   });
   registerAdminRoutes(app, {
-    token: config.adminToken,
+    verifyToken: options.verifyOperatorToken ?? createOperatorTokenVerifier(config.pocketbase.url),
     engine: () => engine,
     ready: readiness.ready,
     startedAt,
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,
     ...(adminData === undefined ? {} : { data: adminData }),
+    ...(options.pocketbase === undefined ? {} : {
+      showConfig: {
+        activeShowId: readiness.ready ? readiness.showId : null,
+        list: () => listPublishedShows(options.pocketbase!),
+        readPending: async () => (await readServerConfigOverride(options.pocketbase!))?.activeShowId ?? null,
+        write: (showId) => writeActiveShowId(options.pocketbase!, showId),
+        latest: (showId) => getLatestPublishedShow(options.pocketbase!, showId),
+        publish: (record) => publishShow(options.pocketbase!, record),
+      },
+      ghostConfig: {
+        active: options.targetAudienceSizeOverride
+          ?? (readiness.ready ? readiness.scenario.targetAudienceSize ?? 0 : 0),
+        readPending: async () => (await readServerConfigOverride(options.pocketbase!))?.targetAudienceSize ?? null,
+        write: (targetAudienceSize) => writeTargetAudienceSize(options.pocketbase!, targetAudienceSize),
+      },
+      lobbyConfig: {
+        write: (startTimes) => writeLobbyStartTimes(options.pocketbase!, startTimes),
+      },
+    }),
   });
 
-  registerMediaRoutes(app, config.mediaManifestPath, config.mediaDir);
+  registerMediaRoutes(app, config.mediaDir);
   registerBundleRoutes(app, config.bundleDirs);
 
   app.server.on("upgrade", (request, socket, head) => {
@@ -185,6 +300,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   // Close them before Fastify waits for the underlying server to drain.
   app.addHook("preClose", async () => {
     clearInterval(webSocketKeepAliveInterval);
+    movementConsent?.stop();
     engine?.stop();
     for (const socket of webSockets.clients) socket.terminate();
     await new Promise<void>((resolve) => webSockets.close(() => resolve()));

@@ -17,6 +17,7 @@ export class CursorPipeline {
   private readonly cursors = new Map<string, CursorState>();
   private readonly intervalMs: number;
   private lastEmittedCursors: Cursor[] = [];
+  private ghostCursors: readonly Cursor[] = [];
   private dirty = false;
   private tickNumber = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -57,9 +58,16 @@ export class CursorPipeline {
     return true;
   }
 
+  /** Replace the current set of replayed ("ghost") cursors -- see apps/server/src/ghosts. */
+  setGhostCursors(ghosts: readonly Cursor[]): void {
+    this.ghostCursors = ghosts;
+    this.dirty = true;
+  }
+
   tick(): void {
     if (!this.dirty || this.options.canSendCursors?.() === false) return;
-    const cursors = [...this.cursors.values()].map(({ lastSeq: _lastSeq, ...cursor }) => cursor);
+    const liveCursors = [...this.cursors.values()].map(({ lastSeq: _lastSeq, ...cursor }) => cursor);
+    const cursors = [...liveCursors, ...this.ghostCursors];
     if (this.matchesLastEmission(cursors)) {
       this.dirty = false;
       return;
@@ -102,7 +110,8 @@ export class CursorPipeline {
         cursor.clientId === previous.clientId &&
         cursor.color === previous.color &&
         cursor.x === previous.x &&
-        cursor.y === previous.y;
+        cursor.y === previous.y &&
+        cursor.ghost === previous.ghost;
     });
   }
 }

@@ -3,6 +3,30 @@ import { compileStudioGraph, type StudioProject } from "@smartphonecracy/studio-
 export type Phase = StudioProject["scenario"]["phases"][number];
 export type PhaseKind = Phase["kind"];
 export type AuthorablePhaseKind = Exclude<PhaseKind, "idle">;
+export type AuthorableComponentType =
+  | "video"
+  | "image-audio"
+  | "position-question"
+  | "video-position-question"
+  | "image-audio-position-question";
+
+export function componentTypeForPhase(phase: Phase): AuthorableComponentType | "idle" {
+  if (phase.kind === "idle" || phase.kind === "position-question") return phase.kind;
+  if (phase.kind === "video-position-question") {
+    return phase.audioSrc === undefined ? "video-position-question" : "image-audio-position-question";
+  }
+  return phase.audioSrc === undefined ? "video" : "image-audio";
+}
+
+export function phaseKindForComponentType(type: AuthorableComponentType): AuthorablePhaseKind {
+  if (type === "image-audio") return "video";
+  if (type === "image-audio-position-question") return "video-position-question";
+  return type;
+}
+
+export function isImageAudioComponentType(type: AuthorableComponentType): boolean {
+  return type === "image-audio" || type === "image-audio-position-question";
+}
 
 export const QUESTION_DEFAULTS = {
   durationMs: 60_000,
@@ -43,6 +67,26 @@ export function changePhaseKind(phase: Phase, kind: PhaseKind): Phase {
   if (phase.kind === kind) return phase;
   if (kind === "idle") return { id: "idle", kind };
   if (kind === "video") return { id: phase.id, kind, src: "media/new-video.mp4", expectedDurationMs: 1_000, next: "idle" };
+  if (kind === "video-position-question") return {
+    id: phase.id,
+    kind,
+    src: "media/new-video.mp4",
+    expectedDurationMs: 40_000,
+    text: "New position question",
+    field: {
+      type: "four-quadrant",
+      xAxis: { minLabel: "Left", maxLabel: "Right" },
+      yAxis: { minLabel: "Top", maxLabel: "Bottom" },
+    },
+    showAtMs: 0,
+    openAtMs: 15_000,
+    closeAtMs: 20_000,
+    hideAtMs: 25_000,
+    closeCountdownSeconds: 5,
+    connectionStaleAfterMs: 10_000,
+    showLiveCounts: QUESTION_DEFAULTS.showLiveCounts,
+    next: { type: "quadrant-plurality", map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: [...QUESTION_DEFAULTS.countedStatuses] },
+  };
   return {
     id: phase.id, kind, text: "New position question",
     field: {

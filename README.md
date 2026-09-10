@@ -29,7 +29,24 @@ corepack enable
 pnpm install
 ```
 
-The checked-in development scenario and media manifest are used by default. The installation runs without a database or external service.
+The checked-in development scenario and media manifest are used by default. The installation's live runtime state stays in-process with no database dependency, but the admin dashboard and persisted operational data (errors, audit log, session exports) require a local PocketBase instance — see below.
+
+## PocketBase
+
+The server talks to a local, self-hosted PocketBase instance (SQLite-backed, no external/cloud service) for admin-dashboard login and operational persistence:
+
+```bash
+pnpm pocketbase:download   # fetch the pinned binary for your platform (once)
+pnpm pocketbase:dev        # run PocketBase on http://127.0.0.1:8090, leave it running
+```
+
+On first run, create a PocketBase superuser (prompted at the URL PocketBase prints, or via `pocketbase/bin/pocketbase superuser upsert <email> <password>`), then provision an admin-dashboard operator account:
+
+```bash
+pocketbase/scripts/create-operator.sh <email> <password>
+```
+
+Sign in at `/admin/` with that email/password. See [pocketbase/README.md](pocketbase/README.md) for more.
 
 ## Run locally
 
@@ -51,7 +68,9 @@ Open the authenticated installation display:
 
 <http://127.0.0.1:3000/display/?installation=dev-installation&room=main&token=dev-display-token>
 
-The query parameters identify the installation and room and authenticate this browser as the official display. The server allows only one authenticated display connection. The root page (`http://127.0.0.1:3000/`) redirects to an unauthenticated `/display/` fallback: it can show the attract visuals, but it cannot receive the live QR code or installation state.
+The query parameters identify the installation and room and authenticate this browser as the official display. The server allows only one authenticated display connection. The root page (`http://127.0.0.1:3000/`) redirects to `/phone/` instead, since most root-page visitors are participants, not the venue's one display kiosk.
+
+Participants use the stable public URL `http://127.0.0.1:3000/phone/` (or just the server root). It has no query parameters: visitors enter their name and press **Join**. The operator dashboard shows the named live roster. Joining opens a waiting lobby but never starts a show based on headcount; operators can start manually or configure one or more date-and-time starts in `/admin/`, with quick ±10 second and ±1 minute adjustments for the next start.
 
 The server also exposes:
 
@@ -75,7 +94,9 @@ scenario is not ready, it fails closed with HTTP 503 and
 metadata (the public media manifest already lists media paths), so authors must
 not put secrets or private visitor information in either field.
 
-Development credentials in the server configuration are intentionally local-only defaults. Set installation-specific `ADMIN_TOKEN`, `JOIN_GRANT_SECRET`, and `DISPLAY_TOKEN` values before venue operation.
+Development credentials in the server configuration are intentionally local-only defaults. Set installation-specific `JOIN_GRANT_SECRET`, `DISPLAY_TOKEN`, and `POCKETBASE_ADMIN_PASSWORD` values before venue operation. `JOIN_GRANT_SECRET` continues to sign returning-participant leases; public first-time joins are protected by admission capacity and per-IP rate limits rather than URL secrets.
+
+The admin dashboard (`/admin/`) authenticates operators against PocketBase's `operators` collection instead of a shared static token — see [PocketBase setup](#pocketbase) below for provisioning an operator account.
 
 The admin API applies process-local per-IP limits in separate buckets for authenticated traffic and failed authentication, so bad-token traffic cannot exhaust an operator's allowance on a shared network. Defaults are 600 authenticated requests and 30 authentication failures per 60 seconds. Override them with `ADMIN_RATE_LIMIT_MAX_REQUESTS`, `ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES`, and `ADMIN_RATE_LIMIT_WINDOW_MS`. `X-Forwarded-For` is used only when `TRUST_PROXY=true`.
 
@@ -98,6 +119,10 @@ env HOST=0.0.0.0 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=development PHONE_JO
 ```
 
 Keep the authenticated display open on the Mac as above, then scan its QR code. The phone and Mac must be on the same Wi-Fi network, and the macOS firewall must allow incoming connections to Node.js on port 3000. Do not use `localhost` in `PHONE_JOIN_BASE_URL`: on the phone, that means the phone itself.
+
+The display prints `PHONE_JOIN_BASE_URL` at the bottom of the lobby by default and keeps a corner QR available during active play for late joining. Set `SHOW_PHONE_JOIN_BASE_URL=false` to hide the printed URL or `ALLOW_LATE_JOIN=false` to restore lobby-only admission.
+
+The onboarding attract playlist automatically bundles every MP4 in `apps/display/src/assets/`. The display chooses clips randomly and never plays the same clip twice in a row. With one MP4, that file loops normally. Each clip has its own generated perspective QR track. After adding or replacing an attract MP4, run `pnpm generate-idle-marker-tracks` (requires Python, OpenCV, and NumPy) and commit the updated `apps/display/src/idle/markerTracks.generated.ts`.
 
 To run `showtest1` and accept physical phones at the same time, combine both sets of environment variables:
 
@@ -138,6 +163,18 @@ To exercise the multiplayer server without browsers:
 
 ```bash
 pnpm simulate-clients
+```
+
+Defaults to 30 simulated phones (the historical local-installation player cap).
+For a larger production deployment, raise `--count` along with the server's
+`MAX_PARTICIPANTS`/`MAX_WEBSOCKET_CONNECTIONS`/`JOIN_RATE_LIMIT_*` env vars
+(`apps/server/src/config.ts`) and pass matching `--join-rate-limit-*` flags so
+the script's reconnect timing doesn't trip the server's own join limiter, e.g.:
+
+```bash
+pnpm simulate-clients -- --count 300 --duration-ms 180000 \
+  --join-rate-limit-max-attempts 400 --join-rate-limit-window-ms 60000 \
+  --url wss://your-staging-host/ws
 ```
 
 ## Content

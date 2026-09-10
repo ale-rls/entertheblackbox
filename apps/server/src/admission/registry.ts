@@ -9,8 +9,10 @@ export const IDENTITY_COLORS = [
 
 export type ParticipantRecord = {
   clientId: string;
+  name: string;
   participantLease: string;
   color: string;
+  joinedAt: number;
   leaseExpiresAt: number;
   socket?: WebSocket | undefined;
   disconnectedAt?: number | undefined;
@@ -80,6 +82,7 @@ export class ParticipantRegistry {
   admit(options: {
     participantLease: string;
     clientId: string;
+    name: string;
     leaseExpiresAt: number;
     socket: WebSocket;
     now?: number;
@@ -91,11 +94,14 @@ export class ParticipantRegistry {
 
     const participant = existing ?? {
       clientId: options.clientId,
+      name: options.name,
       participantLease: options.participantLease,
       color: this.allocateColor(options.clientId),
+      joinedAt: now,
       leaseExpiresAt: options.leaseExpiresAt,
       lastSeenAt: now,
     };
+    participant.name = options.name;
     const replacedSocket = existing?.socket && existing.socket !== options.socket
       ? existing.socket
       : undefined;
@@ -118,6 +124,12 @@ export class ParticipantRegistry {
         participant.disconnectedAt = now;
         this.connectedLeases.delete(lease);
       }
+    }
+  }
+
+  touchSocket(socket: WebSocket, now = Date.now()): void {
+    for (const participant of this.participants.values()) {
+      if (participant.socket === socket) participant.lastSeenAt = now;
     }
   }
 

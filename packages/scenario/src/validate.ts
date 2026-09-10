@@ -33,22 +33,16 @@ function targetsOf(phase: Phase): Array<{ label: string; target: string }> {
       return [];
     case "video":
       return [{ label: "next", target: phase.next }];
-    case "position-question": {
+    case "position-question":
+    case "video-position-question": {
       const next = phase.next;
       if (next.type === "fixed") {
         return [{ label: "next.target", target: next.target }];
       }
-      const mapped = "q1" in next.map
-        ? [
-            { label: "next.map.q1", target: next.map.q1 },
-            { label: "next.map.q2", target: next.map.q2 },
-            { label: "next.map.q3", target: next.map.q3 },
-            { label: "next.map.q4", target: next.map.q4 },
-          ]
-        : [
-            { label: "next.map.min", target: next.map.min },
-            { label: "next.map.max", target: next.map.max },
-          ];
+      const mapped = Object.entries(next.map).map(([key, target]) => ({
+        label: `next.map.${key}`,
+        target,
+      }));
       return [
         ...mapped,
         { label: "next.tie", target: next.tie },
@@ -111,12 +105,18 @@ export function validateScenario(
   if (mediaManifest) {
     const known = new Set(mediaManifest.files.map((f) => f.src));
     for (const phase of scenario.phases) {
-      if (phase.kind === "video" && !known.has(phase.src)) {
+      if (phase.kind !== "video" && phase.kind !== "video-position-question") continue;
+      for (const src of [
+        phase.src,
+        ...(phase.audioSrc === undefined ? [] : [phase.audioSrc]),
+        ...(phase.extraAudioSrc === undefined ? [] : [phase.extraAudioSrc]),
+      ]) {
+        if (known.has(src)) continue;
         errors.push({
           severity: "error",
           code: "missing-media",
           phaseId: phase.id,
-          message: `video phase "${phase.id}" references "${phase.src}" which is not in the media manifest`,
+          message: `media phase "${phase.id}" references "${src}" which is not in the media manifest`,
         });
       }
     }

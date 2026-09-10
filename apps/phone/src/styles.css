@@ -1,11 +1,26 @@
+@font-face {
+  font-family: "Leander";
+  src: url("./assets/Leander.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Leander", system-ui, sans-serif;
   background: #08090b;
 }
 
 * {
   box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
 
 html,
@@ -32,6 +47,92 @@ body {
   min-height: 100dvh;
 }
 
+.join-screen {
+  display: grid;
+  width: 100%;
+  min-height: 100dvh;
+  padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+  place-items: center;
+}
+
+.join-card {
+  display: grid;
+  width: min(100%, 28rem);
+  gap: 1rem;
+  padding: clamp(1.5rem, 7vw, 2.5rem);
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 1.5rem;
+  background: rgb(15 17 22 / 88%);
+  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 40%);
+}
+
+.join-card h1 {
+  margin: 0 0 .75rem;
+  font-size: clamp(2rem, 10vw, 3.25rem);
+  line-height: 1;
+}
+
+.join-eyebrow,
+.join-message,
+.join-error {
+  margin: 0;
+}
+
+.join-eyebrow {
+  color: rgb(255 255 255 / 55%);
+  font-size: .8rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.join-message {
+  color: rgb(255 255 255 / 70%);
+  line-height: 1.45;
+}
+
+.join-card label {
+  color: rgb(255 255 255 / 72%);
+  font-size: .95rem;
+}
+
+.join-card input {
+  width: 100%;
+  min-height: 3.5rem;
+  padding: .85rem 1rem;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: .8rem;
+  outline: none;
+  background: rgb(255 255 255 / 7%);
+  color: #fff;
+  font-size: 1.15rem;
+}
+
+.join-card input:focus {
+  border-color: #fff;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 12%);
+}
+
+.join-card button,
+.rejected button {
+  min-height: 4rem;
+  border: 0;
+  border-radius: .9rem;
+  background: #f5f5f5;
+  color: #08090b;
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+
+.join-card button:disabled {
+  cursor: wait;
+  opacity: .45;
+}
+
+.join-error {
+  color: #ff8b86;
+  line-height: 1.4;
+}
+
 .trackpad {
   display: grid;
   width: 100%;
@@ -43,6 +144,92 @@ body {
 
 .trackpad:active {
   cursor: grabbing;
+}
+.trackpad-instruction {
+  position: absolute;
+  top: max(1rem, env(safe-area-inset-top));
+  right: 1rem;
+  left: 1rem;
+  margin: 0;
+  color: rgb(255 255 255 / 42%);
+  font-family: system-ui, sans-serif;
+  font-size: clamp(.9rem, 4vw, 1.1rem);
+  text-align: center;
+  pointer-events: none;
+}
+.phone-phase-text {
+  position: absolute;
+  z-index: 1;
+  top: max(4rem, calc(env(safe-area-inset-top) + 3rem));
+  right: 1rem;
+  left: 1rem;
+  max-width: 36rem;
+  margin: 0 auto;
+  padding: .55rem .8rem;
+  border-radius: .45rem;
+  background: rgb(0 0 0 / 58%);
+  font-size: clamp(1.1rem, 5vw, 1.6rem);
+  line-height: 1.2;
+  text-align: center;
+  white-space: pre-line;
+  pointer-events: none;
+}
+.live-cursor-field {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(100vw, 100dvh);
+  height: min(100vw, 100dvh);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.live-cursor-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid rgb(255 255 255 / 80%);
+  border-radius: 50%;
+  box-shadow: 0 0 .9rem currentColor, 0 2px 6px rgb(0 0 0 / 65%);
+  will-change: transform;
+  pointer-events: none;
+}
+
+.rating-buttons {
+  position: absolute;
+  z-index: 2;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(4rem, calc(env(safe-area-inset-bottom) + 3rem));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.rating-button {
+  display: grid;
+  place-items: center;
+  width: clamp(4.5rem, 22vw, 6rem);
+  aspect-ratio: 1;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 999px;
+  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 35%);
+  font-size: clamp(2.2rem, 12vw, 4rem);
+  line-height: 1;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.rating-button.applause {
+  background: rgb(86 211 100 / 12%);
+}
+
+.rating-button.boo {
+  background: rgb(248 81 73 / 12%);
+}
+
+.rating-button:active {
+  filter: brightness(1.6);
 }
 
 .watch-screen,
@@ -61,7 +248,12 @@ body {
   width: 100%;
   min-height: 100dvh;
   place-items: center;
+  align-content: center;
+  gap: 1rem;
+  padding: 1.5rem;
 }
+
+.rejected button { width: min(100%, 20rem); }
 
 .hud {
   position: fixed;
@@ -89,4 +281,68 @@ body {
 
 .connection-dot.offline {
   background: #f85149;
+}
+
+.consent-backdrop {
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+  background: rgb(0 0 0 / 82%);
+  place-items: center;
+}
+
+.consent-dialog {
+  display: grid;
+  width: min(100%, 32rem);
+  gap: 1.5rem;
+  padding: clamp(1.5rem, 7vw, 2.5rem);
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 1.5rem;
+  background: #0f1116;
+  box-shadow: 0 1.5rem 5rem rgb(0 0 0 / 60%);
+}
+
+.consent-dialog h1,
+.consent-result {
+  margin: 0;
+  font-size: clamp(1.6rem, 7vw, 2.35rem);
+  line-height: 1.15;
+  text-align: center;
+}
+
+.consent-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.consent-actions button {
+  min-height: 4.5rem;
+  border: 0;
+  border-radius: .9rem;
+  background: #f5f5f5;
+  color: #08090b;
+  font-size: 1.35rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.consent-actions button:last-child {
+  border: 1px solid rgb(255 255 255 / 28%);
+  background: transparent;
+  color: #f5f5f5;
+}
+
+.consent-actions button:disabled {
+  cursor: wait;
+  opacity: .5;
+}
+
+.consent-error {
+  margin: 0;
+  color: #ff8b86;
+  line-height: 1.4;
+  text-align: center;
 }

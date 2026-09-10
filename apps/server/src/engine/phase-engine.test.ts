@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import { scenarioSchema } from "@smartphonecracy/scenario";
 import type { WebSocket } from "ws";
 import { ParticipantRegistry } from "../admission/index.js";
+import type {
+  MovementBatchFlushed,
+  MovementRecordingFinalized,
+  MovementRecordingStarted,
+} from "../movement/index.js";
 import { PhaseEngine, type PhaseCheckpoint } from "./phase-engine.js";
+import type { GhostPool } from "../ghosts/index.js";
 import type { FinalVoteSnapshot } from "../votes/index.js";
 
 class MockSocket extends EventEmitter {
@@ -57,8 +63,14 @@ function setup(options: {
   displayDisconnectTimeoutMs?: number;
   testScenario?: typeof scenario;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
-  sessionEnds?: Array<{ reason: string; endedAt: number }>;
+  sessionEnds?: Array<{ reason: string; sessionId: string; endedAt: number }>;
+  movementStarted?: MovementRecordingStarted[];
+  movementBatches?: MovementBatchFlushed[];
+  movementFinalized?: MovementRecordingFinalized[];
+  ghostPool?: GhostPool;
   qr?: boolean;
+  autoStartOnFirstParticipant?: boolean;
+  scheduledStartTimes?: number[];
 } ) {
   const registry = new ParticipantRegistry(2, 50);
   const checkpoints = options.checkpoints ?? [];
@@ -67,6 +79,7 @@ function setup(options: {
     registry,
     installationId: "inst-1",
     roomId: "room-1",
+    showId: "show-1",
     displayToken: "display-secret",
     now: options.now,
     sessionIdFactory: () => "session-1",
@@ -75,15 +88,29 @@ function setup(options: {
       interactiveIdleTimeoutMs: options.interactiveIdleTimeoutMs ?? 100,
       maxSessionDurationMs: options.maxSessionDurationMs ?? 10_000,
       displayDisconnectTimeoutMs: options.displayDisconnectTimeoutMs ?? 1_000_000,
-      noParticipantGraceMs: 100,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
+    ...(options.autoStartOnFirstParticipant === undefined ? {} : { autoStartOnFirstParticipant: options.autoStartOnFirstParticipant }),
+    ...(options.scheduledStartTimes === undefined ? {} : { scheduledStartTimes: options.scheduledStartTimes }),
     ...(options.sessionEnds === undefined
       ? {}
-      : { onSessionEnded: (event: { reason: string; endedAt: number }) => options.sessionEnds!.push(event) }),
+      : { onSessionEnded: (event: { reason: string; sessionId: string; endedAt: number }) => options.sessionEnds!.push(event) }),
     ...(options.onVoteSnapshotEnqueued === undefined
       ? {}
       : { onVoteSnapshotEnqueued: options.onVoteSnapshotEnqueued }),
+    ...(options.movementStarted === undefined
+      ? {}
+      : { onMovementRecordingStarted: (event: MovementRecordingStarted) => options.movementStarted!.push(event) }),
+    ...(options.movementBatches === undefined
+      ? {}
+      : { onMovementBatchFlushed: (event: MovementBatchFlushed) => options.movementBatches!.push(event) }),
+    ...(options.movementFinalized === undefined
+      ? {}
+      : {
+          onMovementRecordingFinalized: (event: MovementRecordingFinalized) =>
+            options.movementFinalized!.push(event),
+        }),
+    ...(options.ghostPool === undefined ? {} : { ghostPool: options.ghostPool }),
     ...(options.qr
       ? {
           qr: {
@@ -113,6 +140,48 @@ const liveCountsScenario = scenarioSchema.parse({
     : phase),
 });
 
+const targetAudienceScenario = (targetAudienceSize: number) => scenarioSchema.parse({
+  ...scenario,
+  targetAudienceSize,
+});
+
+const ratingScenario = scenarioSchema.parse({
+  ...scenario,
+  version: "engine-test-rating",
+  phases: scenario.phases.map((phase) => phase.id === "intro"
+    ? { ...phase, rating: { candidateLabel: "OpenApollo" } }
+    : phase),
+});
+
+const compositeVideoQuestionScenario = scenarioSchema.parse({
+  version: "engine-test-video-question",
+  entryPhaseId: "video-question",
+  cyclesAllowed: false,
+  phases: [
+    { kind: "idle", id: "idle" },
+    {
+      kind: "video-position-question",
+      id: "video-question",
+      src: "question.mp4",
+      expectedDurationMs: 1_000,
+      text: "Choose while the video plays",
+      field: {
+        type: "four-quadrant",
+        xAxis: { minLabel: "left", maxLabel: "right" },
+        yAxis: { minLabel: "up", maxLabel: "down" },
+      },
+      showAtMs: 15,
+      openAtMs: 20,
+      closeAtMs: 40,
+      hideAtMs: 50,
+      connectionStaleAfterMs: 100,
+      showLiveCounts: true,
+      rating: { candidateLabel: "OpenApollo" },
+      next: { type: "fixed", target: "idle" },
+    },
+  ],
+});
+
 const twoQuadrantScenario = scenarioSchema.parse({
   ...scenario,
   version: "engine-test-two-quadrant",
@@ -122,6 +191,7 @@ const twoQuadrantScenario = scenarioSchema.parse({
         field: {
           type: "two-quadrant",
           axis: "x",
+          variant: "spectrum",
           labels: { minLabel: "Disagree", maxLabel: "Agree" },
         },
         showLiveCounts: true,
@@ -140,6 +210,7 @@ function addParticipant(registry: ParticipantRegistry, socket: WebSocket, now: n
   const result = registry.admit({
     participantLease: `lease-${id}`,
     clientId: id,
+    name: id,
     leaseExpiresAt: now + 10_000,
     socket,
     now,
@@ -159,6 +230,31 @@ function connectDisplay(engine: PhaseEngine, socket: WebSocket): void {
 }
 
 describe("PhaseEngine lifecycle", () => {
+  it("waits for an operator or scheduled start when participant-count auto-start is disabled", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now, autoStartOnFirstParticipant: false });
+    const display = new MockSocket();
+    const phone = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    connectDisplay(engine, display as unknown as WebSocket);
+    engine.participantJoined(phone as unknown as WebSocket, registry.values()[0]);
+
+    expect(engine.lifecycleState).toBe("lobby");
+    expect(engine.getSnapshot().deadlineAt).toBeNull();
+    now = 10_000;
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe("lobby");
+
+    engine.setLobbyStartTimes([20_000], now);
+    expect(engine.nextLobbyStartAt).toBe(20_000);
+    expect(engine.adjustLobbyStart(10_000, now)).toEqual({ ok: true });
+    expect(engine.nextLobbyStartAt).toBe(30_000);
+    now = 30_000;
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe("active");
+    expect(engine.nextLobbyStartAt).toBeNull();
+  });
+
   it("encodes a broadcast once and reuses it for every open socket", () => {
     const { engine } = setup({ now: () => 1_000 });
     const first = new MockSocket();
@@ -188,8 +284,7 @@ describe("PhaseEngine lifecycle", () => {
     connectDisplay(engine, display as unknown as WebSocket);
     expect(display.sent.filter((message) => message.t === "qr_grant")).toHaveLength(1);
     const joinUrl = new URL(display.sent.find((message) => message.t === "qr_grant").url);
-    expect(joinUrl.searchParams.get("installation")).toBe("inst-1");
-    expect(joinUrl.searchParams.get("room")).toBe("room-1");
+    expect(joinUrl.toString()).toBe("https://phone.example/join");
 
     engine.handleClientMessage({ t: "qr_grant_request", v: 2 }, display as unknown as WebSocket);
     expect(display.sent.filter((message) => message.t === "qr_grant")).toHaveLength(2);
@@ -302,6 +397,64 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.completeVideo("session-1", "intro", epoch - 1, now)).toEqual({ ok: false, reason: "stale" });
     expect(engine.completeVideo("session-1", "intro", epoch, now)).toEqual({ ok: true });
     expect(engine.currentPhaseId).toBe("question");
+  });
+
+  it("opens and freezes a video vote on its timeline, then branches when the video ends", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now, testScenario: compositeVideoQuestionScenario });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+
+    now = 1_100;
+    engine.tick(now);
+    expect(engine.currentPhaseId).toBe("video-question");
+    const epoch = engine.currentPhaseEpoch;
+
+    now = 1_119;
+    engine.tick(now);
+    expect(display.sent.some((message) => message.t === "question_status")).toBe(false);
+
+    now = 1_120;
+    engine.tick(now);
+    engine.handleClientMessage({
+      t: "input",
+      v: 2,
+      sessionId: "session-1",
+      phaseEpoch: epoch,
+      seq: 1,
+      x: 0.75,
+      y: 0.25,
+    }, phone as unknown as WebSocket);
+    expect(display.sent.some((message) => message.t === "question_status")).toBe(true);
+    engine.handleClientMessage({
+      t: "reaction",
+      v: 2,
+      sessionId: "session-1",
+      phaseEpoch: epoch,
+      kind: "applause",
+    }, phone as unknown as WebSocket);
+
+    now = 1_140;
+    engine.tick(now);
+    expect(engine.currentPhaseId).toBe("video-question");
+    expect(display.sent.find((message) => message.t === "question_resolved")).toMatchObject({
+      resolvedTarget: "idle",
+      freezeUntil: 1_150,
+      winner: "fixed",
+    });
+
+    now = 1_400;
+    engine.tick(now);
+    expect(display.sent.filter((message) => message.t === "rating_status").at(-1)).toMatchObject({
+      candidateLabel: "OpenApollo",
+      applause: 1,
+      boo: 0,
+    });
+    expect(engine.completeVideo("session-1", "video-question", epoch, now)).toEqual({ ok: true });
+    expect(engine.currentPhaseId).toBe("idle");
   });
 
   it("accepts video_ended only from the authenticated display and cannot double-advance", () => {
@@ -518,11 +671,10 @@ describe("PhaseEngine lifecycle", () => {
     ]);
   });
 
-  it("aborts to idle on interactive inactivity, max duration, no participants, and display loss", () => {
+  it("aborts to idle on interactive inactivity, max duration, and display loss", () => {
     const cases = [
       { label: "interactive-idle-timeout", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
       { label: "max-session-duration", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
-      { label: "no-participants", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
       { label: "display-timeout", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
     ] as const;
 
@@ -543,20 +695,32 @@ describe("PhaseEngine lifecycle", () => {
       now = 1_100;
       engine.tick(now);
       engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
-      if (testCase.label === "no-participants") {
-        registry.releaseSocket(phone as unknown as WebSocket, now);
-        engine.socketClosed(phone as unknown as WebSocket);
-      }
       if (testCase.label === "display-timeout") engine.socketClosed(display as unknown as WebSocket);
-      if (testCase.label === "no-participants") {
-        engine.tick(now + 1);
-        engine.tick(now + 101);
-      } else {
-        testCase.trigger(engine, now);
-      }
+      testCase.trigger(engine, now);
       expect(engine.lifecycleState, testCase.label).toBe("idle");
       expect(checkpoints.at(-1)?.reason, testCase.label).toBe(testCase.label);
     }
+  });
+
+  it("keeps an active show running when every participant disconnects", () => {
+    let now = 1_000;
+    const checkpoints: PhaseCheckpoint[] = [];
+    const { engine, registry } = setup({ now: () => now, checkpoints });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket);
+    connectDisplay(engine, display as unknown as WebSocket);
+    now = 1_100;
+    engine.tick(now);
+
+    registry.releaseSocket(phone as unknown as WebSocket, now);
+    engine.socketClosed(phone as unknown as WebSocket);
+    engine.tick(now + 1_000);
+
+    expect(engine.lifecycleState).toBe("active");
+    expect(engine.currentPhaseId).toBe("intro");
+    expect(checkpoints.at(-1)?.reason).toBe("session-start");
   });
 
   it("recovers active state to idle and authenticates/replaces displays", () => {
@@ -621,7 +785,7 @@ describe("PhaseEngine lifecycle", () => {
 
   it("signals session end once when active play returns to idle", () => {
     let now = 1_000;
-    const sessionEnds: Array<{ reason: string; endedAt: number }> = [];
+    const sessionEnds: Array<{ reason: string; sessionId: string; endedAt: number }> = [];
     const { engine, registry } = setup({ now: () => now, sessionEnds });
     const phone = new MockSocket();
     const display = new MockSocket();
@@ -633,10 +797,40 @@ describe("PhaseEngine lifecycle", () => {
 
     now = 1_125;
     expect(engine.adminIdle(now)).toEqual({ ok: true });
-    expect(sessionEnds).toEqual([{ reason: "admin-idle", endedAt: 1_125 }]);
+    expect(sessionEnds).toEqual([{ reason: "admin-idle", sessionId: "session-1", endedAt: 1_125 }]);
 
     engine.adminIdle(1_150);
     expect(sessionEnds).toHaveLength(1);
+  });
+
+  it("projects live cursor movement during the lobby without starting a movement recording", () => {
+    const now = 1_000;
+    const movementStarted: MovementRecordingStarted[] = [];
+    const { engine, registry } = setup({ now: () => now, movementStarted });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    const participant = registry.get("lease-p1");
+    if (participant === undefined) throw new Error("expected participant record");
+    engine.participantJoined(phone as unknown as WebSocket, participant);
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.lifecycleState).toBe("lobby");
+
+    engine.handleClientMessage({
+      t: "input",
+      v: 2,
+      sessionId: "lobby",
+      phaseEpoch: engine.currentPhaseEpoch,
+      seq: 0,
+      x: 0.25,
+      y: 0.75,
+    }, phone as unknown as WebSocket);
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+
+    expect(display.sent.filter((message) => message.t === "cursors").at(-1)).toMatchObject({
+      cursors: [{ clientId: "p1", color: participant.color, x: 0.25, y: 0.75 }],
+    });
+    expect(movementStarted).toEqual([]);
   });
 
   it("resets the cursor sequence when a replacement socket rejoins before the old socket closes", () => {
@@ -669,6 +863,7 @@ describe("PhaseEngine lifecycle", () => {
     const admission = registry.admit({
       participantLease: "lease-p1",
       clientId: "p1",
+      name: "p1",
       leaseExpiresAt: now + 10_000,
       socket: replacement as unknown as WebSocket,
       now,
@@ -692,6 +887,157 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.adminSkip(1_120)).toEqual({ ok: true });
     expect(snapshot?.votes).toEqual([
       expect.objectContaining({ participantId: "p1", x: 0.1, y: 0.9 }),
+    ]);
+  });
+
+  it("replays ghost cursors alongside live ones, capped at max(0, targetAudienceSize - liveCount)", () => {
+    let now = 1_000;
+    const ghostPool: GhostPool = {
+      tracks: [{ recordingId: "rec-a", samples: [{ t: 0, x: 0, y: 0 }, { t: 200, x: 1, y: 1 }] }],
+    };
+    const { engine, registry } = setup({
+      now: () => now,
+      testScenario: targetAudienceScenario(2),
+      ghostPool,
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    const participant = registry.get("lease-p1");
+    if (participant === undefined) throw new Error("expected participant record");
+    engine.participantJoined(phone as unknown as WebSocket, participant);
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+    const cursors = display.sent.filter((message) => message.t === "cursors").at(-1)?.cursors;
+    expect(cursors).toContainEqual(expect.objectContaining({ clientId: "ghost:rec-a", ghost: true }));
+    expect(cursors).toHaveLength(2); // 1 live (default position) + 1 ghost, filling to targetAudienceSize 2
+  });
+
+  it("shows no ghosts once live participants already fill targetAudienceSize", () => {
+    let now = 1_000;
+    const ghostPool: GhostPool = {
+      tracks: [{ recordingId: "rec-a", samples: [{ t: 0, x: 0, y: 0 }] }],
+    };
+    const { engine, registry } = setup({
+      now: () => now,
+      testScenario: targetAudienceScenario(1),
+      ghostPool,
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    const participant = registry.get("lease-p1");
+    if (participant === undefined) throw new Error("expected participant record");
+    engine.participantJoined(phone as unknown as WebSocket, participant);
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+    const cursors = display.sent.filter((message) => message.t === "cursors").at(-1)?.cursors;
+    expect(cursors?.some((c: { ghost?: boolean }) => c.ghost)).toBe(false);
+  });
+
+  it("clears ghosts once the session returns to idle", () => {
+    let now = 1_000;
+    const ghostPool: GhostPool = {
+      tracks: [{ recordingId: "rec-a", samples: [{ t: 0, x: 0, y: 0 }] }],
+    };
+    const { engine, registry } = setup({
+      now: () => now,
+      testScenario: targetAudienceScenario(2),
+      ghostPool,
+      interactiveIdleTimeoutMs: 1_000,
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    const participant = registry.get("lease-p1");
+    if (participant === undefined) throw new Error("expected participant record");
+    engine.participantJoined(phone as unknown as WebSocket, participant);
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+    expect(display.sent.filter((message) => message.t === "cursors").at(-1)?.cursors)
+      .toContainEqual(expect.objectContaining({ ghost: true }));
+
+    now = 1_050;
+    expect(engine.adminIdle(now)).toEqual({ ok: true });
+    (engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+    expect(display.sent.filter((message) => message.t === "cursors").at(-1)?.cursors)
+      .not.toContainEqual(expect.objectContaining({ ghost: true }));
+  });
+
+  it("records movement during a video phase, not just position-question phases", () => {
+    let now = 1_000;
+    const movementStarted: MovementRecordingStarted[] = [];
+    const movementBatches: MovementBatchFlushed[] = [];
+    const { engine, registry } = setup({ now: () => now, movementStarted, movementBatches });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    expect(engine.currentPhaseId).toBe("intro");
+
+    const videoEpoch = engine.currentPhaseEpoch;
+    engine.handleClientMessage({
+      t: "input", v: 2, sessionId: "session-1", phaseEpoch: videoEpoch, seq: 0, x: 0.4, y: 0.6,
+    }, phone as unknown as WebSocket);
+
+    expect(movementStarted).toEqual([
+      expect.objectContaining({ sessionId: "session-1", participantId: "p1", showId: "show-1", startedAt: now }),
+    ]);
+    engine.tick(now + 100);
+    expect(movementBatches).toEqual([]);
+  });
+
+  it("finalizes every open movement recording as completed when the session ends", () => {
+    let now = 1_000;
+    const movementFinalized: MovementRecordingFinalized[] = [];
+    const { engine, registry } = setup({ now: () => now, movementFinalized });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    const videoEpoch = engine.currentPhaseEpoch;
+    engine.handleClientMessage({
+      t: "input", v: 2, sessionId: "session-1", phaseEpoch: videoEpoch, seq: 0, x: 0.4, y: 0.6,
+    }, phone as unknown as WebSocket);
+
+    now = 1_050;
+    expect(engine.adminIdle(now)).toEqual({ ok: true });
+    expect(movementFinalized).toEqual([
+      expect.objectContaining({ status: "completed", sampleCount: 1, endedAt: now }),
+    ]);
+  });
+
+  it("finalizes a movement recording as abandoned when the participant's socket closes mid-session", () => {
+    let now = 1_000;
+    const movementFinalized: MovementRecordingFinalized[] = [];
+    const { engine, registry } = setup({ now: () => now, movementFinalized });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    const videoEpoch = engine.currentPhaseEpoch;
+    engine.handleClientMessage({
+      t: "input", v: 2, sessionId: "session-1", phaseEpoch: videoEpoch, seq: 0, x: 0.4, y: 0.6,
+    }, phone as unknown as WebSocket);
+
+    now = 1_030;
+    registry.releaseSocket(phone as unknown as WebSocket, now);
+    engine.socketClosed(phone as unknown as WebSocket);
+    expect(movementFinalized).toEqual([
+      expect.objectContaining({ status: "abandoned", sampleCount: 1, endedAt: now }),
     ]);
   });
 
@@ -742,6 +1088,51 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.currentPhaseId).toBe("intro");
     expect(engine.currentPhaseEpoch).toBe(restartedEpoch);
     expect(checkpoints.map((checkpoint) => checkpoint.reason)).toContain("admin-restart");
+  });
+
+  it("describes the complete operator flow and safely jumps to any active scene", () => {
+    let now = 1_000;
+    const checkpoints: PhaseCheckpoint[] = [];
+    const { engine, registry } = setup({ now: () => now, checkpoints });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+
+    expect(engine.adminFlow).toEqual({
+      entryPhaseId: "intro",
+      scenes: [
+        { id: "intro", kind: "video", title: "intro", routes: [{ outcome: "next", target: "question" }] },
+        { id: "question", kind: "position-question", title: "Choose", routes: [{ outcome: "next", target: "idle" }] },
+      ],
+    });
+    expect(engine.adminJump("question", now)).toEqual({ ok: false, reason: "wrong-phase" });
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    const introEpoch = engine.currentPhaseEpoch;
+    now = 1_050;
+    expect(engine.adminJump("question", now)).toEqual({ ok: true });
+    expect(engine.currentPhaseId).toBe("question");
+    expect(engine.currentPhaseEpoch).toBeGreaterThan(introEpoch);
+    expect(engine.getSnapshot()).toMatchObject({ id: "question", startedAt: now, deadlineAt: now + 200 });
+    expect(checkpoints.at(-1)?.reason).toBe("admin-jump");
+    expect(engine.completeVideo("session-1", "intro", introEpoch, now + 1)).toEqual({ ok: false, reason: "wrong-phase" });
+    expect(engine.currentPhaseId).toBe("question");
+
+    expect(engine.adminJump("idle", now + 1)).toEqual({ ok: false, reason: "invalid-target" });
+    expect(engine.adminJump("missing", now + 1)).toEqual({ ok: false, reason: "invalid-target" });
+    expect(engine.currentPhaseId).toBe("question");
+  });
+
+  it("includes every branch outcome in the operator flow", () => {
+    const { engine } = setup({ now: () => 1_000, testScenario: twoQuadrantScenario });
+    expect(engine.adminFlow.scenes.find((scene) => scene.id === "question")?.routes).toEqual([
+      { outcome: "min", target: "idle" },
+      { outcome: "max", target: "idle" },
+      { outcome: "tie", target: "idle" },
+      { outcome: "empty", target: "idle" },
+    ]);
   });
 
   it("advances immediately when skipping an already-resolved question", () => {
@@ -923,5 +1314,67 @@ describe("PhaseEngine lifecycle", () => {
     now = 1_350;
     engine.tick(now);
     expect(display.sent.filter((message) => message.t === "question_status")).toHaveLength(initialCount + 1);
+  });
+
+  it("tallies applause/boo reactions during a rating-enabled video and broadcasts a live rating_status", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now, testScenario: ratingScenario });
+    const phoneA = new MockSocket();
+    const phoneB = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phoneA as unknown as WebSocket, now, "p1");
+    addParticipant(registry, phoneB as unknown as WebSocket, now, "p2");
+    engine.participantJoined(phoneA as unknown as WebSocket, registry.get("lease-p1"));
+    engine.participantJoined(phoneB as unknown as WebSocket, registry.get("lease-p2"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    now = 1_100;
+    engine.tick(now); // lobby countdown elapses, entering the rating-enabled "intro" video
+    const introEpoch = engine.currentPhaseEpoch;
+
+    // Rating begins the moment the video phase is entered.
+    expect(display.sent.find((message) => message.t === "rating_status")).toMatchObject({
+      candidateLabel: "OpenApollo", applause: 0, boo: 0,
+    });
+
+    for (const kind of ["applause", "applause", "boo"] as const) {
+      engine.handleClientMessage({
+        t: "reaction", v: 2, sessionId: "session-1", phaseEpoch: introEpoch, kind,
+      }, phoneA as unknown as WebSocket);
+    }
+    // Unlimited taps: a second participant can tap repeatedly too, and votes accumulate.
+    engine.handleClientMessage({
+      t: "reaction", v: 2, sessionId: "session-1", phaseEpoch: introEpoch, kind: "applause",
+    }, phoneB as unknown as WebSocket);
+
+    now = 1_400; // past the broadcast throttle window so the dirty tally flushes
+    engine.tick(now);
+    expect(display.sent.filter((message) => message.t === "rating_status").at(-1)).toMatchObject({
+      t: "rating_status", candidateLabel: "OpenApollo", applause: 3, boo: 1,
+    });
+  });
+
+  it("ignores stale-epoch reactions and clears the tally once the video phase ends", () => {
+    let now = 1_000;
+    const { engine, registry } = setup({ now: () => now, testScenario: ratingScenario });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    now = 1_100;
+    engine.tick(now); // lobby countdown elapses, entering the rating-enabled "intro" video
+    const staleEpoch = engine.currentPhaseEpoch - 1;
+
+    engine.handleClientMessage({
+      t: "reaction", v: 2, sessionId: "session-1", phaseEpoch: staleEpoch, kind: "applause",
+    }, phone as unknown as WebSocket);
+    expect(display.sent.filter((message) => message.t === "rating_status")).toHaveLength(1); // only the initial 0/0
+
+    now = 1_100;
+    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+    display.sent.length = 0;
+    now = 1_150;
+    engine.tick(now);
+    expect(display.sent.some((message) => message.t === "rating_status")).toBe(false);
   });
 });

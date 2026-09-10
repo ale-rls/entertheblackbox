@@ -1,0 +1,79 @@
+# Build context is the repo root (this is a pnpm workspace: apps/server
+# depends on packages/protocol, packages/scenario, packages/shared as raw
+# TS source -- see each package's `exports` field -- and on the built
+# static bundles of apps/display, apps/phone, apps/admin).
+#
+# Coolify: Base Directory `.`, Dockerfile Location `apps/server/Dockerfile`.
+
+FROM node:22-bookworm-slim AS build
+
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
+
+COPY . .
+
+RUN pnpm install --frozen-lockfile
+
+# apps/admin authenticates operators against PocketBase directly from the
+# browser, so it needs PocketBase's URL baked in at build time via Vite's
+# import.meta.env.VITE_* convention (apps/admin/src/App.tsx). A Coolify
+# build ARG isn't visible to RUN steps as a process env var on its own --
+# this ENV line is what makes `vite build` actually see it.
+ARG VITE_POCKETBASE_URL
+ENV VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL
+
+# apps/display bakes BUILD_VERSION into its bundle as __BUILD_VERSION__
+# (apps/display/vite.config.ts) and sends it as clientVersion on every
+# display_join; the server rejects/reloads a display whose clientVersion
+# doesn't match its own runtime BUILD_VERSION (plan §7 reload-on-mismatch).
+# Coolify auto-injects SOURCE_COMMIT as a build ARG on every deploy, so
+# deriving BUILD_VERSION from it here -- and again in the runtime stage
+# below -- keeps both sides identical without anyone having to remember to
+# set/update a BUILD_VERSION env var by hand each deploy.
+ARG SOURCE_COMMIT=dev
+ENV BUILD_VERSION=$SOURCE_COMMIT
+
+# apps/display and apps/phone both bake the cursor-relay URL in at build
+# time as __REALTIME_WS_URL__ (their vite.config.ts); unset, both fall
+# back to ws://localhost:9001, which only ever works on a developer's own
+# machine. Point this at the realtime-ws-coolify deployment's public
+# wss:// URL, e.g. wss://smartphonocracy-websockets.enabler.space.
+ARG REALTIME_WS_URL
+ENV REALTIME_WS_URL=$REALTIME_WS_URL
+
+# apps/display also bakes DISPLAY_TOKEN in as __DISPLAY_TOKEN__, so the
+# venue's one kiosk can load bare /display/ with no ?token= at all.
+# Deliberately build-time-only (not exposed via the public /api/status
+# the way installationId/roomId are) -- this must match the DISPLAY_TOKEN
+# apps/server is given at runtime, and changing it later needs apps/display
+# rebuilt, not just the server restarted.
+ARG DISPLAY_TOKEN
+ENV DISPLAY_TOKEN=$DISPLAY_TOKEN
+
+RUN pnpm --filter @smartphonecracy/display build \
+  && pnpm --filter @smartphonecracy/phone build \
+  && pnpm --filter @smartphonecracy/admin build \
+  && pnpm --filter @smartphonecracy/studio build
+
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
+
+# tsx runs the server's TypeScript directly at runtime (no compile step),
+# so the runtime image needs the full workspace: source, node_modules
+# (pnpm's symlinked structure ties packages/* into apps/server's
+# resolution), and the three built client bundles.
+COPY --from=build /app /app
+
+# Must match the build stage's BUILD_VERSION (see comment there) --
+# otherwise the server's own runtime config disagrees with what it just
+# baked into the display bundle it serves.
+ARG SOURCE_COMMIT=dev
+ENV BUILD_VERSION=$SOURCE_COMMIT
+ENV NODE_ENV=production
+EXPOSE 3000
+
+CMD ["node", "--import", "tsx", "apps/server/src/index.ts"]

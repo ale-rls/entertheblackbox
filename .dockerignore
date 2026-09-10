@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/dist-proof
+.git
+.watchdog
+.steps.lock
+*.log
+.DS_Store
+.env
+.env.*
+pocketbase/bin
+pocketbase/pb_data
+pocketbase/pb_logs
+pocketbase/.e2e-data
+test-results

@@ -56,6 +56,7 @@ function join(
     clientVersion: "test",
     installationId: "inst-1",
     roomId: "room-1",
+    name: "Test participant",
     joinGrant: grant,
     ...(lease ? { participantLease: lease } : {}),
   })));
@@ -93,6 +94,17 @@ describe("HMAC admission tokens", () => {
 });
 
 describe("participant admission", () => {
+  it("admits a named participant from the public URL without a query grant", async () => {
+    const admission = controller({ allowPublicJoin: true });
+    const participant = socket();
+    join(admission, participant, "");
+    await Promise.resolve();
+
+    expect((participant as unknown as MockSocket).sent).toContainEqual(expect.objectContaining({ t: "identity" }));
+    expect(admission.registry.values()).toHaveLength(1);
+    expect(admission.registry.values()[0]).toMatchObject({ name: "Test participant" });
+  });
+
   it("evicts every phone at show end and requires a freshly issued QR grant", () => {
     let now = 1_000;
     const admission = controller({ now: () => now });
@@ -122,6 +134,19 @@ describe("participant admission", () => {
     const freshQrJoin = socket();
     join(admission, freshQrJoin, admission.issueJoinGrant(now).token, undefined, "198.51.100.4");
     expect(lastMessage(freshQrJoin)).toMatchObject({ t: "identity" });
+  });
+
+  it("rejects an empty join grant gracefully instead of closing the socket", () => {
+    // A phone that loads /phone/ with no ?g= at all (bookmarked base URL,
+    // stripped query string) sends joinGrant: "" -- this must reach the
+    // same expired_grant rejection a garbage grant gets, not fail schema
+    // validation and close the connection outright (which the client
+    // would just silently retry forever with the same empty grant).
+    const admission = controller();
+    const s = socket();
+    join(admission, s, "");
+    expect(lastMessage(s)).toMatchObject({ t: "join_rejected", reason: "expired_grant" });
+    expect((s as unknown as MockSocket).closeCalls).toEqual([]);
   });
 
   it("catches client message handler failures and closes only the offending socket", async () => {
@@ -284,6 +309,7 @@ describe("participant admission", () => {
       clientVersion: "test",
       installationId: "inst-1",
       roomId: "room-1",
+      name: "Stale participant",
       displayToken: "token",
     })));
     expect((matchingDisplay as unknown as MockSocket).sent).not.toContainEqual(expect.objectContaining({ t: "reload" }));
@@ -296,6 +322,7 @@ describe("participant admission", () => {
       clientVersion: "old-build",
       installationId: "inst-1",
       roomId: "room-1",
+      name: "Legacy participant",
       joinGrant: grant,
     })));
     expect((stalePhone as unknown as MockSocket).sent).toEqual(expect.arrayContaining([

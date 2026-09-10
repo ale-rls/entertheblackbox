@@ -17,6 +17,7 @@ export type QrGrantPushLoopOptions = {
   rotationMs?: number;
   allowLateJoin?: boolean;
   activeQrVisibility?: "corner" | "hidden";
+  showPhoneJoinBaseUrl?: boolean;
 };
 
 export class QrGrantPushLoop {
@@ -43,10 +44,10 @@ export class QrGrantPushLoop {
 
   push(): void {
     const lifecycle = this.options.lifecycle();
-    if (
-      lifecycle === "active" &&
-      (this.options.allowLateJoin === false || this.options.activeQrVisibility === "hidden")
-    ) {
+    // Admission and presentation are separate policies: returning/new late
+    // participants may still be accepted, but the installation must never
+    // advertise a join code over the active show.
+    if (lifecycle === "active") {
       this.options.send({ t: "qr_hidden", v: PROTOCOL_VERSION });
       return;
     }
@@ -54,15 +55,15 @@ export class QrGrantPushLoop {
     const now = this.now();
     const grant = this.options.issueGrant(now);
     const url = new URL(this.options.phoneJoinBaseUrl);
-    url.searchParams.set("installation", grant.claims.installationId);
-    url.searchParams.set("room", grant.claims.roomId);
-    url.searchParams.set("g", grant.token);
+    url.search = "";
+    url.hash = "";
     this.options.send({
       t: "qr_grant",
       v: PROTOCOL_VERSION,
       url: url.toString(),
       expiresAt: grant.claims.expiresAt,
-      placement: lifecycle === "active" ? "corner" : "large",
+      placement: "large",
+      showJoinUrl: this.options.showPhoneJoinBaseUrl !== false,
     });
   }
 }

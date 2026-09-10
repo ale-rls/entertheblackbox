@@ -11,11 +11,13 @@ export function Countdown({
   deadlineAt,
   className,
   minimumSeconds = 0,
+  center,
 }: {
   clock: ServerClock;
   deadlineAt: number;
   className?: string;
   minimumSeconds?: number;
+  center?: { x: number; y: number } | null;
 }) {
   const [remainingMs, setRemainingMs] = useState(() =>
     clock.remainingUntil(deadlineAt),
@@ -30,7 +32,10 @@ export function Countdown({
   }, [clock, deadlineAt]);
 
   return (
-    <div className={["countdown", className].filter(Boolean).join(" ")}>
+    <div
+      className={["countdown", center ? "countdown-field-centered" : "", className].filter(Boolean).join(" ")}
+      style={center ? { left: `${center.x}%`, top: `${center.y}%` } : undefined}
+    >
       {Math.max(minimumSeconds, Math.ceil(remainingMs / 1000))}
     </div>
   );

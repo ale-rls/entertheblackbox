@@ -15,9 +15,12 @@ const clientMessages: ClientToServerMessage[] = [
     clientVersion: "1.0.0",
     installationId: "inst-1",
     roomId: "room-1",
+    name: "Ada",
     joinGrant: "grant-token",
   },
   { t: "input", v: 2, sessionId: "s1", phaseEpoch: 3, seq: 12, x: 0.25, y: 0.75 },
+  { t: "reaction", v: 2, sessionId: "s1", phaseEpoch: 3, kind: "applause" },
+  { t: "reaction", v: 2, sessionId: "s1", phaseEpoch: 3, kind: "boo" },
   { t: "ping", v: 2, clientTime: 1_752_000_000_000 },
   {
     t: "display_join",
@@ -51,7 +54,18 @@ const fourField = {
 const twoField = {
   type: "two-quadrant" as const,
   axis: "x" as const,
+  variant: "spectrum" as const,
   labels: { minLabel: "disagree", maxLabel: "agree" },
+};
+const twoSplitField = { ...twoField, variant: "split" as const };
+
+const zonesField = {
+  type: "polygon-zones" as const,
+  zones: [
+    { id: "apollon", label: "Apollon", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }] },
+    { id: "dionysos", label: "Dionysos", points: [{ x: 0.35, y: 0 }, { x: 0.65, y: 0 }, { x: 0.65, y: 1 }] },
+    { id: "kassandra", label: "Kassandra", points: [{ x: 0.7, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }] },
+  ],
 };
 
 const phaseSnapshot = {
@@ -71,10 +85,23 @@ const phaseSnapshot = {
 
 const serverMessages: ServerToClientMessage[] = [
   { t: "snapshot", v: 2, sessionId: "s1", phaseEpoch: 2, phase: phaseSnapshot, serverTime: 1 },
+  { t: "snapshot", v: 2, sessionId: "s2", phaseEpoch: 1, phase: {
+    kind: "video",
+    id: "image-audio",
+    src: "portrait.png",
+    audioSrc: "voice.mp3",
+    tailDurationMs: 2_000,
+    expectedDurationMs: 14_000,
+    next: "idle",
+    scenarioVersion: "test-1",
+    startedAt: 10,
+    deadlineAt: 14_010,
+  }, serverTime: 10 },
   { t: "phase", v: 2, sessionId: "s1", phaseEpoch: 2, phase: phaseSnapshot, serverTime: 1 },
   { t: "presence", v: 2, count: 7 },
   { t: "reload", v: 2, minVersion: "1.2.0", reason: "protocol" },
   { t: "cursors", v: 2, tick: 42, cursors: [{ clientId: "c1", x: 0.5, y: 0.5, color: "#f0a" }] },
+  { t: "cursors", v: 2, tick: 43, cursors: [{ clientId: "ghost:rec-1", x: 0.5, y: 0.5, color: "#f0a", ghost: true }] },
   {
     t: "question_status",
     v: 2,
@@ -103,7 +130,7 @@ const serverMessages: ServerToClientMessage[] = [
     phaseEpoch: 3,
     connectedCount: 5,
     positionedCount: 4,
-    field: twoField,
+    field: twoSplitField,
     quadrantCounts: { min: 1, max: 3 },
   },
   {
@@ -117,7 +144,29 @@ const serverMessages: ServerToClientMessage[] = [
     resolvedTarget: "video-2",
     freezeUntil: 1_752_000_063_000,
   },
-  { t: "qr_grant", v: 2, url: "https://x.example/j?g=abc", expiresAt: 9, placement: "corner" },
+  {
+    t: "question_status",
+    v: 2,
+    sessionId: "s1",
+    phaseEpoch: 4,
+    connectedCount: 5,
+    positionedCount: 4,
+    field: zonesField,
+    quadrantCounts: { apollon: 1, dionysos: 2, kassandra: 0 },
+  },
+  {
+    t: "question_resolved",
+    v: 2,
+    sessionId: "s1",
+    phaseEpoch: 4,
+    field: zonesField,
+    quadrantCounts: { apollon: 1, dionysos: 2, kassandra: 0 },
+    winner: "dionysos",
+    resolvedTarget: "video-triumph-dionysos",
+    freezeUntil: 1_752_000_063_000,
+  },
+  { t: "rating_status", v: 2, sessionId: "s1", phaseEpoch: 5, candidateLabel: "OpenApollo", applause: 12, boo: 3 },
+  { t: "qr_grant", v: 2, url: "https://x.example/j?g=abc", expiresAt: 9, placement: "corner", showJoinUrl: true },
   { t: "qr_hidden", v: 2 },
   { t: "display_notice", v: 2, code: "display_replaced", level: "warning", message: "replaced" },
   {
@@ -155,6 +204,20 @@ describe("round-trips", () => {
   it("parses Uint8Array payloads (ws binary frames)", () => {
     const bytes = new TextEncoder().encode(encodeMessage({ t: "ping", v: 2, clientTime: 1 }));
     expect(parseClientMessage(bytes).ok).toBe(true);
+  });
+
+  it("mirrors two-quadrant variants on the wire and defaults legacy fields to spectrum", () => {
+    const parsed = parseServerMessage(JSON.stringify({
+      t: "question_status",
+      v: 2,
+      sessionId: "s1",
+      phaseEpoch: 3,
+      connectedCount: 1,
+      positionedCount: 1,
+      field: { type: "two-quadrant", axis: "x", labels: { minLabel: "No", maxLabel: "Yes" } },
+      quadrantCounts: { min: 0, max: 1 },
+    }));
+    expect(parsed).toMatchObject({ ok: true, message: { field: { variant: "spectrum" } } });
   });
 });
 

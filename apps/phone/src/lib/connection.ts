@@ -9,7 +9,7 @@ import {
 import { clearLease, loadLease, storeLease } from "./lease.js";
 
 /**
- * Phone WebSocket connection: joins with the QR grant + any stored
+ * Phone WebSocket connection: joins with a visitor name + any stored
  * lease, persists the lease from identity, reconnects with exponential
  * backoff, pings every ~10 s (plan §7), and hands every valid server
  * message to the consumer. WebSocket constructor injectable for tests.
@@ -20,16 +20,22 @@ export type PhoneConnectionOptions = {
   clientVersion: string;
   installationId: string;
   roomId: string;
-  joinGrant: string;
+  name: string;
   onMessage: (message: ServerToClientMessage) => void;
   onSocketOpen?: () => void;
   onSocketLost?: () => void;
-  onSessionEnded?: () => void;
+  onSessionEnded?: (session: EndedPhoneSession | null) => void;
   webSocketFactory?: (url: string) => WebSocket;
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">;
   pingIntervalMs?: number;
   now?: () => number;
   rng?: () => number;
+};
+
+export type EndedPhoneSession = {
+  sessionId: string;
+  clientId: string;
+  participantLease: string;
 };
 
 export class PhoneConnection {
@@ -38,6 +44,7 @@ export class PhoneConnection {
   private attempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
+  private endedSession: EndedPhoneSession | null = null;
   private readonly pingIntervalMs: number;
   private readonly now: () => number;
   private readonly rng: () => number;
@@ -82,7 +89,7 @@ export class PhoneConnection {
         clientVersion: this.options.clientVersion,
         installationId: this.options.installationId,
         roomId: this.options.roomId,
-        joinGrant: this.options.joinGrant,
+        name: this.options.name,
         ...(lease === null ? {} : { participantLease: lease }),
       });
       this.send({ t: "ping", v: PROTOCOL_VERSION, clientTime: this.now() });
@@ -99,11 +106,23 @@ export class PhoneConnection {
         return;
       }
       if (parsed.message.t === "identity") {
+        this.endedSession = {
+          sessionId: parsed.message.sessionId,
+          clientId: parsed.message.clientId,
+          participantLease: parsed.message.participantLease,
+        };
         storeLease(
           this.options.installationId,
           parsed.message.participantLease,
           this.options.storage,
         );
+      }
+      if (
+        (parsed.message.t === "snapshot" || parsed.message.t === "phase") &&
+        parsed.message.phase.kind !== "idle" &&
+        this.endedSession !== null
+      ) {
+        this.endedSession.sessionId = parsed.message.sessionId;
       }
       this.options.onMessage(parsed.message);
     };
@@ -115,7 +134,7 @@ export class PhoneConnection {
       if (event.code === SHOW_ENDED_CLOSE_CODE) {
         this.stopped = true;
         clearLease(this.options.installationId, this.options.storage);
-        this.options.onSessionEnded?.();
+        this.options.onSessionEnded?.(this.endedSession);
         return;
       }
       this.options.onSocketLost?.();

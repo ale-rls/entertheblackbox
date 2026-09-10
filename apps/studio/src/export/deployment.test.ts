@@ -16,7 +16,7 @@ describe("deployment export", () => {
     expect(second).toEqual(first);
     expect(first.packageName).toContain("-vdev-0.1.0-");
     expect(Object.keys(first.files)).toEqual(["scenario.json", "media-manifest.json", ".studio.json", "validation-report.json", "README.txt"]);
-    expect(first.files["validation-report.json"]).toMatchObject({ valid: true, studioBuild: "test-build", runtimeSchemaVersion: 2, mediaTotalBytes: 67 });
+    expect(first.files["validation-report.json"]).toMatchObject({ valid: true, studioBuild: "test-build", runtimeSchemaVersion: 3, mediaTotalBytes: 67 });
     expect(first.files["validation-report.json"].branchSmoke).toHaveLength(11);
     expect(first.files["validation-report.json"].branchSmoke).toContainEqual(expect.objectContaining({ phaseId: "question-two-quadrant", outcome: "min", winner: "min" }));
     expect(first.files["README.txt"]).toContain("Validation: PASS (11 branch checks)");

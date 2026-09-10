@@ -233,7 +233,7 @@ The remaining defaults allow a solo visitor to experience the work, give nearby 
 
 ### Return to idle
 
-- If there are no active participants for a configurable grace period, usually 2–5 minutes, the session is closed.
+- Once playback is active, participant disconnects do not stop the session; the show continues so a temporary network loss cannot return the display to idle.
 - During lobby and position-question phases, if all participants produce no trackpad input for 3 minutes, the session closes even if their tabs continue sending heartbeats. Video playback does not count toward this interactive-idle timeout.
 - The session closes when `maxSessionDurationMs` is reached, even if the graph contains cycles or a participant remains connected.
 - The server records the session summary and returns the display to the idle phase.
@@ -370,7 +370,7 @@ Required edge-case behavior:
 - A participant who disconnects retains their latest coordinates and is labelled `disconnected`.
 - Staleness measures connection liveness, not cursor movement. A deliberately parked cursor remains valid. The client heartbeat runs approximately every 10 seconds; a connected client is labelled `stale` only when no heartbeat or other socket message has arrived for `connectionStaleAfterMs`, initially 30 seconds.
 - A late participant may vote using the remaining question time.
-- No participants: return to idle rather than advancing.
+- No connected participants: keep the session running and resolve the question using its configured disconnected/empty vote semantics.
 - Display disconnects: pause or abort according to a global policy; default is abort to idle after the display timeout.
 
 ## 9. Display application
@@ -731,7 +731,7 @@ The project is ready for launch when all of the following are true:
 - Multiple ordinary tabs using the same participant lease produce one participant and one projected cursor.
 - A new thirty-first participant receives `room_full`, while an existing leased participant may reconnect at capacity.
 - The first participant starts a 10-second lobby and a solo participant can begin the show.
-- An abandoned solo session produces zero counted votes, follows the director-approved `empty` target, and still returns safely to idle through inactivity or maximum-duration policy.
+- An abandoned solo session continues playback, follows the director-approved disconnected/`empty` vote behavior, and still returns safely to idle through the scenario flow, inactivity, or maximum-duration policy.
 - Heartbeats without trackpad input cannot keep an interactive phase alive beyond the 3-minute idle timeout.
 - A cyclic session returns to idle at the configured maximum session duration.
 - The display renders all cursors without visible degradation.

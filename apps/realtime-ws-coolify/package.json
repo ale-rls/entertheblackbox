@@ -1,0 +1,19 @@
+{
+  "name": "@smartphonecracy/realtime-ws-coolify",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Room-scoped uWebSockets.js cursor relay, packaged to match the proven Coolify deployment layout of manegame/uwebsocket-server (flat dir, plain JS, npm ci against a committed package-lock.json).",
+  "main": "websocket-server.js",
+  "scripts": {
+    "start": "node websocket-server.js",
+    "dev": "node websocket-server.js",
+    "docker:build": "docker build -t smartphonecracy-realtime-ws-coolify .",
+    "docker:run": "docker run -p 9001:9001 --env-file .env smartphonecracy-realtime-ws-coolify"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.56.0"
+  }
+}

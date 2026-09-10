@@ -8,6 +8,8 @@ import { defineConfig } from "@playwright/test";
  */
 export default defineConfig({
   testDir: ".",
+  globalSetup: "./global-setup.ts",
+  globalTeardown: "./global-teardown.ts",
   timeout: 120_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,

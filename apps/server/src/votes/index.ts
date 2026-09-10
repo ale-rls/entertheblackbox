@@ -9,3 +9,6 @@ export type {
   VoteParticipantSeed,
   VoteResolution,
 } from "./vote-engine.js";
+
+export { RatingEngine } from "./rating-engine.js";
+export type { RatingIdentity, RatingStatus } from "./rating-engine.js";

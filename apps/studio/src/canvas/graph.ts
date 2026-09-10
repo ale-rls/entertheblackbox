@@ -6,9 +6,6 @@ export const END_NODE_ID = "__studio_end__";
 export const FIXED_HANDLE = "next";
 export const FOUR_OUTCOME_HANDLES = ["q1", "q2", "q3", "q4", "tie", "empty"] as const;
 export const TWO_OUTCOME_HANDLES = ["min", "max", "tie", "empty"] as const;
-export const OUTCOME_HANDLES = [...FOUR_OUTCOME_HANDLES, "min", "max"] as const;
-
-export type OutcomeHandle = (typeof OUTCOME_HANDLES)[number];
 type Phase = StudioProject["scenario"]["phases"][number];
 export type GraphPhase = Exclude<Phase, { kind: "idle" }>;
 
@@ -27,8 +24,12 @@ export function withoutOutputEdge(edges: Edge[], source: string | null, sourceHa
 
 export function phaseOutputHandles(phase: Phase | undefined): readonly string[] {
   if (!phase || phase.kind === "idle") return [];
-  return phase.kind === "position-question" && phase.next.type === "quadrant-plurality"
-    ? phase.field.type === "two-quadrant" ? TWO_OUTCOME_HANDLES : FOUR_OUTCOME_HANDLES
+  return (phase.kind === "position-question" || phase.kind === "video-position-question") && phase.next.type === "quadrant-plurality"
+    ? phase.field.type === "two-quadrant"
+      ? TWO_OUTCOME_HANDLES
+      : phase.field.type === "polygon-zones"
+        ? [...phase.field.zones.map((zone) => zone.id), "tie", "empty"]
+        : FOUR_OUTCOME_HANDLES
     : [FIXED_HANDLE];
 }
 
@@ -48,7 +49,7 @@ export function edgeTarget(target: string): string {
 
 export function replacePluralityLayoutEdges(
   edges: Edge[],
-  phase: Extract<Phase, { kind: "position-question" }>,
+  phase: Extract<Phase, { kind: "position-question" | "video-position-question" }>,
 ): Edge[] {
   if (phase.next.type !== "quadrant-plurality") return edges;
   const next = phase.next;
@@ -61,6 +62,25 @@ export function replacePluralityLayoutEdges(
           ?? edgeTarget(next[handle])
         : END_NODE_ID;
       return { id: `${phase.id}:${handle}`, source: phase.id, sourceHandle: handle, target: commonTarget };
+    }),
+  ];
+}
+
+/** Preserve still-valid output connections while adding or removing dynamic polygon-zone handles. */
+export function reconcilePhaseOutputEdges(edges: Edge[], phase: Phase): Edge[] {
+  const retained = edges.filter((edge) => edge.source !== phase.id);
+  if (phase.kind === "idle") return retained;
+  return [
+    ...retained,
+    ...phaseOutputHandles(phase).map((handle) => {
+      const existing = edges.find((edge) => edge.source === phase.id && (edge.sourceHandle ?? FIXED_HANDLE) === handle);
+      if (existing) return { ...existing, id: `${phase.id}:${handle}`, sourceHandle: handle };
+      let runtime = "idle";
+      if (phase.kind === "video") runtime = phase.next;
+      else if (phase.next.type === "fixed") runtime = phase.next.target;
+      else if (handle === "tie" || handle === "empty") runtime = phase.next[handle];
+      else runtime = (phase.next.map as Record<string, string>)[handle] ?? "idle";
+      return { id: `${phase.id}:${handle}`, source: phase.id, sourceHandle: handle, target: edgeTarget(runtime) };
     }),
   ];
 }
@@ -120,15 +140,17 @@ export function applyEdges(project: StudioProject, edges: Edge[]): StudioProject
       if (!edge) throw new Error(`Phase “${phase.id}” has a dangling next output.`);
       return { ...phase, next: { ...phase.next, target: runtimeTarget(edge.target) } };
     }
-    const handles = outputHandles(project, phase.id) as readonly OutcomeHandle[];
+    const handles = outputHandles(project, phase.id);
     const targets = Object.fromEntries(handles.map((handle) => {
       const edge = edgeFor(phase.id, handle);
       if (!edge) throw new Error(`Phase “${phase.id}” has a dangling ${handle} output.`);
       return [handle, runtimeTarget(edge.target)];
-    })) as Record<OutcomeHandle, string>;
+    })) as Record<string, string>;
     const map = phase.field.type === "two-quadrant"
       ? { min: targets.min, max: targets.max }
-      : { q1: targets.q1, q2: targets.q2, q3: targets.q3, q4: targets.q4 };
+      : phase.field.type === "polygon-zones"
+        ? Object.fromEntries(phase.field.zones.map((zone) => [zone.id, targets[zone.id]!]))
+        : { q1: targets.q1, q2: targets.q2, q3: targets.q3, q4: targets.q4 };
     return { ...phase, next: { ...phase.next, map, tie: targets.tie, empty: targets.empty } };
   });
   return { ...project, scenario: { ...project.scenario, entryPhaseId: runtimeTarget(entry.target), phases: phases as StudioProject["scenario"]["phases"] } };

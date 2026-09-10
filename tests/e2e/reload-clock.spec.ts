@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { adminStatus, startServer, type E2eServer } from "./helpers/server.js";
-import { displayUrl, phoneUrl } from "./helpers/clients.js";
+import { adminAction, adminStatus, startServer, type E2eServer } from "./helpers/server.js";
+import { displayUrl, joinPhone, phoneUrl } from "./helpers/clients.js";
 
 /**
  * §16: stale-bundle reload chain (STEP-030/031) and server-time-corrected
@@ -25,12 +25,16 @@ test.describe("stale bundle reload", () => {
    * to reload again. Three page loads therefore prove the full §16 chain
    * twice over: join → reload received → app-shell reload → re-join.
    */
-  async function countLoads(page: import("@playwright/test").Page, url: string): Promise<void> {
+  async function countLoads(page: import("@playwright/test").Page, url: string, join = false): Promise<void> {
     await page.addInitScript(() => {
       const count = Number(sessionStorage.getItem("e2eLoads") ?? "0") + 1;
       sessionStorage.setItem("e2eLoads", String(count));
     });
     await page.goto(url);
+    if (join) {
+      await page.locator("#participant-name").fill("Stale bundle visitor");
+      await page.getByRole("button", { name: "Join", exact: true }).click();
+    }
     await expect
       .poll(
         // The evaluate can race the very navigation it is counting;
@@ -52,7 +56,7 @@ test.describe("stale bundle reload", () => {
 
   test("stale phone bundle reloads and reconnects", async ({ browser }) => {
     const phone = await browser.newPage();
-    await countLoads(phone, phoneUrl(server.baseUrl));
+    await countLoads(phone, phoneUrl(server.baseUrl), true);
     await phone.close();
   });
 });
@@ -83,7 +87,8 @@ test.describe("clock offset", () => {
     await expect.poll(async () => (await adminStatus(server.baseUrl)).displayConnected).toBe(true);
 
     const phone = await browser.newPage();
-    await phone.goto(phoneUrl(server.baseUrl));
+    await joinPhone(phone, server.baseUrl, "Clock visitor");
+    await adminAction(server.baseUrl, "start");
     await expect
       .poll(async () => (await adminStatus(server.baseUrl)).phaseId, { timeout: 30_000 })
       .toBe("question-fixed");

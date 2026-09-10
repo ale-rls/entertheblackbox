@@ -65,11 +65,13 @@ describe("two-quadrant resolution math", () => {
   const xField = {
     type: "two-quadrant" as const,
     axis: "x" as const,
+    variant: "spectrum" as const,
     labels: { minLabel: "disagree", maxLabel: "agree" },
   };
   const yField = {
     type: "two-quadrant" as const,
     axis: "y" as const,
+    variant: "spectrum" as const,
     labels: { minLabel: "top", maxLabel: "bottom" },
   };
   const votes = [
@@ -114,5 +116,65 @@ describe("two-quadrant resolution math", () => {
       quadrantCounts: { min: 1, max: 2 },
       resolvedTarget: "next",
     });
+  });
+
+  it("excludes positioned votes outside a calibrated arena ellipse", () => {
+    const arenaField = {
+      ...xField,
+      arena: { type: "ellipse" as const, centerX: 0.5, centerY: 0.7, radiusX: 0.4, radiusY: 0.2 },
+    };
+    const arenaVotes = [
+      { x: 0.3, y: 0.7, status: "valid" },
+      { x: 0.7, y: 0.7, status: "valid" },
+      { x: 0.1, y: 0.2, status: "valid" },
+    ] as const;
+
+    expect(classifyPositionVotesForField(arenaField, arenaVotes, new Set(["valid"]))).toMatchObject({
+      quadrantCounts: { min: 1, max: 1 },
+      includedTotal: 2,
+      excludedTotal: 1,
+    });
+  });
+});
+
+describe("polygon-zones resolution math", () => {
+  const field = {
+    type: "polygon-zones" as const,
+    zones: [
+      { id: "apollon", label: "Apollon", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }, { x: 0, y: 1 }] },
+      { id: "dionysos", label: "Dionysos", points: [{ x: 0.35, y: 0 }, { x: 0.65, y: 0 }, { x: 0.65, y: 1 }, { x: 0.35, y: 1 }] },
+      { id: "kassandra", label: "Kassandra", points: [{ x: 0.7, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0.7, y: 1 }] },
+    ],
+  };
+  const votes = [
+    { x: 0.1, y: 0.5, status: "valid" },
+    { x: 0.5, y: 0.5, status: "valid" },
+    { x: 0.5, y: 0.5, status: "valid" },
+    { x: 0.32, y: 0.5, status: "valid" }, // lands in the gap between zones
+    { x: null, y: null, status: "valid" },
+  ] as const;
+
+  it("counts only positions inside a zone, excluding gaps", () => {
+    expect(countPositionQuadrants(field, votes)).toEqual({ apollon: 1, dionysos: 2, kassandra: 0 });
+  });
+
+  it("classifies gap and never-moved votes as excluded", () => {
+    expect(classifyPositionVotesForField(field, votes, new Set(["valid"]))).toMatchObject({
+      quadrantCounts: { apollon: 1, dionysos: 2, kassandra: 0 },
+      includedTotal: 3,
+      excludedTotal: 2,
+    });
+  });
+
+  it("resolves a unique winner among three zones", () => {
+    expect(resolvePositionPlurality(field, votes, new Set(["valid"]))).toMatchObject({
+      winner: "dionysos",
+      quadrantCounts: { apollon: 1, dionysos: 2, kassandra: 0 },
+    });
+  });
+
+  it("resolves empty when nothing lands in a zone", () => {
+    const noVotes = [{ x: 0.32, y: 0.5, status: "valid" }] as const;
+    expect(resolvePositionPlurality(field, noVotes, new Set(["valid"])).winner).toBe("empty");
   });
 });

@@ -26,12 +26,16 @@ afterEach(async () => {
   if (root) await act(async () => root?.unmount());
   root = null;
   document.body.replaceChildren();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
 async function renderVideo(
   send: (message: DisplayToServerMessage) => void,
   sessionId: string | null = "session-1",
+  soundEnabled = false,
+  videoPhase = phase,
+  extraAudioSrc?: string,
 ) {
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
   document.body.innerHTML = '<div id="root"></div>';
@@ -40,9 +44,11 @@ async function renderVideo(
     root?.render(
       <PhaseVideo
         sessionId={sessionId}
-        phase={phase}
+        phase={videoPhase}
         phaseEpoch={7}
         src="blob:cached-intro"
+        {...(extraAudioSrc === undefined ? {} : { extraAudioSrc })}
+        soundEnabled={soundEnabled}
         send={send}
       />,
     );
@@ -69,7 +75,7 @@ describe("PhaseVideo", () => {
       phaseEpoch: 7,
       mediaId: "media/intro.mp4",
       status: "stalled",
-      detail: "The browser stalled while loading video data",
+      detail: "The browser stalled while loading media data",
     });
     expect(send).toHaveBeenNthCalledWith(2, {
       t: "video_ended",
@@ -89,5 +95,47 @@ describe("PhaseVideo", () => {
     video.dispatchEvent(new Event("ended"));
 
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("unmutes scenario video after the display sound control is enabled", async () => {
+    const video = await renderVideo(vi.fn(), "session-1", true);
+
+    expect(video.muted).toBe(false);
+    expect(video.playsInline).toBe(true);
+  });
+
+  it("plays an optional audio track alongside the video without letting it end the phase", async () => {
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    const send = vi.fn();
+    const video = await renderVideo(send, "session-1", true, phase, "blob:cached-soundtrack");
+    const audio = document.querySelector("audio")!;
+
+    expect(audio.src).toContain("blob:cached-soundtrack");
+    expect(audio.muted).toBe(false);
+    expect(audio.getAttribute("aria-label")).toBe("Extra video audio track");
+
+    audio.dispatchEvent(new Event("ended"));
+    expect(send).not.toHaveBeenCalledWith(expect.objectContaining({ t: "video_ended" }));
+
+    video.dispatchEvent(new Event("ended"));
+    expect(pause).toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ t: "video_ended", phaseId: "intro" }));
+  });
+
+  it("holds the final video frame for the configured visual tail", async () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    const video = await renderVideo(send, "session-1", false, {
+      ...phase,
+      tailDurationMs: 2_000,
+      expectedDurationMs: phase.expectedDurationMs + 2_000,
+    });
+
+    video.dispatchEvent(new Event("ended"));
+    expect(send).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1_999);
+    expect(send).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ t: "video_ended", phaseId: "intro" }));
   });
 });

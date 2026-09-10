@@ -18,13 +18,47 @@ const fourField: QuestionField = {
 const twoXField: QuestionField = {
   type: "two-quadrant",
   axis: "x",
+  variant: "spectrum",
   labels: { minLabel: "disagree", maxLabel: "agree" },
 };
 
 const twoYField: QuestionField = {
   type: "two-quadrant",
   axis: "y",
+  variant: "spectrum",
   labels: { minLabel: "local", maxLabel: "global" },
+};
+
+const twoXSplitField: QuestionField = { ...twoXField, variant: "split" };
+
+const arenaFourField: QuestionField = {
+  ...fourField,
+  arena: { type: "ellipse", centerX: 0.5, centerY: 0.7, radiusX: 0.4, radiusY: 0.2, splitY: 0.65 },
+};
+
+const arenaTwoXField: QuestionField = { ...twoXField, arena: arenaFourField.arena };
+const arenaTwoYField: QuestionField = { ...twoYField, arena: arenaFourField.arena };
+
+const unitSquareQuad = {
+  type: "quad" as const,
+  corners: [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+  ] as [{ x: number; y: number }, { x: number; y: number }, { x: number; y: number }, { x: number; y: number }],
+};
+
+const quadFourField: QuestionField = { ...fourField, arena: unitSquareQuad };
+const quadTwoXField: QuestionField = { ...twoXField, arena: unitSquareQuad };
+
+const zonesField: QuestionField = {
+  type: "polygon-zones",
+  zones: [
+    { id: "apollon", label: "Apollon", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }, { x: 0, y: 1 }] },
+    { id: "dionysos", label: "Dionysos", points: [{ x: 0.35, y: 0 }, { x: 0.65, y: 0 }, { x: 0.65, y: 1 }, { x: 0.35, y: 1 }] },
+    { id: "kassandra", label: "Kassandra", points: [{ x: 0.7, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0.7, y: 1 }] },
+  ],
 };
 
 function resolved(
@@ -57,13 +91,18 @@ describe("QuadrantOverlay", () => {
 
     expect(html).toContain('class="axis axis-x"');
     expect(html).toContain('class="axis axis-y"');
+    expect(html).toContain('class="axis-label axis-label-min">left</span>');
+    expect(html).toContain('class="axis-label axis-label-max">right</span>');
+    expect(html).toContain('class="axis-label axis-label-min">top</span>');
+    expect(html).toContain('class="axis-label axis-label-max">bottom</span>');
+    expect(html.indexOf('class="quadrant-overlay quadrant-overlay-four-quadrant"')).toBeLessThan(html.indexOf('class="axis axis-x"'));
     expect(html).toContain('class="axis-cross"');
     expect(html.match(/data-quadrant=/g)).toHaveLength(4);
     expect(html).toContain('class="quadrant quadrant-top-right" data-quadrant="q1"');
     expect(html).toContain('data-quadrant="q4"><span class="quadrant-count">4</span>');
   });
 
-  it("renders an X two-quadrant field with one divider and only X labels", () => {
+  it("renders an X two-way field as a horizontal spectrum with only X labels", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay
         field={twoXField}
@@ -75,8 +114,10 @@ describe("QuadrantOverlay", () => {
 
     expect(html).toContain('class="axis axis-x"');
     expect(html).not.toContain('class="axis axis-y"');
-    expect(html).toContain('class="axis-divider axis-divider-x"');
-    expect(html.match(/class="axis-divider /g)).toHaveLength(1);
+    expect(html).toContain('class="axis-track axis-track-x"');
+    expect(html).toContain('class="axis-arrow axis-arrow-left"');
+    expect(html).toContain('class="axis-arrow axis-arrow-right"');
+    expect(html).not.toContain("axis-arrow-top");
     expect(html).not.toContain("axis-cross");
     expect(html.match(/data-quadrant=/g)).toHaveLength(2);
     expect(html).toContain('class="quadrant quadrant-left" data-quadrant="min"');
@@ -85,7 +126,7 @@ describe("QuadrantOverlay", () => {
     expect(html).toContain("agree");
   });
 
-  it("renders a Y two-quadrant winner using top/bottom min/max regions", () => {
+  it("renders a Y two-way field as a vertical spectrum without blinking an outcome area", () => {
     const html = renderToStaticMarkup(
       <QuadrantOverlay
         field={twoYField}
@@ -97,14 +138,122 @@ describe("QuadrantOverlay", () => {
 
     expect(html).toContain('class="axis axis-y"');
     expect(html).not.toContain('class="axis axis-x"');
-    expect(html).toContain('class="axis-divider axis-divider-y"');
-    expect(html.match(/class="axis-divider /g)).toHaveLength(1);
+    expect(html).toContain('class="axis-track axis-track-y"');
+    expect(html).toContain('class="axis-arrow axis-arrow-top"');
+    expect(html).toContain('class="axis-arrow axis-arrow-bottom"');
+    expect(html).not.toContain("axis-arrow-left");
     expect(html).toContain(
       'class="quadrant quadrant-top quadrant-dimmed" data-quadrant="min"',
     );
     expect(html).toContain(
       'class="quadrant quadrant-bottom quadrant-winner" data-quadrant="max"',
     );
+    expect(html).not.toContain("quadrant-blink");
+  });
+
+  it("renders a hard two-way split with a perpendicular divider and no spectrum arrows", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay field={twoXSplitField} liveField={twoXSplitField} liveCounts={{ min: 1, max: 2 }} resolution={null} />,
+    );
+    expect(html).toContain('class="axis-divider axis-divider-x"');
+    expect(html).not.toContain("axis-track");
+    expect(html).not.toContain("axis-arrow");
+  });
+
+  it("moves an uncalibrated left/right divider and its hit regions off centre", () => {
+    const field = { ...twoXSplitField, splitX: 0.47 };
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay field={field} liveField={field} liveCounts={{ min: 1, max: 2 }} resolution={null} />,
+    );
+    expect(html).toContain('class="axis-divider axis-divider-x" style="left:47%;right:auto"');
+    expect(html).toContain('data-quadrant="min" style="inset:0 53% 0 0"');
+    expect(html).toContain('data-quadrant="max" style="inset:0 0 0 47%"');
+  });
+
+  it("blinks the leading side after a fixed left/right decision", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay field={twoXSplitField} liveField={twoXSplitField} liveCounts={null} resolution={resolved(twoXSplitField, "fixed")} />,
+    );
+    expect(html).toContain('quadrant-right quadrant-blink');
+    expect(html).not.toContain('quadrant-left quadrant-blink');
+  });
+
+  it("clips calibrated quadrants and divider lines to the arena ellipse", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay
+        field={arenaFourField}
+        liveField={arenaFourField}
+        liveCounts={{ q1: 1, q2: 2, q3: 3, q4: 4 }}
+        resolution={null}
+      />,
+    );
+
+    expect(html).toContain('class="quadrant-overlay arena-ellipse-overlay arena-ellipse-four-quadrant"');
+    expect(html).toContain('<ellipse cx="50" cy="70" rx="40" ry="20"></ellipse>');
+    expect(html).toContain('y1="65"');
+    expect(html).toContain('y2="65"');
+    expect(html.match(/class="arena-divider"/g)).toHaveLength(2);
+    expect(html.match(/data-quadrant=/g)).toHaveLength(4);
+    expect(html).toContain('data-quadrant="q4"');
+    expect(html).toContain('class="arena-axis-label arena-axis-label-x arena-axis-label-min"');
+    expect(html).toContain('class="quadrant-count">4</span>');
+  });
+
+  it("draws the selected spectrum axis without a center-point marker", () => {
+    const xHtml = renderToStaticMarkup(<QuadrantOverlay field={arenaTwoXField} liveField={arenaTwoXField} liveCounts={null} resolution={null} />);
+    const yHtml = renderToStaticMarkup(<QuadrantOverlay field={arenaTwoYField} liveField={arenaTwoYField} liveCounts={null} resolution={null} />);
+
+    expect(xHtml).toContain('<line class="arena-spectrum-axis"');
+    expect(xHtml).toContain('y1="65"');
+    expect(xHtml).toContain('y2="65"');
+    expect(yHtml).toContain('<line class="arena-spectrum-axis" x1="50" y1="50" x2="50" y2="90"></line>');
+    expect(xHtml).not.toContain("arena-spectrum-origin");
+    expect(yHtml).not.toContain("arena-spectrum-origin");
+  });
+
+  it("draws the classification boundary and no origin for a calibrated hard split", () => {
+    const split = { ...arenaTwoXField, variant: "split" as const };
+    const html = renderToStaticMarkup(<QuadrantOverlay field={split} liveField={split} liveCounts={null} resolution={null} />);
+    expect(html).toContain('<line class="arena-divider" x1="50" y1="50" x2="50" y2="90"></line>');
+    expect(html).not.toContain("arena-spectrum-axis");
+    expect(html).not.toContain("arena-spectrum-origin");
+  });
+
+  it("renders a perspective-calibrated quad arena as polygon regions split through its edge midpoints", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay
+        field={quadFourField}
+        liveField={quadFourField}
+        liveCounts={{ q1: 1, q2: 2, q3: 3, q4: 4 }}
+        resolution={null}
+      />,
+    );
+
+    expect(html).toContain('class="quadrant-overlay arena-ellipse-overlay arena-ellipse-four-quadrant"');
+    // Unit-square quad: divider lines run through the edge midpoints (50,0)-(50,100) and (0,50)-(100,50).
+    expect(html).toContain('<line class="arena-divider" x1="0" y1="50" x2="100" y2="50"></line>');
+    expect(html).toContain('<line class="arena-divider" x1="50" y1="0" x2="50" y2="100"></line>');
+    expect(html).toContain('<polygon class="arena-outline" points="0,0 100,0 100,100 0,100"></polygon>');
+    expect(html.match(/data-quadrant=/g)).toHaveLength(4);
+    expect(html).toContain('points="50,50 100,50 100,100 50,100"');
+    expect(html).toContain('class="quadrant-count">4</span>');
+  });
+
+  it("does not blink an explicitly highlighted side of a spectrum arena", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay
+        field={quadTwoXField}
+        liveField={quadTwoXField}
+        liveCounts={{ min: 2, max: 5 }}
+        resolution={null}
+        showCounts={false}
+        highlightRegionId="max"
+      />,
+    );
+
+    expect(html).not.toContain("quadrant-count");
+    expect(html).toContain('class="arena-region arena-region-max"');
+    expect(html).not.toContain("arena-region-blink");
   });
 
   it("does not render live counts from a mismatched field", () => {
@@ -130,7 +279,7 @@ describe("QuadrantOverlay", () => {
       />,
     );
     expect(tie.match(/quadrant-dimmed/g)).toHaveLength(2);
-    expect(tie).toContain('class="outcome outcome-tie">tie</div>');
+    expect(tie).toContain('class="outcome outcome-tie">Gleichstand</div>');
 
     const empty = renderToStaticMarkup(
       <QuadrantOverlay
@@ -156,5 +305,71 @@ describe("QuadrantOverlay", () => {
     expect(fixed).not.toContain("quadrant-winner");
     expect(fixed).not.toContain("quadrant-dimmed");
     expect(fixed).not.toContain('class="outcome');
+  });
+
+  it("renders polygon zone labels without counts or shapes while voting is live", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay
+        field={zonesField}
+        liveField={zonesField}
+        liveCounts={{ apollon: 1, dionysos: 2, kassandra: 0 }}
+        resolution={null}
+      />,
+    );
+
+    expect(html).toContain('class="quadrant-overlay quadrant-overlay-polygon-zones"');
+    expect(html).not.toContain("zone-shape");
+    expect(html).toContain("Apollon");
+    expect(html).toContain("Dionysos");
+    expect(html).toContain("Kassandra");
+    expect(html).not.toContain("zone-count");
+    expect(html).not.toContain(">2</span>");
+  });
+
+  it("renders only the winning zone as a borderless blinking shape", () => {
+    const resolution = {
+      t: "question_resolved" as const,
+      v: PROTOCOL_VERSION,
+      sessionId: "session-1",
+      phaseEpoch: 2,
+      field: zonesField,
+      quadrantCounts: { apollon: 1, dionysos: 2, kassandra: 0 },
+      winner: "dionysos",
+      resolvedTarget: "next",
+      freezeUntil: 10_000,
+    } as unknown as QuestionResolvedMessage;
+
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay field={zonesField} liveField={null} liveCounts={null} resolution={resolution} />,
+    );
+
+    expect(html).toContain('class="zone-shape zone-shape-winner zone-shape-blink"');
+    expect(html.match(/<polygon/g)).toHaveLength(1);
+    expect(html).not.toContain("zone-count");
+    expect(html).not.toContain("zone-shape-dimmed");
+    expect(html).not.toContain('class="outcome');
+  });
+
+  it("shows and highlights the deterministic Kleroterion selection for a tied zone vote", () => {
+    const resolution = {
+      t: "question_resolved" as const,
+      v: PROTOCOL_VERSION,
+      sessionId: "session-1",
+      phaseEpoch: 2,
+      field: zonesField,
+      quadrantCounts: { apollon: 2, dionysos: 2, kassandra: 0 },
+      winner: "tie" as const,
+      resolvedTarget: "dionysos-vision",
+      freezeUntil: 10_000,
+      tieBreak: { type: "kleroterion" as const, candidates: ["apollon", "dionysos"], selected: "dionysos" },
+    } as QuestionResolvedMessage;
+
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay field={zonesField} liveField={null} liveCounts={null} resolution={resolution} />,
+    );
+    expect(html).toContain("Lottokratie entscheidet… Dionysos");
+    expect(html).toContain("zone-shape-winner");
+    expect(html.match(/<polygon/g)).toHaveLength(2);
+    expect(html).not.toContain("zone-shape-dimmed");
   });
 });

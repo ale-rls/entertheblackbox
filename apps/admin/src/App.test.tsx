@@ -2,6 +2,24 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+
+const pocketbaseAuth = vi.hoisted(() => ({ authWithPassword: vi.fn() }));
+
+vi.mock("pocketbase", () => ({
+  default: class {
+    authStore = { token: "" };
+    collection() {
+      return {
+        authWithPassword: async (email: string, password: string) => {
+          const result = await pocketbaseAuth.authWithPassword(email, password);
+          this.authStore.token = result.token;
+          return result;
+        },
+      };
+    }
+  },
+}));
+
 import { App, type Status } from "./App.js";
 
 const activeStatus: Status = {
@@ -12,10 +30,19 @@ const activeStatus: Status = {
   displayHeartbeatAgeMs: 42,
   displayPlaybackIssue: null,
   connectedParticipants: 118,
+  participants: [],
   sessionId: "5H7D-A2",
   lifecycle: "active",
   phaseId: "question-02",
   phaseEpoch: 7,
+};
+
+const sceneFlow = {
+  entryPhaseId: "intro",
+  scenes: [
+    { id: "intro", kind: "video", title: "Opening film", routes: [{ outcome: "next", target: "question-02" }] },
+    { id: "question-02", kind: "position-question", title: "Choose a position", routes: [{ outcome: "next", target: "idle" }] },
+  ],
 };
 
 let root: Root | null = null;
@@ -28,9 +55,10 @@ afterEach(async () => {
   if (root) await act(async () => root?.unmount());
   root = null;
   document.body.replaceChildren();
-  sessionStorage.clear();
+  localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  pocketbaseAuth.authWithPassword.mockReset();
 });
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -58,12 +86,16 @@ function button(label: string): HTMLButtonElement {
 }
 
 function createAdminFetch(options?: { status?: Status; rejectAction?: string }) {
-  const requests: Array<{ url: string; method: string }> = [];
+  const requests: Array<{ url: string; method: string; body?: string }> = [];
   const mock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
-    requests.push({ url, method });
+    requests.push({ url, method, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
     if (url.endsWith("/status")) return jsonResponse(options?.status ?? activeStatus);
+    if (url.endsWith("/flow")) return jsonResponse(sceneFlow);
+    if (url.endsWith("/shows") && method === "GET") {
+      return jsonResponse({ active: "show-a", pending: null, shows: [{ showId: "show-a", name: "Election night", version: "1.0.0", publishedAt: 1_000 }] });
+    }
     if (method === "POST" && url.endsWith(`/${options?.rejectAction ?? "\0"}`)) return jsonResponse({ ok: false, reason: "wrong-phase" }, 409);
     return jsonResponse({ ok: true });
   });
@@ -84,21 +116,29 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).not.toContain("question-02");
   });
 
-  it("stores a submitted token, authenticates, fetches status, and polls every two seconds", async () => {
+  it("signs in via PocketBase, stores the resulting token, fetches status, and polls every two seconds", async () => {
+    pocketbaseAuth.authWithPassword.mockResolvedValue({
+      token: "pb-operator-token",
+      record: { id: "op1", email: "operator@smartphonecracy.local", role: "operator" },
+    });
     const { requests } = createAdminFetch();
     const intervalSpy = vi.spyOn(window, "setInterval");
     await renderApp();
 
-    const token = document.querySelector<HTMLInputElement>("#admin-token")!;
+    const email = document.querySelector<HTMLInputElement>("#admin-email")!;
+    const password = document.querySelector<HTMLInputElement>("#admin-password")!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      setter?.call(token, "operator-secret");
-      token.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(email, "operator@smartphonecracy.local");
+      email.dispatchEvent(new Event("input", { bubbles: true }));
+      setter?.call(password, "operator-secret");
+      password.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    await act(async () => { button("Connect").click(); });
+    await act(async () => { button("Sign in").click(); });
     await flush();
 
-    expect(sessionStorage.getItem("admin-token")).toBe("operator-secret");
+    expect(pocketbaseAuth.authWithPassword).toHaveBeenCalledWith("operator@smartphonecracy.local", "operator-secret");
+    expect(localStorage.getItem("admin-token")).toBe("pb-operator-token");
     expect(requests).toContainEqual({ url: "/api/admin/status", method: "GET" });
     expect(requests.some(({ url }) => url === "/api/admin/errors")).toBe(false);
     expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 2_000);
@@ -108,7 +148,7 @@ describe("Admin operations UI", () => {
   });
 
   it("derives action availability, executes Skip, and confirms Restart with keyboard-safe focus", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     const { requests } = createAdminFetch();
     await renderApp();
 
@@ -140,8 +180,54 @@ describe("Admin operations UI", () => {
     expect(document.activeElement).toBe(restartTrigger);
   });
 
+  it("shows the published flow and confirms a direct jump to any other scene", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    const { requests } = createAdminFetch();
+    await renderApp();
+
+    expect(document.body.textContent).toContain("Scene navigator");
+    expect(document.body.textContent).toContain("Opening film");
+    expect(document.body.textContent).toContain("next → question-02");
+    const current = document.querySelector<HTMLButtonElement>('[aria-current="step"]')!;
+    expect(current.disabled).toBe(true);
+    expect(current.textContent).toContain("Choose a position");
+
+    const opening = document.querySelector<HTMLButtonElement>('[aria-label="Opening film, jump to this scene"]')!;
+    await act(async () => { opening.click(); });
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Jump to “Opening film”?");
+    await act(async () => { button("Jump to scene").click(); });
+    await flush();
+
+    expect(requests).toContainEqual({
+      url: "/api/admin/jump",
+      method: "POST",
+      body: JSON.stringify({ phaseId: "intro" }),
+    });
+    expect(document.body.textContent).toContain("Jumped to “Opening film”.");
+  });
+
+  it("adds a show start five minutes from now and keeps the scene navigator last", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    const { requests } = createAdminFetch();
+    await renderApp();
+
+    await act(async () => { button("Add show in 5 minutes").click(); });
+    await flush();
+
+    expect(requests).toContainEqual({
+      url: "/api/admin/lobby",
+      method: "POST",
+      body: JSON.stringify({ startTimes: [1_300_000] }),
+    });
+    expect(document.body.textContent).toContain("Show added in 5 minutes.");
+
+    const panels = Array.from(document.querySelectorAll(".admin-grid > section"));
+    expect(panels.at(-1)?.querySelector("#admin-flow-heading")).not.toBeNull();
+  });
+
   it("keeps server-refused actions visible as inline failure feedback", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     createAdminFetch({ rejectAction: "skip" });
     await renderApp();
 
@@ -151,7 +237,7 @@ describe("Admin operations UI", () => {
   });
 
   it("surfaces a blocked phase video as a live operational failure", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     createAdminFetch({
       status: {
         ...activeStatus,
@@ -172,21 +258,22 @@ describe("Admin operations UI", () => {
   });
 
   it("reports authentication failures without exposing operational placeholders", async () => {
-    sessionStorage.setItem("admin-token", "bad-token");
+    localStorage.setItem("admin-token", "bad-token");
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ error: "unauthorized" }, 401)));
     await renderApp();
 
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain("Invalid admin token");
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("Your session has expired. Sign in again.");
     expect(document.body.textContent).toContain("Connect to load live status");
     expect(document.body.textContent).not.toContain("Current phase");
   });
 
   it("marks cached status stale after a failed poll and clears staleness on recovery", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     let failStatus = false;
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
       if (url.endsWith("/status")) return failStatus ? jsonResponse({ error: "unavailable" }, 503) : jsonResponse(activeStatus);
+      if (url.endsWith("/installation")) return jsonResponse({ active: { installationId: "dev-installation", roomId: "main" }, pending: null });
       return jsonResponse({ ok: true });
     }));
     const intervalSpy = vi.spyOn(window, "setInterval");
@@ -211,8 +298,47 @@ describe("Admin operations UI", () => {
     expect(document.querySelector('[role="alert"]')).toBeNull();
   });
 
+  it("shows the active show and saves a pending selection", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    const requests: Array<{ url: string; method: string; body?: string }> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      requests.push({ url, method, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
+      if (url.endsWith("/status")) return jsonResponse(activeStatus);
+      if (url.endsWith("/shows") && method === "GET") {
+        return jsonResponse({
+          active: "show-a", pending: null,
+          shows: [
+            { showId: "show-a", name: "Election night", version: "1.0.0", publishedAt: 1_000 },
+            { showId: "show-b", name: "Housing town hall", version: "2.0.0", publishedAt: 2_000 },
+          ],
+        });
+      }
+      if (url.endsWith("/shows") && method === "POST") return jsonResponse({ ok: true, pending: "show-b" });
+      return jsonResponse({ ok: true });
+    }));
+    await renderApp();
+
+    expect(document.body.textContent).toContain("Election night (1.0.0)");
+
+    const select = document.querySelector<HTMLSelectElement>("#active-show")!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(select, "show-b");
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const saveShowButton = select.closest("form")!.querySelector<HTMLButtonElement>("button[type=submit]")!;
+    await act(async () => { saveShowButton.click(); });
+    await flush();
+
+    const saveRequest = requests.find(({ url, method }) => url.endsWith("/shows") && method === "POST");
+    expect(saveRequest?.body).toBe(JSON.stringify({ showId: "show-b" }));
+    expect(document.body.textContent).toContain("queued until the current show ends");
+  });
+
   it("does not present inactive recent-error or session-export features", async () => {
-    sessionStorage.setItem("admin-token", "operator-secret");
+    localStorage.setItem("admin-token", "operator-secret");
     const { requests } = createAdminFetch();
     await renderApp();
 

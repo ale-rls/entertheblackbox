@@ -15,6 +15,7 @@ type TrackedCursor = {
   color: string;
   previous: Sample | null;
   latest: Sample;
+  ghost: boolean;
 };
 
 export type RenderedCursor = {
@@ -22,6 +23,7 @@ export type RenderedCursor = {
   x: number;
   y: number;
   color: string;
+  ghost: boolean;
 };
 
 export class CursorField {
@@ -46,18 +48,39 @@ export class CursorField {
     }
   }
 
+  /**
+   * Ingest a single cursor event from the realtime-ws-coolify low-latency
+   * side channel, additive to ingest()'s batched main-protocol
+   * ticks rather than a replacement for them -- unlike ingest(), this never
+   * evicts cursors absent from the update, since a single-cursor event
+   * carries no information about who else is still present.
+   */
+  upsertOne(clientId: string, color: string, x: number, y: number, at: number): void {
+    if (this.frozen) return;
+    this.upsert({ clientId, color, x, y }, at);
+  }
+
+  /** Drop one cursor (realtime-ws cursor_leave), leaving all others untouched. */
+  removeOne(clientId: string): void {
+    if (this.frozen) return;
+    this.cursors.delete(clientId);
+  }
+
   private upsert(cursor: Cursor, at: number): void {
     const existing = this.cursors.get(cursor.clientId);
     const sample: Sample = { x: cursor.x, y: cursor.y, at };
+    const ghost = cursor.ghost === true;
     if (existing) {
       existing.previous = existing.latest;
       existing.latest = sample;
       existing.color = cursor.color;
+      existing.ghost = ghost;
     } else {
       this.cursors.set(cursor.clientId, {
         color: cursor.color,
         previous: null,
         latest: sample,
+        ghost,
       });
     }
   }
@@ -91,6 +114,7 @@ export class CursorField {
         x,
         y,
         color: tracked.color,
+        ghost: tracked.ghost,
       });
     }
     return out;

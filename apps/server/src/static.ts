@@ -11,8 +11,12 @@ const contentTypes: Record<string, string> = {
   ".json": "application/json; charset=utf-8",
   ".map": "application/json; charset=utf-8",
   ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
   ".svg": "image/svg+xml",
+  ".mp3": "audio/mpeg",
   ".mp4": "video/mp4",
+  ".webm": "video/webm",
   ".webp": "image/webp",
 };
 
@@ -58,12 +62,16 @@ async function sendBundleFile(
     return;
   }
 
-  await sendFile(
-    reply,
-    filePath,
-    extension === ".html" ? "no-cache" : "public, max-age=31536000, immutable",
-    "asset_not_found",
-  );
+  // sw.js (apps/display's app-shell service worker) must never get the
+  // year-long immutable cache below: browsers otherwise keep an old SW
+  // in control of the page for up to 24h (or until manually cleared),
+  // which keeps serving its own old cached bundle regardless of how many
+  // times the server gets redeployed with a fix.
+  const cacheControl = relative === "sw.js"
+    ? "no-cache"
+    : extension === ".html" ? "no-cache" : "public, max-age=31536000, immutable";
+
+  await sendFile(reply, filePath, cacheControl, "asset_not_found");
 }
 
 type ByteRange = {
@@ -149,13 +157,8 @@ async function sendRangedFile(
 
 export function registerMediaRoutes(
   app: FastifyInstance,
-  mediaManifestPath: string,
   mediaDir: string,
 ): void {
-  app.get("/media-manifest.json", async (_request, reply) => {
-    await sendFile(reply, resolve(mediaManifestPath), "no-cache", "media_manifest_not_found");
-  });
-
   app.get<{ Params: { "*": string } }>("/media/*", async (request, reply) => {
     const rootPath = resolve(mediaDir);
     const filePath = resolve(rootPath, request.params["*"]);
@@ -170,11 +173,14 @@ export function registerMediaRoutes(
 
 export function registerBundleRoutes(
   app: FastifyInstance,
-  bundles: Record<"display" | "phone" | "admin", string>,
+  bundles: Record<"display" | "phone" | "admin" | "studio", string>,
 ): void {
-  app.get("/", async (_request, reply) => reply.redirect("/display/"));
+  // Most root-page visitors are participants opening the stable join link;
+  // display is only ever loaded with its own full authenticated URL for
+  // the venue's one big-screen kiosk, never via the bare root path.
+  app.get("/", async (_request, reply) => reply.redirect("/phone/"));
 
-  for (const role of ["display", "phone", "admin"] as const) {
+  for (const role of ["display", "phone", "admin", "studio"] as const) {
     app.get(`/${role}`, async (_request, reply) => reply.redirect(`/${role}/`));
     app.get<{ Params: { "*": string } }>(`/${role}/*`, async (request, reply) => {
       await sendBundleFile(reply, bundles[role], request.params["*"], request.headers.range);

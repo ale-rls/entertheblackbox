@@ -1,16 +1,18 @@
 import type {
   CountablePositionVoteStatus,
-  PositionQuestionPhase,
+  PositionVotePhase,
   PositionVoteStatus,
 } from "@smartphonecracy/scenario";
 import {
   countPositionQuadrants,
   DEFAULT_INSTALLATION_POLICY,
+  deterministicChoice,
   materializePositionStatus,
   resolvePositionPlurality,
   resolvePositionFixedTransition,
   type FourQuadrant,
   type FourQuadrantField,
+  type PolygonZonesField,
   type PositionField,
   type PositionQuadrantCounts,
   type TwoQuadrant,
@@ -50,6 +52,7 @@ type FourQuadrantResolution = {
   quadrantCounts: PositionQuadrantCounts<FourQuadrantField>;
   winner: FourQuadrant | "tie" | "empty" | "fixed";
   resolvedTarget: string;
+  tieBreak?: TieBreakResolution;
 };
 
 type TwoQuadrantResolution = {
@@ -57,13 +60,28 @@ type TwoQuadrantResolution = {
   quadrantCounts: PositionQuadrantCounts<TwoQuadrantField>;
   winner: TwoQuadrant | "tie" | "empty" | "fixed";
   resolvedTarget: string;
+  tieBreak?: TieBreakResolution;
 };
 
-export type VoteResolution = (FourQuadrantResolution | TwoQuadrantResolution) & {
+type PolygonZonesResolution = {
+  field: PolygonZonesField;
+  quadrantCounts: PositionQuadrantCounts<PolygonZonesField>;
+  winner: string | "tie" | "empty" | "fixed";
+  resolvedTarget: string;
+  tieBreak?: TieBreakResolution;
+};
+
+type TieBreakResolution = { type: "kleroterion"; candidates: string[]; selected: string };
+
+export type VoteResolution = (FourQuadrantResolution | TwoQuadrantResolution | PolygonZonesResolution) & {
   snapshot: FinalVoteSnapshot;
 };
 
-export type LiveQuestionStatus = (Pick<FourQuadrantResolution, "field" | "quadrantCounts"> | Pick<TwoQuadrantResolution, "field" | "quadrantCounts">) & {
+export type LiveQuestionStatus = (
+  | Pick<FourQuadrantResolution, "field" | "quadrantCounts">
+  | Pick<TwoQuadrantResolution, "field" | "quadrantCounts">
+  | Pick<PolygonZonesResolution, "field" | "quadrantCounts">
+) & {
   connectedCount: number;
   positionedCount: number;
 };
@@ -95,32 +113,34 @@ function freezeVote(vote: PositionVote): PositionVote {
  * quadrant winner; plurality transitions additionally apply status filtering.
  */
 export function resolveSnapshot(
-  question: PositionQuestionPhase,
+  question: PositionVotePhase,
   snapshot: FinalVoteSnapshot,
 ): Omit<VoteResolution, "snapshot"> {
   if (question.next.type === "fixed") {
-    return question.field.type === "four-quadrant"
-      ? resolvePositionFixedTransition(question.field, snapshot.votes, question.next.target)
-      : resolvePositionFixedTransition(question.field, snapshot.votes, question.next.target);
+    return resolvePositionFixedTransition(question.field, snapshot.votes, question.next.target);
   }
 
   const counted = new Set<CountablePositionVoteStatus>(question.next.countedStatuses);
-  if (question.field.type === "four-quadrant") {
-    const outcome = resolvePositionPlurality(question.field, snapshot.votes, counted);
-    const resolvedTarget = outcome.winner === "empty"
-      ? question.next.empty
-      : outcome.winner === "tie"
-        ? question.next.tie
-        : (question.next.map as Record<FourQuadrant, string>)[outcome.winner];
-    return { ...outcome, resolvedTarget };
-  }
   const outcome = resolvePositionPlurality(question.field, snapshot.votes, counted);
+  if (outcome.winner === "tie" && question.next.tieBreak?.type === "kleroterion") {
+    // An explicit pool lets the author curate which branches a tie may
+    // activate. Omitting it preserves the original tied-leaders-only draw.
+    const candidates = question.next.tieBreak.candidates
+      ?? ((outcome.tiedCandidates ?? []) as string[]);
+    const selected = deterministicChoice(`${snapshot.sessionId}:${snapshot.questionId}:${snapshot.phaseEpoch}`, candidates);
+    const resolvedTarget = (question.next.map as Record<string, string>)[selected]!;
+    return {
+      ...outcome,
+      resolvedTarget,
+      tieBreak: { type: "kleroterion", candidates, selected },
+    } as Omit<VoteResolution, "snapshot">;
+  }
   const resolvedTarget = outcome.winner === "empty"
     ? question.next.empty
     : outcome.winner === "tie"
       ? question.next.tie
-      : (question.next.map as Record<TwoQuadrant, string>)[outcome.winner];
-  return { ...outcome, resolvedTarget };
+      : (question.next.map as Record<FourQuadrant | TwoQuadrant | string, string>)[outcome.winner];
+  return { ...outcome, resolvedTarget } as Omit<VoteResolution, "snapshot">;
 }
 
 export class VoteEngine {
@@ -130,7 +150,7 @@ export class VoteEngine {
   private nextHeartbeatPruneAt: number | null = null;
   private question: {
     sessionId: string;
-    question: PositionQuestionPhase;
+    question: PositionVotePhase;
     phaseEpoch: number;
     phaseStartedAt: number;
     phaseDeadline: number;
@@ -156,7 +176,7 @@ export class VoteEngine {
 
   beginQuestion(options: {
     sessionId: string;
-    question: PositionQuestionPhase;
+    question: PositionVotePhase;
     phaseEpoch: number;
     phaseStartedAt: number;
     phaseDeadline: number;
@@ -297,7 +317,7 @@ export class VoteEngine {
     return this.question?.resolution ?? null;
   }
 
-  currentQuestion(): PositionQuestionPhase | null {
+  currentQuestion(): PositionVotePhase | null {
     return this.question?.question ?? null;
   }
 
@@ -342,7 +362,7 @@ export class VoteEngine {
     votes: Iterable<MutableVote>,
     statuses: Map<string, PositionVoteStatus>,
     field: PositionField,
-    next: PositionQuestionPhase["next"],
+    next: PositionVotePhase["next"],
   ): PositionQuadrantCounts {
     const counted = next.type === "quadrant-plurality"
       ? new Set<CountablePositionVoteStatus>(next.countedStatuses)

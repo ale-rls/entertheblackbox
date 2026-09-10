@@ -27,7 +27,7 @@ function Harness({ send }: { send: (message: DisplayToServerMessage) => void }) 
     videoUrl: "blob:cached-intro",
     send,
   });
-  return <video ref={diagnostics.ref} onPlaying={diagnostics.onPlaying} onStalled={diagnostics.onStalled} onError={diagnostics.onError} />;
+  return <video ref={(node) => { diagnostics.ref.current = node; }} onPlaying={diagnostics.onPlaying} onStalled={diagnostics.onStalled} onError={diagnostics.onError} />;
 }
 
 async function render(send: (message: DisplayToServerMessage) => void) {

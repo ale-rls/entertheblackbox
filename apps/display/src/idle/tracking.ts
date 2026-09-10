@@ -1,13 +1,15 @@
 import {
-  MARKER_TRACK,
-  MARKER_TRACK_FPS,
+  ORIGINAL_MARKER_TRACK,
+  type MarkerTrack,
 } from "./markerTrack.js";
 
 export type Point = readonly [x: number, y: number];
 export type Quad = readonly [Point, Point, Point, Point];
 
 /** Compensate for the canvas update landing one paint after the video frame. */
-export const TRACK_PRESENTATION_LEAD_SECONDS = 1 / MARKER_TRACK_FPS;
+export const TRACK_PRESENTATION_LEAD_SECONDS = 1 / ORIGINAL_MARKER_TRACK.fps;
+/** Expand from the black marker into the prop's surrounding white frame. */
+export const TRACKED_QR_SCALE = 1.25;
 const PERSPECTIVE_MESH_STEPS = 4;
 
 const pointAt = (frame: readonly number[], corner: number): Point => [
@@ -15,17 +17,20 @@ const pointAt = (frame: readonly number[], corner: number): Point => [
   frame[corner * 2 + 1]!,
 ];
 
-/** Interpolate the precomputed marker track against the video's media clock. */
-export function trackedQuadAt(mediaTimeSeconds: number): Quad {
-  const duration = MARKER_TRACK.length / MARKER_TRACK_FPS;
+/** Interpolate one video's precomputed marker track against its media clock. */
+export function trackedQuadAt(
+  mediaTimeSeconds: number,
+  track: MarkerTrack = ORIGINAL_MARKER_TRACK,
+): Quad {
+  const duration = track.frames.length / track.fps;
   const finiteTime = Number.isFinite(mediaTimeSeconds) ? mediaTimeSeconds : 0;
   const loopTime = ((finiteTime % duration) + duration) % duration;
-  const framePosition = loopTime * MARKER_TRACK_FPS;
-  const frameIndex = Math.floor(framePosition) % MARKER_TRACK.length;
-  const nextIndex = (frameIndex + 1) % MARKER_TRACK.length;
+  const framePosition = loopTime * track.fps;
+  const frameIndex = Math.floor(framePosition) % track.frames.length;
+  const nextIndex = (frameIndex + 1) % track.frames.length;
   const mix = framePosition - Math.floor(framePosition);
-  const frame = MARKER_TRACK[frameIndex]!;
-  const next = MARKER_TRACK[nextIndex]!;
+  const frame = track.frames[frameIndex]!;
+  const next = track.frames[nextIndex]!;
 
   return [0, 1, 2, 3].map((corner) => {
     const from = pointAt(frame, corner);
@@ -50,6 +55,25 @@ const pointOnQuad = (quad: Quad, x: number, y: number): Point => {
       + bottomLeft[1] * (1 - x) * y,
   ];
 };
+
+/** Scale a perspective quad around its centre without changing its tracking. */
+export function scaleQuad(quad: Quad, scale: number): Quad {
+  const [topLeft, topRight, bottomRight, bottomLeft] = quad;
+  const center: Point = [
+    (topLeft[0] + topRight[0] + bottomRight[0] + bottomLeft[0]) / 4,
+    (topLeft[1] + topRight[1] + bottomRight[1] + bottomLeft[1]) / 4,
+  ];
+  const scalePoint = (point: Point): Point => [
+    center[0] + (point[0] - center[0]) * scale,
+    center[1] + (point[1] - center[1]) * scale,
+  ];
+  return [
+    scalePoint(topLeft),
+    scalePoint(topRight),
+    scalePoint(bottomRight),
+    scalePoint(bottomLeft),
+  ];
+}
 
 function drawTriangle(
   context: CanvasRenderingContext2D,
@@ -92,8 +116,12 @@ export function drawTrackedQr(
   context: CanvasRenderingContext2D,
   image: CanvasImageSource & { width: number; height: number },
   mediaTimeSeconds: number,
+  track: MarkerTrack = ORIGINAL_MARKER_TRACK,
 ): void {
-  const quad = trackedQuadAt(mediaTimeSeconds + TRACK_PRESENTATION_LEAD_SECONDS);
+  const quad = scaleQuad(
+    trackedQuadAt(mediaTimeSeconds + 1 / track.fps, track),
+    TRACKED_QR_SCALE,
+  );
   const width = image.width;
   const height = image.height;
 

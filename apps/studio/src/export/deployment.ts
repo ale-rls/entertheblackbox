@@ -45,7 +45,7 @@ export class DeploymentExportError extends Error {
 export function smokeAllBranches(draft: Draft): BranchSmokeResult[] {
   const results: BranchSmokeResult[] = [];
   for (const phase of draft.project.scenario.phases) {
-    if (phase.kind !== "position-question") continue;
+    if (phase.kind !== "position-question" && phase.kind !== "video-position-question") continue;
     const candidates: Array<Exclude<ForcedOutcome, "abandoned-solo">> = phase.next.type === "fixed"
       ? [phase.field.type === "two-quadrant" ? "min" : "q1"]
       : forcedOutcomes(phase.field).filter((outcome): outcome is Exclude<ForcedOutcome, "abandoned-solo"> => outcome !== "abandoned-solo");

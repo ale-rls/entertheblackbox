@@ -18,8 +18,10 @@ describe("Show Studio design proof", () => {
     expect(html).toContain("Preview show");
     expect(html).toContain("Question");
     expect(html).toContain('value="four-quadrant"');
-    expect(html).toContain('value="two-quadrant-x"');
-    expect(html).toContain('value="two-quadrant-y"');
+    expect(html).toContain('value="two-quadrant-x-split"');
+    expect(html).toContain('value="two-quadrant-x-spectrum"');
+    expect(html).toContain('value="two-quadrant-y-split"');
+    expect(html).toContain('value="two-quadrant-y-spectrum"');
     expect(html).not.toContain("Prompt");
     expect(html).not.toContain("Single axis");
     expect(html).not.toContain("Delete node");

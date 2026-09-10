@@ -1,0 +1,241 @@
+{
+  "canvasFormatVersion": 1,
+  "edges": [
+    {
+      "id": "entry",
+      "source": "__studio_entry__",
+      "sourceHandle": "next",
+      "target": "Athene"
+    },
+    {
+      "id": "Athene:next",
+      "source": "Athene",
+      "sourceHandle": "next",
+      "target": "chaseme"
+    },
+    {
+      "id": "chaseme:next",
+      "source": "chaseme",
+      "sourceHandle": "next",
+      "target": "chapme"
+    },
+    {
+      "id": "chapme:next",
+      "source": "chapme",
+      "sourceHandle": "next",
+      "target": "ostrakismos"
+    },
+    {
+      "id": "ostrakismos:next",
+      "source": "ostrakismos",
+      "sourceHandle": "next",
+      "target": "video-position-question-966206"
+    },
+    {
+      "id": "video-position-question-966206:next",
+      "source": "video-position-question-966206",
+      "sourceHandle": "next",
+      "target": "video-position-question-f46987"
+    },
+    {
+      "id": "video-position-question-f46987:next",
+      "source": "video-position-question-f46987",
+      "sourceHandle": "next",
+      "target": "2-6-01-wo-befindest-du-dich"
+    },
+    {
+      "id": "2-6-01-wo-befindest-du-dich:next",
+      "source": "2-6-01-wo-befindest-du-dich",
+      "sourceHandle": "next",
+      "target": "2-6-02-wo-waerst-du-gerne"
+    },
+    {
+      "id": "2-6-02-wo-waerst-du-gerne:next",
+      "source": "2-6-02-wo-waerst-du-gerne",
+      "sourceHandle": "next",
+      "target": "2-6-03-westliche-demokratie"
+    },
+    {
+      "id": "2-6-03-westliche-demokratie:next",
+      "source": "2-6-03-westliche-demokratie",
+      "sourceHandle": "next",
+      "target": "2-6-04-demokratie-in-50-jahren"
+    },
+    {
+      "id": "2-6-04-demokratie-in-50-jahren:next",
+      "source": "2-6-04-demokratie-in-50-jahren",
+      "sourceHandle": "next",
+      "target": "2-6-05-politische-aktivitaet"
+    },
+    {
+      "id": "2-6-05-politische-aktivitaet:next",
+      "source": "2-6-05-politische-aktivitaet",
+      "sourceHandle": "next",
+      "target": "2-6-06-politisch-aktiv-waerst-du-gerne"
+    },
+    {
+      "id": "2-6-06-politisch-aktiv-waerst-du-gerne:next",
+      "source": "2-6-06-politisch-aktiv-waerst-du-gerne",
+      "sourceHandle": "next",
+      "target": "2-6-07-politisches-system"
+    },
+    {
+      "id": "2-6-07-politisches-system:next",
+      "source": "2-6-07-politisches-system",
+      "sourceHandle": "next",
+      "target": "2-6-08-politisches-klima"
+    },
+    {
+      "id": "2-6-08-politisches-klima:next",
+      "source": "2-6-08-politisches-klima",
+      "sourceHandle": "next",
+      "target": "2-6-09-oekonomisch"
+    },
+    {
+      "id": "2-6-09-oekonomisch:next",
+      "source": "2-6-09-oekonomisch",
+      "sourceHandle": "next",
+      "target": "2-6-10-ki-fiziert"
+    },
+    {
+      "id": "2-6-10-ki-fiziert:next",
+      "source": "2-6-10-ki-fiziert",
+      "sourceHandle": "next",
+      "target": "abmoderation"
+    },
+    {
+      "id": "abmoderation:next",
+      "source": "abmoderation",
+      "sourceHandle": "next",
+      "target": "3-0-wahlkampf-auftakt"
+    },
+    {
+      "id": "3-0-wahlkampf-auftakt:next",
+      "source": "3-0-wahlkampf-auftakt",
+      "sourceHandle": "next",
+      "target": "3-1-openapollo-rede"
+    },
+    {
+      "id": "3-1-openapollo-rede:next",
+      "source": "3-1-openapollo-rede",
+      "sourceHandle": "next",
+      "target": "__studio_end__"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "__studio_entry__",
+      "x": 30,
+      "y": 80
+    },
+    {
+      "id": "Athene",
+      "x": 360,
+      "y": 80
+    },
+    {
+      "id": "chaseme",
+      "x": 660,
+      "y": 80
+    },
+    {
+      "id": "chapme",
+      "x": 960,
+      "y": 80
+    },
+    {
+      "id": "ostrakismos",
+      "x": 360,
+      "y": 300
+    },
+    {
+      "id": "video-position-question-966206",
+      "x": 660,
+      "y": 300
+    },
+    {
+      "id": "video-position-question-f46987",
+      "x": 960,
+      "y": 300
+    },
+    {
+      "id": "2-6-01-wo-befindest-du-dich",
+      "x": 360,
+      "y": 520
+    },
+    {
+      "id": "2-6-02-wo-waerst-du-gerne",
+      "x": 660,
+      "y": 520
+    },
+    {
+      "id": "2-6-03-westliche-demokratie",
+      "x": 960,
+      "y": 520
+    },
+    {
+      "id": "2-6-04-demokratie-in-50-jahren",
+      "x": 360,
+      "y": 740
+    },
+    {
+      "id": "2-6-05-politische-aktivitaet",
+      "x": 660,
+      "y": 740
+    },
+    {
+      "id": "2-6-06-politisch-aktiv-waerst-du-gerne",
+      "x": 960,
+      "y": 740
+    },
+    {
+      "id": "2-6-07-politisches-system",
+      "x": 360,
+      "y": 960
+    },
+    {
+      "id": "2-6-08-politisches-klima",
+      "x": 660,
+      "y": 960
+    },
+    {
+      "id": "2-6-09-oekonomisch",
+      "x": 960,
+      "y": 960
+    },
+    {
+      "id": "2-6-10-ki-fiziert",
+      "x": 360,
+      "y": 1180
+    },
+    {
+      "id": "abmoderation",
+      "x": 660,
+      "y": 1180
+    },
+    {
+      "id": "3-0-wahlkampf-auftakt",
+      "x": 960,
+      "y": 1180
+    },
+    {
+      "id": "3-1-openapollo-rede",
+      "x": 360,
+      "y": 1400
+    },
+    {
+      "id": "__studio_end__",
+      "x": 1250,
+      "y": 500
+    }
+  ],
+  "runtimeScenarioVersion": "smartphonocracy-v14-de-2026.08.27",
+  "showId": "8031057e-1a58-41b5-bd8b-731e801f132d",
+  "studioFormatVersion": 1,
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  }
+}
+

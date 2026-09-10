@@ -5,27 +5,38 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { Draft } from "./model.js";
 
 const database = vi.hoisted(() => ({ drafts: [] as Draft[], deleted: [] as string[] }));
-const media = vi.hoisted(() => ({ load: vi.fn(), upload: vi.fn() }));
+const media = vi.hoisted(() => ({ load: vi.fn(), upload: vi.fn(), remove: vi.fn() }));
 
 vi.mock("./drafts.js", () => ({
   Autosave: class {
     schedule(_draft: Draft, changed?: (status: "saved") => void) { changed?.("saved"); }
   },
-  IndexedDbDraftDatabase: class {
+  recoverDraft: async () => undefined,
+}));
+
+vi.mock("./pocketbase-drafts.js", () => ({
+  PocketbaseDraftDatabase: class {
     async list() { return database.drafts; }
     async delete(id: string) {
       database.deleted.push(id);
       database.drafts = database.drafts.filter((draft) => draft.id !== id);
     }
   },
-  recoverDraft: async () => undefined,
 }));
 
 vi.mock("./media/local.js", () => ({
-  loadLocalMediaManifest: media.load,
   refreshDraftLocalMedia: (draft: Draft) => draft,
-  runtimeMediaManifest: () => ({ files: [] }),
-  uploadLocalMedia: media.upload,
+  runtimeMediaManifest: (manifest: { files: Array<{ src: string; bytes: number; hash: string }> }) => ({
+    files: manifest.files.map(({ src, bytes, hash }) => ({ src, bytes, hash })),
+  }),
+}));
+
+vi.mock("./media/pocketbase-media.js", () => ({
+  PocketbaseMediaLibrary: class {
+    list = media.load;
+    upload = media.upload;
+    remove = media.remove;
+  },
 }));
 
 import { App } from "./App.js";
@@ -44,9 +55,11 @@ beforeEach(() => {
   database.deleted = [];
   media.load.mockReset().mockResolvedValue(undefined);
   media.upload.mockReset().mockResolvedValue(undefined);
+  media.remove.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 404 })));
   vi.stubGlobal("scrollTo", vi.fn());
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  vi.stubGlobal("DOMMatrixReadOnly", class { m22 = 1; });
 });
 
 afterEach(async () => {
@@ -79,6 +92,20 @@ function button(label: string): HTMLButtonElement {
 }
 
 describe("Studio confirmations", () => {
+  it("warns when the production show is active", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/api/status")) {
+        return Response.json({ showLifecycle: "active" });
+      }
+      return new Response(null, { status: 404 });
+    }));
+
+    await render(<App />);
+
+    expect(document.querySelector(".live-show-warning")?.textContent).toContain("Live show running");
+    expect(document.querySelector(".live-show-warning")?.textContent).toContain("apply after the show ends");
+  });
+
   it("traps focus, closes on Escape, and restores the delete trigger", async () => {
     database.drafts = [{ id: "draft-1", name: "Museum Show", updatedAt: 1 } as Draft];
     await render(<App />);
@@ -207,9 +234,11 @@ describe("Studio feedback and keyboard entry", () => {
       .mockResolvedValueOnce(undefined);
     await render(<App />);
     await act(async () => { button("New show").click(); });
+    await act(async () => { button("Media").click(); });
 
-    const input = document.querySelector<HTMLInputElement>('input[aria-label="Add video media"]')!;
-    expect(input.accept).toBe("video/mp4,video/webm,.mp4,.webm");
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Upload media to media library"]')!;
+    expect(input.accept).toContain("audio/mpeg");
+    expect(input.accept).toContain("image/png");
     const files = [
       new File(["first"], "first.mp4", { type: "video/mp4" }),
       new File(["duplicate"], "duplicate.mp4", { type: "video/mp4" }),
@@ -229,6 +258,419 @@ describe("Studio feedback and keyboard entry", () => {
     expect(media.load).toHaveBeenCalledTimes(2);
     expect(document.body.textContent).toContain("Added 2: first.mp4, third.webm.");
     expect(document.body.textContent).toContain("Failed 1: duplicate.mp4");
+  });
+
+  it("shows media usage and confirms permanent removal from the shared library", async () => {
+    media.load
+      .mockResolvedValueOnce({ files: [{ src: "unused.mp4", bytes: 1_048_576, hash: "unused", durationMs: 12_000 }] })
+      .mockResolvedValueOnce({ files: [] });
+    await render(<App />);
+    await act(async () => { button("Media library").click(); });
+
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("unused.mp4");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("1.0 MB");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Shared");
+    await act(async () => { button("Remove").click(); });
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("permanently deletes the shared PocketBase media file");
+    await act(async () => { button("Remove media").click(); });
+    await flush();
+
+    expect(media.remove).toHaveBeenCalledWith("unused.mp4");
+    expect(document.body.textContent).toContain("Removed unused.mp4 from the media library.");
+  });
+
+  it("uses the media library picker when adding and changing a video phase", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "opening.mp4", bytes: 1_000, hash: "opening", durationMs: 1_000 },
+      { src: "conclusion.webm", bytes: 2_000, hash: "conclusion", durationMs: 2_500 },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Video phase").click(); });
+
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("Choose media");
+    expect(dialog.textContent).toContain("opening.mp4");
+    expect(dialog.textContent).toContain("conclusion.webm");
+    const conclusionRow = Array.from(dialog.querySelectorAll<HTMLElement>(".media-row"))
+      .find((row) => row.textContent?.includes("conclusion.webm"))!;
+    await act(async () => { conclusionRow.querySelector<HTMLButtonElement>("button")?.click(); });
+    await flush();
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    const sourceButton = document.querySelector<HTMLButtonElement>('.media-source-picker')!;
+    expect(sourceButton.textContent).toContain("conclusion.webm");
+    expect(sourceButton.getAttribute("aria-label")).toContain("Current media: conclusion.webm");
+    expect(document.body.textContent).toContain("Playback duration: 2.500 seconds");
+    expect(document.body.textContent).toContain("Hold last frame (ms)");
+    expect(document.body.textContent).toContain("Selected conclusion.webm for video-");
+
+    const holdInput = Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("Hold last frame (ms)"))
+      ?.querySelector<HTMLInputElement>("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(holdInput, "1500");
+      holdInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(document.body.textContent).toContain("total with last-frame hold: 4.000 seconds");
+
+    await act(async () => { sourceButton.click(); });
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Choose media");
+    expect(document.querySelector('.media-row[data-selected="true"]')?.textContent).toContain("conclusion.webm");
+  });
+
+  it("authors a still image + MP3 phase with type-filtered library pickers", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "opening.mp4", bytes: 1_000, hash: "video", durationMs: 1_000 },
+      { src: "portrait.png", bytes: 2_000, hash: "image" },
+      { src: "voice.mp3", bytes: 3_000, hash: "voice", durationMs: 12_000 },
+      { src: "alternate.mp3", bytes: 4_000, hash: "alternate", durationMs: 25_000 },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Image + MP3 phase").click(); });
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("portrait.png");
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("opening.mp4");
+    expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain("voice.mp3");
+    await act(async () => { button("Cancel").click(); });
+
+    const componentType = Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("Component type"))
+      ?.querySelector<HTMLSelectElement>("select")!;
+    expect(componentType.value).toBe("image-audio");
+    expect(Array.from(componentType.options).map((option) => option.value)).toEqual([
+      "video",
+      "image-audio",
+      "position-question",
+      "video-position-question",
+      "image-audio-position-question",
+    ]);
+
+    expect(document.body.textContent).toContain("portrait.png");
+    expect(document.body.textContent).toContain("voice.mp3");
+    expect(document.body.textContent).toContain("Tail after audio (ms)");
+    expect(document.body.textContent).toContain("total with tail: 13.000 seconds");
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(componentType, "video");
+      componentType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(componentType.value).toBe("video");
+    expect(document.body.textContent).toContain("opening.mp4");
+    expect(document.body.textContent).not.toContain("Tail after audio (ms)");
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(componentType, "image-audio");
+      componentType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(componentType.value).toBe("image-audio");
+    expect(document.body.textContent).toContain("portrait.png");
+    expect(document.body.textContent).toContain("voice.mp3");
+    expect(document.body.textContent).toContain("total with tail: 13.000 seconds");
+
+    const tailInput = Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("Tail after audio (ms)"))
+      ?.querySelector<HTMLInputElement>("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(tailInput, "3000");
+      tailInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(document.body.textContent).toContain("total with tail: 15.000 seconds");
+    const audioPicker = document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"]')!;
+    await act(async () => { audioPicker.click(); });
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(dialog.textContent).toContain("voice.mp3");
+    expect(dialog.textContent).toContain("alternate.mp3");
+    expect(dialog.textContent).not.toContain("portrait.png");
+    expect(dialog.textContent).not.toContain("opening.mp4");
+
+    const alternate = Array.from(dialog.querySelectorAll<HTMLElement>(".media-row"))
+      .find((row) => row.textContent?.includes("alternate.mp3"))!;
+    await act(async () => { alternate.querySelector<HTMLButtonElement>("button")?.click(); });
+    await flush();
+    expect(document.body.textContent).toContain("Audio duration: 25.000 seconds");
+    expect(document.body.textContent).toContain("total with tail: 28.000 seconds");
+    expect(document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"]')?.textContent).toContain("alternate.mp3");
+  });
+
+  it("converts between structural component types through the same selector", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "opening.mp4", bytes: 1_000, hash: "video", durationMs: 5_000 },
+      { src: "portrait.png", bytes: 2_000, hash: "image" },
+      { src: "voice.mp3", bytes: 3_000, hash: "voice", durationMs: 12_000 },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Video phase").click(); });
+    await act(async () => { button("Cancel").click(); });
+
+    const componentType = Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes("Component type"))
+      ?.querySelector<HTMLSelectElement>("select")!;
+    expect(componentType.value).toBe("video");
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(componentType, "position-question");
+      componentType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => { button("Change component type").click(); });
+    await flush();
+    expect(componentType.value).toBe("position-question");
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(componentType, "image-audio");
+      componentType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const confirmation = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+    expect(confirmation.textContent).toContain("from position question to still image + MP3");
+    await act(async () => { button("Change component type").click(); });
+    await flush();
+
+    expect(componentType.value).toBe("image-audio");
+    expect(document.body.textContent).toContain("portrait.png");
+    expect(document.body.textContent).toContain("voice.mp3");
+    expect(document.body.textContent).toContain("total with tail: 13.000 seconds");
+  });
+
+  it("authors a curated random outcome pool for tied votes", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+    const node = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="position-question-"]')).at(-1)!;
+    await act(async () => { node.click(); });
+
+    const tieToggle = Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.includes("Resolve ties with a random draw"))
+      ?.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    await act(async () => { tieToggle.click(); });
+
+    const pool = Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.includes("Random outcome pool"))
+      ?.querySelector<HTMLSelectElement>("select")!;
+    expect(pool.value).toBe("tied");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(pool, "selected");
+      pool.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const eligibleInputs = () => Array.from(document.querySelectorAll<HTMLInputElement>(".tie-break-options fieldset input[type=checkbox]"));
+    expect(eligibleInputs()).toHaveLength(4);
+    expect(eligibleInputs().every((input) => input.checked)).toBe(true);
+    await act(async () => { eligibleInputs()[2]!.click(); });
+    await act(async () => { eligibleInputs()[3]!.click(); });
+
+    expect(eligibleInputs().map((input) => input.checked)).toEqual([true, true, false, false]);
+    expect(eligibleInputs().slice(0, 2).every((input) => input.disabled)).toBe(true);
+    expect(document.querySelector(".tie-break-options")?.textContent).toContain("stable for this show session");
+  });
+
+  it("edits image + MP3 vote timing relative to the audio tail", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "portrait.png", bytes: 2_000, hash: "image" },
+      { src: "voice.mp3", bytes: 3_000, hash: "voice", durationMs: 12_000 },
+      { src: "alternate.mp3", bytes: 4_000, hash: "alternate", durationMs: 20_000 },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Image + MP3 + position vote").click(); });
+    await act(async () => { button("Cancel").click(); });
+
+    const inputFor = (text: string) => Array.from(document.querySelectorAll("label"))
+      .find((label) => label.textContent?.includes(text))
+      ?.querySelector<HTMLInputElement>("input")!;
+    expect(document.body.textContent).toContain("milliseconds from MP3 end");
+    expect(inputFor("Show question").value).toBe("0");
+    expect(inputFor("Open voting").value).toBe("15000");
+    expect(inputFor("Close voting").value).toBe("20000");
+    expect(inputFor("Hide question").value).toBe("25000");
+
+    const tailInput = inputFor("Tail after audio (ms)");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(tailInput, "30000");
+      tailInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { button("Fit vote to audio tail").click(); });
+    expect(inputFor("Close voting").value).toBe("20000");
+    expect(inputFor("Hide question").value).toBe("25000");
+
+    await act(async () => { document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"]')?.click(); });
+    const alternate = Array.from(document.querySelectorAll<HTMLElement>(".media-row"))
+      .find((row) => row.textContent?.includes("alternate.mp3"))!;
+    await act(async () => { alternate.querySelector<HTMLButtonElement>("button")?.click(); });
+    await flush();
+    expect(document.body.textContent).toContain("Audio duration: 20.000 seconds");
+    expect(inputFor("Show question").value).toBe("0");
+    expect(inputFor("Close voting").value).toBe("20000");
+    expect(inputFor("Hide question").value).toBe("25000");
+  });
+
+  it("opens the live display and admin as clearly named external tools", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+
+    const links = Array.from(document.querySelectorAll<HTMLAnchorElement>("a"));
+    const display = links.find((link) => link.textContent === "Display")!;
+    const admin = links.find((link) => link.textContent === "Admin")!;
+    expect(display.getAttribute("href")).toBe("/display/");
+    expect(display.getAttribute("target")).toBe("_blank");
+    expect(admin.getAttribute("href")).toBe("/admin/");
+    expect(admin.getAttribute("target")).toBe("_blank");
+    expect(document.body.textContent).not.toContain("Monitor show");
+    expect(Array.from(document.querySelectorAll("button")).some((item) => item.textContent === "Preview")).toBe(false);
+  });
+
+  it("offers a display preview from the selected phase in the top bar", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    expect(Array.from(document.querySelectorAll("a")).some((item) => item.textContent === "Preview from here")).toBe(false);
+
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Video phase").click(); });
+    await act(async () => { button("Cancel").click(); });
+    const preview = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).find((item) => item.textContent === "Preview from here")!;
+    await act(async () => { preview.click(); });
+
+    expect(preview.href).toMatch(/\/preview\.html\?preview=/);
+    expect(preview.target).toBe("_blank");
+    expect(preview.rel).toBe("noreferrer");
+  });
+
+  it("offers the centered XL title option for video phases", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "media/new-video.mp4", bytes: 1_000, hash: "video", durationMs: 10_000 },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Video phase").click(); });
+    await act(async () => { button("Cancel").click(); });
+
+    const titlePosition = Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.includes("Title position"))
+      ?.querySelector<HTMLSelectElement>("select")!;
+    expect(titlePosition.value).toBe("top");
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(titlePosition, "centered-xl");
+      titlePosition.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(titlePosition.value).toBe("centered-xl");
+    const compiled = Array.from(document.querySelectorAll("details"))
+      .find((item) => item.querySelector("summary")?.textContent?.includes("Compiled scenario JSON"));
+    expect(compiled?.querySelector("pre")?.textContent).toContain('"titleLayout": "centered-xl"');
+  });
+
+  it("copies arena settings from one question to another", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+
+    const selectLastPositionQuestion = async () => {
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="position-question-"]'));
+      await act(async () => { nodes.at(-1)?.click(); });
+    };
+    await selectLastPositionQuestion();
+
+    const arenaCheckbox = () => Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.includes("Constrain voting to a calibrated arena"))
+      ?.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    const arenaInput = (name: string) => Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.startsWith(name))
+      ?.querySelector<HTMLInputElement>('input[type="number"]')!;
+
+    await act(async () => { arenaCheckbox().click(); });
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(arenaInput("centerX"), "0.54");
+      arenaInput("centerX").dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { button("Copy arena settings").click(); });
+    expect(document.body.textContent).toContain("Copied ellipse arena settings.");
+
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+    await selectLastPositionQuestion();
+    expect(arenaCheckbox().checked).toBe(false);
+    expect(button("Paste arena settings").disabled).toBe(false);
+
+    await act(async () => { button("Paste arena settings").click(); });
+    expect(arenaCheckbox().checked).toBe(true);
+    expect(arenaInput("centerX").value).toBe("0.54");
+    expect(document.body.textContent).toContain("Applied ellipse arena settings.");
+  });
+
+  it("shows the left/right divider prominently and updates its visual position", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+    const node = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="position-question-"]')).at(-1)!;
+    await act(async () => { node.click(); });
+
+    const layout = Array.from(document.querySelectorAll("label"))
+      .find((item) => item.textContent?.includes("Position layout"))
+      ?.querySelector<HTMLSelectElement>("select")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(layout, "two-quadrant-x-split");
+      layout.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => { button("Replace connections").click(); });
+
+    const control = document.querySelector<HTMLElement>(".divider-position-control")!;
+    expect(control.textContent).toContain("Left / right dividing line");
+    expect(control.textContent).toContain("50%");
+    const slider = control.querySelector<HTMLInputElement>('input[type="range"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(slider, "47");
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    expect(control.querySelector("output")?.textContent).toBe("47%");
+    expect(control.querySelector<HTMLElement>(".divider-position-preview i")?.style.left).toBe("47%");
+  });
+
+  it("collapses and expands the bottom panel from its persistent header", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+
+    const content = document.querySelector<HTMLElement>("#bottom-panel-content")!;
+    const collapse = button("Collapse panel");
+    expect(collapse.getAttribute("aria-expanded")).toBe("true");
+    expect(content.hidden).toBe(false);
+
+    await act(async () => { collapse.click(); });
+    expect(content.hidden).toBe(true);
+    expect(document.querySelector(".diagnostics")?.classList.contains("is-collapsed")).toBe(true);
+    expect(button("Expand panel").getAttribute("aria-expanded")).toBe("false");
+
+    await act(async () => { button("Expand panel").click(); });
+    expect(content.hidden).toBe(false);
+    expect(button("Collapse panel").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("acknowledges every acknowledgement-required diagnostic at once", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+
+    const acknowledgementInputs = () => Array.from(document.querySelectorAll<HTMLInputElement>(".diagnostics input[type=checkbox]"));
+    expect(acknowledgementInputs().length).toBeGreaterThan(1);
+    expect(acknowledgementInputs().every((input) => !input.checked)).toBe(true);
+    expect(button("Acknowledge all").disabled).toBe(false);
+
+    await act(async () => { button("Acknowledge all").click(); });
+
+    expect(acknowledgementInputs().every((input) => input.checked)).toBe(true);
+    expect(button("Acknowledge all").disabled).toBe(true);
+    expect(document.querySelector(".diagnostics-list-heading")?.textContent).not.toContain("export blocked");
   });
 
   it("returns focus to a menu trigger after a normal selection", async () => {

@@ -1,19 +1,99 @@
+@font-face {
+  font-family: "Leander";
+  src: url("./assets/Leander.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   color: #fff;
   background: #050505;
-  font-family: system-ui, sans-serif;
+  font-family: "Leander", system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
-html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-.display-root { position: relative; background: #050505; }
+button, input, select, textarea { font: inherit; }
+html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+/*
+ * The kiosk target is a fixed 16:9 frame (matches Studio's REFERENCE_DISPLAY
+ * calibration in the polygon/arena editors). #root letterboxes the real
+ * viewport down to that ratio so "cover" media crops and polygon/arena zone
+ * math always line up with what was calibrated in Studio, regardless of the
+ * physical screen's actual aspect ratio (e.g. a non-16:9 laptop panel in
+ * fullscreen).
+ */
+#root { display: flex; align-items: center; justify-content: center; background: #050505; }
+.display-root {
+  position: relative;
+  overflow: hidden;
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  background: #050505;
+}
 .layer { position: absolute; inset: 0; }
 .layer-video video { width: 100%; height: 100%; object-fit: cover; }
-.layer-ui { z-index: 1; pointer-events: none; }
-.layer-cursors { z-index: 2; pointer-events: none; }
+.phase-video-slot { position: absolute; inset: 0; z-index: 0; opacity: 0; pointer-events: none; }
+.phase-video-slot-active { z-index: 1; opacity: 1; }
+.phase-image-audio,
+.phase-image-audio img { width: 100%; height: 100%; }
+.phase-image-audio img { display: block; object-fit: cover; background: #050505; }
+.phase-image-audio audio { display: none; }
+.layer-spectrum-glow { z-index: 1; pointer-events: none; }
+.layer-ui { z-index: 2; pointer-events: none; }
+.layer-cursors { z-index: 3; pointer-events: none; }
+.spectrum-glow-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: blur(7px) saturate(1.18);
+  opacity: .92;
+}
 .cursor-canvas { display: block; width: 100%; height: 100%; }
+.display-controls {
+  position: absolute;
+  z-index: 8;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .65rem;
+  max-width: min(90vw, 42rem);
+  pointer-events: auto;
+}
+.sound-control,
+.fullscreen-control {
+  padding: 0.7rem 1rem;
+  border: 1px solid rgb(255 255 255 / 42%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 68%);
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+.sound-control:hover,
+.sound-control:focus-visible,
+.fullscreen-control:hover,
+.fullscreen-control:focus-visible { background: rgb(255 255 255 / 18%); }
+.sound-control:focus-visible,
+.fullscreen-control:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.fullscreen-control:disabled { cursor: not-allowed; opacity: .55; }
+.fullscreen-error {
+  flex-basis: 100%;
+  padding: .4rem .7rem;
+  border-radius: .35rem;
+  background: rgb(110 0 0 / 82%);
+  color: #fff;
+  font-family: system-ui, sans-serif;
+  font-size: .9rem;
+  text-align: right;
+}
 .idle, .question { position: absolute; inset: 0; }
 .idle-attract { overflow: hidden; background: #050505; }
+.idle-attract-hidden { opacity: 0; pointer-events: none; }
 .idle-attract-video, .idle-attract-overlay {
   position: absolute;
   inset: 0;
@@ -21,10 +101,39 @@ html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflo
   height: 100%;
   object-fit: cover;
 }
+.idle-attract-video { z-index: 0; opacity: 0; pointer-events: none; }
+.idle-attract-video-active { opacity: 1; }
 .idle-attract-overlay { z-index: 1; }
-.question h2 { position: absolute; z-index: 4; top: 2rem; left: 50%; max-width: 70%; margin: 0; transform: translateX(-50%); text-align: center; }
+.question-copy { position: absolute; z-index: 4; top: 2rem; left: 50%; width: min(78%, 70rem); transform: translateX(-50%); text-align: center; }
+.question-text { margin: 0; font-size: clamp(1.5rem, 3.5vw, 3.2rem); font-weight: 700; }
+.video-title { position: absolute; z-index: 5; top: 2rem; left: 50%; max-width: 78%; padding: .65rem 1rem; transform: translateX(-50%); border-radius: .5rem; background: rgb(0 0 0 / 62%); font-size: clamp(1.4rem, 3vw, 2.8rem); font-weight: 700; text-align: center; backdrop-filter: blur(6px); }
+.video-title-centered-xl { top: 50%; width: 70%; max-width: none; padding: 0; transform: translate(-50%, -50%); border-radius: 0; background: none; font-size: clamp(2.5rem, min(6vw, 11vh), 7rem); line-height: 1.05; white-space: nowrap; backdrop-filter: none; }
+.phase-subtitles { position: absolute; z-index: 7; right: 8%; bottom: 7%; left: 8%; text-align: center; }
+.phase-subtitles p { display: table; max-width: 70rem; margin: .25rem auto; padding: .45rem .8rem; border-radius: .35rem; background: rgb(0 0 0 / 72%); font-size: clamp(1.25rem, 3vw, 2.6rem); font-weight: 700; line-height: 1.2; text-wrap: balance; }
+.question-over-video { animation: question-in 180ms ease-out; }
+.question-over-video.question-fade-out { animation: question-out 320ms ease-in forwards; }
+@keyframes question-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes question-out { from { opacity: 1; } to { opacity: 0; } }
+.vote-close-countdown {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #fff;
+  font-size: clamp(5rem, 16vw, 13rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 24px rgb(255 255 255 / 55%), 0 2px 12px rgb(0 0 0 / 72%);
+  animation: vote-close-tick 1s ease-out;
+  pointer-events: none;
+}
+@keyframes vote-close-tick {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(1.3); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
 
-.quadrant-overlay { position: absolute; inset: 7rem 6rem 5rem; }
+.quadrant-overlay { position: absolute; inset: 0; }
 .quadrant { position: absolute; display: grid; place-items: center; transition: opacity 180ms ease, background 180ms ease; }
 .quadrant-top-right { inset: 0 0 50% 50%; }
 .quadrant-top-left { inset: 0 50% 50% 0; }
@@ -36,36 +145,159 @@ html, body, #root, .display-root { width: 100%; height: 100%; margin: 0; overflo
 .quadrant-bottom { inset: 50% 0 0; }
 .quadrant-winner { background: rgb(255 255 255 / 16%); }
 .quadrant-dimmed { opacity: .28; }
+.quadrant-blink { animation: quadrant-blink .55s ease-in-out infinite; }
+@keyframes quadrant-blink {
+  0%, 100% { background: rgb(255 255 255 / 30%); }
+  50% { background: rgb(255 255 255 / 4%); }
+}
 .quadrant-count { font-size: clamp(2rem, 7vw, 6rem); font-variant-numeric: tabular-nums; }
 
-.axis-cross, .axis-divider { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
-.axis-cross::before, .axis-cross::after, .axis-divider::before {
+.arena-ellipse-overlay { inset: 0; }
+.arena-ellipse-shapes { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.arena-region { fill: rgb(255 255 255 / 4%); transition: opacity 180ms ease, fill 180ms ease; }
+.arena-region-winner { fill: rgb(255 255 255 / 20%); }
+.arena-region-dimmed { opacity: .25; }
+.arena-region-blink { animation: arena-region-blink .55s ease-in-out infinite; }
+@keyframes arena-region-blink {
+  0%, 100% { fill: rgb(255 255 255 / 32%); }
+  50% { fill: rgb(255 255 255 / 6%); }
+}
+.arena-outline,
+.arena-divider,
+.arena-spectrum-axis {
+  fill: none;
+  stroke: rgb(255 255 255 / 82%);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 6px rgb(255 255 255 / 55%)) drop-shadow(0 1px 2px rgb(0 0 0 / 55%));
+}
+.arena-outline { stroke-width: 3px; }
+.arena-axis-label {
+  position: absolute;
+  z-index: 4;
+  max-width: min(15rem, 26vw);
+  padding: .35rem .55rem;
+  border-radius: .35rem;
+  background: rgb(0 0 0 / 64%);
+  font-size: clamp(1rem, 2.2vw, 2rem);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  text-wrap: balance;
+  pointer-events: none;
+}
+/* x-axis (left/right) labels sit above their line, centered on a
+   viewport-clamped point (see clampPercent in QuadrantOverlay.tsx) so long
+   words never run past the screen edge. */
+.arena-axis-label-x { transform: translate(-50%, calc(-100% - .6rem)); }
+.arena-axis-label-y.arena-axis-label-min { transform: translate(-50%, -100%); }
+.arena-axis-label-y.arena-axis-label-max { transform: translate(-50%, -100%); }
+.arena-count {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, -50%);
+  transition: opacity 180ms ease;
+  pointer-events: none;
+}
+.arena-count-dimmed { opacity: .28; }
+.arena-count-winner { font-weight: 700; }
+
+.quadrant-overlay-polygon-zones { inset: 0; }
+.zone-shapes { position: absolute; inset: 0; width: 100%; height: 100%; }
+.zone-shape { fill: transparent; stroke: none; transition: fill 180ms ease; }
+.zone-shape-winner { fill: rgb(255 255 255 / 22%); }
+.zone-shape-blink { animation: arena-region-blink .55s ease-in-out infinite; }
+.zone-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  transition: opacity 180ms ease;
+}
+.zone-label-dimmed { opacity: .35; }
+.zone-name { font-size: clamp(1.2rem, 3vw, 2.2rem); }
+.zone-label-winner .zone-name { font-weight: 700; }
+
+.axis-cross, .axis-track, .axis-divider { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.axis-cross::before, .axis-cross::after, .axis-track::before, .axis-divider::before {
   content: "";
   position: absolute;
   background: rgb(255 255 255 / 72%);
+  box-shadow: 0 0 8px rgb(255 255 255 / 55%);
 }
-.axis-cross::before, .axis-divider-x::before { top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-1px); }
-.axis-cross::after, .axis-divider-y::before { left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-1px); }
+.axis-cross::before, .axis-track-y::before { top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-1px); }
+.axis-cross::after, .axis-track-x::before { left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-1px); }
+.axis-divider-x::before { top: 0; bottom: 0; left: 0; width: 2px; transform: translateX(-1px); }
+.axis-divider-y::before { left: 0; right: 0; top: 50%; height: 2px; transform: translateY(-1px); }
+.axis-arrow { position: absolute; width: 0; height: 0; border: .55rem solid transparent; }
+.axis-arrow-left { top: 50%; left: -.85rem; border-right-color: rgb(255 255 255 / 72%); transform: translateY(-50%); }
+.axis-arrow-right { top: 50%; right: -.85rem; border-left-color: rgb(255 255 255 / 72%); transform: translateY(-50%); }
+.axis-arrow-top { top: -.85rem; left: 50%; border-bottom-color: rgb(255 255 255 / 72%); transform: translateX(-50%); }
+.axis-arrow-bottom { bottom: -.85rem; left: 50%; border-top-color: rgb(255 255 255 / 72%); transform: translateX(-50%); }
 
-.axis { position: absolute; z-index: 4; display: flex; justify-content: space-between; color: rgb(255 255 255 / 78%); }
-.axis-x { right: 6rem; bottom: 2rem; left: 6rem; }
-.axis-y { top: 7rem; bottom: 5rem; left: 1.5rem; flex-direction: column; }
-.outcome { position: absolute; z-index: 5; inset: 0; display: grid; place-items: center; font-size: clamp(2rem, 7vw, 6rem); }
+.axis { position: absolute; z-index: 4; color: rgb(255 255 255 / 88%); font-size: clamp(1rem, 2.2vw, 2rem); font-weight: 700; line-height: 1.1; pointer-events: none; }
+.axis-x { top: 50%; right: 0; left: 0; height: 0; }
+.axis-y { top: 0; bottom: 0; left: 50%; width: 0; }
+.axis-label { position: absolute; max-width: min(15rem, 18vw); padding: .35rem .55rem; border-radius: .35rem; background: rgb(0 0 0 / 56%); text-align: center; text-wrap: balance; }
+.axis-x .axis-label { top: 0; }
+.axis-x .axis-label-min { left: 1.25rem; transform: translateY(-50%); text-align: left; }
+.axis-x .axis-label-max { right: 1.25rem; transform: translateY(-50%); text-align: right; }
+.axis-y .axis-label { left: 0; }
+.axis-y .axis-label-min { top: 1.25rem; transform: translateX(-50%); }
+.axis-y .axis-label-max { bottom: 1.25rem; transform: translateX(-50%); }
+.outcome { position: absolute; z-index: 5; inset: 0; display: grid; place-items: center; padding: 2rem; font-size: clamp(2rem, 7vw, 6rem); text-align: center; text-shadow: 0 2px 14px #000; }
 .outcome-empty { display: none; }
 
-.countdown, .reconnecting, .media-status, .notice, .phone-count { position: absolute; z-index: 6; }
+.countdown, .reconnecting, .media-status, .notice, .lobby-information { position: absolute; z-index: 6; }
 .countdown { right: 2rem; bottom: 2rem; }
-.countdown-lobby {
+.countdown-field-centered { right: auto; bottom: auto; transform: translate(-50%, -50%); font-size: clamp(5rem, 16vw, 13rem); font-weight: 700; text-shadow: 0 0 24px rgb(255 255 255 / 55%), 0 2px 12px rgb(0 0 0 / 72%); }
+.lobby-information {
   inset: 0;
-  display: grid;
-  place-items: center;
-  color: #000;
-  font-size: clamp(8rem, 24vw, 22rem);
-  font-weight: 700;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.lobby-heading {
+  position: absolute;
+  top: clamp(1rem, 3vh, 2.5rem);
+  bottom: auto;
+  left: 50%;
+  margin: 0;
+  transform: translateX(-50%);
+  font-size: clamp(2rem, 5vw, 4.5rem);
+  text-shadow: 0 2px 12px rgb(0 0 0 / 72%);
+}
+.lobby-instructions {
+  position: absolute;
+  top: auto;
+  right: clamp(1rem, 4vw, 4rem);
+  bottom: clamp(4.25rem, 8vh, 6rem);
+  left: clamp(1rem, 4vw, 4rem);
+  color: #fff;
+  opacity: 1;
+  font-family: "Leander", system-ui, sans-serif;
+  font-size: 2.5rem;
+  line-height: 1.35;
+  text-align: center;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 85%);
+}
+.lobby-instructions p { margin: .2rem 0; }
+.lobby-join-url {
+  position: absolute;
+  right: 1rem;
+  bottom: clamp(1rem, 2.5vh, 2rem);
+  left: 1rem;
+  overflow: hidden;
+  color: #fff;
+  font-family: "Leander", system-ui, sans-serif;
+  font-size: clamp(1.4rem, 2.2vw, 2rem);
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 8px rgb(0 0 0 / 85%);
+  white-space: nowrap;
 }
 .reconnecting, .media-status, .notice { top: 1rem; left: 1rem; }
 .media-status { top: 3rem; }
 .notice { top: auto; bottom: 1rem; }
-.phone-count { right: 1rem; bottom: 1rem; color: #000; font-size: 40px; }

@@ -1,3 +1,10 @@
+export type MarkerTrack = {
+  fps: number;
+  width: number;
+  height: number;
+  frames: readonly (readonly number[])[];
+};
+
 /** Precomputed perspective marker corners for idle-attract.mp4 at 25 fps.
  * Generated at source resolution with transform-level outlier rejection and smoothing.
  * Values are
@@ -258,3 +265,10 @@ export const MARKER_TRACK: readonly (readonly number[])[] = [
   [504.6, 234.6, 630.4, 231.7, 632.3, 357.5, 505.6, 359.4],
   [504.6, 234.6, 630.4, 231.7, 632.3, 357.7, 505.6, 359.4],
 ];
+
+export const ORIGINAL_MARKER_TRACK: MarkerTrack = {
+  fps: MARKER_TRACK_FPS,
+  width: MARKER_TRACK_WIDTH,
+  height: MARKER_TRACK_HEIGHT,
+  frames: MARKER_TRACK,
+};

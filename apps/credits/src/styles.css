@@ -1,0 +1,131 @@
+@font-face {
+  font-family: "Leander";
+  src: url("../../display/src/assets/Leander.ttf") format("truetype");
+  font-display: block;
+  font-style: normal;
+  font-weight: 400;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.credits {
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-family: "Leander", serif;
+  letter-spacing: 0.025em;
+}
+
+.roll {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1240px;
+  margin-left: -620px;
+  will-change: transform;
+}
+
+.roll-title {
+  margin-bottom: 220px;
+  text-align: center;
+}
+
+.roll-title h2 {
+  margin: 0 0 18px;
+  font-size: 88px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.roll-title p {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: 0.12em;
+}
+
+.credits-block {
+  display: flex;
+  flex-direction: column;
+  gap: 78px;
+  margin-bottom: 230px;
+}
+
+.credit-row {
+  text-align: center;
+}
+
+.credit-label {
+  margin-bottom: 10px;
+  font-size: 21px;
+  line-height: 1.25;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.credit-name {
+  font-size: 42px;
+  line-height: 1.25;
+}
+
+.credits-production {
+  gap: 100px;
+  margin-bottom: 250px;
+}
+
+.statement {
+  margin: 0 auto 250px;
+  text-align: center;
+}
+
+.statement-kicker {
+  display: inline-block;
+  margin-bottom: 30px;
+  font-size: 18px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.statement p {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1.38;
+}
+
+.statement span {
+  font-size: 60px;
+}
+
+.statement .dates {
+  margin-top: 44px;
+  font-size: 32px;
+  line-height: 1.42;
+  letter-spacing: 0.06em;
+}
+
+.disclosure {
+  max-width: 1060px;
+  margin-bottom: 250px;
+}
+
+.disclosure p {
+  font-size: 35px;
+  line-height: 1.48;
+}
+
+.end-mark {
+  text-align: center;
+}
+
+.interrobang-logo {
+  width: 246px;
+  height: 320px;
+  margin: 0 auto;
+  background: url("../../display/src/assets/interrobang-logo.png") center / contain no-repeat;
+  filter: brightness(0) invert(1);
+}

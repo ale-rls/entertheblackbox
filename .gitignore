@@ -15,3 +15,9 @@ content/media/*
 
 # Playwright artifacts
 test-results/
+
+# PocketBase local instance (binary is downloaded, data/logs are runtime state)
+pocketbase/bin/
+pocketbase/pb_data/
+pocketbase/pb_logs/
+pocketbase/.e2e-data/

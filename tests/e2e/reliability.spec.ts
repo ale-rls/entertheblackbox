@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { adminStatus, startServer, type E2eServer } from "./helpers/server.js";
-import { displayUrl, dragTrackpad, phoneUrl } from "./helpers/clients.js";
+import { adminAction, adminStatus, startServer, type E2eServer } from "./helpers/server.js";
+import { displayUrl, dragTrackpad, joinPhone } from "./helpers/clients.js";
 
 /**
  * §16 reliability drills: server-kill recovery, display-kill abort to
@@ -26,8 +26,9 @@ test.describe("reliability", () => {
 
     // Drive into an active session so the kill hits mid-experience.
     const phone = await browser.newPage();
-    await phone.goto(phoneUrl(server.baseUrl));
+    await joinPhone(phone, server.baseUrl, "Reliability visitor");
     await expect(phone.locator(".trackpad")).toBeVisible();
+    await adminAction(server.baseUrl, "start");
     await expect
       .poll(async () => (await adminStatus(server.baseUrl)).lifecycle, { timeout: 20_000 })
       .toBe("active");
@@ -51,7 +52,7 @@ test.describe("reliability", () => {
 
     // A fresh phone can join the recovered system and start a session.
     const phone2 = await browser.newPage();
-    await phone2.goto(phoneUrl(server.baseUrl));
+    await joinPhone(phone2, server.baseUrl, "Recovery visitor");
     await expect(phone2.locator(".trackpad")).toBeVisible();
     await expect
       .poll(async () => (await adminStatus(server.baseUrl)).lifecycle, { timeout: 20_000 })
@@ -67,7 +68,8 @@ test.describe("reliability", () => {
     await expect.poll(async () => (await adminStatus(server.baseUrl)).displayConnected).toBe(true);
 
     const phone = await browser.newPage();
-    await phone.goto(phoneUrl(server.baseUrl));
+    await joinPhone(phone, server.baseUrl, "Display recovery visitor");
+    await adminAction(server.baseUrl, "start");
     await expect
       .poll(async () => (await adminStatus(server.baseUrl)).lifecycle, { timeout: 20_000 })
       .toBe("active");
