@@ -1,0 +1,1217 @@
+{
+  "version": "1.0.0",
+  "entryPhaseId": "k2_intro",
+  "cyclesAllowed": false,
+  "phases": [
+    {
+      "kind": "idle",
+      "id": "idle"
+    },
+    {
+      "kind": "video",
+      "id": "k2_intro",
+      "title": "Modell-Intro",
+      "src": "narration.png",
+      "audioSrc": "k2_intro.mp3",
+      "expectedDurationMs": 60000,
+      "next": "k3_intro"
+    },
+    {
+      "kind": "video",
+      "id": "k3_intro",
+      "title": "Trainingsepoche: Arbeit",
+      "src": "narration.png",
+      "audioSrc": "k3_intro.mp3",
+      "expectedDurationMs": 60000,
+      "next": "arbeit_1"
+    },
+    {
+      "kind": "position-question",
+      "id": "arbeit_1",
+      "text": "Wie fühlt sich deine bisherige Arbeit für dich an?\nPositioniere dich auf der rosa Skala zwischen links “Ich liebe diese Arbeit” und rechts “Diese Arbeit ist nicht auszuhalten”.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "variant": "spectrum",
+        "labels": {
+          "minLabel": "Ich liebe diese Arbeit",
+          "maxLabel": "Diese Arbeit ist nicht auszuhalten"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "arbeit_2"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "arbeit_2",
+      "text": "Wie sinnvoll ist deine bisherige Arbeit für dich selbst und wie sinnvoll ist sie für andere?\nPositioniere dich im Feld zwischen den beiden Achsen. Die grüne Achse zeigt, wie sinnvoll deine bisherige Arbeit für dich selbst ist. Von “wenig sinnvoll für mich” unten bis “sehr sinnvoll für mich” oben. Die rosa Achse zeigt, wie sinnvoll sie für andere ist. Von “wenig sinnvoll für andere” links bis “sehr sinnvoll für andere” rechts. \nBerücksichtige beide Achsen gleichzeitig und wähle die Position, die deiner Einschätzung am besten entspricht.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "four-quadrant",
+        "xAxis": {
+          "minLabel": "wenig sinnvoll für andere",
+          "maxLabel": "sehr sinnvoll für andere"
+        },
+        "yAxis": {
+          "minLabel": "sehr sinnvoll für mich",
+          "maxLabel": "wenig sinnvoll für mich"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "arbeit_3"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "arbeit_3",
+      "text": "Wie angemessen wurdest du für deine bisherige Arbeit bezahlt?\nPositioniere dich auf der rosa Skala zwischen links „viel zu wenig“ und rechts „überbezahlt“. Die Mitte der Skala bedeutet „angemessen bezahlt“.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "variant": "spectrum",
+        "labels": {
+          "minLabel": "Ich empfange Befehle",
+          "maxLabel": "Ich entscheide selbst"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "arbeit_4"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "arbeit_4",
+      "text": "Wie angemessen wurdest du für deine bisherige Arbeit bezahlt?\nPositioniere dich auf der rosa Skala zwischen links „viel zu wenig“ und rechts „überbezahlt“. Die Mitte der Skala bedeutet „angemessen bezahlt“.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "polygon-zones",
+        "zones": [
+          {
+            "id": "scale-left",
+            "label": "viel zu wenig",
+            "points": [
+              {
+                "x": 0,
+                "y": 0
+              },
+              {
+                "x": 0.3333333333333333,
+                "y": 0
+              },
+              {
+                "x": 0.3333333333333333,
+                "y": 1
+              },
+              {
+                "x": 0,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "scale-mid",
+            "label": "angemessen",
+            "points": [
+              {
+                "x": 0.3333333333333333,
+                "y": 0
+              },
+              {
+                "x": 0.6666666666666666,
+                "y": 0
+              },
+              {
+                "x": 0.6666666666666666,
+                "y": 1
+              },
+              {
+                "x": 0.3333333333333333,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "scale-right",
+            "label": "überbezahlt",
+            "points": [
+              {
+                "x": 0.6666666666666666,
+                "y": 0
+              },
+              {
+                "x": 1,
+                "y": 0
+              },
+              {
+                "x": 1,
+                "y": 1
+              },
+              {
+                "x": 0.6666666666666666,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "next": {
+        "type": "fixed",
+        "target": "arbeit_5"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "arbeit_5",
+      "text": "Wie groß ist deine Sorge, in deiner Arbeit durch andere Menschen ersetzt zu werden?\nPositioniere dich auf der rosa Skala zwischen links “keine Sorge” und rechts “sehr große Sorge”.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "polygon-zones",
+        "zones": [
+          {
+            "id": "scale-left",
+            "label": "Ich bin eher geschrumpft",
+            "points": [
+              {
+                "x": 0,
+                "y": 0
+              },
+              {
+                "x": 0.3333333333333333,
+                "y": 0
+              },
+              {
+                "x": 0.3333333333333333,
+                "y": 1
+              },
+              {
+                "x": 0,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "scale-mid",
+            "label": "Ich bin stehengeblieben",
+            "points": [
+              {
+                "x": 0.3333333333333333,
+                "y": 0
+              },
+              {
+                "x": 0.6666666666666666,
+                "y": 0
+              },
+              {
+                "x": 0.6666666666666666,
+                "y": 1
+              },
+              {
+                "x": 0.3333333333333333,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "scale-right",
+            "label": "Ich bin sehr stark gewachsen",
+            "points": [
+              {
+                "x": 0.6666666666666666,
+                "y": 0
+              },
+              {
+                "x": 1,
+                "y": 0
+              },
+              {
+                "x": 1,
+                "y": 1
+              },
+              {
+                "x": 0.6666666666666666,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "next": {
+        "type": "fixed",
+        "target": "arbeit_6"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "arbeit_6",
+      "text": "Wie verbunden fühlst du dich mit den Menschen, mit denen du bisher gearbeitet hast?\nStelle dich näher zur Mitte der blauen Kreisringe, je mehr du dich sehr verbunden fühlst.\nStelle dich weiter nach außen, wenn du dich sehr isoliert fühlst.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "polygon-zones",
+        "zones": [
+          {
+            "id": "ring-center",
+            "label": "sehr verbunden",
+            "points": [
+              {
+                "x": 0.67,
+                "y": 0.5
+              },
+              {
+                "x": 0.6642,
+                "y": 0.544
+              },
+              {
+                "x": 0.6472,
+                "y": 0.585
+              },
+              {
+                "x": 0.6202,
+                "y": 0.6202
+              },
+              {
+                "x": 0.585,
+                "y": 0.6472
+              },
+              {
+                "x": 0.544,
+                "y": 0.6642
+              },
+              {
+                "x": 0.5,
+                "y": 0.67
+              },
+              {
+                "x": 0.456,
+                "y": 0.6642
+              },
+              {
+                "x": 0.415,
+                "y": 0.6472
+              },
+              {
+                "x": 0.3798,
+                "y": 0.6202
+              },
+              {
+                "x": 0.3528,
+                "y": 0.585
+              },
+              {
+                "x": 0.3358,
+                "y": 0.544
+              },
+              {
+                "x": 0.33,
+                "y": 0.5
+              },
+              {
+                "x": 0.3358,
+                "y": 0.456
+              },
+              {
+                "x": 0.3528,
+                "y": 0.415
+              },
+              {
+                "x": 0.3798,
+                "y": 0.3798
+              },
+              {
+                "x": 0.415,
+                "y": 0.3528
+              },
+              {
+                "x": 0.456,
+                "y": 0.3358
+              },
+              {
+                "x": 0.5,
+                "y": 0.33
+              },
+              {
+                "x": 0.544,
+                "y": 0.3358
+              },
+              {
+                "x": 0.585,
+                "y": 0.3528
+              },
+              {
+                "x": 0.6202,
+                "y": 0.3798
+              },
+              {
+                "x": 0.6472,
+                "y": 0.415
+              },
+              {
+                "x": 0.6642,
+                "y": 0.456
+              }
+            ]
+          },
+          {
+            "id": "ring-mid",
+            "label": "teils verbunden",
+            "points": [
+              {
+                "x": 0.84,
+                "y": 0.5
+              },
+              {
+                "x": 0.8284,
+                "y": 0.588
+              },
+              {
+                "x": 0.7944,
+                "y": 0.67
+              },
+              {
+                "x": 0.7404,
+                "y": 0.7404
+              },
+              {
+                "x": 0.67,
+                "y": 0.7944
+              },
+              {
+                "x": 0.588,
+                "y": 0.8284
+              },
+              {
+                "x": 0.5,
+                "y": 0.84
+              },
+              {
+                "x": 0.412,
+                "y": 0.8284
+              },
+              {
+                "x": 0.33,
+                "y": 0.7944
+              },
+              {
+                "x": 0.2596,
+                "y": 0.7404
+              },
+              {
+                "x": 0.2056,
+                "y": 0.67
+              },
+              {
+                "x": 0.1716,
+                "y": 0.588
+              },
+              {
+                "x": 0.16,
+                "y": 0.5
+              },
+              {
+                "x": 0.1716,
+                "y": 0.412
+              },
+              {
+                "x": 0.2056,
+                "y": 0.33
+              },
+              {
+                "x": 0.2596,
+                "y": 0.2596
+              },
+              {
+                "x": 0.33,
+                "y": 0.2056
+              },
+              {
+                "x": 0.412,
+                "y": 0.1716
+              },
+              {
+                "x": 0.5,
+                "y": 0.16
+              },
+              {
+                "x": 0.588,
+                "y": 0.1716
+              },
+              {
+                "x": 0.67,
+                "y": 0.2056
+              },
+              {
+                "x": 0.7404,
+                "y": 0.2596
+              },
+              {
+                "x": 0.7944,
+                "y": 0.33
+              },
+              {
+                "x": 0.8284,
+                "y": 0.412
+              }
+            ]
+          },
+          {
+            "id": "ring-edge",
+            "label": "sehr isoliert",
+            "points": [
+              {
+                "x": 1,
+                "y": 0.5
+              },
+              {
+                "x": 0.983,
+                "y": 0.6294
+              },
+              {
+                "x": 0.933,
+                "y": 0.75
+              },
+              {
+                "x": 0.8536,
+                "y": 0.8536
+              },
+              {
+                "x": 0.75,
+                "y": 0.933
+              },
+              {
+                "x": 0.6294,
+                "y": 0.983
+              },
+              {
+                "x": 0.5,
+                "y": 1
+              },
+              {
+                "x": 0.3706,
+                "y": 0.983
+              },
+              {
+                "x": 0.25,
+                "y": 0.933
+              },
+              {
+                "x": 0.1464,
+                "y": 0.8536
+              },
+              {
+                "x": 0.067,
+                "y": 0.75
+              },
+              {
+                "x": 0.017,
+                "y": 0.6294
+              },
+              {
+                "x": 0,
+                "y": 0.5
+              },
+              {
+                "x": 0.017,
+                "y": 0.3706
+              },
+              {
+                "x": 0.067,
+                "y": 0.25
+              },
+              {
+                "x": 0.1464,
+                "y": 0.1464
+              },
+              {
+                "x": 0.25,
+                "y": 0.067
+              },
+              {
+                "x": 0.3706,
+                "y": 0.017
+              },
+              {
+                "x": 0.5,
+                "y": 0
+              },
+              {
+                "x": 0.6294,
+                "y": 0.017
+              },
+              {
+                "x": 0.75,
+                "y": 0.067
+              },
+              {
+                "x": 0.8536,
+                "y": 0.1464
+              },
+              {
+                "x": 0.933,
+                "y": 0.25
+              },
+              {
+                "x": 0.983,
+                "y": 0.3706
+              }
+            ]
+          }
+        ]
+      },
+      "next": {
+        "type": "fixed",
+        "target": "arbeit_7"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "arbeit_7",
+      "text": "Wie groß ist deine Sorge, in deiner Arbeit durch andere Menschen ersetzt zu werden?\nPositioniere dich auf der rosa Skala zwischen links \"keine Sorge\" und rechts \"sehr große Sorge\".",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "variant": "spectrum",
+        "labels": {
+          "minLabel": "keine Sorge",
+          "maxLabel": "sehr große Sorge"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "arbeit_8"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "arbeit_8",
+      "text": "Wie groß ist deine Sorge, in deiner Arbeit durch Maschinen oder KI-Systeme ersetzt zu werden?\nPositioniere dich auf der rosa Skala zwischen links “keine Sorge” und rechts “sehr große Sorge”.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "variant": "spectrum",
+        "labels": {
+          "minLabel": "keine Sorge",
+          "maxLabel": "sehr große Sorge"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "k3_1_abschluss"
+      }
+    },
+    {
+      "kind": "video",
+      "id": "k3_1_abschluss",
+      "title": "Abschluss Trainingsstrecke Arbeit",
+      "src": "narration.png",
+      "audioSrc": "k3_1_abschluss.mp3",
+      "expectedDurationMs": 60000,
+      "next": "k4_intro"
+    },
+    {
+      "kind": "video",
+      "id": "k4_intro",
+      "title": "Trainingsepoche: Mensch–Maschine",
+      "src": "narration.png",
+      "audioSrc": "k4_intro.mp3",
+      "expectedDurationMs": 60000,
+      "next": "mensch_maschine_1"
+    },
+    {
+      "kind": "position-question",
+      "id": "mensch_maschine_1",
+      "text": "Wie lange könntest du im Alltag deine Verbindung zum Netz trennen, ohne Angst zu haben, etwas Wichtiges zu verpassen?\nPositioniere dich auf der rosa Skala zwischen links “keine 10 Minuten” und rechts “wochenlang”.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "variant": "spectrum",
+        "labels": {
+          "minLabel": "keine 10 Minuten",
+          "maxLabel": "wochenlang"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "mensch_maschine_2"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "mensch_maschine_2",
+      "text": "Wer weiß mehr über dich: deine Freund:innen oder dein Smartphone?\nPositioniere dich auf der rosa Skala zwischen links “meine Freund:innen” und rechts “mein Smartphone”.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "variant": "spectrum",
+        "labels": {
+          "minLabel": "meine Freund:innen",
+          "maxLabel": "mein Smartphone"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "mensch_maschine_3"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "mensch_maschine_3",
+      "text": "Was von dir würdest du niemals mit einer Maschine teilen?\nPositioniere dich in einem der vier Felder, die die rosa und grünen Linien zusammen bilden. Das Feld oben links bedeutet“ mein Körper”, das Feld oben rechts “meine Gedanken”. Das Feld unten links bedeutet “meine Beziehungen”, das Feld unten rechts “nichts ist unantastbar”.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "polygon-zones",
+        "zones": [
+          {
+            "id": "field-top-left",
+            "label": "mein Körper",
+            "points": [
+              {
+                "x": 0,
+                "y": 0
+              },
+              {
+                "x": 0.5,
+                "y": 0
+              },
+              {
+                "x": 0.5,
+                "y": 0.5
+              },
+              {
+                "x": 0,
+                "y": 0.5
+              }
+            ]
+          },
+          {
+            "id": "field-top-right",
+            "label": "meine Gedanken",
+            "points": [
+              {
+                "x": 0.5,
+                "y": 0
+              },
+              {
+                "x": 1,
+                "y": 0
+              },
+              {
+                "x": 1,
+                "y": 0.5
+              },
+              {
+                "x": 0.5,
+                "y": 0.5
+              }
+            ]
+          },
+          {
+            "id": "field-bottom-left",
+            "label": "meine Beziehungen",
+            "points": [
+              {
+                "x": 0,
+                "y": 0.5
+              },
+              {
+                "x": 0.5,
+                "y": 0.5
+              },
+              {
+                "x": 0.5,
+                "y": 1
+              },
+              {
+                "x": 0,
+                "y": 1
+              }
+            ]
+          },
+          {
+            "id": "field-bottom-right",
+            "label": "nichts ist unantastbar",
+            "points": [
+              {
+                "x": 0.5,
+                "y": 0.5
+              },
+              {
+                "x": 1,
+                "y": 0.5
+              },
+              {
+                "x": 1,
+                "y": 1
+              },
+              {
+                "x": 0.5,
+                "y": 1
+              }
+            ]
+          }
+        ]
+      },
+      "next": {
+        "type": "fixed",
+        "target": "mensch_maschine_4"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "mensch_maschine_4",
+      "text": "Wie wichtig ist es dir, dass es Bereiche deines Lebens gibt, die kein digitales System kennen kann?\nStelle dich näher zur Mitte der blauen Kreisringe, wenn es dir überhaupt nicht wichtig ist.\nStelle dich weiter nach außen, wenn es dir sehr wichtig ist.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "polygon-zones",
+        "zones": [
+          {
+            "id": "ring-center",
+            "label": "überhaupt nicht wichtig",
+            "points": [
+              {
+                "x": 0.67,
+                "y": 0.5
+              },
+              {
+                "x": 0.6642,
+                "y": 0.544
+              },
+              {
+                "x": 0.6472,
+                "y": 0.585
+              },
+              {
+                "x": 0.6202,
+                "y": 0.6202
+              },
+              {
+                "x": 0.585,
+                "y": 0.6472
+              },
+              {
+                "x": 0.544,
+                "y": 0.6642
+              },
+              {
+                "x": 0.5,
+                "y": 0.67
+              },
+              {
+                "x": 0.456,
+                "y": 0.6642
+              },
+              {
+                "x": 0.415,
+                "y": 0.6472
+              },
+              {
+                "x": 0.3798,
+                "y": 0.6202
+              },
+              {
+                "x": 0.3528,
+                "y": 0.585
+              },
+              {
+                "x": 0.3358,
+                "y": 0.544
+              },
+              {
+                "x": 0.33,
+                "y": 0.5
+              },
+              {
+                "x": 0.3358,
+                "y": 0.456
+              },
+              {
+                "x": 0.3528,
+                "y": 0.415
+              },
+              {
+                "x": 0.3798,
+                "y": 0.3798
+              },
+              {
+                "x": 0.415,
+                "y": 0.3528
+              },
+              {
+                "x": 0.456,
+                "y": 0.3358
+              },
+              {
+                "x": 0.5,
+                "y": 0.33
+              },
+              {
+                "x": 0.544,
+                "y": 0.3358
+              },
+              {
+                "x": 0.585,
+                "y": 0.3528
+              },
+              {
+                "x": 0.6202,
+                "y": 0.3798
+              },
+              {
+                "x": 0.6472,
+                "y": 0.415
+              },
+              {
+                "x": 0.6642,
+                "y": 0.456
+              }
+            ]
+          },
+          {
+            "id": "ring-mid",
+            "label": "mittel",
+            "points": [
+              {
+                "x": 0.84,
+                "y": 0.5
+              },
+              {
+                "x": 0.8284,
+                "y": 0.588
+              },
+              {
+                "x": 0.7944,
+                "y": 0.67
+              },
+              {
+                "x": 0.7404,
+                "y": 0.7404
+              },
+              {
+                "x": 0.67,
+                "y": 0.7944
+              },
+              {
+                "x": 0.588,
+                "y": 0.8284
+              },
+              {
+                "x": 0.5,
+                "y": 0.84
+              },
+              {
+                "x": 0.412,
+                "y": 0.8284
+              },
+              {
+                "x": 0.33,
+                "y": 0.7944
+              },
+              {
+                "x": 0.2596,
+                "y": 0.7404
+              },
+              {
+                "x": 0.2056,
+                "y": 0.67
+              },
+              {
+                "x": 0.1716,
+                "y": 0.588
+              },
+              {
+                "x": 0.16,
+                "y": 0.5
+              },
+              {
+                "x": 0.1716,
+                "y": 0.412
+              },
+              {
+                "x": 0.2056,
+                "y": 0.33
+              },
+              {
+                "x": 0.2596,
+                "y": 0.2596
+              },
+              {
+                "x": 0.33,
+                "y": 0.2056
+              },
+              {
+                "x": 0.412,
+                "y": 0.1716
+              },
+              {
+                "x": 0.5,
+                "y": 0.16
+              },
+              {
+                "x": 0.588,
+                "y": 0.1716
+              },
+              {
+                "x": 0.67,
+                "y": 0.2056
+              },
+              {
+                "x": 0.7404,
+                "y": 0.2596
+              },
+              {
+                "x": 0.7944,
+                "y": 0.33
+              },
+              {
+                "x": 0.8284,
+                "y": 0.412
+              }
+            ]
+          },
+          {
+            "id": "ring-edge",
+            "label": "sehr wichtig",
+            "points": [
+              {
+                "x": 1,
+                "y": 0.5
+              },
+              {
+                "x": 0.983,
+                "y": 0.6294
+              },
+              {
+                "x": 0.933,
+                "y": 0.75
+              },
+              {
+                "x": 0.8536,
+                "y": 0.8536
+              },
+              {
+                "x": 0.75,
+                "y": 0.933
+              },
+              {
+                "x": 0.6294,
+                "y": 0.983
+              },
+              {
+                "x": 0.5,
+                "y": 1
+              },
+              {
+                "x": 0.3706,
+                "y": 0.983
+              },
+              {
+                "x": 0.25,
+                "y": 0.933
+              },
+              {
+                "x": 0.1464,
+                "y": 0.8536
+              },
+              {
+                "x": 0.067,
+                "y": 0.75
+              },
+              {
+                "x": 0.017,
+                "y": 0.6294
+              },
+              {
+                "x": 0,
+                "y": 0.5
+              },
+              {
+                "x": 0.017,
+                "y": 0.3706
+              },
+              {
+                "x": 0.067,
+                "y": 0.25
+              },
+              {
+                "x": 0.1464,
+                "y": 0.1464
+              },
+              {
+                "x": 0.25,
+                "y": 0.067
+              },
+              {
+                "x": 0.3706,
+                "y": 0.017
+              },
+              {
+                "x": 0.5,
+                "y": 0
+              },
+              {
+                "x": 0.6294,
+                "y": 0.017
+              },
+              {
+                "x": 0.75,
+                "y": 0.067
+              },
+              {
+                "x": 0.8536,
+                "y": 0.1464
+              },
+              {
+                "x": 0.933,
+                "y": 0.25
+              },
+              {
+                "x": 0.983,
+                "y": 0.3706
+              }
+            ]
+          }
+        ]
+      },
+      "next": {
+        "type": "fixed",
+        "target": "mensch_maschine_5"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "mensch_maschine_5",
+      "text": "Wie werden Menschen und Maschinen in zwanzig Jahren zusammenleben?\nPositioniere dich im Feld zwischen den beiden Achsen. Die grüne Achse zeigt an, wer in der Zukunft führt. Von “die Maschinen führen” unten bis “die Menschen führen” oben. Die rosa Achse zeigt den Grad des Zusammenseins an. Von “getrennt” links bis “verschmolzen” rechts. \nBerücksichtige beide Achsen gleichzeitig und wähle die Position, die deiner Einschätzung am besten entspricht.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "four-quadrant",
+        "xAxis": {
+          "minLabel": "getrennt",
+          "maxLabel": "verschmolzen"
+        },
+        "yAxis": {
+          "minLabel": "die Menschen führen",
+          "maxLabel": "die Maschinen führen"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "mensch_maschine_6"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "mensch_maschine_6",
+      "text": "Wie möchtest du selbst in Zukunft mit Maschinen zusammenleben?\nPositioniere dich im Feld zwischen den beiden Achsen. Die grüne Achse zeigt an, wer für dich in der Zukunft führt. Von “die Maschine führt” unten bis “ich führe” oben. Die rosa Achse zeigt den Grad des Zusammenseins an. Von “getrennt” links bis “verschmolzen” rechts.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "four-quadrant",
+        "xAxis": {
+          "minLabel": "getrennt",
+          "maxLabel": "verschmolzen"
+        },
+        "yAxis": {
+          "minLabel": "ich führe",
+          "maxLabel": "die Maschine führt"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "mensch_maschine_7"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "mensch_maschine_7",
+      "text": "Wie gut könntest du dein heutiges Leben ohne digitale und KI-basierte Systeme organisieren?\nPositioniere dich auf der rosa Skala zwischen links “ohne Schwierigkeiten” und rechts “gar nicht mehr”.",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "variant": "spectrum",
+        "labels": {
+          "minLabel": "ohne Schwierigkeiten",
+          "maxLabel": "gar nicht mehr"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "mensch_maschine_8"
+      }
+    },
+    {
+      "kind": "position-question",
+      "id": "mensch_maschine_8",
+      "text": "Wie weit möchtest du dich digitalen und KI-basierten Systemen entziehen?\nPositioniere dich auf der rosa Skala zwischen links “Ich möchte mich komplett entziehen” und rechts “ich möchte mit ihnen verschmelzen”",
+      "durationMs": 45000,
+      "freezeMs": 5000,
+      "connectionStaleAfterMs": 5000,
+      "showLiveCounts": true,
+      "field": {
+        "type": "two-quadrant",
+        "axis": "x",
+        "variant": "spectrum",
+        "labels": {
+          "minLabel": "Ich möchte mich komplett entziehen",
+          "maxLabel": "Ich möchte mit ihnen verschmelzen"
+        }
+      },
+      "next": {
+        "type": "fixed",
+        "target": "idle"
+      }
+    }
+  ]
+}
