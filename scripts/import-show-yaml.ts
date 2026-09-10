@@ -25,8 +25,17 @@
  *                                               first match, so order matters)
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
+import { scenarioSchema, validateScenario } from "../packages/scenario/src/index.js";
 
 type Round = {
   id: string;
@@ -53,8 +62,10 @@ const NARRATION_IMAGE = "narration.png";
  */
 const PLACEHOLDER_NARRATION_MS = 60_000;
 
-/** Narrations that fell back to the placeholder, reported at the end. */
-const unknownDurations: string[] = [];
+type ImportDiagnostics = {
+  unknownDurations: string[];
+  unmatchedZones: Array<{ round: string; zone: string }>;
+};
 
 /**
  * Real length of a narration MP3, in milliseconds, or null.
@@ -178,10 +189,7 @@ function circle(id: string, label: string, radius: number, steps = 24) {
   return { id, label, points };
 }
 
-/** Zone names collected during a run that no form knew how to read. */
-const unmatchedZones: Array<{ round: string; zone: string }> = [];
-
-function fieldFor(round: Round): Record<string, unknown> {
+function fieldFor(round: Round, diagnostics: ImportDiagnostics): Record<string, unknown> {
   const labels = round.form_labels ?? {};
   const options = round.options ?? [];
   const consumed = new Set<string>();
@@ -198,7 +206,7 @@ function fieldFor(round: Round): Record<string, unknown> {
   };
   const reportUnmatched = () => {
     for (const option of options) {
-      if (!consumed.has(option.zone)) unmatchedZones.push({ round: round.id, zone: option.zone });
+      if (!consumed.has(option.zone)) diagnostics.unmatchedZones.push({ round: round.id, zone: option.zone });
     }
   };
 
@@ -289,19 +297,36 @@ function fieldFor(round: Round): Record<string, unknown> {
   }
 }
 
-function narrationDurationMs(round: Round, mediaDir: string): number {
+function narrationDurationMs(round: Round, mediaDir: string, diagnostics: ImportDiagnostics): number {
   if ((round.duration_s ?? 0) > 0) return (round.duration_s ?? 0) * 1_000;
   const measured = round.audio === undefined ? null : audioDurationMs(mediaDir, round.audio);
   if (measured !== null) return measured;
-  unknownDurations.push(round.id);
+  diagnostics.unknownDurations.push(round.id);
   return PLACEHOLDER_NARRATION_MS;
 }
 
-function main(): void {
+function atomicReplace(path: string, contents: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const tempPath = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
+  try {
+    writeFileSync(tempPath, contents, { encoding: "utf8", flag: "wx" });
+    renameSync(tempPath, path);
+  } catch (error) {
+    rmSync(tempPath, { force: true });
+    throw error;
+  }
+}
+
+function printValidationIssue(path: readonly (string | number)[], message: string): void {
+  const location = path.length > 0 ? path.join(".") : "(root)";
+  console.error(`ERROR: scenario schema: ${location}: ${message}`);
+}
+
+function main(): number {
   const [source, ...rest] = process.argv.slice(2);
   if (source === undefined) {
     console.error("usage: tsx scripts/import-show-yaml.ts <show.yaml> [--out-dir content]");
-    process.exit(2);
+    return 2;
   }
   const outDirIndex = rest.indexOf("--out-dir");
   const outDir = resolve(outDirIndex === -1 ? "content" : rest[outDirIndex + 1] ?? "content");
@@ -312,6 +337,7 @@ function main(): void {
 
   const phases: Array<Record<string, unknown>> = [{ kind: "idle", id: "idle" }];
   const media = new Set<string>();
+  const diagnostics: ImportDiagnostics = { unknownDurations: [], unmatchedZones: [] };
 
   rounds.forEach((round, index) => {
     const next = rounds[index + 1]?.id ?? "idle";
@@ -323,7 +349,7 @@ function main(): void {
         ...(round.question === undefined ? {} : { title: round.question }),
         src: NARRATION_IMAGE,
         audioSrc: round.audio ?? "missing-audio.mp3",
-        expectedDurationMs: narrationDurationMs(round, mediaDir),
+        expectedDurationMs: narrationDurationMs(round, mediaDir, diagnostics),
         next,
       });
       return;
@@ -340,22 +366,60 @@ function main(): void {
       freezeMs: (round.grace_s ?? 5) * 1_000,
       connectionStaleAfterMs: CONNECTION_STALE_AFTER_MS,
       showLiveCounts: true,
-      field: fieldFor(round),
+      field: fieldFor(round, diagnostics),
       next: { type: "fixed", target: next },
     });
   });
 
-  const scenario = {
+  const candidate = {
     version: "1.0.0",
     entryPhaseId: rounds[0]!.id,
     cyclesAllowed: false,
     phases,
   };
 
-  mkdirSync(join(outDir, "scenarios"), { recursive: true });
   const scenarioPath = join(outDir, "scenarios", "entertheblackbox.json");
-  writeFileSync(scenarioPath, `${JSON.stringify(scenario, null, 2)}\n`);
 
+  const validationErrors: string[] = [];
+  const scenarioResult = scenarioSchema.safeParse(candidate);
+  if (!scenarioResult.success) {
+    for (const issue of scenarioResult.error.issues) {
+      printValidationIssue(issue.path, issue.message);
+      validationErrors.push(issue.message);
+    }
+  } else {
+    const graphResult = validateScenario(scenarioResult.data);
+    for (const issue of graphResult.errors) {
+      console.error(`ERROR: scenario graph: ${issue.message}`);
+      validationErrors.push(issue.message);
+    }
+    for (const issue of graphResult.warnings) {
+      console.warn(`WARN: scenario graph: ${issue.message}`);
+    }
+  }
+
+  if (diagnostics.unknownDurations.length > 0) {
+    console.error(
+      `ERROR: ${diagnostics.unknownDurations.length} narration(s) fell back to a ` +
+      `${PLACEHOLDER_NARRATION_MS / 1_000}s placeholder because their audio is not in ` +
+      `${mediaDir} (or ffprobe is unavailable): ${diagnostics.unknownDurations.join(", ")}.` +
+      ` Add the audio and re-run.`,
+    );
+    validationErrors.push("narration duration unavailable");
+  }
+
+  if (diagnostics.unmatchedZones.length > 0) {
+    console.error(`ERROR: ${diagnostics.unmatchedZones.length} zone(s) not read by any form mapping:`);
+    for (const { round, zone } of diagnostics.unmatchedZones) console.error(`  ${round}: ${zone}`);
+    validationErrors.push("unmatched zone");
+  }
+
+  if (validationErrors.length > 0 || !scenarioResult.success) {
+    console.error(`FAIL: import validation found errors; destination not changed: ${scenarioPath}`);
+    return 1;
+  }
+
+  atomicReplace(scenarioPath, `${JSON.stringify(scenarioResult.data, null, 2)}\n`);
   const questions = phases.filter((phase) => phase.kind === "position-question").length;
   const narrations = phases.filter((phase) => phase.kind === "video").length;
   console.log(`wrote ${scenarioPath} (${questions} questions, ${narrations} narration cues)`);
@@ -365,25 +429,12 @@ function main(): void {
   console.log(`\nrequired media, to be placed in content/media:`);
   for (const src of [...media].sort()) console.log(`  ${src}`);
   console.log(`\nthen: pnpm build-media-manifest`);
-
-  if (unknownDurations.length > 0) {
-    console.warn(
-      `\nWARNING: ${unknownDurations.length} narration(s) fell back to a ` +
-      `${PLACEHOLDER_NARRATION_MS / 1_000}s placeholder because their audio is not in ` +
-      `${mediaDir} (or ffprobe is unavailable): ${unknownDurations.join(", ")}.` +
-      `\nThe server abandons a narration ${PLACEHOLDER_NARRATION_MS / 1_000}s + 5s after it starts, ` +
-      `so anything longer is cut off mid-sentence. Add the audio and re-run.`,
-    );
-    process.exitCode = 1;
-  }
-
-  if (unmatchedZones.length > 0) {
-    // A zone his file defines that no form here reads. Usually means his
-    // format moved and this importer is quietly dropping a label.
-    console.warn(`\nWARNING: ${unmatchedZones.length} zone(s) not read by any form mapping:`);
-    for (const { round, zone } of unmatchedZones) console.warn(`  ${round}: ${zone}`);
-    process.exitCode = 1;
-  }
+  return 0;
 }
 
-main();
+try {
+  process.exitCode = main();
+} catch (error) {
+  console.error(`[ERROR] ${(error as Error).message ?? error}`);
+  process.exitCode = 1;
+}
