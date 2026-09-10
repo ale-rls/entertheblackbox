@@ -18,6 +18,7 @@ import { CursorPipeline } from "../cursors/index.js";
 import { GhostCursorPlayer, type GhostPool } from "../ghosts/index.js";
 import type { TrackingAction } from "../tracking/audience.js";
 import { participantIdForGid } from "../tracking/protocol.js";
+import { BindingRegistry } from "../tracking/binding.js";
 import {
   MovementRecorder,
   type MovementBatchFlushed,
@@ -170,6 +171,9 @@ export class PhaseEngine {
   private readonly votes: VoteEngine;
   private readonly ratings = new RatingEngine();
   private readonly cursors: CursorPipeline;
+  /** GID-to-phone bindings, for personal audio. Empty until a phone claims a
+   * body; voting works without it. */
+  readonly bindings = new BindingRegistry();
   private readonly movement: MovementRecorder;
   private readonly ghosts: GhostCursorPlayer;
   private readonly video = new VideoPhaseHandler();
@@ -440,6 +444,7 @@ export class PhaseEngine {
   }
 
   tick(now = this.now()): void {
+    this.bindings.tick(now);
     this.expireStaleDisplay(now);
     if (this.lifecycle === "idle") {
       if (this.displaySocket !== undefined && this.nextLobbyStartAt !== null) this.startLobby(now);
@@ -709,23 +714,49 @@ export class PhaseEngine {
    */
   applyTrackingActions(actions: readonly TrackingAction[], now = this.now()): void {
     for (const action of actions) {
-      const participantId = participantIdForGid(action.gid);
       switch (action.type) {
-        case "join":
-          this.votes.addParticipant({ participantId, connected: true, lastHeartbeatAt: now }, now);
+        case "join": {
+          this.bindings.gidSeen(action.gid, null, now);
+          this.votes.addParticipant(
+            { participantId: this.trackedParticipantId(action.gid), connected: true, lastHeartbeatAt: now },
+            now,
+          );
           break;
-        case "position":
+        }
+        case "position": {
+          this.bindings.gidSeen(action.gid, { x: action.x, y: action.y }, now);
+          const participantId = this.trackedParticipantId(action.gid);
+          // votes.recordInput drops input for a participant with no vote entry,
+          // and the entry a body needs changes the moment a phone claims it.
+          // Seeding here keeps a mid-question claim, or a phone that joined
+          // after the question was seeded, from voting into nothing.
+          this.votes.addParticipant({ participantId, connected: true, lastHeartbeatAt: now }, now);
           this.recordInput(now, participantId, action.x, action.y);
           break;
-        case "leave":
+        }
+        case "leave": {
+          // Resolve before the registry forgets who held this gid.
+          const participantId = this.trackedParticipantId(action.gid);
+          this.bindings.gidLeft(action.gid, now);
           // Mirrors a phone dropping off: the vote already cast still counts
           // under the scenario's countedStatuses, which is what we want for
           // someone briefly occluded mid-question.
           this.votes.setConnected(participantId, false, now);
           break;
+        }
       }
     }
     this.queueQuestionStatus(now);
+  }
+
+  /**
+   * Who a tracked body votes as. A body whose phone has claimed it votes as
+   * that participant, so its answer joins the rest of that person's session.
+   * An unclaimed body votes anonymously, which is the normal case on the
+   * stage side, where people walk in rather than joining.
+   */
+  private trackedParticipantId(gid: number): string {
+    return this.bindings.participantForGid(gid) ?? participantIdForGid(gid);
   }
 
   setDisplayConnected(connected: boolean, now = this.now()): void {
