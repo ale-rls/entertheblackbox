@@ -90,6 +90,52 @@ describe("VoteEngine", () => {
     });
   });
 
+  it.each([
+    ["immediately before", 999, true, "target", 999],
+    ["exactly at", 1_000, false, "source", 100],
+    ["after", 1_001, false, "source", 100],
+  ] as const)("transfers a vote %s the phase deadline", (_boundary, now, expectedTransfer, expectedParticipantId, expectedHeartbeatAt) => {
+    const votes = new VoteEngine();
+    begin(votes, ["source"]);
+    votes.recordInput("source", 0.25, 0.75, 100);
+
+    expect(votes.transferVote("source", "target", now)).toBe(expectedTransfer);
+    expect(votes.finalize(1_000)?.snapshot.votes.map(({ participantId, x, y, lastHeartbeatAt }) => ({
+      participantId,
+      x,
+      y,
+      lastHeartbeatAt,
+    }))).toEqual([{
+      participantId: expectedParticipantId,
+      x: 0.25,
+      y: 0.75,
+      lastHeartbeatAt: 100,
+    }]);
+
+    // Start another question to observe the retained heartbeat map as well as
+    // the vote snapshot: a rejected transfer must not move either state.
+    votes.clearQuestion();
+    votes.beginQuestion({
+      sessionId: "session-2",
+      question,
+      phaseEpoch: 5,
+      phaseStartedAt: 0,
+      phaseDeadline: 2_000,
+      participants: ["source", "target"].map((participantId) => ({
+        participantId,
+        connected: true,
+        lastHeartbeatAt: null,
+      })),
+    });
+
+    expect(votes.finalize(1_000)?.snapshot.votes.map(({ participantId, lastHeartbeatAt }) => ({
+      participantId,
+      lastHeartbeatAt,
+    }))).toEqual(expectedTransfer
+      ? [{ participantId: "source", lastHeartbeatAt: null }, { participantId: "target", lastHeartbeatAt: now }]
+      : [{ participantId: "source", lastHeartbeatAt: expectedHeartbeatAt }, { participantId: "target", lastHeartbeatAt: null }]);
+  });
+
   it("forgets heartbeat IDs past the participant lease TTL while retaining active IDs", () => {
     const votes = new VoteEngine({ heartbeatRetentionMs: 100 });
     begin(votes, ["expired", "active"]);

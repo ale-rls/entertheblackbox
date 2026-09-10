@@ -271,7 +271,7 @@ export class VoteEngine {
    */
   transferVote(fromParticipantId: string, toParticipantId: string, now: number): boolean {
     const question = this.question;
-    if (!question || question.finalized !== null) return false;
+    if (!question || question.finalized !== null || now >= question.phaseDeadline) return false;
     const from = question.votes.get(fromParticipantId);
     if (!from) return false;
     question.votes.delete(fromParticipantId);
