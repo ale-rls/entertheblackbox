@@ -16,7 +16,8 @@
     "simulate-clients": "tsx scripts/simulate-clients.ts",
     "pocketbase:download": "pocketbase/scripts/download.sh",
     "pocketbase:dev": "pocketbase/scripts/dev.sh",
-    "publish-scenario": "tsx scripts/publish-scenario-to-pocketbase.ts"
+    "publish-scenario": "tsx scripts/publish-scenario-to-pocketbase.ts",
+    "import-show-yaml": "tsx scripts/import-show-yaml.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
