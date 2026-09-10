@@ -12,7 +12,7 @@ export const VIDEO = {
 export const RemotionRoot: React.FC = () => {
   return (
     <Composition
-      id="SmartphonocracyCredits"
+      id="EnterTheBlackboxCredits"
       component={Credits}
       durationInFrames={VIDEO.durationInFrames}
       fps={VIDEO.fps}

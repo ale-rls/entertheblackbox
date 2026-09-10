@@ -33,7 +33,9 @@ const bundledIdleAttractVideos: readonly AttractVideo[] = Object.entries(import.
   })
   .map(([path, url]) => {
     const filename = path.split("/").at(-1)!;
-    return { url, markerTrack: MARKER_TRACKS_BY_FILENAME[filename] ?? null };
+    // A clip with no generated track still gets the static centred placement,
+    // so newly added footage shows a readable QR before the tracker is run.
+    return { url, markerTrack: MARKER_TRACKS_BY_FILENAME[filename] ?? ORIGINAL_MARKER_TRACK };
   });
 
 export function IdleAttract({
@@ -66,7 +68,7 @@ export function IdleAttract({
   const activeVideoIndex = slotVideoIndexes[activeSlot];
   const activeVideo = videos[activeVideoIndex] ?? videos[0];
   const activeVideoUrl = activeVideo?.url;
-  const activeMarkerTrack = activeVideo?.markerTrack ?? null;
+  const activeMarkerTrack = activeVideo?.markerTrack ?? ORIGINAL_MARKER_TRACK;
   const videoRefs = useRef<[HTMLVideoElement | null, HTMLVideoElement | null]>([null, null]);
   const switching = useRef(false);
   const pendingFrameCallback = useRef<{ video: HTMLVideoElement; id: number } | null>(null);
@@ -123,7 +125,7 @@ export function IdleAttract({
   useEffect(() => {
     const video = videoRefs.current[activeSlot];
     const overlay = overlayRef.current;
-    if (video === null || overlay === null) return;
+    if (overlay === null) return;
     const context = overlay.getContext("2d");
     if (context === null) return;
 
@@ -137,6 +139,18 @@ export function IdleAttract({
         drawTrackedQr(context, qrCanvas, mediaTime, activeMarkerTrack);
       }
     };
+
+    // With no attract footage there is nothing to track against, but the lobby
+    // still has to show a join QR. The fallback track is a single static frame,
+    // so one draw is enough; this effect re-runs whenever the code or its
+    // visibility changes.
+    if (video === null) {
+      draw(0);
+      return () => {
+        stopped = true;
+        context.clearRect(0, 0, overlay.width, overlay.height);
+      };
+    }
 
     if (typeof video.requestVideoFrameCallback === "function") {
       const onVideoFrame: VideoFrameRequestCallback = (_now, metadata) => {
@@ -218,6 +232,7 @@ export function IdleAttract({
   return (
     <div className={`idle idle-attract${mediaVisible ? "" : " idle-attract-hidden"}`}>
       {([0, 1] as const).map((slot) => {
+        if (videos.length === 0) return null;
         if (slot === 1 && videos.length <= 1) return null;
         const slotVideo = videos[slotVideoIndexes[slot]] ?? videos[0];
         return <video

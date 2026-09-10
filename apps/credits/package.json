@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "remotion studio src/index.ts",
-    "render": "remotion render src/index.ts SmartphonocracyCredits ../display/src/assets/smartphonocracy-credits.mp4 --codec=h264 --pixel-format=yuv420p --crf=18",
+    "render": "remotion render src/index.ts EnterTheBlackboxCredits ../display/src/assets/credits.mp4 --codec=h264 --pixel-format=yuv420p --crf=18",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

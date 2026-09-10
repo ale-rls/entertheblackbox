@@ -13,6 +13,21 @@ dist-proof/
 content/media/*
 !content/media/intro.mp4
 
+# Script drafts and other written show content stay out of git. This is a
+# public repository; an unproduced script does not belong in it.
+*Ablauf*.txt
+/script/
+/scripts-draft/
+
+# Bundled display media (attract clips, credits render) is show content and
+# stays out of git too. Drop the files in locally; the attract playlist is an
+# import.meta.glob, so they are picked up without any code change. Fonts and
+# logos are design assets, not show content, and remain tracked.
+apps/display/src/assets/*.mp4
+apps/display/src/assets/*.mp3
+apps/display/src/assets/*.webm
+apps/display/src/assets/*.mov
+
 # Playwright artifacts
 test-results/
 

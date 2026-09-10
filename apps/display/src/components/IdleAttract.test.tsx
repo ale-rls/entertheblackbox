@@ -46,7 +46,9 @@ afterEach(async () => {
 });
 
 describe("IdleAttract", () => {
-  it("uses the advert hold clip as A in the bundled lobby playlist", async () => {
+  it("renders no video element when no attract footage is bundled", async () => {
+    // apps/display/src/assets/*.mp4 is gitignored show content, so a fresh
+    // clone has an empty playlist. The lobby must still come up.
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     document.body.innerHTML = '<div id="root"></div>';
@@ -55,9 +57,28 @@ describe("IdleAttract", () => {
       root?.render(<IdleAttract grant={null} qrHidden={false} clock={new ServerClock()} />);
       await Promise.resolve();
     });
-    const src = document.querySelector(".idle-attract-video-active")?.getAttribute("src") ?? "";
-    expect(src).toContain("1.0_25_c_advert.mp4");
-    expect(src).not.toContain("idle-attract.mp4");
+    expect(document.querySelectorAll(".idle-attract-video")).toHaveLength(0);
+    expect(document.querySelector(".idle-attract-overlay")).not.toBeNull();
+  });
+
+  it("still runs the QR overlay pass with an empty playlist", async () => {
+    // Regression guard: the overlay effect used to bail out on `video === null`,
+    // so with no bundled footage the lobby went black and never painted a join
+    // QR. It now draws the static fallback placement instead. Reaching
+    // clearRect proves the effect body ran rather than returning early.
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const clearRect = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+      { clearRect } as unknown as CanvasRenderingContext2D,
+    );
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => {
+      root?.render(<IdleAttract grant={null} qrHidden={false} clock={new ServerClock()} />);
+      await Promise.resolve();
+    });
+    expect(document.querySelectorAll(".idle-attract-video")).toHaveLength(0);
+    expect(clearRect).toHaveBeenCalled();
   });
 
   it("rewinds and explicitly restarts playback each time idle remounts", async () => {
@@ -67,7 +88,9 @@ describe("IdleAttract", () => {
       document.body.innerHTML = '<div id="root"></div>';
       root = createRoot(document.querySelector("#root")!);
       await act(async () => {
-        root?.render(<IdleAttract grant={null} qrHidden={false} clock={new ServerClock()} />);
+        root?.render(
+          <IdleAttract grant={null} qrHidden={false} clock={new ServerClock()} videoUrls={["one.mp4"]} />,
+        );
         await Promise.resolve();
       });
       expect(document.querySelector<HTMLVideoElement>(".idle-attract-video-active")?.currentTime).toBe(0);

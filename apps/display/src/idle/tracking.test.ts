@@ -15,9 +15,21 @@ describe("trackedQuadAt", () => {
   });
 
   it("interpolates smoothly between video frames", () => {
-    const halfway = trackedQuadAt(0.5 / MARKER_TRACK_FPS).flat();
-    const first = MARKER_TRACK[0]!;
-    const second = MARKER_TRACK[1]!;
+    // Uses an explicit two-frame fixture rather than the default track: the
+    // default is a single static frame until this production's attract clips
+    // and their generated tracks exist, so it cannot exercise interpolation.
+    const track: MarkerTrack = {
+      fps: 25,
+      width: 1280,
+      height: 704,
+      frames: [
+        [0, 0, 100, 0, 100, 100, 0, 100],
+        [20, 40, 120, 40, 120, 140, 20, 140],
+      ],
+    };
+    const halfway = trackedQuadAt(0.5 / track.fps, track).flat();
+    const first = track.frames[0]!;
+    const second = track.frames[1]!;
     const expected = first.map(
       (value, index) => value + (second[index]! - value) / 2,
     );

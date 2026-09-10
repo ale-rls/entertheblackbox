@@ -1,6 +1,15 @@
 import type {CSSProperties, ReactNode} from 'react';
-import {AbsoluteFill, Easing, Html5Audio, interpolate, useCurrentFrame} from 'remotion';
-import creditsMusic from '../../display/src/assets/smartphonocracy-credits-music.mp3';
+import {AbsoluteFill, Easing, interpolate, useCurrentFrame} from 'remotion';
+
+/**
+ * Credits roll template.
+ *
+ * The roll mechanics, typography, and timing curves are the reusable part; the
+ * names, coproducers, and exhibition text below are placeholders to be replaced
+ * with this production's own credits. Add the music back as an `Html5Audio`
+ * track once the file exists in `apps/display/src/assets/` — see the render
+ * script in package.json.
+ */
 
 type CreditProps = {
   label: string;
@@ -29,52 +38,31 @@ const RollingCredits: React.FC = () => {
   return (
     <div className="roll" style={style}>
       <section className="roll-title">
-        <h2>Smartphonocracy</h2>
-        <p>Eine interaktive KI-Performance</p>
+        <h2>Enter the Blackbox</h2>
+        <p>TODO: subtitle</p>
       </section>
 
       <section className="credits-block credits-team">
-        <Credit label="Konzept">Interrobang (Till Müller-Klug)</Credit>
-        <Credit label="Video">Alexandre Silveira</Credit>
-        <Credit label="Creative Coding">Manus Nijhoff</Credit>
-        <Credit label="Musik">Friedrich Greiling</Credit>
-        <Credit label="Produktionsleitung">
-          ehrliche arbeit – freies Kulturbüro<br />
-          Sandra Klöss
-        </Credit>
-        <Credit label="Company Management, Kommunikation & Social Media">
-          Jack Willenbacher
-        </Credit>
-        <Credit label="Freie Mitarbeit Kommunikation">Tina Ebert</Credit>
+        <Credit label="Konzept">TODO</Credit>
+        <Credit label="Video">TODO</Credit>
+        <Credit label="Creative Coding">TODO</Credit>
+        <Credit label="Musik">TODO</Credit>
+        <Credit label="Produktionsleitung">TODO</Credit>
       </section>
 
       <section className="credits-block credits-production">
-        <Credit label="Produktion">Interrobang 2026</Credit>
-        <Credit label="Koproduktion">
-          Städel Museum und<br />
-          Deutsches Theatermuseum
-        </Credit>
+        <Credit label="Produktion">TODO</Credit>
+        <Credit label="Koproduktion">TODO</Credit>
       </section>
 
       <section className="statement exhibition">
-        <div className="statement-kicker">Ausstellung</div>
-        <p>
-          Smartphonocracy ist Teil der Ausstellung<br />
-          <span>“Future, now!”</span><br />
-          im Deutschen Theatermuseum München.
-        </p>
-        <p className="dates">
-          14. Oktober 2026<br />
-          bis 1. August 2027
-        </p>
+        <div className="statement-kicker">TODO: Spielort / Ausstellung</div>
+        <p>TODO: venue and run</p>
       </section>
 
       <section className="statement disclosure">
         <div className="statement-kicker">Hinweis</div>
-        <p>
-          Diese Produktion enthält KI-generierte Videoinhalte sowie synthetisch erzeugte Stimmen
-          (Text-to-Speech, ElevenLabs)
-        </p>
+        <p>TODO: confirm whether this production needs an AI-content disclosure</p>
       </section>
 
       <section className="end-mark">
@@ -94,15 +82,6 @@ export const Credits: React.FC = () => {
   return (
     <AbsoluteFill className="credits" style={{opacity: masterOpacity}}>
       <RollingCredits />
-      <Html5Audio
-        src={creditsMusic}
-        volume={(audioFrame) =>
-          interpolate(audioFrame, [0, 72], [0, 1], {
-            extrapolateLeft: 'clamp',
-            extrapolateRight: 'clamp',
-          })
-        }
-      />
     </AbsoluteFill>
   );
 };
