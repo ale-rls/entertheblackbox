@@ -38,11 +38,11 @@ not verification. Run before opening:
 pnpm -r typecheck && pnpm -r test
 ```
 
-Add end-to-end when the change touches runtime client or server behavior:
-
-```bash
-pnpm test:e2e
-```
+That is what CI runs. There is deliberately no end-to-end job: the real check
+for a change to runtime client or server behaviour is running the show, not a
+headless browser. The Playwright specs remain in `tests/e2e` and can be run by
+hand before a venue date (`pnpm pocketbase:download` once, then
+`pnpm test:e2e`), with the caveat that several are quarantined (#9).
 
 Add scenario validation when the change touches the scenario schema, a
 scenario file, or a media manifest:

@@ -7,6 +7,22 @@ on:
 permissions:
   contents: read
 
+# A new push supersedes the previous run on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Deliberately no end-to-end job. This is an installation run by its own
+# technical team, not software shipped to strangers, and the real check is a
+# tech rehearsal in the venue with actual phones on the actual network. The
+# Playwright specs are kept in tests/e2e and can be run by hand:
+#
+#   pnpm pocketbase:download   # once
+#   pnpm test:e2e
+#
+# What CI protects is narrower and worth the minute: the code compiles, the
+# clients build, and the scenario graph is valid. A build that breaks during
+# a tech rehearsal is the failure mode this catches.
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -25,20 +41,3 @@ jobs:
       - run: pnpm validate-scenario content/scenarios/dev.json
       - name: Build display, phone, and admin bundles
         run: pnpm --filter @entertheblackbox/display build && pnpm --filter @entertheblackbox/phone build && pnpm --filter @entertheblackbox/admin build
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.17.0
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright install --with-deps chromium
-      # The e2e global setup spawns a local PocketBase; the binary is
-      # gitignored, so every runner fetches its own pinned copy.
-      - run: pnpm pocketbase:download
-      - run: pnpm test:e2e

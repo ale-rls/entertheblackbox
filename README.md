@@ -157,11 +157,26 @@ See [the Studio curator guide](docs/studio-guide.md) and [runtime compatibility 
 ```bash
 pnpm typecheck
 pnpm test
-pnpm test:e2e
 pnpm validate-scenario content/scenarios/dev.json --manifest content/media-manifest.json --media-dir content/media
 ```
 
-The end-to-end suite builds the installation clients and runs Playwright flows against real server processes. Some environments require permission to bind local ports.
+Those three are what CI runs, alongside the client builds. There is no
+end-to-end job on purpose: for an installation run by its own technical team,
+the check that matters is a tech rehearsal in the venue with real phones on the
+real network.
+
+The Playwright suite is still here and can be run by hand before a venue date:
+
+```bash
+pnpm pocketbase:download   # once, fetches the pinned binary
+pnpm test:e2e
+```
+
+It builds the installation clients and drives real server processes, so it
+takes several minutes and some environments require permission to bind local
+ports. Several Studio specs are quarantined with `test.fixme` because they
+assert UI text the Studio no longer renders, so a green run is not broad
+coverage.
 
 To exercise the multiplayer server without browsers:
 

@@ -35,13 +35,19 @@ State what you ran and what happened. "Should pass" is not verification.
 pnpm -r typecheck && pnpm -r test
 ```
 
-Touching runtime client or server behavior also needs e2e. It spawns a local
-PocketBase, so the binary must be downloaded once:
+CI runs exactly that, plus the client builds. **There is no e2e job on
+purpose** — the real check for this show is a tech rehearsal in the venue with
+real phones on the real network, not headless Chromium against a fake scenario.
+The Playwright specs are still in `tests/e2e` if you want them by hand:
 
 ```bash
 pnpm pocketbase:download   # once
 pnpm test:e2e
 ```
+
+Several of those specs are quarantined with `test.fixme` because they assert
+Studio text that no longer exists (#9). Do not treat a green e2e run as broad
+coverage.
 
 Touching the scenario schema, a scenario, or a media manifest:
 
