@@ -13,7 +13,7 @@ Deployment topology:
 | PocketBase | Combined monorepo Coolify service | HTTPS |
 | Audio bridge | This Coolify stack | HTTPS |
 | Icecast + Liquidsoap | This Coolify stack | No |
-| Realtime cursor relay | Existing separate Coolify resource | WSS |
+| Realtime cursor relay | Combined monorepo Coolify service | WSS |
 | TrackingBox | Venue machine | No public ingress required |
 
 PocketBase is not duplicated by this service-specific Compose stack. For the
