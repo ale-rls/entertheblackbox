@@ -232,6 +232,49 @@ body {
   filter: brightness(1.6);
 }
 
+.group-selection {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  gap: 1.5rem;
+  padding: max(1.5rem, env(safe-area-inset-top)) max(1.5rem, env(safe-area-inset-right)) max(1.5rem, env(safe-area-inset-bottom)) max(1.5rem, env(safe-area-inset-left));
+  background: rgb(8 9 11 / 94%);
+  touch-action: manipulation;
+}
+
+.group-selection h1 {
+  margin: 0;
+  font-size: clamp(2rem, 9vw, 3.5rem);
+  line-height: 1;
+  text-align: center;
+}
+
+.group-selection-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  gap: .9rem;
+  width: min(100%, 36rem);
+  margin: 0 auto;
+}
+
+.group-selection-options button {
+  min-height: 5rem;
+  padding: 1rem;
+  border: 2px solid var(--group-color, rgb(255 255 255 / 35%));
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--group-color, #fff) 12%, #08090b);
+  color: #fff;
+  font-size: clamp(1.25rem, 6vw, 2rem);
+}
+
+.group-selection-options button.selected {
+  background: var(--group-color, #f5f5f5);
+  color: #08090b;
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 25%);
+}
+
 .watch-screen,
 .rejected p {
   max-width: 24rem;

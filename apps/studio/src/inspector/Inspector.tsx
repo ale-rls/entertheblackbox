@@ -57,10 +57,10 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         <label className="sc-tool-label"><span>Group ID</span><input className="sc-tool-field" value={group.id} onChange={(event) => { const id = event.target.value; const groups = (project.scenario.groups ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, id } : item); onGroupsChange(groups, (project.scenario.initialGroupIds ?? []).map((value) => value === group.id ? id : value)); }} /></label>
         <label className="sc-tool-label"><span>Label</span><input className="sc-tool-field" value={group.label} onChange={(event) => onGroupsChange((project.scenario.groups ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item), project.scenario.initialGroupIds ?? [])} /></label>
         <label className="sc-tool-checkbox"><input type="checkbox" checked={(project.scenario.initialGroupIds ?? []).includes(group.id)} onChange={(event) => { const current = project.scenario.initialGroupIds ?? []; onGroupsChange(project.scenario.groups ?? [], event.target.checked ? [...current, group.id] : current.filter((id) => id !== group.id)); }} />Assign members to this group at show start</label>
-        <button className="sc-tool-button" type="button" onClick={() => onGroupsChange((project.scenario.groups ?? []).filter((_, itemIndex) => itemIndex !== index), (project.scenario.initialGroupIds ?? []).filter((id) => id !== group.id))}>Remove group</button>
+        <button className="sc-tool-button" type="button" disabled={(project.scenario.groups?.length ?? 0) <= 2} onClick={() => onGroupsChange((project.scenario.groups ?? []).filter((_, itemIndex) => itemIndex !== index), (project.scenario.initialGroupIds ?? []).filter((id) => id !== group.id))}>Remove group</button>
       </div>)}
-      <button className="sc-tool-button" type="button" onClick={() => { const groups = project.scenario.groups ?? []; let suffix = groups.length + 1; while (groups.some((group) => group.id === `group-${suffix}`)) suffix += 1; onGroupsChange([...groups, { id: `group-${suffix}`, label: `Group ${suffix}` }], project.scenario.initialGroupIds ?? []); }}>Add group</button>
-      <p className="sc-tool-copy field-hint">Select at least two starting groups for balanced assignment in the lobby. Branching moments can reorganize them later.</p>
+      <button className="sc-tool-button" type="button" onClick={() => { const groups = project.scenario.groups ?? []; if (groups.length === 0) { onGroupsChange([{ id: "group-1", label: "Group 1" }, { id: "group-2", label: "Group 2" }], []); return; } let suffix = groups.length + 1; while (groups.some((group) => group.id === `group-${suffix}`)) suffix += 1; onGroupsChange([...groups, { id: `group-${suffix}`, label: `Group ${suffix}` }], project.scenario.initialGroupIds ?? []); }}>{(project.scenario.groups?.length ?? 0) === 0 ? "Add groups" : "Add group"}</button>
+      <p className="sc-tool-copy field-hint">A show has at least two labelled groups. Starting groups are assigned automatically in the lobby; a group scene can instead ask people to choose on their phones.</p>
     </fieldset>
     <Compiled project={project} /></aside>;
   const label = (plain: string, runtime: string) => <span>{plain}<small>{runtime}</small></span>;
@@ -77,7 +77,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     onChange({ ...phase, assignment: change(phase.assignment) });
   };
   const updateFallbackGroup = (fallbackGroupId: string) => {
-    if (phase.kind !== "group-branch" || phase.assignment.type === "balanced") return;
+    if (phase.kind !== "group-branch" || phase.assignment.type === "balanced" || phase.assignment.type === "self-select") return;
     onChange({ ...phase, assignment: { ...phase.assignment, fallbackGroupId } });
   };
 
@@ -181,9 +181,10 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         const type = event.target.value;
         const fallbackGroupId = phase.branches[0]!.groupId;
         onChange({ ...phase, assignment: type === "balanced" ? { type: "balanced" }
+          : type === "self-select" ? { type: "self-select" }
           : type === "manual" ? { type: "manual", fallbackGroupId }
           : { type: "vote", questionId: project.scenario.phases.find((item) => item.kind === "position-question" || item.kind === "video-position-question")?.id ?? "question", map: {}, fallbackGroupId } });
-      }}><option value="balanced">Balanced automatically</option><option value="vote">From an earlier individual vote</option><option value="manual">Assigned live by operator</option></select></label>
+      }}><option value="self-select">Chosen by participants on their phones</option><option value="balanced">Balanced automatically</option><option value="vote">From an earlier individual vote</option><option value="manual">Assigned live by operator</option></select></label>
       {phase.assignment.type === "vote" && <>
         <label className="sc-tool-label">{label("Source question", "assignment.questionId")}<select className="sc-tool-select" value={phase.assignment.questionId} onChange={(event) => updateVoteAssignment((assignment) => ({ ...assignment, questionId: event.target.value }))}>
           {project.scenario.phases.filter((item) => item.kind === "position-question" || item.kind === "video-position-question").map((item) => <option value={item.id} key={item.id}>{item.id}</option>)}
@@ -198,7 +199,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
           })),
         )}
       </>}
-      {phase.assignment.type !== "balanced" && <label className="sc-tool-label">{label("Fallback group", "assignment.fallbackGroupId")}<select className="sc-tool-select" value={phase.assignment.fallbackGroupId} onChange={(event) => updateFallbackGroup(event.target.value)}>{phase.branches.map((branch) => <option key={branch.groupId} value={branch.groupId}>{project.scenario.groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId}</option>)}</select></label>}
+      {(phase.assignment.type === "vote" || phase.assignment.type === "manual") && <label className="sc-tool-label">{label("Fallback group", "assignment.fallbackGroupId")}<select className="sc-tool-select" value={phase.assignment.fallbackGroupId} onChange={(event) => updateFallbackGroup(event.target.value)}>{phase.branches.map((branch) => <option key={branch.groupId} value={branch.groupId}>{project.scenario.groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId}</option>)}</select></label>}
       {phase.branches.map((branch, index) => <fieldset key={branch.groupId}><legend>{project.scenario.groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId}</legend>
         {number("Allocation weight", `branches.${index}.weight`, branch.weight, (weight) => onChange({ ...phase, branches: phase.branches.map((item, itemIndex) => itemIndex === index ? { ...item, weight: Math.max(1, weight) } : item) }))}
         {text("Phone narration MP3", `branches.${index}.phoneAudioSrc`, branch.phoneAudioSrc ?? "", (phoneAudioSrc) => onChange({ ...phase, branches: phase.branches.map((item, itemIndex) => itemIndex === index ? { ...item, phoneAudioSrc: phoneAudioSrc || undefined } : item) }))}

@@ -33,6 +33,7 @@ export type PhoneState = {
   ratingCandidateLabel: string | null;
   /** One phone text field: an active subtitle takes precedence over the scene title. */
   phoneDisplayText: string | null;
+  groupSelection: Extract<ServerToClientMessage, { t: "group_selection_options" }> | null;
   phaseTiming: {
     startedAt: number;
     serverOffsetMs: number;
@@ -52,6 +53,7 @@ export const initialPhoneState: PhoneState = {
   reloadRequired: null,
   ratingCandidateLabel: null,
   phoneDisplayText: null,
+  groupSelection: null,
   phaseTiming: null,
 };
 
@@ -122,9 +124,13 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
           m.phase.kind === "position-question" ||
           m.phase.kind === "video-position-question",
         phaseTiming,
+        groupSelection: null,
         ...temporalFields(phaseTiming, receivedAtMs),
       };
     }
+    case "group_selection_options":
+      if (m.sessionId !== state.sessionId || m.phaseEpoch !== state.phaseEpoch) return state;
+      return { ...state, groupSelection: m };
     case "status":
       return { ...state, statusMessage: m.message };
     case "reload":

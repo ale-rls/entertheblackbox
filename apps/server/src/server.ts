@@ -129,6 +129,13 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       displayToken: config.displayToken,
       participantLeaseTtlMs: admission.participantLeaseTtlMs,
       autoStartOnFirstParticipant: false,
+      groupSelection: {
+        current: (participantId) => groups?.groupFor(participantId) ?? null,
+        select: (participantId, groupId) => {
+          groups?.assign(participantId, groupId);
+          void audio?.refreshParticipant(participantId);
+        },
+      },
       qr: {
         phoneJoinBaseUrl: config.phoneJoinBaseUrl,
         issueGrant: (now) => admission.issueJoinGrant(now),

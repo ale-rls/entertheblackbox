@@ -103,6 +103,10 @@ export type PhaseEngineOptions = {
   onLobbyScheduleChanged?: (startTimes: readonly number[]) => void;
   /** Legacy/test compatibility; production disables participant-count auto-start. */
   autoStartOnFirstParticipant?: boolean;
+  groupSelection?: {
+    current: (participantId: string) => string | null;
+    select: (participantId: string, groupId: string) => void;
+  };
   qr?: Omit<QrGrantPushLoopOptions, "send" | "lifecycle" | "hasDisplay" | "now">;
 };
 
@@ -206,6 +210,7 @@ export class PhaseEngine {
   private scheduledStartTimes: number[];
   private readonly autoStartOnFirstParticipant: boolean;
   private readonly onLobbyScheduleChanged: ((startTimes: readonly number[]) => void) | undefined;
+  private readonly groupSelection: PhaseEngineOptions["groupSelection"];
 
   constructor(options: PhaseEngineOptions) {
     this.scenario = options.scenario;
@@ -220,6 +225,7 @@ export class PhaseEngine {
     this.scheduledStartTimes = this.normalizeStartTimes(options.scheduledStartTimes ?? []).filter((time) => time > this.now());
     this.autoStartOnFirstParticipant = options.autoStartOnFirstParticipant ?? true;
     this.onLobbyScheduleChanged = options.onLobbyScheduleChanged;
+    this.groupSelection = options.groupSelection;
     this.onCheckpoint = options.onCheckpoint;
     this.onPhaseDeadline = options.onPhaseDeadline;
     this.onSessionEnded = options.onSessionEnded;
@@ -581,6 +587,7 @@ export class PhaseEngine {
       }, this.now());
     }
     this.send(socket, this.getSnapshotMessage());
+    this.sendGroupSelectionOptions(socket);
     this.queueQuestionStatus();
     if (this.lifecycle === "idle" && this.displaySocket !== undefined && this.registry.connectedCount >= 1) {
       this.startLobby(this.now());
@@ -659,6 +666,21 @@ export class PhaseEngine {
           }
         }
         return;
+      case "group_selection": {
+        const participantId = this.participantIds.get(socket);
+        const phase = this.currentPhase();
+        if (
+          participantId !== undefined &&
+          phase.kind === "group-branch" &&
+          phase.assignment.type === "self-select" &&
+          this.matches(message.sessionId, phase.id, message.phaseEpoch) &&
+          phase.branches.some((branch) => branch.groupId === message.groupId)
+        ) {
+          this.groupSelection?.select(participantId, message.groupId);
+          this.sendGroupSelectionOptions(socket);
+        }
+        return;
+      }
       case "input":
         if (
           this.participantSockets.has(socket) &&
@@ -1010,6 +1032,7 @@ export class PhaseEngine {
       phase: this.getSnapshot(),
       serverTime: this.now(),
     });
+    for (const socket of this.participantSockets) this.sendGroupSelectionOptions(socket);
     if (sessionEnded !== undefined) this.onSessionEnded?.(sessionEnded);
   }
 
@@ -1213,6 +1236,28 @@ export class PhaseEngine {
 
   private sendToDisplay(message: ServerToClientMessage): void {
     if (this.displaySocket !== undefined) this.send(this.displaySocket, message);
+  }
+
+  private sendGroupSelectionOptions(socket: WebSocket): void {
+    const phase = this.currentPhase();
+    if (phase.kind !== "group-branch" || phase.assignment.type !== "self-select") return;
+    const participantId = this.participantIds.get(socket);
+    if (participantId === undefined) return;
+    const catalogue = new Map((this.scenario.groups ?? []).map((group) => [group.id, group]));
+    const groups = phase.branches.flatMap((branch) => {
+      const group = catalogue.get(branch.groupId);
+      return group === undefined ? [] : [group];
+    });
+    if (groups.length < 2) return;
+    this.send(socket, {
+      t: "group_selection_options",
+      v: PROTOCOL_VERSION,
+      sessionId: this.sessionId,
+      phaseEpoch: this.phaseEpoch,
+      ...(phase.title === undefined ? {} : { title: phase.title }),
+      groups,
+      selectedGroupId: this.groupSelection?.current(participantId) ?? null,
+    });
   }
 
   private send(socket: WebSocket, message: ServerToClientMessage): void {

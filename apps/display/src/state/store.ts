@@ -124,6 +124,7 @@ export function displayReducer(
     case "cursors":
     case "identity":
     case "join_rejected":
+    case "group_selection_options":
     case "status":
     case "pong":
       return state;

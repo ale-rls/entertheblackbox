@@ -309,6 +309,17 @@ export function App() {
     });
   };
 
+  const selectGroup = (groupId: string) => {
+    if (state.sessionId === null) return;
+    connection?.send({
+      t: "group_selection",
+      v: PROTOCOL_VERSION,
+      sessionId: state.sessionId,
+      phaseEpoch: state.phaseEpoch,
+      groupId,
+    });
+  };
+
   return (
     <main
       className="phone-root"
@@ -361,6 +372,26 @@ export function App() {
             /></div>}
           {!state.inputOpen && (
             <p className="watch-screen">{state.join.kind === "accepted" ? `${submittedName}, watch the screen` : "Joining…"}</p>
+          )}
+          {state.groupSelection !== null && (
+            <section className="group-selection" aria-labelledby="group-selection-title">
+              <h1 id="group-selection-title">{state.groupSelection.title ?? "Choose your group"}</h1>
+              <div className="group-selection-options">
+                {state.groupSelection.groups.map((group) => (
+                  <button
+                    key={group.id}
+                    type="button"
+                    className={state.groupSelection?.selectedGroupId === group.id ? "selected" : ""}
+                    style={group.color === undefined ? undefined : { "--group-color": group.color } as React.CSSProperties}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => { event.stopPropagation(); selectGroup(group.id); }}
+                    aria-pressed={state.groupSelection?.selectedGroupId === group.id}
+                  >
+                    {group.label}
+                  </button>
+                ))}
+              </div>
+            </section>
           )}
           {state.ratingCandidateLabel !== null && (
             <div className="rating-buttons" aria-label={`Reactions for ${state.ratingCandidateLabel}`}>

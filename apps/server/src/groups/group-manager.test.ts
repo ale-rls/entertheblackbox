@@ -47,4 +47,16 @@ describe("GroupManager", () => {
     groups.applyBranch(branch({ type: "manual", fallbackGroupId: "a" }), ["one", "two"]);
     expect(groups.groupFor("one")).toBe("b");
   });
+
+  it("clears the source cohort so every participant can self-select", () => {
+    const groups = new GroupManager(scenario);
+    groups.beginSession(["one", "two"]);
+    groups.applyBranch(branch({ type: "self-select" }), ["one", "two"]);
+    expect(groups.snapshot(["one", "two"])).toEqual([
+      { participantId: "one", groupId: null },
+      { participantId: "two", groupId: null },
+    ]);
+    groups.assign("one", "b");
+    expect(groups.groupFor("one")).toBe("b");
+  });
 });

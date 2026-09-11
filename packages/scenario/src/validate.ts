@@ -118,9 +118,9 @@ export function validateScenario(
         message: `group branch "${phase.id}" references unknown group "${groupId}"`,
       });
       const outputs = new Set(phase.branches.map((branch) => branch.groupId));
-      const assignedGroups = phase.assignment.type === "balanced" ? []
-        : phase.assignment.type === "manual" ? [phase.assignment.fallbackGroupId]
-          : [...Object.values(phase.assignment.map), phase.assignment.fallbackGroupId];
+      const assignedGroups = phase.assignment.type === "vote"
+        ? [...Object.values(phase.assignment.map), phase.assignment.fallbackGroupId]
+        : phase.assignment.type === "manual" ? [phase.assignment.fallbackGroupId] : [];
       for (const groupId of new Set(assignedGroups)) if (!outputs.has(groupId)) errors.push({
         severity: "error", code: "invalid-group-branch", phaseId: phase.id,
         message: `group branch "${phase.id}" assigns "${groupId}" but does not expose it as an output`,

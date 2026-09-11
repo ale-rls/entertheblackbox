@@ -205,6 +205,26 @@ describe("trackpad", () => {
 const apply = (state: PhoneState, message: ServerToClientMessage, receivedAtMs?: number) =>
   phoneReducer(state, { type: "server-message", message, ...(receivedAtMs === undefined ? {} : { receivedAtMs }) });
 
+describe("phone group selection", () => {
+  it("accepts current-phase options and clears them on the next phase", () => {
+    const current = { ...initialPhoneState, sessionId: "s1", phaseEpoch: 3 };
+    const choosing = apply(current, {
+      t: "group_selection_options", v: PROTOCOL_VERSION, sessionId: "s1", phaseEpoch: 3,
+      groups: [{ id: "a", label: "A" }, { id: "b", label: "B" }], selectedGroupId: "a",
+    });
+    expect(choosing.groupSelection?.selectedGroupId).toBe("a");
+    expect(apply(choosing, phase("video", 4)).groupSelection).toBeNull();
+  });
+
+  it("ignores stale selection options", () => {
+    const current = { ...initialPhoneState, sessionId: "s1", phaseEpoch: 4 };
+    expect(apply(current, {
+      t: "group_selection_options", v: PROTOCOL_VERSION, sessionId: "s1", phaseEpoch: 3,
+      groups: [{ id: "a", label: "A" }, { id: "b", label: "B" }], selectedGroupId: null,
+    })).toBe(current);
+  });
+});
+
 const phase = (
   kind: "idle" | "video" | "position-question" | "video-position-question",
   epoch: number,

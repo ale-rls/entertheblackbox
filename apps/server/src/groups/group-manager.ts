@@ -64,6 +64,10 @@ export class GroupManager {
     const counts = new Map(outputIds.map((id) => [id, 0]));
 
     for (const participantId of ordered) {
+      if (phase.assignment.type === "self-select") {
+        this.membership.delete(participantId);
+        continue;
+      }
       let groupId: string;
       if (phase.assignment.type === "vote") {
         const answer = this.answers.get(participantId)?.get(phase.assignment.questionId);

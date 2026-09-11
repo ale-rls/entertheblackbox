@@ -126,11 +126,21 @@ export const reactionSchema = z.object({
   kind: z.enum(["applause", "boo"]),
 });
 
+/** Participant choice during an authored self-select group branch. */
+export const groupSelectionSchema = z.object({
+  t: z.literal("group_selection"),
+  v,
+  sessionId: nonEmpty,
+  phaseEpoch: z.number().int().nonnegative(),
+  groupId: nonEmpty,
+});
+
 export const phoneToServerSchema = z.discriminatedUnion("t", [
   joinSchema,
   inputSchema,
   pingSchema,
   reactionSchema,
+  groupSelectionSchema,
 ]);
 
 // -------------------------------------------------------------- display → server
@@ -192,6 +202,7 @@ export const clientToServerSchema = z.discriminatedUnion("t", [
   inputSchema,
   pingSchema,
   reactionSchema,
+  groupSelectionSchema,
   displayJoinSchema,
   videoEndedSchema,
   displayHeartbeatSchema,
@@ -380,6 +391,20 @@ export const statusSchema = z.object({
   message: z.string(),
 });
 
+export const groupSelectionOptionsSchema = z.object({
+  t: z.literal("group_selection_options"),
+  v,
+  sessionId: nonEmpty,
+  phaseEpoch: z.number().int().nonnegative(),
+  title: z.string().optional(),
+  groups: z.array(z.object({
+    id: nonEmpty,
+    label: nonEmpty,
+    color: z.string().optional(),
+  })).min(2),
+  selectedGroupId: nonEmpty.nullable(),
+});
+
 export const pongSchema = z.object({
   t: z.literal("pong"),
   v,
@@ -403,6 +428,7 @@ export const serverToClientSchema = z.union([
   identitySchema,
   joinRejectedSchema,
   statusSchema,
+  groupSelectionOptionsSchema,
   pongSchema,
 ]);
 
@@ -419,6 +445,7 @@ export type JoinMessage = z.infer<typeof joinSchema>;
 export type InputMessage = z.infer<typeof inputSchema>;
 export type PingMessage = z.infer<typeof pingSchema>;
 export type ReactionMessage = z.infer<typeof reactionSchema>;
+export type GroupSelectionMessage = z.infer<typeof groupSelectionSchema>;
 export type PhoneToServerMessage = z.infer<typeof phoneToServerSchema>;
 
 export type DisplayJoinMessage = z.infer<typeof displayJoinSchema>;

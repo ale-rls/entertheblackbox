@@ -434,6 +434,7 @@ const groupBranchSchema = z.object({
 
 export const groupAssignmentSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("balanced") }),
+  z.object({ type: z.literal("self-select") }),
   z.object({
     type: z.literal("vote"),
     questionId: phaseIdSchema,
@@ -503,7 +504,7 @@ export const phaseSchema = z.union([
 const canonicalScenarioSchema = z.object({
   version: z.string().min(1, "scenario version must be non-empty"),
   /** Stable group catalogue used by split nodes, targeting, and live controls. */
-  groups: z.array(audienceGroupSchema).refine((groups) => new Set(groups.map((group) => group.id)).size === groups.length, {
+  groups: z.array(audienceGroupSchema).min(2, "a show with groups needs at least two groups").refine((groups) => new Set(groups.map((group) => group.id)).size === groups.length, {
     message: "group ids must be unique",
   }).optional(),
   /** Optional balanced assignment performed as the audience joins the lobby. */
