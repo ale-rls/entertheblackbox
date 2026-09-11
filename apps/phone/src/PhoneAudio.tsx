@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AudioProgress, drifted } from "./lib/audio-progress";
+import { AudioProgress, DriftWatch, drifted } from "./lib/audio-progress";
 
 /** One native media element stays mounted across scene and WebSocket changes. */
 export function PhoneAudio({ participantLease }: { participantLease: string }) {
@@ -10,6 +10,7 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
   const retry = useRef<ReturnType<typeof setTimeout>>();
   const attempts = useRef(0);
   const progress = useRef(new AudioProgress());
+  const driftWatch = useRef(new DriftWatch());
   const playGeneration = useRef(0);
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
     audio.src = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
     audio.load();
     progress.current.reset(audio.currentTime);
+    driftWatch.current.reset();
     const generation = ++playGeneration.current;
     void audio.play().catch((error: unknown) => {
       if (generation !== playGeneration.current || !wanted.current) return;
@@ -66,14 +68,16 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
     if (!url) return;
     const audio = element.current!;
     progress.current.reset(audio.currentTime);
+    driftWatch.current.reset();
     const watchdog = setInterval(() => {
       if (!wanted.current || document.hidden) return;
       const bufferedEnd = audio.buffered.length > 0 ? audio.buffered.end(audio.buffered.length - 1) : audio.currentTime;
-      if (progress.current.stalled(audio.currentTime) || audio.ended || audio.error
-        || drifted(bufferedEnd, audio.currentTime)) scheduleRetry();
+      const backlogPersists = driftWatch.current.persists(drifted(bufferedEnd, audio.currentTime));
+      if (progress.current.stalled(audio.currentTime) || audio.ended || audio.error || backlogPersists) scheduleRetry();
     }, 5_000);
     const visible = () => {
       progress.current.reset(audio.currentTime);
+      driftWatch.current.reset();
       if (!document.hidden && wanted.current && (audio.paused || audio.error)) play();
     };
     document.addEventListener("visibilitychange", visible);
@@ -99,7 +103,7 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
 
   return <section className="phone-audio" aria-label="Headphone audio" onPointerDown={(event) => event.stopPropagation()}>
     <audio ref={element} preload="none" onError={scheduleRetry} onEnded={scheduleRetry}
-      onPlaying={() => { progress.current.reset(element.current?.currentTime ?? 0); attempts.current = 0; clearTimeout(retry.current); retry.current = undefined; setStatus("Headphones playing. You can lock your phone."); }} />
+      onPlaying={() => { progress.current.reset(element.current?.currentTime ?? 0); driftWatch.current.reset(); attempts.current = 0; clearTimeout(retry.current); retry.current = undefined; setStatus("Headphones playing. You can lock your phone."); }} />
     <p role="status">{status}</p>
     <button type="button" disabled={!url} onClick={play}>Start headphones</button>
   </section>;
