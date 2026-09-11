@@ -28,6 +28,28 @@ export function drifted(bufferedEnd: number, position: number, threshold = 10): 
   return bufferedEnd - position >= threshold;
 }
 
+/**
+ * A plain `<audio src>` element never seeks itself to the live edge — it
+ * just plays back whatever it has downloaded, in order, forever. Ordinary
+ * network burstiness lets it download a little faster than real-time now
+ * and then, and that backlog only ever grows over a multi-hour show: it
+ * doesn't shrink on its own, and it's what eventually trips `drifted()`
+ * into a full reconnect. It's also what makes a "stop"/interrupt cue take
+ * as long to reach the ear as the backlog is deep, since Liquidsoap cutting
+ * the source can't reach into a phone's local buffer and evict already-
+ * downloaded audio.
+ *
+ * Seeking forward within data already buffered is free — no network
+ * fetch, no rebuffer stall — so trimming the gap continuously here is what
+ * keeps both a full reconnect and a slow stop from ever becoming necessary
+ * in the common case. `drifted()`/`DriftWatch` remain the fallback for when
+ * this can't keep up (e.g. seeking itself fails).
+ */
+export function catchUpTarget(bufferedEnd: number, position: number, aheadBy = 2, margin = 0.5): number | null {
+  if (bufferedEnd - position <= aheadBy) return null;
+  return bufferedEnd - margin;
+}
+
 /** Requires drift to hold across consecutive checks so one bursty sample can't force a reconnect. */
 export class DriftWatch {
   private since: number | null = null;

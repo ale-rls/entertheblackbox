@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AudioProgress, DriftWatch, drifted } from "./lib/audio-progress";
+import { AudioProgress, DriftWatch, catchUpTarget, drifted } from "./lib/audio-progress";
 
 /** One native media element stays mounted across scene and WebSocket changes. */
 export function PhoneAudio({ participantLease }: { participantLease: string }) {
@@ -81,6 +81,15 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
       if (!document.hidden && wanted.current && (audio.paused || audio.error)) play();
     };
     document.addEventListener("visibilitychange", visible);
+    // Trim backlog continuously (free — already-downloaded data, no rebuffer)
+    // instead of letting it accumulate toward a full reconnect (§ drifted()).
+    const catchUp = () => {
+      if (!wanted.current || document.hidden || audio.paused) return;
+      const bufferedEnd = audio.buffered.length > 0 ? audio.buffered.end(audio.buffered.length - 1) : audio.currentTime;
+      const target = catchUpTarget(bufferedEnd, audio.currentTime);
+      if (target !== null && target > audio.currentTime) audio.currentTime = target;
+    };
+    audio.addEventListener("timeupdate", catchUp);
     const mediaSession = navigator.mediaSession;
     if (mediaSession) {
       mediaSession.metadata = new MediaMetadata({ title: "Enter the Blackbox", artist: "Your headphones" });
@@ -96,6 +105,7 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
       wanted.current = false;
       ++playGeneration.current;
       document.removeEventListener("visibilitychange", visible);
+      audio.removeEventListener("timeupdate", catchUp);
       mediaSession?.setActionHandler("play", null); mediaSession?.setActionHandler("pause", null);
       audio.pause(); audio.removeAttribute("src"); audio.load();
     };
