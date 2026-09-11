@@ -346,6 +346,7 @@ describe("Studio feedback and keyboard entry", () => {
       "position-question",
       "video-position-question",
       "image-audio-position-question",
+      "group-branch",
     ]);
 
     expect(document.body.textContent).toContain("portrait.png");

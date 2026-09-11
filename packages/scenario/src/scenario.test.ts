@@ -667,6 +667,37 @@ describe("validateScenario graph checks", () => {
     const marked = { ...structuredClone(s), cyclesAllowed: true };
     expect(validateScenario(marked).errors.some((e) => e.code === "unmarked-cycle")).toBe(false);
   });
+
+  it("validates authored group branches and group-targeted media", () => {
+    const parsed = scenarioSchema.parse({
+      version: "groups", entryPhaseId: "split", cyclesAllowed: false,
+      groups: [{ id: "workers", label: "Workers" }, { id: "machines", label: "Machines" }],
+      initialGroupIds: ["workers", "machines"],
+      phases: [idle, {
+        kind: "group-branch", id: "split", title: "Departments", durationMs: 5_000,
+        assignment: { type: "balanced" },
+        branches: [{ groupId: "workers", phoneAudioSrc: "workers.mp3" }, { groupId: "machines", phoneAudioSrc: "machines.mp3" }],
+        next: "idle",
+      }],
+    });
+    const result = validateScenario(parsed, { files: [
+      { src: "workers.mp3", bytes: 1, hash: "a" }, { src: "machines.mp3", bytes: 1, hash: "b" },
+    ] });
+    expect(result.ok).toBe(true);
+  });
+
+  it("rejects unknown groups and vote sources", () => {
+    const parsed = scenarioSchema.parse({
+      version: "groups", entryPhaseId: "split", cyclesAllowed: false,
+      groups: [{ id: "known", label: "Known" }, { id: "other", label: "Other" }],
+      phases: [idle, {
+        kind: "group-branch", id: "split", durationMs: 1,
+        assignment: { type: "vote", questionId: "missing-question", map: { min: "missing-group" }, fallbackGroupId: "known" },
+        branches: [{ groupId: "known" }, { groupId: "missing-group" }], next: "idle",
+      }],
+    });
+    expect(validateScenario(parsed).errors.map((error) => error.code)).toEqual(expect.arrayContaining(["unknown-group", "unknown-question"]));
+  });
 });
 
 describe("validateMediaManifest", () => {

@@ -76,7 +76,7 @@ export function reconcilePhaseOutputEdges(edges: Edge[], phase: Phase): Edge[] {
       const existing = edges.find((edge) => edge.source === phase.id && (edge.sourceHandle ?? FIXED_HANDLE) === handle);
       if (existing) return { ...existing, id: `${phase.id}:${handle}`, sourceHandle: handle };
       let runtime = "idle";
-      if (phase.kind === "video") runtime = phase.next;
+      if (phase.kind === "video" || phase.kind === "group-branch") runtime = phase.next;
       else if (phase.next.type === "fixed") runtime = phase.next.target;
       else if (handle === "tie" || handle === "empty") runtime = phase.next[handle];
       else runtime = (phase.next.map as Record<string, string>)[handle] ?? "idle";
@@ -89,7 +89,7 @@ export function graphEdges(project: StudioProject): Edge[] {
   const edges: Edge[] = [{ id: "entry", source: ENTRY_NODE_ID, sourceHandle: FIXED_HANDLE, target: edgeTarget(project.scenario.entryPhaseId) }];
   for (const phase of project.scenario.phases) {
     if (phase.kind === "idle") continue;
-    if (phase.kind === "video") {
+    if (phase.kind === "video" || phase.kind === "group-branch") {
       edges.push({ id: `${phase.id}:next`, source: phase.id, sourceHandle: FIXED_HANDLE, target: edgeTarget(phase.next) });
       continue;
     }
@@ -129,7 +129,7 @@ export function applyEdges(project: StudioProject, edges: Edge[]): StudioProject
   if (!entry) throw new Error("The entry marker must be connected.");
   const phases = project.scenario.phases.map((phase) => {
     if (phase.kind === "idle") return phase;
-    if (phase.kind === "video") {
+    if (phase.kind === "video" || phase.kind === "group-branch") {
       const edge = edgeFor(phase.id, FIXED_HANDLE);
       if (!edge) throw new Error(`Phase “${phase.id}” has a dangling next output.`);
       const target = runtimeTarget(edge.target);

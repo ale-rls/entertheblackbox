@@ -29,6 +29,11 @@ export type RegisterAdminOptions = {
   engine: () => PhaseEngine | null;
   ready: boolean;
   audioStatus?: () => Promise<unknown>;
+  groupControl?: {
+    catalogue: readonly { id: string; label: string; color?: string | undefined }[];
+    memberships: () => readonly { participantId: string; groupId: string | null }[];
+    assign: (participantId: string, groupId: string) => void;
+  };
   startedAt: number;
   data?: AdminDataSource;
   trustProxy?: boolean;
@@ -118,6 +123,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
 
     admin.get("/status", async () => {
       const engine = options.engine();
+      const memberships = new Map(options.groupControl?.memberships().map((row) => [row.participantId, row.groupId]) ?? []);
       return {
         audio: await options.audioStatus?.() ?? { configured: false, players: [] },
         healthy: true,
@@ -127,12 +133,29 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         displayHeartbeatAgeMs: engine?.displayHeartbeatAgeMs ?? null,
         displayPlaybackIssue: engine?.currentDisplayPlaybackIssue ?? null,
         connectedParticipants: engine?.connectedParticipantCount ?? 0,
-        participants: engine?.participantPresence ?? [],
+        participants: (engine?.participantPresence ?? []).map((participant) => ({
+          ...participant,
+          groupId: memberships.get(participant.clientId) ?? null,
+        })),
+        groups: options.groupControl?.catalogue ?? [],
         sessionId: engine?.currentSessionId ?? null,
         lifecycle: engine?.lifecycleState ?? null,
         phaseId: engine?.currentPhaseId ?? null,
         phaseEpoch: engine?.currentPhaseEpoch ?? null,
       };
+    });
+    admin.post<{ Body: { participantId?: unknown; groupId?: unknown } }>("/groups/assign", async (request, reply) => {
+      if (!options.groupControl) return reply.code(503).send({ error: "groups_unavailable" });
+      const { participantId, groupId } = request.body ?? {};
+      if (typeof participantId !== "string" || !participantId || typeof groupId !== "string" || !groupId) {
+        return reply.code(400).send({ error: "invalid_request" });
+      }
+      const participant = options.engine()?.participantPresence.find((row) => row.clientId === participantId);
+      if (!participant) return reply.code(404).send({ error: "participant_not_found" });
+      try { options.groupControl.assign(participantId, groupId); }
+      catch { return reply.code(400).send({ error: "unknown_group" }); }
+      options.data?.audit({ action: "assign-participant-group", at: new Date().toISOString(), detail: { participantId, groupId } });
+      return { ok: true, participantId, groupId };
     });
     admin.get("/flow", async (_request, reply) => {
       const engine = options.engine();

@@ -11,6 +11,7 @@ import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
 import type { GhostPool } from "./ghosts/index.js";
 import { MovementConsentManager } from "./movement/index.js";
+import { GroupManager } from "./groups/group-manager.js";
 import { DEFAULT_INSTALLATION_POLICY } from "@entertheblackbox/shared";
 import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
 import { readServerConfigOverride, writeActiveShowId, writeTargetAudienceSize } from "./persistence/installation-config.js";
@@ -92,6 +93,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         onError: (error) => app.log.error({ error }, "failed to delete unconsented movement recording"),
       });
   const audio = config.audio ? new PersonalAudio(config.audio, config.mediaDir, (error) => app.log.error({ error }, "personal audio failed")) : null;
+  const groups = readiness.ready ? new GroupManager(readiness.scenario) : null;
   audio?.start();
   if (readiness.ready) audio?.prepare(readiness.scenario.phases);
   let engine: PhaseEngine | null = null;
@@ -106,7 +108,10 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     allowPublicJoin: true,
     isNewParticipantAllowed: () => config.allowLateJoin || engine?.lifecycleState !== "active",
     onClientMessage: (message, socket, request) => engine?.handleClientMessage(message, socket, request),
-    onParticipantJoin: (participant, socket) => engine?.participantJoined(socket, participant),
+    onParticipantJoin: (participant, socket) => {
+      groups?.ensureParticipant(participant.clientId);
+      engine?.participantJoined(socket, participant);
+    },
     onSocketClosed: (socket) => engine?.socketClosed(socket),
     onMessageError: (error) => {
       const message = error instanceof Error ? error.message : String(error);
@@ -133,6 +138,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       onSessionEnded: (event) => {
         const { sessionId, endedAt } = event;
         audio?.endSession();
+        groups?.endSession();
         movementConsent?.endSession(sessionId);
         admission.endParticipantSession(endedAt);
         options.onSessionEnded?.(event);
@@ -141,10 +147,19 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         adminData?.recordCheckpoint?.(checkpoint);
         if (checkpoint.kind === "transition") {
           const phase = readiness.scenario.phases.find((p) => p.id === checkpoint.phaseId);
-          if (phase) audio?.transition(phase);
+          const participantIds = admission.registry.values().map((participant) => participant.clientId);
+          if (checkpoint.reason === "session-start" || checkpoint.reason === "admin-restart") groups?.beginSession(participantIds);
+          if (phase?.kind === "group-branch") groups?.applyBranch(phase, participantIds);
+          if (phase) audio?.transition(phase, (participantId) => groups?.groupFor(participantId) ?? null);
         }
       },
-      onVoteSnapshotEnqueued: (snapshot) => adminData?.recordVoteSnapshot?.(snapshot),
+      onVoteSnapshotEnqueued: (snapshot) => {
+        adminData?.recordVoteSnapshot?.(snapshot);
+        const question = readiness.scenario.phases.find((phase) => phase.id === snapshot.questionId);
+        if (question?.kind === "position-question" || question?.kind === "video-position-question") {
+          groups?.recordAnswers(question.id, question.field, snapshot);
+        }
+      },
       onMovementRecordingStarted: (event) => {
         movementConsent?.track(event.sessionId, event.participantId);
         adminData?.recordMovementStarted?.(event);
@@ -197,6 +212,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     const lease = verifyParticipantLease(body.data.participantLease, { secret: config.joinGrantSecret, installationId: config.installationId });
     const participant = admission.registry.get(body.data.participantLease);
     if (!lease || !participant || participant.clientId !== lease.clientId) return reply.code(401).send({ error: "invalid_participant_lease" });
+    groups?.ensureParticipant(participant.clientId);
     try { return { streamUrl: await audio.register(participant) }; }
     catch { return reply.code(503).send({ error: "audio_unavailable" }); }
   });
@@ -254,6 +270,14 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,
     audioStatus: () => audio?.status() ?? Promise.resolve({ configured: false, players: [] }),
+    ...(groups === null ? {} : { groupControl: {
+      catalogue: readiness.ready ? readiness.scenario.groups ?? [] : [],
+      memberships: () => groups.snapshot(admission.registry.values().map((participant) => participant.clientId)),
+      assign: (participantId: string, groupId: string) => {
+        groups.assign(participantId, groupId);
+        void audio?.refreshParticipant(participantId);
+      },
+    } }),
     ...(adminData === undefined ? {} : { data: adminData }),
     ...(options.pocketbase === undefined ? {} : {
       showConfig: {

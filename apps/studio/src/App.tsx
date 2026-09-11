@@ -49,6 +49,7 @@ const componentTypeLabel: Record<AuthorableComponentType, string> = {
   "position-question": "position question",
   "video-position-question": "video + position vote",
   "image-audio-position-question": "still image + MP3 + position vote",
+  "group-branch": "group branch",
 };
 
 /** Default authoring rhythm: 15s decide, 5s vote, 5s result hold. */
@@ -461,7 +462,7 @@ export function App() {
     persistGraph(next);
     setGraphFeedback({ status: "success", message: "Connection updated." });
   };
-  const addPhase = (kind: "idle" | "video" | "image-audio" | "position-question" | "video-position-question" | "image-audio-position-question") => {
+  const addPhase = (kind: "idle" | "video" | "image-audio" | "position-question" | "video-position-question" | "image-audio-position-question" | "group-branch") => {
     if (!draft) return;
     if (kind === "idle" && draft.project.scenario.phases.some((phase) => phase.kind === "idle")) {
       setGraphFeedback({ status: "danger", message: "Idle phase not added: this show already has its idle phase. Select the existing idle phase to edit it." });
@@ -483,7 +484,12 @@ export function App() {
       ...(imageAudio ? { audioSrc: firstAudio?.src ?? "media/new-audio.mp3", tailDurationMs } : {}),
       expectedDurationMs,
     };
+    const groupCatalogue = (draft.project.scenario.groups?.length ?? 0) >= 2
+      ? draft.project.scenario.groups!
+      : [{ id: "group-a", label: "Group A", color: "#00bbf9" }, { id: "group-b", label: "Group B", color: "#f15bb5" }];
     const phase = kind === "idle" ? { kind, id: "idle" as const }
+      : kind === "group-branch"
+        ? { kind, id, title: "Divide audience", durationMs: 5_000, assignment: { type: "balanced" as const }, branches: groupCatalogue.slice(0, 2).map((group) => ({ groupId: group.id, weight: 1 })), next: "idle" }
       : kind === "position-question"
         ? { kind, id, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, durationMs: 60000, freezeMs: 5000, connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
         : mediaVote
@@ -495,7 +501,11 @@ export function App() {
     const nextEdges = [...edges, ...handles.map((handle) => ({ id: `${id}:${handle}`, source: id, sourceHandle: handle, target: END_NODE_ID }))];
     setNodes(nextNodes);
     setEdges(nextEdges);
-    saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges);
+    saveCanvas({ ...draft, project: { ...draft.project, scenario: {
+      ...draft.project.scenario,
+      ...(kind === "group-branch" ? { groups: groupCatalogue, initialGroupIds: draft.project.scenario.initialGroupIds ?? groupCatalogue.slice(0, 2).map((group) => group.id) } : {}),
+      phases,
+    } } }, nextNodes, nextEdges);
     if (phase.kind === "video" || phase.kind === "video-position-question") {
       setSelectedId(id);
       setShowInspector(true);
@@ -514,7 +524,7 @@ export function App() {
   const selectMedia = (row: MediaLibraryRow) => {
     if (!draft || !mediaPicker) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === mediaPicker.phaseId);
-    if (phase && phase.kind !== "idle" && mediaPicker.target === "phoneAudioSrc") {
+    if (phase && phase.kind !== "idle" && phase.kind !== "group-branch" && mediaPicker.target === "phoneAudioSrc") {
       updatePhase({ ...phase, phoneAudioSrc: row.src });
       closeMediaPicker();
       return;
@@ -543,6 +553,14 @@ export function App() {
   const updateTargetAudienceSize = (targetAudienceSize: number) => {
     if (!draft) return;
     record({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, targetAudienceSize } }, updatedAt: Date.now() });
+  };
+  const updateGroups = (groups: NonNullable<Draft["project"]["scenario"]["groups"]>, initialGroupIds: string[]) => {
+    if (!draft) return;
+    record({ ...draft, project: { ...draft.project, scenario: {
+      ...draft.project.scenario,
+      groups,
+      initialGroupIds: initialGroupIds.length >= 2 ? initialGroupIds : undefined,
+    } }, updatedAt: Date.now() });
   };
   const renameSelected = (nextId: string) => {
     if (!draft || !selectedId) return;
@@ -870,7 +888,7 @@ export function App() {
   const mediaPickerPhase = mediaPicker
     ? draft.project.scenario.phases.find((phase) => phase.id === mediaPicker.phaseId)
     : undefined;
-  const mediaPickerSelectedSrc = mediaPicker?.target === "phoneAudioSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle"
+  const mediaPickerSelectedSrc = mediaPicker?.target === "phoneAudioSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
     ? mediaPickerPhase.phoneAudioSrc ?? ""
     : mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
     ? mediaPicker?.target === "audioSrc"
@@ -918,6 +936,7 @@ export function App() {
         { label: "Position question", onSelect: () => addPhase("position-question") },
         { label: "Video + position vote", onSelect: () => addPhase("video-position-question") },
         { label: "Image + MP3 + position vote", onSelect: () => addPhase("image-audio-position-question") },
+        { label: "Group branching moment", onSelect: () => addPhase("group-branch") },
       ]} />
       <Menu label="View" items={[
         { label: showInspector ? "Hide properties" : "Show properties", onSelect: () => setShowInspector((value) => !value) },
@@ -987,7 +1006,7 @@ export function App() {
       </div>}
     </header>
     <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
-    <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onComponentTypeChange={changeSelectedComponentType} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} />
+    <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onComponentTypeChange={changeSelectedComponentType} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} onGroupsChange={updateGroups} />
     <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} collapsed={!showDiagnostics} onToggle={() => setShowDiagnostics((value) => !value)} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onAcknowledgeAll={(keys) => setAcknowledged((current) => new Set([...current, ...keys]))} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
     {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} showActive={showLifecycle === "active"} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
     {mediaPicker && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} showActive={showLifecycle === "active"} selection={{ contextLabel: `${mediaPicker.mediaKind} for ${mediaPicker.phaseId}`, selectedSrc: mediaPickerSelectedSrc, mediaKind: mediaPicker.mediaKind, onSelect: selectMedia }} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={closeMediaPicker} />}

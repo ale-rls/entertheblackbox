@@ -360,6 +360,9 @@ export function App() {
         {phase?.kind === "video" && phase.title && (
           <VideoTitle title={phase.title} layout={phase.titleLayout} />
         )}
+        {phase?.kind === "group-branch" && phase.title && (
+          <div className="group-branch-title">{phase.title}</div>
+        )}
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && <PhaseSubtitles phase={phase} clock={connection.clock} />}
         {phase?.kind === "video-position-question" && (
           <VideoQuestionOverlay

@@ -41,7 +41,7 @@ export function advancePreview(session: PreviewSession): PreviewSession {
   const phase = currentPhase(session);
   if (phase.kind === "idle") return session;
   let target: string;
-  if (phase.kind === "video") target = phase.next;
+  if (phase.kind === "video" || phase.kind === "group-branch") target = phase.next;
   else {
     if (phase.next.type !== "fixed") throw new Error("Choose an outcome for this question.");
     target = phase.next.target;

@@ -142,7 +142,7 @@ export type AdminFlow = {
 };
 
 function adminRoutesForPhase(phase: Exclude<Phase, { kind: "idle" }>): AdminFlowRoute[] {
-  if (phase.kind === "video") return [{ outcome: "next", target: phase.next }];
+  if (phase.kind === "video" || phase.kind === "group-branch") return [{ outcome: "next", target: phase.next }];
   if (phase.next.type === "fixed") return [{ outcome: "next", target: phase.next.target }];
   return [
     ...Object.entries(phase.next.map).map(([outcome, target]) => ({ outcome, target })),
@@ -287,7 +287,7 @@ export class PhaseEngine {
         .map((phase) => ({
           id: phase.id,
           kind: phase.kind,
-          title: phase.title ?? (phase.kind === "video" ? phase.id : phase.text),
+          title: phase.title ?? (phase.kind === "video" || phase.kind === "group-branch" ? phase.id : phase.text),
           routes: adminRoutesForPhase(phase),
         })),
     };
@@ -359,7 +359,7 @@ export class PhaseEngine {
   adminSkip(now = this.now()): TransitionResult {
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
     const phase = this.currentPhase();
-    if (phase.kind === "video") return this.advanceTo(phase.next, now, "admin-skip");
+    if (phase.kind === "video" || phase.kind === "group-branch") return this.advanceTo(phase.next, now, "admin-skip");
     if (phase.kind === "video-position-question") {
       this.beginCompositeVoteIfDue(now, phase, true);
       this.resolveCompositeQuestion(now, phase);
@@ -483,6 +483,11 @@ export class PhaseEngine {
     }
 
     const phase = this.currentPhase();
+
+    if (phase.kind === "group-branch") {
+      if (this.deadlineAt !== null && now >= this.deadlineAt) this.advanceTo(phase.next, now, "group-branch-complete");
+      return;
+    }
 
     if (phase.kind === "video") {
       if (phase.rating) this.broadcastRatingStatus(now);
@@ -935,6 +940,8 @@ export class PhaseEngine {
     this.video.cancel();
     this.deadlineAt = phase.kind === "video" || phase.kind === "video-position-question"
       ? this.video.begin({ sessionId: this.sessionId, phaseId: target, phaseEpoch: this.phaseEpoch + 1 }, phase.expectedDurationMs, now)
+      : phase.kind === "group-branch"
+        ? now + phase.durationMs
       : phase.kind === "position-question"
         ? now + phase.durationMs
         : null;

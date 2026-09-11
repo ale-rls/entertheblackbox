@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Phase } from "@entertheblackbox/scenario";
 import { PersonalAudio } from "./personal-audio.js";
 
-const phase = (phoneAudioSrc?: string): Phase => ({
+const phase = (phoneAudioSrc?: string): Extract<Phase, { kind: "position-question" }> => ({
   kind: "position-question", id: "question", text: "Move", durationMs: 1_000,
   freezeMs: 0, connectionStaleAfterMs: 1_000, showLiveCounts: false,
   field: { type: "two-quadrant", axis: "x", variant: "spectrum", labels: { minLabel: "A", maxLabel: "B" } },
@@ -54,5 +54,29 @@ describe("PersonalAudio", () => {
     await audio.stop();
     expect(calls).toContain("http://bridge/players/one/reset");
     expect(calls).toContain("http://bridge/players/one");
+  });
+
+  it("selects group-specific narration while retaining a broadcast fallback", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+    await Promise.all([writeFile(join(dir, "all.mp3"), "all"), writeFile(join(dir, "red.mp3"), "red")]);
+    const plays: Array<{ id: string; body: { file: string } }> = [];
+    const request = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const match = String(url).match(/\/players\/([^/]+)\/play$/);
+      if (match) plays.push({ id: match[1]!, body: JSON.parse(String(init?.body)) });
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    const audio = new PersonalAudio({ url: "http://bridge", token: "secret", publicUrl: "https://audio.example" }, dir, vi.fn(), request);
+    await audio.register({ clientId: "one", name: "One" });
+    await audio.register({ clientId: "two", name: "Two" });
+    const memberships = new Map([["one", "red"], ["two", "blue"]]);
+    audio.transition({ ...phase("all.mp3"), phoneAudioByGroup: { red: "red.mp3" } }, (id) => memberships.get(id) ?? null);
+    await audio.register({ clientId: "two", name: "Two" });
+    expect(plays.map((play) => play.id).sort()).toEqual(["one", "two"]);
+    expect(plays[0]!.body.file).not.toBe(plays[1]!.body.file);
+    memberships.set("two", "red");
+    await audio.refreshParticipant("two");
+    await audio.stop();
+    expect(plays).toHaveLength(3);
+    expect(plays[2]).toEqual({ id: "two", body: plays.find((play) => play.id === "one")!.body });
   });
 });

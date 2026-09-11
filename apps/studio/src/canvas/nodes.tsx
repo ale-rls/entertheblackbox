@@ -6,10 +6,11 @@ type NodeData = {
   label: string;
   kind: string;
   outcomes?: Array<{ id: string; label: string; tone: "quad" | "special" }>;
+  groupOutputs?: string[];
 };
 type Phase = StudioProject["scenario"]["phases"][number];
 
-const KIND_TITLE: Record<string, string> = { idle: "Idle", video: "Media", "position-question": "Question", "video-position-question": "Media + vote" };
+const KIND_TITLE: Record<string, string> = { idle: "Idle", video: "Media", "position-question": "Question", "video-position-question": "Media + vote", "group-branch": "Group branch" };
 
 const InPort = () => (
   <div className="port port-in"><Handle aria-label="Input" className="sc-tool-graph-port" id="input" type="target" position={Position.Left} /><span className="port-name">in</span></div>
@@ -20,9 +21,15 @@ const OutPort = ({ id, label, tone }: { id: string; label: string; tone?: "quad"
 
 export function nodeDataForPhase(phase: Phase): NodeData {
   const data: NodeData = {
-    label: phase.kind === "position-question" || phase.kind === "video-position-question" ? phase.text : phase.id,
+    label: phase.kind === "position-question" || phase.kind === "video-position-question"
+      ? phase.text
+      : phase.kind === "video" || phase.kind === "group-branch" ? phase.title ?? phase.id : phase.id,
     kind: phase.kind,
   };
+  if (phase.kind === "group-branch") {
+    data.groupOutputs = phase.branches.map((branch) => branch.groupId);
+    return data;
+  }
   if ((phase.kind !== "position-question" && phase.kind !== "video-position-question") || phase.next.type !== "quadrant-plurality") return data;
   if (phase.field.type === "four-quadrant") {
     data.outcomes = [
@@ -66,7 +73,12 @@ export function PhaseNode({ id, data, dragging, selected }: NodeProps) {
   return (
     <div className={`studio-node sc-tool-graph-node kind-${value.kind}`} data-sc-tool-domain={value.kind === "position-question" || value.kind === "video-position-question" ? "question" : value.kind} data-sc-tool-dragging={dragging} data-selected={selected}>
       <div className="node-head">{KIND_TITLE[value.kind] ?? value.kind}</div>
-      <div className="node-body"><div className="node-title">{value.label}</div></div>
+      <div className="node-body">
+        <div className="node-title">{value.label}</div>
+        {value.groupOutputs && <div className="group-output-list" aria-label="Membership outputs">
+          {value.groupOutputs.map((groupId) => <span key={groupId}>{groupId}</span>)}
+        </div>}
+      </div>
       <div className="node-io">
         <InPort />
         {outputs.length > 0 && <div className="ports-out">{outputs}</div>}

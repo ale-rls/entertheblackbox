@@ -19,6 +19,7 @@ type Props = {
   onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
   onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x-split" | "two-quadrant-x-spectrum" | "two-quadrant-y-split" | "two-quadrant-y-spectrum" | "three-candidate-zones", trigger: HTMLSelectElement) => void;
   onTargetAudienceSizeChange: (value: number) => void;
+  onGroupsChange: (groups: NonNullable<StudioProject["scenario"]["groups"]>, initialGroupIds: string[]) => void;
 };
 
 const numberValue = (value: string, fallback: number) => {
@@ -26,7 +27,7 @@ const numberValue = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export function Inspector({ project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange }: Props) {
+export function Inspector({ project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   const [copiedArena, setCopiedArena] = useState<Arena | null>(null);
@@ -48,9 +49,19 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       }
     : undefined;
 
-  if (!phase) return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2><p className="sc-tool-copy">Select a runtime phase to edit it.</p>
+  if (!phase) return <aside className="inspector" aria-label="Properties inspector"><h2>Show properties</h2><p className="sc-tool-copy">Select a runtime phase to edit it.</p>
     <label className="sc-tool-label"><span>Ghost cursor fill target<small>targetAudienceSize</small></span><input className="sc-tool-field" type="number" min="0" value={project.scenario.targetAudienceSize ?? 0} onChange={(event) => onTargetAudienceSizeChange(numberValue(event.target.value, project.scenario.targetAudienceSize ?? 0))} /></label>
     <p className="sc-tool-copy field-hint">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghost cursors.</p>
+    <fieldset><legend>Audience groups <small>groups</small></legend>
+      {(project.scenario.groups ?? []).map((group, index) => <div key={group.id}>
+        <label className="sc-tool-label"><span>Group ID</span><input className="sc-tool-field" value={group.id} onChange={(event) => { const id = event.target.value; const groups = (project.scenario.groups ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, id } : item); onGroupsChange(groups, (project.scenario.initialGroupIds ?? []).map((value) => value === group.id ? id : value)); }} /></label>
+        <label className="sc-tool-label"><span>Label</span><input className="sc-tool-field" value={group.label} onChange={(event) => onGroupsChange((project.scenario.groups ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item), project.scenario.initialGroupIds ?? [])} /></label>
+        <label className="sc-tool-checkbox"><input type="checkbox" checked={(project.scenario.initialGroupIds ?? []).includes(group.id)} onChange={(event) => { const current = project.scenario.initialGroupIds ?? []; onGroupsChange(project.scenario.groups ?? [], event.target.checked ? [...current, group.id] : current.filter((id) => id !== group.id)); }} />Assign members to this group at show start</label>
+        <button className="sc-tool-button" type="button" onClick={() => onGroupsChange((project.scenario.groups ?? []).filter((_, itemIndex) => itemIndex !== index), (project.scenario.initialGroupIds ?? []).filter((id) => id !== group.id))}>Remove group</button>
+      </div>)}
+      <button className="sc-tool-button" type="button" onClick={() => { const groups = project.scenario.groups ?? []; let suffix = groups.length + 1; while (groups.some((group) => group.id === `group-${suffix}`)) suffix += 1; onGroupsChange([...groups, { id: `group-${suffix}`, label: `Group ${suffix}` }], project.scenario.initialGroupIds ?? []); }}>Add group</button>
+      <p className="sc-tool-copy field-hint">Select at least two starting groups for balanced assignment in the lobby. Branching moments can reorganize them later.</p>
+    </fieldset>
     <Compiled project={project} /></aside>;
   const label = (plain: string, runtime: string) => <span>{plain}<small>{runtime}</small></span>;
   const text = (plain: string, runtime: string, value: string, change: (value: string) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" value={value} onChange={(event) => change(event.target.value)} /></label>;
@@ -61,6 +72,14 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     </button></div>
     {!localMedia.some((file) => file.src === src) && <p className="field-error" role="alert">This file is missing from the shared media library. Choose a replacement.</p>}
   </>;
+  const updateVoteAssignment = (change: (assignment: Extract<Extract<Phase, { kind: "group-branch" }>["assignment"], { type: "vote" }>) => Extract<Extract<Phase, { kind: "group-branch" }>["assignment"], { type: "vote" }>) => {
+    if (phase.kind !== "group-branch" || phase.assignment.type !== "vote") return;
+    onChange({ ...phase, assignment: change(phase.assignment) });
+  };
+  const updateFallbackGroup = (fallbackGroupId: string) => {
+    if (phase.kind !== "group-branch" || phase.assignment.type === "balanced") return;
+    onChange({ ...phase, assignment: { ...phase.assignment, fallbackGroupId } });
+  };
 
   return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2>
     <label className="sc-tool-label">{label("Runtime ID", "id")}<input className="sc-tool-field" aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
@@ -71,6 +90,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       <option value="position-question">Position question</option>
       <option value="video-position-question">Video + position vote</option>
       <option value="image-audio-position-question">Still image + MP3 + position vote</option>
+      <option value="group-branch">Group branching moment</option>
     </select></label>}
     {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
     {(phase.kind === "video" || phase.kind === "video-position-question") && <>
@@ -154,10 +174,47 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, subtitles: [...(phase.subtitles ?? []), { text: "New subtitle", startAtMs: 0, endAtMs: Math.min(phase.expectedDurationMs, 5_000) }] })}>Add subtitle</button>
       </fieldset>
     </>}
-    {phase.kind !== "idle" && <fieldset><legend>Phone headphones</legend>
+    {phase.kind === "group-branch" && <fieldset><legend>Group branching moment</legend>
+      {text("Title", "title", phase.title ?? "", (title) => onChange({ ...phase, title: title || undefined }))}
+      {number("Duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs: Math.max(1, durationMs) }))}
+      <label className="sc-tool-label">{label("Assignment logic", "assignment.type")}<select className="sc-tool-select" value={phase.assignment.type} onChange={(event) => {
+        const type = event.target.value;
+        const fallbackGroupId = phase.branches[0]!.groupId;
+        onChange({ ...phase, assignment: type === "balanced" ? { type: "balanced" }
+          : type === "manual" ? { type: "manual", fallbackGroupId }
+          : { type: "vote", questionId: project.scenario.phases.find((item) => item.kind === "position-question" || item.kind === "video-position-question")?.id ?? "question", map: {}, fallbackGroupId } });
+      }}><option value="balanced">Balanced automatically</option><option value="vote">From an earlier individual vote</option><option value="manual">Assigned live by operator</option></select></label>
+      {phase.assignment.type === "vote" && <>
+        <label className="sc-tool-label">{label("Source question", "assignment.questionId")}<select className="sc-tool-select" value={phase.assignment.questionId} onChange={(event) => updateVoteAssignment((assignment) => ({ ...assignment, questionId: event.target.value }))}>
+          {project.scenario.phases.filter((item) => item.kind === "position-question" || item.kind === "video-position-question").map((item) => <option value={item.id} key={item.id}>{item.id}</option>)}
+        </select></label>
+        {text(
+          "Outcome map (outcome=group, comma separated)",
+          "assignment.map",
+          Object.entries(phase.assignment.map).map(([outcome, groupId]) => `${outcome}=${groupId}`).join(", "),
+          (value) => updateVoteAssignment((assignment) => ({
+              ...assignment,
+              map: Object.fromEntries(value.split(",").map((entry) => entry.trim().split("=")).filter((pair): pair is [string, string] => pair.length === 2 && Boolean(pair[0] && pair[1]))),
+          })),
+        )}
+      </>}
+      {phase.assignment.type !== "balanced" && <label className="sc-tool-label">{label("Fallback group", "assignment.fallbackGroupId")}<select className="sc-tool-select" value={phase.assignment.fallbackGroupId} onChange={(event) => updateFallbackGroup(event.target.value)}>{phase.branches.map((branch) => <option key={branch.groupId} value={branch.groupId}>{project.scenario.groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId}</option>)}</select></label>}
+      {phase.branches.map((branch, index) => <fieldset key={branch.groupId}><legend>{project.scenario.groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId}</legend>
+        {number("Allocation weight", `branches.${index}.weight`, branch.weight, (weight) => onChange({ ...phase, branches: phase.branches.map((item, itemIndex) => itemIndex === index ? { ...item, weight: Math.max(1, weight) } : item) }))}
+        {text("Phone narration MP3", `branches.${index}.phoneAudioSrc`, branch.phoneAudioSrc ?? "", (phoneAudioSrc) => onChange({ ...phase, branches: phase.branches.map((item, itemIndex) => itemIndex === index ? { ...item, phoneAudioSrc: phoneAudioSrc || undefined } : item) }))}
+      </fieldset>)}
+      <p className="sc-tool-copy field-hint">The node changes membership atomically. Each group hears its own optional narration, then the shared timeline continues.</p>
+    </fieldset>}
+    {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone headphones</legend>
       {mediaPicker("Stream narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}
       {phase.phoneAudioSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, phoneAudioSrc: undefined })}>Remove phone narration</button>}
-      <p className="sc-tool-copy field-hint">Plays through every joined phone’s continuous stream when this scene starts. Allow time for the full recording and stream buffering before the next scene.</p>
+      {(project.scenario.groups ?? []).map((group) => text(
+        `${group.label} override (MP3)`,
+        `phoneAudioByGroup.${group.id}`,
+        phase.phoneAudioByGroup?.[group.id] ?? "",
+        (src) => onChange({ ...phase, phoneAudioByGroup: Object.fromEntries(Object.entries({ ...(phase.phoneAudioByGroup ?? {}), [group.id]: src }).filter(([, value]) => Boolean(value))) }),
+      ))}
+      <p className="sc-tool-copy field-hint">The broadcast MP3 is the fallback. Group overrides replace it only for members of that group.</p>
     </fieldset>}
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}

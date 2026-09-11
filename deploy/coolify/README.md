@@ -48,6 +48,55 @@ collections; they do not delete the legacy production collections. The audio
 volume is a cache and can be rebuilt by the server, but retaining it makes the
 first restart faster.
 
+## Admin and Show Studio
+
+Admin and Show Studio are built into the `frontend` image and served by the
+same Fastify service as the phone and display clients. Do not create separate
+Coolify services or domains for them. Replace `https://play.example.org` below
+with the public domain attached to `frontend`:
+
+| Interface | URL | Purpose |
+|---|---|---|
+| Operator admin | `https://play.example.org/admin/` | Monitor the installation, select the active published show, schedule show starts, and control a live session |
+| Show Studio | `https://play.example.org/studio/` | Create, validate, preview, and publish versioned shows and their media |
+| PocketBase dashboard | `https://pb.example.org/_/` | Superuser-only database and operator-account administration |
+
+Both operator interfaces authenticate against PocketBase's `operators`
+collection. They use the public PocketBase address supplied as
+`VITE_POCKETBASE_URL`; it must be reachable from the operator's browser and
+must use HTTPS in production. After changing that value, rebuild the
+`frontend` image because the address is embedded in both browser bundles at
+build time.
+
+PocketBase superuser credentials are only supplied to the server at runtime
+through `POCKETBASE_ADMIN_EMAIL` and `POCKETBASE_ADMIN_PASSWORD`. They are not
+valid operator-panel credentials and are not embedded in either browser
+bundle.
+
+### Provision the first operator
+
+After PocketBase starts and applies its migrations, open
+`https://pb.example.org/_/`, sign in as the existing PocketBase superuser, open
+the `operators` collection, and create a record with an email, password, the
+`operator` role, and `verified` enabled. There is deliberately no public
+operator signup.
+
+Alternatively, run the repository provisioning script from a trusted machine
+that has Bash, curl, and Python 3:
+
+```bash
+POCKETBASE_URL=https://pb.example.org \
+POCKETBASE_ADMIN_EMAIL=superuser@example.org \
+POCKETBASE_ADMIN_PASSWORD='the-existing-superuser-password' \
+pocketbase/scripts/create-operator.sh operator@example.org 'a-long-unique-password'
+```
+
+Use that operator email and password to sign in to both `/admin/` and
+`/studio/`. The admin panel writes schedules and active-show selections through
+the authenticated `/api/admin/*` server API; Show Studio publishes through the
+same API and stores its shared media in PocketBase. The server uses its
+internal `http://pocketbase:8090` connection for privileged persistence.
+
 ## Required environment
 
 Coolify must define every value in this table. Compose rejects an incomplete
@@ -106,6 +155,8 @@ Run these before opening admission:
 ```bash
 curl https://play.example.org/healthz
 curl https://play.example.org/readyz
+curl -fsS -o /dev/null https://play.example.org/admin/
+curl -fsS -o /dev/null https://play.example.org/studio/
 curl https://pb.example.org/api/health
 curl https://audio.example.org/health
 curl -H "Authorization: Bearer $BRIDGE_TOKEN" https://audio.example.org/status
@@ -113,10 +164,13 @@ curl -H "Authorization: Bearer $BRIDGE_TOKEN" https://audio.example.org/status
 
 `healthz` proves the process is alive. `readyz` must return 200 only after a
 show has been published from Studio and its media has synchronized from
-PocketBase. Open `/studio/`, publish the production show, then verify a real
-phone can join, tap **Start headphones**, hear a cue, lock its screen, and hear
-a later cue. The real-phone check is required because container health checks
-cannot prove mobile background playback.
+PocketBase. The two silent curl checks confirm that the frontend image contains
+the Admin and Studio bundles. Sign in to `/studio/`, publish the production
+show, then sign in to `/admin/`, select it under **Active show**, and add a
+future time under **Lobby schedule**. Finally, verify a real phone can join, tap
+**Start headphones**, hear a cue, lock its screen, and hear a later cue. The
+real-phone check is required because container health checks cannot prove
+mobile background playback.
 
 If deployment fails, keep the old containers and volume, correct the reported
 missing variable or health check, and redeploy. Do not create a fresh

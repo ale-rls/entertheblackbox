@@ -25,7 +25,9 @@ export type Status = {
     connected: boolean;
     joinedAt: number;
     lastSeenAt: number;
+    groupId?: string | null;
   }>;
+  groups?: Array<{ id: string; label: string; color?: string }>;
   sessionId: string | null;
   lifecycle: string | null;
   phaseId: string | null;
@@ -36,7 +38,7 @@ type Feedback = { status: "success" | "danger"; message: string };
 type ConfirmAction = "idle" | "restart";
 type FlowScene = {
   id: string;
-  kind: "video" | "position-question" | "video-position-question";
+  kind: "video" | "position-question" | "video-position-question" | "group-branch";
   title: string;
   routes: Array<{ outcome: string; target: string }>;
 };
@@ -159,7 +161,10 @@ function JumpConfirmationDialog({ scene, onCancel, onConfirm }: { scene: FlowSce
 }
 
 function sceneKindLabel(kind: FlowScene["kind"]): string {
-  return kind === "video" ? "Media" : kind === "position-question" ? "Question" : "Media + vote";
+  return kind === "video" ? "Media"
+    : kind === "position-question" ? "Question"
+      : kind === "group-branch" ? "Group branch"
+        : "Media + vote";
 }
 
 export function App() {
@@ -428,6 +433,19 @@ export function App() {
       setWorkingAction(null);
     }
   };
+  const assignGroup = async (participantId: string, groupId: string) => {
+    setFeedback(null);
+    try {
+      await api("groups/assign", connectedToken, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantId, groupId }),
+      });
+      setFeedback({ status: "success", message: "Participant group updated." });
+      await refresh();
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not update the participant group." });
+    }
+  };
 
   const jumpToScene = async (scene: FlowScene) => {
     setWorkingAction("jump");
@@ -604,7 +622,12 @@ export function App() {
           {status.participants.length === 0 ? <p className="sc-tool-copy">Nobody has joined this session yet.</p> : <ul className="admin-participant-list">
             {status.participants.map((participant) => <li key={participant.clientId}>
               <span className="admin-participant-color" style={{ backgroundColor: participant.color }} />
-              <div><strong>{participant.name}</strong><span>joined {new Date(participant.joinedAt).toLocaleTimeString([], { timeStyle: "short" })}</span></div>
+              <div><strong>{participant.name}</strong><span>joined {new Date(participant.joinedAt).toLocaleTimeString([], { timeStyle: "short" })}</span>
+                {(status.groups?.length ?? 0) > 0 && <label className="sc-tool-label"><span>Audience group</span><select className="sc-tool-select" value={participant.groupId ?? ""} onChange={(event) => void assignGroup(participant.clientId, event.target.value)}>
+                  <option value="" disabled>Unassigned</option>
+                  {status.groups!.map((group) => <option key={group.id} value={group.id}>{group.label}</option>)}
+                </select></label>}
+              </div>
               <StatusLabel status={participant.connected ? "success" : "warning"}>{participant.connected ? "Connected" : "Disconnected"}</StatusLabel>
             </li>)}
           </ul>}

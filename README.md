@@ -2,6 +2,8 @@
 
 Enter the Blackbox is the runtime and visual authoring toolkit for the piece of the same name. Visitors scan a QR code, use their phones as cursors, and collectively navigate questions and video branches on a shared display.
 
+Shows can also divide the audience into authored groups. A group branch can allocate people evenly, derive membership from an earlier vote, or preserve assignments made live by the operator. Each group can receive its own synchronized MP3 through participant phones while a broadcast MP3 remains available as a fallback. See [Group branching and targeted audio](docs/group-branching.md).
+
 The server is authoritative: it manages admission, room state, timed vote snapshots, branch resolution, recovery, and the operational admin API. Shows are versioned scenario graphs rather than hard-coded application flows.
 
 ## Applications

@@ -13,6 +13,9 @@ export type ScenarioIssue = {
     | "missing-idle-phase"
     | "unknown-entry-phase"
     | "broken-target"
+    | "unknown-group"
+    | "unknown-question"
+    | "invalid-group-branch"
     | "missing-media"
     | "unreachable-phase"
     | "unmarked-cycle";
@@ -32,6 +35,8 @@ function targetsOf(phase: Phase): Array<{ label: string; target: string }> {
     case "idle":
       return [];
     case "video":
+      return [{ label: "next", target: phase.next }];
+    case "group-branch":
       return [{ label: "next", target: phase.next }];
     case "position-question":
     case "video-position-question": {
@@ -60,6 +65,7 @@ export function validateScenario(
   const warnings: ScenarioIssue[] = [];
 
   const byId = new Map<string, Phase>();
+  const groupIds = new Set((scenario.groups ?? []).map((group) => group.id));
   for (const phase of scenario.phases) {
     if (byId.has(phase.id)) {
       errors.push({
@@ -100,15 +106,56 @@ export function validateScenario(
         });
       }
     }
+    if (phase.kind === "group-branch") {
+      const referenced = [
+        ...(phase.sourceGroupIds ?? []),
+        ...phase.branches.map((branch) => branch.groupId),
+        ...(phase.assignment.type === "vote" ? [...Object.values(phase.assignment.map), phase.assignment.fallbackGroupId] : []),
+        ...(phase.assignment.type === "manual" ? [phase.assignment.fallbackGroupId] : []),
+      ];
+      for (const groupId of new Set(referenced)) if (!groupIds.has(groupId)) errors.push({
+        severity: "error", code: "unknown-group", phaseId: phase.id,
+        message: `group branch "${phase.id}" references unknown group "${groupId}"`,
+      });
+      const outputs = new Set(phase.branches.map((branch) => branch.groupId));
+      const assignedGroups = phase.assignment.type === "balanced" ? []
+        : phase.assignment.type === "manual" ? [phase.assignment.fallbackGroupId]
+          : [...Object.values(phase.assignment.map), phase.assignment.fallbackGroupId];
+      for (const groupId of new Set(assignedGroups)) if (!outputs.has(groupId)) errors.push({
+        severity: "error", code: "invalid-group-branch", phaseId: phase.id,
+        message: `group branch "${phase.id}" assigns "${groupId}" but does not expose it as an output`,
+      });
+      if (phase.assignment.type === "vote") {
+        const questionId = phase.assignment.questionId;
+        if (!scenario.phases.some((candidate) => candidate.id === questionId
+          && (candidate.kind === "position-question" || candidate.kind === "video-position-question"))) errors.push({
+            severity: "error", code: "unknown-question", phaseId: phase.id,
+            message: `group branch "${phase.id}" references unknown position question "${questionId}"`,
+          });
+      }
+    } else if (phase.kind !== "idle" && phase.phoneAudioByGroup) {
+      for (const groupId of Object.keys(phase.phoneAudioByGroup)) if (!groupIds.has(groupId)) errors.push({
+        severity: "error", code: "unknown-group", phaseId: phase.id,
+        message: `phase "${phase.id}" targets unknown group "${groupId}"`,
+      });
+    }
   }
+  for (const groupId of scenario.initialGroupIds ?? []) if (!groupIds.has(groupId)) errors.push({
+    severity: "error", code: "unknown-group", message: `initialGroupIds references unknown group "${groupId}"`,
+  });
 
   if (mediaManifest) {
     const known = new Set(mediaManifest.files.map((f) => f.src));
     for (const phase of scenario.phases) {
       if (phase.kind === "idle") continue;
       const sources = [
-        ...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []),
-        ...(phase.kind === "position-question" ? [] : [phase.src, ...(phase.audioSrc ? [phase.audioSrc] : []), ...(phase.extraAudioSrc ? [phase.extraAudioSrc] : [])]),
+        ...(phase.kind === "group-branch"
+          ? phase.branches.flatMap((branch) => branch.phoneAudioSrc ? [branch.phoneAudioSrc] : [])
+          : [
+              ...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []),
+              ...Object.values(phase.phoneAudioByGroup ?? {}),
+              ...(phase.kind === "position-question" ? [] : [phase.src, ...(phase.audioSrc ? [phase.audioSrc] : []), ...(phase.extraAudioSrc ? [phase.extraAudioSrc] : [])]),
+            ]),
       ];
       for (const src of sources) {
         if (known.has(src)) continue;

@@ -13,7 +13,8 @@ export function studioMediaKindForSource(src: string): StudioMediaKind {
 
 export function phaseMediaSources(phase: StudioProject["scenario"]["phases"][number]): string[] {
   if (phase.kind === "idle") return [];
-  const phone = phase.phoneAudioSrc ? [phase.phoneAudioSrc] : [];
+  if (phase.kind === "group-branch") return phase.branches.flatMap((branch) => branch.phoneAudioSrc ? [branch.phoneAudioSrc] : []);
+  const phone = [...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []), ...Object.values(phase.phoneAudioByGroup ?? {})];
   if (phase.kind === "position-question") return phone;
   return [
     ...phone,

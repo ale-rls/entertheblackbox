@@ -28,7 +28,16 @@ export const countablePositionVoteStatusSchema = z.enum([
   "disconnected",
 ]);
 
-const phoneAudioSrcSchema = z.string().min(1).regex(/^(?![\\/])(?!.*(?:^|[\\/])\.\.(?:[\\/]|$))[^:?#]+\.mp3$/i, "Phone audio must reference a local MP3").optional();
+const phoneAudioFileSchema = z.string().min(1).regex(/^(?![\\/])(?!.*(?:^|[\\/])\.\.(?:[\\/]|$))[^:?#]+\.mp3$/i, "Phone audio must reference a local MP3");
+const phoneAudioSrcSchema = phoneAudioFileSchema.optional();
+const groupIdSchema = z.string().min(1, "group id must be non-empty").regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, "group id must use letters, numbers, hyphens, or underscores");
+const phoneAudioByGroupSchema = z.record(groupIdSchema, phoneAudioFileSchema).optional();
+const phoneAudioFields = {
+  /** Fallback/broadcast MP3. Used for every participant without a group-specific override. */
+  phoneAudioSrc: phoneAudioSrcSchema,
+  /** Per-group MP3 overrides, keyed by stable authored group id. */
+  phoneAudioByGroup: phoneAudioByGroupSchema,
+};
 
 const phaseIdSchema = z.string().min(1, "phase id must be non-empty");
 
@@ -250,8 +259,7 @@ export const subtitleSchema = z.object({
 
 export const videoPhaseSchema = z.object({
   kind: z.literal("video"),
-  /** MP3 injected into each participant’s continuous phone stream on phase entry. */
-  phoneAudioSrc: phoneAudioSrcSchema,
+  ...phoneAudioFields,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
   /** Optional display treatment for the title. Omitted titles retain the standard top placement. */
@@ -285,8 +293,7 @@ export const videoPhaseSchema = z.object({
 
 const positionQuestionBaseSchema = z.object({
   kind: z.literal("position-question"),
-  /** MP3 injected into each participant’s continuous phone stream on phase entry. */
-  phoneAudioSrc: phoneAudioSrcSchema,
+  ...phoneAudioFields,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
   text: z.string().min(1, "question text must be non-empty"),
@@ -333,8 +340,7 @@ const canonicalPositionQuestionPhaseSchema = z.union([
 
 const videoPositionQuestionBaseSchema = z.object({
   kind: z.literal("video-position-question"),
-  /** MP3 injected into each participant’s continuous phone stream on phase entry. */
-  phoneAudioSrc: phoneAudioSrcSchema,
+  ...phoneAudioFields,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
   src: z.string().min(1, "media src must be non-empty"),
@@ -414,6 +420,49 @@ export const videoPositionQuestionPhaseSchema = z.union([
   });
 });
 
+export const audienceGroupSchema = z.object({
+  id: groupIdSchema,
+  label: z.string().min(1, "group label must be non-empty"),
+  color: z.string().regex(/^#[0-9a-f]{6}$/i, "group color must be a six-digit hex color").optional(),
+});
+
+const groupBranchSchema = z.object({
+  groupId: groupIdSchema,
+  weight: z.number().int().positive().default(1),
+  phoneAudioSrc: phoneAudioFileSchema.optional(),
+});
+
+export const groupAssignmentSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("balanced") }),
+  z.object({
+    type: z.literal("vote"),
+    questionId: phaseIdSchema,
+    map: z.record(z.string().min(1), groupIdSchema),
+    fallbackGroupId: groupIdSchema,
+  }),
+  z.object({ type: z.literal("manual"), fallbackGroupId: groupIdSchema }),
+]);
+
+/**
+ * An instantaneous membership branching moment. It transforms the selected
+ * source cohort into N authored groups, then the shared show timeline
+ * continues at `next`. Subsequent phases can vary phone audio by group.
+ */
+export const groupBranchPhaseSchema = z.object({
+  kind: z.literal("group-branch"),
+  id: phaseIdSchema,
+  title: z.string().min(1).optional(),
+  sourceGroupIds: z.array(groupIdSchema).min(1).optional(),
+  assignment: groupAssignmentSchema,
+  branches: z.array(groupBranchSchema).min(2, "a group branch needs at least two outputs")
+    .refine((branches) => new Set(branches.map((branch) => branch.groupId)).size === branches.length, {
+      message: "group branch output ids must be unique",
+    }),
+  durationMs: z.number().int().positive(),
+  showCursors: z.boolean().optional(),
+  next: phaseIdSchema,
+});
+
 type UnknownRecord = Record<string, unknown>;
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -448,10 +497,19 @@ export const phaseSchema = z.union([
   videoPhaseSchema,
   positionQuestionPhaseSchema,
   videoPositionQuestionPhaseSchema,
+  groupBranchPhaseSchema,
 ]);
 
 const canonicalScenarioSchema = z.object({
   version: z.string().min(1, "scenario version must be non-empty"),
+  /** Stable group catalogue used by split nodes, targeting, and live controls. */
+  groups: z.array(audienceGroupSchema).refine((groups) => new Set(groups.map((group) => group.id)).size === groups.length, {
+    message: "group ids must be unique",
+  }).optional(),
+  /** Optional balanced assignment performed as the audience joins the lobby. */
+  initialGroupIds: z.array(groupIdSchema).min(2).refine((ids) => new Set(ids).size === ids.length, {
+    message: "initial group ids must be unique",
+  }).optional(),
   /** Phase the lobby transitions into when a session starts (plan §6). */
   entryPhaseId: phaseIdSchema,
   /**
@@ -508,6 +566,9 @@ export type PolygonZonesField = z.infer<typeof polygonZonesFieldSchema>;
 export type PolygonZonesPluralityNext = z.infer<typeof polygonZonesPluralityNextSchema>;
 export type RatingConfig = z.infer<typeof ratingConfigSchema>;
 export type Subtitle = z.infer<typeof subtitleSchema>;
+export type AudienceGroup = z.infer<typeof audienceGroupSchema>;
+export type GroupAssignment = z.infer<typeof groupAssignmentSchema>;
+export type GroupBranchPhase = z.infer<typeof groupBranchPhaseSchema>;
 export type IdlePhase = z.infer<typeof idlePhaseSchema>;
 export type VideoPhase = z.infer<typeof videoPhaseSchema>;
 export type PositionQuestionPhase = z.infer<typeof positionQuestionPhaseSchema>;

@@ -8,10 +8,11 @@ export type AuthorableComponentType =
   | "image-audio"
   | "position-question"
   | "video-position-question"
-  | "image-audio-position-question";
+  | "image-audio-position-question"
+  | "group-branch";
 
 export function componentTypeForPhase(phase: Phase): AuthorableComponentType | "idle" {
-  if (phase.kind === "idle" || phase.kind === "position-question") return phase.kind;
+  if (phase.kind === "idle" || phase.kind === "position-question" || phase.kind === "group-branch") return phase.kind;
   if (phase.kind === "video-position-question") {
     return phase.audioSrc === undefined ? "video-position-question" : "image-audio-position-question";
   }
@@ -21,6 +22,7 @@ export function componentTypeForPhase(phase: Phase): AuthorableComponentType | "
 export function phaseKindForComponentType(type: AuthorableComponentType): AuthorablePhaseKind {
   if (type === "image-audio") return "video";
   if (type === "image-audio-position-question") return "video-position-question";
+  if (type === "group-branch") return "group-branch";
   return type;
 }
 
@@ -50,7 +52,7 @@ export function renamePhase(project: StudioProject, currentId: string, nextId: s
   const phases = project.scenario.phases.map((phase) => {
     const id = remap(phase.id);
     if (phase.kind === "idle") return { ...phase, id };
-    if (phase.kind === "video") return { ...phase, id, next: remap(phase.next) };
+    if (phase.kind === "video" || phase.kind === "group-branch") return { ...phase, id, next: remap(phase.next) };
     if (phase.next.type === "fixed") return { ...phase, id, next: { ...phase.next, target: remap(phase.next.target) } };
     return { ...phase, id, next: { ...phase.next, map: Object.fromEntries(Object.entries(phase.next.map).map(([key, value]) => [key, remap(value)])) as typeof phase.next.map, tie: remap(phase.next.tie), empty: remap(phase.next.empty) } };
   }) as StudioProject["scenario"]["phases"];
@@ -86,6 +88,12 @@ export function changePhaseKind(phase: Phase, kind: PhaseKind): Phase {
     connectionStaleAfterMs: 10_000,
     showLiveCounts: QUESTION_DEFAULTS.showLiveCounts,
     next: { type: "quadrant-plurality", map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: [...QUESTION_DEFAULTS.countedStatuses] },
+  };
+  if (kind === "group-branch") return {
+    id: phase.id, kind, title: "Divide audience", durationMs: 5_000,
+    assignment: { type: "balanced" },
+    branches: [{ groupId: "group-a", weight: 1 }, { groupId: "group-b", weight: 1 }],
+    next: "idle",
   };
   return {
     id: phase.id, kind, text: "New position question",

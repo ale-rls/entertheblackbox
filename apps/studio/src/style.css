@@ -531,6 +531,22 @@ body:has(.editor),
   font-size: var(--sc-tool-font-size-00);
 }
 
+.group-output-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sc-tool-space-2);
+  margin-block-start: var(--sc-tool-space-4);
+}
+
+.group-output-list span {
+  padding: 0.15rem 0.4rem;
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
+  border-radius: 999px;
+  color: var(--sc-tool-color-text-secondary);
+  font-family: var(--sc-tool-font-mono);
+  font-size: var(--sc-tool-font-size-00);
+}
+
 .studio-node.marker {
   min-width: 8rem;
   border-style: dashed;
