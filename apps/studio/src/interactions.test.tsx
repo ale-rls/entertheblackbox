@@ -470,6 +470,34 @@ describe("Studio feedback and keyboard entry", () => {
     expect(document.querySelector(".tie-break-options")?.textContent).toContain("stable for this show session");
   });
 
+  it("copies and pastes a selected phase node with Cmd/Ctrl+C / Cmd/Ctrl+V", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Position question").click(); });
+    const node = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="position-question-"]')).at(-1)!;
+    await act(async () => { node.click(); });
+    await flush();
+
+    expect(document.querySelectorAll('.react-flow__node[data-id^="position-question-"]')).toHaveLength(1);
+
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "c", metaKey: true, bubbles: true })); });
+    await flush();
+    expect(document.body.textContent).toContain("Copied 1 phase.");
+
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "v", metaKey: true, bubbles: true })); });
+    await flush();
+
+    const nodesAfter = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="position-question-"]'));
+    expect(nodesAfter).toHaveLength(2);
+    expect(new Set(nodesAfter.map((element) => element.dataset.id)).size).toBe(2);
+    expect(document.body.textContent).toContain("Pasted 1 phase.");
+
+    await act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "v", metaKey: true, bubbles: true })); });
+    await flush();
+    expect(document.querySelectorAll('.react-flow__node[data-id^="position-question-"]')).toHaveLength(3);
+  });
+
   it("edits image + MP3 vote timing relative to the audio tail", async () => {
     media.load.mockResolvedValue({ files: [
       { src: "portrait.png", bytes: 2_000, hash: "image" },
