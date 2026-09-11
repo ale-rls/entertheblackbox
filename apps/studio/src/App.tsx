@@ -115,6 +115,7 @@ export function App() {
   const [status, setStatus] = useState<SaveStatusValue>("saved");
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+  const [clipboard, setClipboard] = useState<Phase[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
   const [showInspector, setShowInspector] = useState(false);
@@ -517,6 +518,56 @@ export function App() {
       openMediaPicker(id, "src", imageAudio ? "image" : "video");
     }
   };
+  const copySelection = () => {
+    if (!draft) return;
+    const selectedIds = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
+    const phases = draft.project.scenario.phases.filter((phase): phase is Phase => selectedIds.has(phase.id) && phase.kind !== "idle");
+    if (phases.length === 0) return;
+    setClipboard(structuredClone(phases));
+    setGraphFeedback({ status: "success", message: `Copied ${phases.length} phase${phases.length === 1 ? "" : "s"}.` });
+  };
+  const pasteClipboard = () => {
+    if (!draft || clipboard.length === 0) return;
+    const existingIds = new Set(draft.project.scenario.phases.map((phase) => phase.id));
+    const freshId = (kind: string) => {
+      let id = `${kind}-${crypto.randomUUID().slice(0, 6)}`;
+      while (existingIds.has(id)) id = `${kind}-${crypto.randomUUID().slice(0, 6)}`;
+      existingIds.add(id);
+      return id;
+    };
+    const pastedPhases = clipboard.map((original) => ({ ...structuredClone(original), id: freshId(original.kind) }) as Phase);
+    const pastedNodes: Node[] = pastedPhases.map((phase, index) => {
+      const original = nodes.find((node) => node.id === clipboard[index]!.id);
+      const position = original ? { x: original.position.x + 48, y: original.position.y + 48 } : { x: 400, y: 200 };
+      return { id: phase.id, type: "phase", position, data: nodeDataForPhase(phase, draft.project.scenario.groups), selected: true };
+    });
+    const nextPhases = [...draft.project.scenario.phases, ...pastedPhases] as Draft["project"]["scenario"]["phases"];
+    const nextProject = { ...draft.project, scenario: { ...draft.project.scenario, phases: nextPhases } };
+    const pastedIds = new Set(pastedPhases.map((phase) => phase.id));
+    const newEdges = graphEdges(nextProject).filter((edge) => pastedIds.has(edge.source));
+    const nextNodes = [...nodes.map((node) => ({ ...node, selected: false })), ...pastedNodes];
+    const nextEdges = [...edges, ...newEdges];
+    setNodes(nextNodes);
+    setEdges(nextEdges);
+    saveCanvas({ ...draft, project: nextProject }, nextNodes, nextEdges);
+    if (pastedPhases.length === 1) { setSelectedId(pastedPhases[0]!.id); setShowInspector(true); }
+    setGraphFeedback({ status: "success", message: `Pasted ${pastedPhases.length} phase${pastedPhases.length === 1 ? "" : "s"}.` });
+  };
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const key = event.key.toLowerCase();
+      if (key !== "c" && key !== "v") return;
+      const target = event.target;
+      const editable = target instanceof HTMLElement
+        && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (editable) return;
+      if (key === "c") copySelection();
+      else pasteClipboard();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [copySelection, pasteClipboard]);
   const updatePhase = (nextPhase: Phase) => {
     if (!draft) return;
     const currentPhase = draft.project.scenario.phases.find((phase) => phase.id === nextPhase.id);
@@ -944,6 +995,9 @@ export function App() {
       <Menu label="Edit" items={[
         { label: "Undo", onSelect: () => { if (history.current) applyHistory(history.current.undo()); }, disabled: !history.current?.canUndo },
         { label: "Redo", onSelect: () => { if (history.current) applyHistory(history.current.redo()); }, disabled: !history.current?.canRedo },
+        { separator: true },
+        { label: "Copy", onSelect: copySelection, disabled: !nodes.some((node) => node.selected) },
+        { label: "Paste", onSelect: pasteClipboard, disabled: clipboard.length === 0 },
       ]} />
       <Menu label="Add" items={[
         { label: "Campaign + election sections 3–5", onSelect: () => addCampaignExtension(), disabled: !draft.document.productionBaseline },
@@ -1024,7 +1078,7 @@ export function App() {
         </> : <><p className="sc-tool-help">Signed in as {operatorEmail}. Replace the open draft with a new fork of the active production show?</p><div className="publish-panel-actions"><button className="sc-tool-button" type="button" onClick={() => setProductionImportOpen(false)}>Cancel</button><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" onClick={() => void importLatestProduction()}>Create production fork</button></div></>}
       </div>}
     </header>
-    <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} onPaneClick={() => { setSelectedId(undefined); setShowInspector(true); }} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
+    <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} minZoom={0.15} onPaneClick={() => { setSelectedId(undefined); setShowInspector(true); }} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
     <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onComponentTypeChange={changeSelectedComponentType} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} onGroupsChange={updateGroups} />
     <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} collapsed={!showDiagnostics} onToggle={() => setShowDiagnostics((value) => !value)} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onAcknowledgeAll={(keys) => setAcknowledged((current) => new Set([...current, ...keys]))} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
     {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} showActive={showLifecycle === "active"} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
