@@ -56,7 +56,7 @@ services:
 
   realtime:
     build:
-      context: ../../apps/realtime-ws-coolify
+      context: apps/realtime-ws-coolify
       dockerfile: Dockerfile
     restart: unless-stopped
     expose:
