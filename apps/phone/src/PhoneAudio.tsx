@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AudioProgress } from "./lib/audio-progress";
+import { AudioProgress, drifted } from "./lib/audio-progress";
 
 /** One native media element stays mounted across scene and WebSocket changes. */
 export function PhoneAudio({ participantLease }: { participantLease: string }) {
@@ -68,7 +68,9 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
     progress.current.reset(audio.currentTime);
     const watchdog = setInterval(() => {
       if (!wanted.current || document.hidden) return;
-      if (progress.current.stalled(audio.currentTime) || audio.ended || audio.error) scheduleRetry();
+      const bufferedEnd = audio.buffered.length > 0 ? audio.buffered.end(audio.buffered.length - 1) : audio.currentTime;
+      if (progress.current.stalled(audio.currentTime) || audio.ended || audio.error
+        || drifted(bufferedEnd, audio.currentTime)) scheduleRetry();
     }, 5_000);
     const visible = () => {
       progress.current.reset(audio.currentTime);
