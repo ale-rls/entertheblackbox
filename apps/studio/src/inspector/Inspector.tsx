@@ -120,7 +120,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
             <p className="sc-tool-copy field-hint">The extra track starts with the video, plays once, and stops when the video ends. The video still controls phase timing.</p>
           </>}
         </>
-        : <>{mediaPicker("Still image", "src", phase.src, "image")}{mediaPicker("MP3 audio", "audioSrc", phase.audioSrc, "audio")}</>}
+        : <>{mediaPicker("Still image", "src", phase.src, "image")}{mediaPicker("Main display MP3", "audioSrc", phase.audioSrc, "audio")}<p className="sc-tool-copy field-hint">This MP3 plays from the display. Use Phone headphones below for private narration.</p></>}
       <p className="sc-tool-copy field-hint">{detectedDuration === undefined
         ? "Playback duration is detected automatically from the video or MP3."
         : phase.audioSrc === undefined
@@ -207,7 +207,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       <p className="sc-tool-copy field-hint">The node changes membership atomically. Each group hears its own optional narration, then the shared timeline continues.</p>
     </fieldset>}
     {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone headphones</legend>
-      {mediaPicker("Stream narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}
+      {mediaPicker("Phone stream narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}
       {phase.phoneAudioSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, phoneAudioSrc: undefined })}>Remove phone narration</button>}
       {(project.scenario.groups ?? []).map((group) => text(
         `${group.label} override (MP3)`,

@@ -17,11 +17,17 @@ function setup(options: {
     latest?: (showId?: string) => Promise<PublishedShowArtifact | null>;
     publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown }) => Promise<PublishedShowSummary>;
   };
+  lifecycle?: "idle" | "active";
+  audioSoundcheck?: {
+    sources: readonly string[];
+    play: (src: string, participantId?: string) => Promise<number>;
+    stop: (participantId?: string) => Promise<number>;
+  };
 } = {}) {
   const audit = vi.fn();
   let lobbyTimes = [20_000, 40_000];
   const engine = {
-    lifecycleState: "active", currentSessionId: "s1", currentPhaseId: "q1", currentPhaseEpoch: 2,
+    lifecycleState: options.lifecycle ?? "active", currentSessionId: "s1", currentPhaseId: "q1", currentPhaseEpoch: 2,
     isDisplayConnected: true, displayHeartbeatAgeMs: 12, connectedParticipantCount: 3,
     participantPresence: [{ clientId: "p1", name: "Ada", color: "#fff", connected: true, joinedAt: 500, lastSeenAt: 900 }],
     get lobbyStartTimes() { return lobbyTimes; },
@@ -50,6 +56,7 @@ function setup(options: {
     ready: true,
     startedAt: Date.now(),
     data,
+    ...(options.audioSoundcheck === undefined ? {} : { audioSoundcheck: options.audioSoundcheck }),
     ...options,
   });
   return { app, engine, audit };
@@ -99,6 +106,20 @@ describe("admin API", () => {
     expect(adjusted.statusCode).toBe(200);
     expect(adjusted.json()).toMatchObject({ nextStartAt: 40_000 });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "adjust-lobby-start" }));
+  });
+
+  it("runs phone soundchecks only while the show is not active", async () => {
+    const play = vi.fn(async () => 1);
+    const stop = vi.fn(async () => 2);
+    const headers = { authorization: "Bearer strong-admin-token" };
+    const idle = setup({ lifecycle: "idle", audioSoundcheck: { sources: ["voice.mp3"], play, stop } });
+    expect((await idle.app.inject({ method: "POST", url: "/api/admin/audio/soundcheck", headers, payload: { action: "play", src: "voice.mp3", participantId: "p1" } })).json()).toEqual({ ok: true, affected: 1 });
+    expect(play).toHaveBeenCalledWith("voice.mp3", "p1");
+    expect((await idle.app.inject({ method: "POST", url: "/api/admin/audio/soundcheck", headers, payload: { action: "stop" } })).json()).toEqual({ ok: true, affected: 2 });
+    expect((await idle.app.inject({ method: "POST", url: "/api/admin/audio/soundcheck", headers, payload: { action: "play", src: "missing.mp3" } })).statusCode).toBe(400);
+
+    const active = setup({ audioSoundcheck: { sources: ["voice.mp3"], play, stop } });
+    expect((await active.app.inject({ method: "POST", url: "/api/admin/audio/soundcheck", headers, payload: { action: "play", src: "voice.mp3" } })).statusCode).toBe(409);
   });
 
   it("authenticates and rate-limits admin routes even when their path is percent-encoded", async () => {

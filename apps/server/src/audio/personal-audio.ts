@@ -159,6 +159,28 @@ export class PersonalAudio {
     await refreshed;
   }
 
+  /** Play an authored MP3 immediately for rehearsal without changing show state. */
+  async soundcheck(src: string, participantId?: string): Promise<number> {
+    const ids = participantId === undefined ? [...this.players.keys()] : [participantId];
+    if (ids.some((id) => !this.players.has(id))) throw new Error("Audio participant is not registered");
+    const file = await this.upload(src);
+    await Promise.all(ids.map(async (id) => {
+      await this.call(`/players/${encodeURIComponent(id)}/reset`, "POST");
+      await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
+    }));
+    this.lastError = null;
+    return ids.length;
+  }
+
+  /** Stop rehearsal playback for one phone or the whole registered roster. */
+  async stopSoundcheck(participantId?: string): Promise<number> {
+    const ids = participantId === undefined ? [...this.players.keys()] : [participantId];
+    if (ids.some((id) => !this.players.has(id))) throw new Error("Audio participant is not registered");
+    await Promise.all(ids.map((id) => this.call(`/players/${encodeURIComponent(id)}/reset`, "POST")));
+    this.lastError = null;
+    return ids.length;
+  }
+
   async status(): Promise<unknown> {
     try {
       const status = await this.call("/status");

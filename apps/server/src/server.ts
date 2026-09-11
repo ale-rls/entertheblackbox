@@ -276,7 +276,18 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     startedAt,
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,
-    audioStatus: () => audio?.status() ?? Promise.resolve({ configured: false, players: [] }),
+    audioStatus: async () => {
+      const status = audio ? await audio.status() : { configured: false, players: [] };
+      return {
+        ...(status as Record<string, unknown>),
+        soundcheckSources: readiness.ready ? readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)) : [],
+      };
+    },
+    ...(audio === null || !readiness.ready ? {} : { audioSoundcheck: {
+      sources: readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)),
+      play: (src: string, participantId?: string) => audio.soundcheck(src, participantId),
+      stop: (participantId?: string) => audio.stopSoundcheck(participantId),
+    } }),
     ...(groups === null ? {} : { groupControl: {
       catalogue: readiness.ready ? readiness.scenario.groups ?? [] : [],
       memberships: () => groups.snapshot(admission.registry.values().map((participant) => participant.clientId)),

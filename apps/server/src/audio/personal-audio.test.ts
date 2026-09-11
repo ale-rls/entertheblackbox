@@ -79,4 +79,23 @@ describe("PersonalAudio", () => {
     expect(plays).toHaveLength(3);
     expect(plays[2]).toEqual({ id: "two", body: plays.find((play) => play.id === "one")!.body });
   });
+
+  it("plays and stops a soundcheck on one registered phone", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+    await writeFile(join(dir, "test.mp3"), "test");
+    const calls: string[] = [];
+    const request = vi.fn(async (url: string | URL | Request) => {
+      calls.push(String(url));
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+    const audio = new PersonalAudio({ url: "http://bridge", token: "secret", publicUrl: "https://audio.example" }, dir, vi.fn(), request);
+    await audio.register({ clientId: "one", name: "One" });
+    await audio.register({ clientId: "two", name: "Two" });
+    expect(await audio.soundcheck("test.mp3", "one")).toBe(1);
+    expect(await audio.stopSoundcheck("one")).toBe(1);
+    expect(calls.filter((url) => url.endsWith("/players/one/play"))).toHaveLength(1);
+    expect(calls.filter((url) => url.endsWith("/players/two/play"))).toHaveLength(0);
+    expect(calls.filter((url) => url.endsWith("/players/one/reset"))).toHaveLength(2);
+    await audio.stop();
+  });
 });
