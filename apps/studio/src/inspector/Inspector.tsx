@@ -7,6 +7,7 @@ import { ArenaEllipseEditor, PLATE_A_ARENA_PRESET } from "./ArenaEllipseEditor.j
 import { ArenaQuadEditor, DEFAULT_ARENA_QUAD } from "./ArenaQuadEditor.js";
 import { TimingTimeline } from "./TimingTimeline.js";
 import { studioMediaKindForSource, type StudioMediaKind } from "../media/library.js";
+import { setGroupOptions } from "./groups.js";
 
 type Props = {
   project: StudioProject;
@@ -175,6 +176,17 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       </fieldset>
     </>}
     {phase.kind === "group-branch" && <fieldset><legend>Group branching moment</legend>
+      <fieldset><legend>Group options</legend>
+        {(project.scenario.groups ?? []).map((group) => {
+          const selected = phase.branches.some((branch) => branch.groupId === group.id);
+          return <label className="sc-tool-checkbox" key={group.id}>
+            <input type="checkbox" checked={selected} disabled={selected && phase.branches.length <= 2} onChange={(event) => onChange(setGroupOptions(phase,
+              event.target.checked ? [...phase.branches.map((branch) => branch.groupId), group.id] : phase.branches.filter((branch) => branch.groupId !== group.id).map((branch) => branch.groupId),
+            ))} />{group.label}
+          </label>;
+        })}
+        <p className="sc-tool-copy field-hint">Choose at least two groups for this scene. Add or rename groups using Groups in the toolbar.</p>
+      </fieldset>
       {text("Title", "title", phase.title ?? "", (title) => onChange({ ...phase, title: title || undefined }))}
       {number("Duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs: Math.max(1, durationMs) }))}
       <label className="sc-tool-label">{label("Assignment logic", "assignment.type")}<select className="sc-tool-select" value={phase.assignment.type} onChange={(event) => {
@@ -204,7 +216,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         {number("Allocation weight", `branches.${index}.weight`, branch.weight, (weight) => onChange({ ...phase, branches: phase.branches.map((item, itemIndex) => itemIndex === index ? { ...item, weight: Math.max(1, weight) } : item) }))}
         {text("Phone narration MP3", `branches.${index}.phoneAudioSrc`, branch.phoneAudioSrc ?? "", (phoneAudioSrc) => onChange({ ...phase, branches: phase.branches.map((item, itemIndex) => itemIndex === index ? { ...item, phoneAudioSrc: phoneAudioSrc || undefined } : item) }))}
       </fieldset>)}
-      <p className="sc-tool-copy field-hint">The node changes membership atomically. Each group hears its own optional narration, then the shared timeline continues.</p>
+      <p className="sc-tool-copy field-hint">Connect each group output to its own next scene. Connect Rejoin to the shared scene where everyone meets again. The main display stays black during selection and group paths. Groups arriving early wait; the shared scene starts once all occupied paths finish.</p>
     </fieldset>}
     {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone headphones</legend>
       {mediaPicker("Phone stream narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}

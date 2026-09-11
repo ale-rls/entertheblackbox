@@ -8,6 +8,7 @@ import { exportArtifacts, exportBackup, importRuntime, importStudioFiles } from 
 import { autoLayout, type Draft } from "./model.js";
 import { applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, phaseOutputHandles, pruneEdges, reconcilePhaseOutputEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./canvas/graph.js";
 import { nodeDataForPhase, nodeTypes } from "./canvas/nodes.js";
+import { updateGroupCatalogue } from "./inspector/groups.js";
 import { changePhaseKind, componentTypeForPhase, isImageAudioComponentType, phaseKindForComponentType, renamePhase, type AuthorableComponentType, type Phase } from "./inspector/model.js";
 import { Inspector } from "./inspector/Inspector.js";
 import { SessionHistory } from "./inspector/history.js";
@@ -76,7 +77,7 @@ const nodesForDraft = (draft: Draft, current: Node[] = []): Node[] => {
   const layout = new Map(draft.document.nodes.map((node) => [node.id, node]));
   const currentPositions = new Map(current.map((node) => [node.id, node.position]));
   const phaseNodes: Node[] = graphPhases(draft.project).map((phase, index) => {
-    const data = nodeDataForPhase(phase);
+    const data = nodeDataForPhase(phase, draft.project.scenario.groups);
     return {
       id: phase.id,
       type: "phase",
@@ -98,7 +99,11 @@ const edgesForDraft = (draft: Draft): Edge[] => {
   const usesCurrentCanvasFormat = draft.document.canvasFormatVersion === 1 && documentEdges.every((edge) =>
     edge.sourceHandle != null && nodeIds.has(edge.source) && nodeIds.has(edge.target),
   );
-  return usesCurrentCanvasFormat ? documentEdges : graphEdges(draft.project);
+  if (!usesCurrentCanvasFormat) return graphEdges(draft.project);
+  // Upgrade legacy group nodes, but preserve deliberately disconnected ports.
+  return draft.project.scenario.phases.reduce((result, phase) => phase.kind === "group-branch" &&
+    !result.some((edge) => edge.source === phase.id && edge.sourceHandle?.startsWith("group:"))
+    ? reconcilePhaseOutputEdges(result, phase) : result, documentEdges);
 };
 
 export function App() {
@@ -556,11 +561,21 @@ export function App() {
   };
   const updateGroups = (groups: NonNullable<Draft["project"]["scenario"]["groups"]>, initialGroupIds: string[]) => {
     if (!draft) return;
-    record({ ...draft, project: { ...draft.project, scenario: {
-      ...draft.project.scenario,
-      groups,
-      initialGroupIds: initialGroupIds.length >= 2 ? initialGroupIds : undefined,
-    } }, updatedAt: Date.now() });
+    try {
+      const scenario = updateGroupCatalogue(draft.project.scenario, groups, initialGroupIds);
+      const previousGroups = draft.project.scenario.groups ?? [];
+      const renamed = new Map<string, string>(previousGroups.length === groups.length ? previousGroups.flatMap((group, index) =>
+        groups.some((candidate) => candidate.id === group.id) ? [] : [[`group:${group.id}`, `group:${groups[index]!.id}`] as const]) : []);
+      const remappedEdges = edges.map((edge) => renamed.has(edge.sourceHandle ?? "")
+        ? { ...edge, id: `${edge.source}:${renamed.get(edge.sourceHandle!)!}`, sourceHandle: renamed.get(edge.sourceHandle!)! } : edge);
+      const nextEdges = scenario.phases.reduce((result, phase) => phase.kind === "group-branch" &&
+        phaseOutputHandles(phase).join("|") !== phaseOutputHandles(draft.project.scenario.phases.find((old) => old.id === phase.id)).join("|")
+        ? reconcilePhaseOutputEdges(result, phase) : result, remappedEdges);
+      record({ ...draft, project: { ...draft.project, scenario }, updatedAt: Date.now() }, nextEdges);
+      setGraphFeedback(undefined);
+    } catch (error) {
+      setGraphFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not update groups." });
+    }
   };
   const renameSelected = (nextId: string) => {
     if (!draft || !selectedId) return;
@@ -801,9 +816,11 @@ export function App() {
 
   const currentDiagnostics = diagnostics(draft.project);
   const invalidNodeIds = new Set(currentDiagnostics.filter((item) => item.severity === "error" && item.phaseId).map((item) => item.phaseId));
-  const visibleNodes = nodes.map((node) => invalidNodeIds.has(node.id)
-    ? { ...node, className: [node.className, "invalid"].filter(Boolean).join(" ") }
-    : node);
+  const visibleNodes = nodes.map((node) => {
+    const phase = draft.project.scenario.phases.find((phase) => phase.id === node.id);
+    return { ...node, ...(phase ? { data: nodeDataForPhase(phase, draft.project.scenario.groups) } : {}),
+      ...(invalidNodeIds.has(node.id) ? { className: [node.className, "invalid"].filter(Boolean).join(" ") } : {}) };
+  });
   const blocked = exportBlocked(currentDiagnostics, acknowledged);
   const exportDeployment = () => {
     setExportFeedback(undefined);

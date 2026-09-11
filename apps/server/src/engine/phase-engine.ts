@@ -106,7 +106,10 @@ export type PhaseEngineOptions = {
   groupSelection?: {
     current: (participantId: string) => string | null;
     select: (participantId: string, groupId: string) => void;
+    begin?: (phase: Extract<Phase, { kind: "group-branch" }>, participantIds: readonly string[]) => readonly string[];
   };
+  onPhase?: (phase: Phase) => void;
+  onParticipantPhase?: (participantIds: readonly string[], phase: Phase) => void;
   qr?: Omit<QrGrantPushLoopOptions, "send" | "lifecycle" | "hasDisplay" | "now">;
 };
 
@@ -146,7 +149,8 @@ export type AdminFlow = {
 };
 
 function adminRoutesForPhase(phase: Exclude<Phase, { kind: "idle" }>): AdminFlowRoute[] {
-  if (phase.kind === "video" || phase.kind === "group-branch") return [{ outcome: "next", target: phase.next }];
+  if (phase.kind === "group-branch") return [...phase.branches.map((branch) => ({ outcome: branch.groupId, target: branch.next ?? phase.next })), { outcome: "rejoin", target: phase.next }];
+  if (phase.kind === "video") return [{ outcome: "next", target: phase.next }];
   if (phase.next.type === "fixed") return [{ outcome: "next", target: phase.next.target }];
   return [
     ...Object.entries(phase.next.map).map(([outcome, target]) => ({ outcome, target })),
@@ -160,6 +164,13 @@ function isOpen(socket: WebSocket): boolean {
 }
 
 export class PhaseEngine {
+  private readonly options: PhaseEngineOptions;
+  private epochSequence = 0;
+  private readonly paths = new Map<string, { engine: PhaseEngine; members: Set<string> }>();
+  private readonly groupDisplays = new Map<string, WebSocket>();
+  private selectionCohort = new Set<string>();
+  private pathsStarted = false;
+  private pathDone = false;
   private readonly scenario: Scenario;
   private readonly registry: ParticipantRegistry;
   private readonly installationId: string;
@@ -212,7 +223,8 @@ export class PhaseEngine {
   private readonly onLobbyScheduleChanged: ((startTimes: readonly number[]) => void) | undefined;
   private readonly groupSelection: PhaseEngineOptions["groupSelection"];
 
-  constructor(options: PhaseEngineOptions) {
+  constructor(options: PhaseEngineOptions, private readonly path?: { stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; onPhase: (phase: Phase) => void }) {
+    this.options = options;
     this.scenario = options.scenario;
     this.registry = options.registry;
     this.installationId = options.installationId;
@@ -411,7 +423,7 @@ export class PhaseEngine {
   }
 
   getSnapshot(now = this.now()): PhaseSnapshotMessage {
-    const phase = this.currentPhase();
+    const phase = this.pathDone && this.path ? { ...this.path.waitingPhase, title: "Waiting for other groups", showCursors: false } : this.currentPhase();
     return {
       ...phase,
       scenarioVersion: this.scenario.version,
@@ -441,6 +453,7 @@ export class PhaseEngine {
   }
 
   stop(): void {
+    this.clearPaths();
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.cursors.stop();
@@ -450,6 +463,7 @@ export class PhaseEngine {
   }
 
   tick(now = this.now()): void {
+    if (this.pathDone) return;
     this.bindings.tick(now);
     this.expireStaleDisplay(now);
     if (this.lifecycle === "idle") {
@@ -457,7 +471,7 @@ export class PhaseEngine {
       return;
     }
 
-    if (this.displaySocket === undefined) {
+    if (this.displaySocket === undefined && !this.path) {
       this.displayDisconnectedAt ??= now;
       if (now - this.displayDisconnectedAt >= this.policy.displayDisconnectTimeoutMs) {
         this.abortToIdle("display-timeout", now);
@@ -491,7 +505,11 @@ export class PhaseEngine {
     const phase = this.currentPhase();
 
     if (phase.kind === "group-branch") {
-      if (this.deadlineAt !== null && now >= this.deadlineAt) this.advanceTo(phase.next, now, "group-branch-complete");
+      if (!this.pathsStarted && this.deadlineAt !== null && now >= this.deadlineAt) this.startGroupPaths(phase, now);
+      if (this.pathsStarted) {
+        for (const { engine } of this.paths.values()) engine.tick(now);
+        if ([...this.paths.values()].every(({ engine }) => engine.pathDone)) this.advanceTo(phase.next, now, "group-branch-complete");
+      }
       return;
     }
 
@@ -586,6 +604,14 @@ export class PhaseEngine {
         lastHeartbeatAt: _participant.lastSeenAt,
       }, this.now());
     }
+    const localPath = _participant && this.pathForParticipant(_participant.clientId);
+    if (localPath) {
+      localPath.participantJoined(socket, _participant);
+      return;
+    }
+    // Late arrivals may choose while an unrestricted selection is still open.
+    if (_participant && !this.pathsStarted && this.currentPhase().kind === "group-branch" &&
+      !(this.currentPhase() as Extract<Phase, { kind: "group-branch" }>).sourceGroupIds) this.selectionCohort.add(_participant.clientId);
     this.send(socket, this.getSnapshotMessage());
     this.sendGroupSelectionOptions(socket);
     this.queueQuestionStatus();
@@ -595,6 +621,8 @@ export class PhaseEngine {
   }
 
   socketClosed(socket: WebSocket): void {
+    for (const { engine } of this.paths.values()) engine.socketClosed(socket);
+    for (const [groupId, display] of this.groupDisplays) if (display === socket) this.groupDisplays.delete(groupId);
     this.clients.delete(socket);
     this.participantSockets.delete(socket);
     const participantId = this.participantIds.get(socket);
@@ -618,6 +646,17 @@ export class PhaseEngine {
   }
 
   handleClientMessage(message: ClientToServerMessage, socket: WebSocket, _request?: IncomingMessage): void {
+    if (message.t !== "display_join") {
+      const id = this.participantIds.get(socket);
+      const localPath = id === undefined ? [...this.paths.values()].find(({ engine }) => engine.displaySocket === socket)?.engine : this.pathForParticipant(id);
+      if (localPath) {
+        if (id !== undefined && message.t === "input" && message.sessionId === localPath.sessionId && message.phaseEpoch === localPath.phaseEpoch) {
+          this.movement.recordSample(id, message.x, message.y, this.now());
+        }
+        if (!localPath.pathDone) localPath.handleClientMessage(message, socket, _request);
+        return;
+      }
+    }
     switch (message.t) {
       case "display_join":
         if (
@@ -628,7 +667,21 @@ export class PhaseEngine {
           this.close(socket, 1008, "invalid display credentials");
           return;
         }
-        this.connectDisplay(socket);
+        if (message.groupId !== undefined) {
+          if (!this.scenario.groups?.some((group) => group.id === message.groupId)) {
+            this.close(socket, 1008, "unknown display group");
+            return;
+          }
+          const previous = this.groupDisplays.get(message.groupId);
+          if (previous && previous !== socket) {
+            this.paths.get(message.groupId)?.engine.socketClosed(previous);
+            this.close(previous, DISPLAY_REPLACED_CLOSE_CODE, "display replaced");
+          }
+          this.groupDisplays.set(message.groupId, socket);
+          const localPath = this.paths.get(message.groupId)?.engine;
+          if (localPath) localPath.connectDisplay(socket);
+          else this.sendBlankDisplay(socket);
+        } else this.connectDisplay(socket);
         return;
       case "display_heartbeat":
         if (socket === this.displaySocket && this.matches(message.sessionId, message.phaseId, message.phaseEpoch)) {
@@ -673,6 +726,8 @@ export class PhaseEngine {
           participantId !== undefined &&
           phase.kind === "group-branch" &&
           phase.assignment.type === "self-select" &&
+          !this.pathsStarted && this.deadlineAt !== null && this.now() < this.deadlineAt &&
+          this.selectionCohort.has(participantId) &&
           this.matches(message.sessionId, phase.id, message.phaseEpoch) &&
           phase.branches.some((branch) => branch.groupId === message.groupId)
         ) {
@@ -908,7 +963,7 @@ export class PhaseEngine {
     this.phaseId = "idle";
     this.phaseStartedAt = now;
     this.deadlineAt = this.nextLobbyStartAt ?? (this.autoStartOnFirstParticipant ? now + this.policy.lobbyCountdownMs : null);
-    this.phaseEpoch += 1;
+    this.phaseEpoch = this.nextEpoch();
     this.sessionStartedAt = null;
     this.lastInputAt = now;
     this.deadlineNotified = false;
@@ -940,7 +995,24 @@ export class PhaseEngine {
   }
 
   private enterPhase(target: string, now: number, reason: string): void {
+    this.clearPaths();
+    if (this.path && (target === this.path.stopAt || target === "idle")) {
+      this.pathDone = true;
+      this.phaseId = this.path.waitingPhase.id;
+      this.phaseEpoch = this.nextEpoch();
+      this.deadlineAt = null;
+      this.phaseStartedAt = now;
+      this.votes.clearQuestion();
+      this.ratings.clear();
+      this.video.cancel();
+      this.path.onPhase({ kind: "idle", id: "idle" });
+      this.broadcast({ ...this.getSnapshotMessage(now), t: "phase" });
+      return;
+    }
     const phase = this.requirePhase(target);
+    this.selectionCohort = phase.kind === "group-branch" ? new Set(this.registry.values().filter((participant) =>
+      !phase.sourceGroupIds || phase.sourceGroupIds.includes(this.groupSelection?.current(participant.clientId) ?? "")
+    ).map((participant) => participant.clientId)) : new Set();
     const sessionEnded = this.lifecycle !== "idle" && phase.kind === "idle";
     const endedSessionId = sessionEnded ? this.sessionId : null;
     if (sessionEnded) {
@@ -959,15 +1031,15 @@ export class PhaseEngine {
     this.displayPlaybackIssue = null;
     this.phaseId = target;
     this.phaseStartedAt = now;
+    this.phaseEpoch = this.nextEpoch();
     this.video.cancel();
     this.deadlineAt = phase.kind === "video" || phase.kind === "video-position-question"
-      ? this.video.begin({ sessionId: this.sessionId, phaseId: target, phaseEpoch: this.phaseEpoch + 1 }, phase.expectedDurationMs, now)
+      ? this.video.begin({ sessionId: this.sessionId, phaseId: target, phaseEpoch: this.phaseEpoch }, phase.expectedDurationMs, now)
       : phase.kind === "group-branch"
         ? now + phase.durationMs
       : phase.kind === "position-question"
         ? now + phase.durationMs
         : null;
-    this.phaseEpoch += 1;
     this.deadlineNotified = false;
     if (phase.kind === "idle") {
       this.lifecycle = "idle";
@@ -980,6 +1052,7 @@ export class PhaseEngine {
     }
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
+    this.path?.onPhase(phase);
     if ((phase.kind === "video" || phase.kind === "video-position-question") && phase.rating) {
       this.ratings.begin({
         sessionId: this.sessionId,
@@ -1021,6 +1094,11 @@ export class PhaseEngine {
 
   private transition(reason: string, sessionEnded?: { reason: string; sessionId: string; endedAt: number }): void {
     this.emitCheckpoint("transition", reason);
+    const phase = this.currentPhase();
+    if (phase.kind === "group-branch" && this.groupSelection?.begin) {
+      this.selectionCohort = new Set(this.groupSelection.begin(phase, this.registry.values().map((participant) => participant.clientId)));
+    }
+    this.options.onPhase?.(phase);
     // Hide the join QR before the active phase frame reaches the display,
     // avoiding even a one-message flash over the opening shot.
     this.qr?.push();
@@ -1227,8 +1305,77 @@ export class PhaseEngine {
     return sessionId === this.sessionId && phaseId === this.phaseId && phaseEpoch === this.phaseEpoch;
   }
 
+  private nextEpoch(): number {
+    return this.path ? this.path.nextEpoch() : ++this.epochSequence;
+  }
+
+  private pathForParticipant(id: string): PhaseEngine | undefined {
+    return [...this.paths.values()].find(({ members }) => members.has(id))?.engine;
+  }
+
+  /** The same vote/media engine runs against a scoped roster for each group. */
+  private startGroupPaths(phase: Extract<Phase, { kind: "group-branch" }>, now: number): void {
+    this.pathsStarted = true;
+    this.deadlineAt = null;
+    this.phaseEpoch = this.nextEpoch();
+    // Close phone selection, including phones that did not choose a group.
+    this.broadcast({ ...this.getSnapshotMessage(now), t: "phase" });
+    for (const branch of phase.branches) {
+      const members = new Set(this.registry.values().filter((participant) =>
+        this.selectionCohort.has(participant.clientId) && this.groupSelection?.current(participant.clientId) === branch.groupId
+      ).map((participant) => participant.clientId));
+      if (members.size === 0) continue;
+      const child = new PhaseEngine({
+        scenario: this.scenario, registry: this.registry.scoped(members),
+        installationId: this.installationId, roomId: this.roomId, showId: this.showId,
+        displayToken: this.displayToken, now: this.now, policy: this.policy,
+        autoStartOnFirstParticipant: false,
+        ...(this.options.participantLeaseTtlMs === undefined ? {} : { participantLeaseTtlMs: this.options.participantLeaseTtlMs }),
+        ...(this.options.onVoteSnapshotEnqueued === undefined ? {} : { onVoteSnapshotEnqueued: this.options.onVoteSnapshotEnqueued }),
+      }, {
+        stopAt: phase.next, waitingPhase: phase, nextEpoch: () => this.nextEpoch(),
+        onPhase: (localPhase) => this.options.onParticipantPhase?.([...members], localPhase),
+      });
+      this.paths.set(branch.groupId, { engine: child, members });
+      child.lifecycle = "active";
+      child.sessionId = this.sessionId;
+      child.sessionStartedAt = this.sessionStartedAt;
+      // Attach before entering: transition frames and votes go only to this roster.
+      for (const [socket, id] of this.participantIds) if (members.has(id)) {
+        child.clients.add(socket);
+        child.participantSockets.add(socket);
+        child.participantIds.set(socket, id);
+        const participant = this.registry.values().find((participant) => participant.clientId === id);
+        if (participant) child.cursors.join(id, participant.color);
+      }
+      const display = this.groupDisplays.get(branch.groupId);
+      if (display) {
+        child.displaySocket = display;
+        child.clients.add(display);
+        child.displayHeartbeatAt = now;
+      }
+      child.enterPhase(branch.next ?? phase.next, now, "group-path-start");
+      if (this.timer !== null) child.cursors.start();
+    }
+  }
+
+  private clearPaths(): void {
+    for (const { engine } of this.paths.values()) engine.stop();
+    this.paths.clear();
+    this.pathsStarted = false;
+    for (const socket of this.groupDisplays.values()) this.sendBlankDisplay(socket);
+  }
+
+  private sendBlankDisplay(socket: WebSocket): void {
+    this.send(socket, {
+      t: "snapshot", v: PROTOCOL_VERSION, sessionId: this.sessionId, phaseEpoch: this.nextEpoch(), serverTime: this.now(),
+      phase: { kind: "idle", id: "idle", scenarioVersion: this.scenario.version, startedAt: this.now(), deadlineAt: null },
+    });
+  }
+
   private broadcast(message: ServerToClientMessage): void {
-    const openSockets = [...this.clients].filter(isOpen);
+    const openSockets = [...this.clients].filter((socket) => isOpen(socket) &&
+      !(this.pathsStarted && this.participantIds.has(socket) && this.pathForParticipant(this.participantIds.get(socket)!)));
     if (openSockets.length === 0) return;
     const encoded = encodeMessage(message);
     for (const socket of openSockets) socket.send(encoded);
@@ -1240,9 +1387,9 @@ export class PhaseEngine {
 
   private sendGroupSelectionOptions(socket: WebSocket): void {
     const phase = this.currentPhase();
-    if (phase.kind !== "group-branch" || phase.assignment.type !== "self-select") return;
+    if (phase.kind !== "group-branch" || phase.assignment.type !== "self-select" || this.pathsStarted || this.pathDone) return;
     const participantId = this.participantIds.get(socket);
-    if (participantId === undefined) return;
+    if (participantId === undefined || !this.selectionCohort.has(participantId)) return;
     const catalogue = new Map((this.scenario.groups ?? []).map((group) => [group.id, group]));
     const groups = phase.branches.flatMap((branch) => {
       const group = catalogue.get(branch.groupId);

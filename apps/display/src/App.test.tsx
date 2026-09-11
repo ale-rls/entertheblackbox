@@ -126,6 +126,27 @@ afterEach(async () => {
 });
 
 describe("App media-readiness gate", () => {
+  it("unmounts all media, QR, controls and cursors while group paths own the show, then resumes shared rendering", async () => {
+    harness.mediaStatus = { state: "ready" };
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+    await act(async () => harness.connectionOptions!.onMessage({
+      t: "phase", v: PROTOCOL_VERSION, sessionId: "session", phaseEpoch: 10, serverTime: 0,
+      phase: { kind: "group-branch", id: "split", title: "Choose a group", durationMs: 1_000,
+        assignment: { type: "self-select" }, branches: [{ groupId: "a", weight: 1 }, { groupId: "b", weight: 1 }], next: "idle",
+        scenarioVersion: "test", startedAt: 0, deadlineAt: 1_000 },
+    }));
+    expect(document.querySelector('[aria-label="Display inactive"]')).not.toBeNull();
+    expect(document.querySelector(".display-root")!.children).toHaveLength(0);
+    expect(harness.showMedia).toHaveBeenLastCalledWith(null, null, null);
+    await act(async () => harness.connectionOptions!.onMessage({
+      t: "phase", v: PROTOCOL_VERSION, sessionId: "idle", phaseEpoch: 11, serverTime: 1_000,
+      phase: { kind: "idle", id: "idle", scenarioVersion: "test", startedAt: 1_000, deadlineAt: null },
+    }));
+    expect(document.querySelector('[aria-label="Display inactive"]')).toBeNull();
+    expect(document.querySelector('[data-testid="idle-attract"]')).not.toBeNull();
+  });
   it("keeps the idle preparation UI offline, then connects once media is ready", async () => {
     document.body.innerHTML = '<div id="root"></div>';
     root = createRoot(document.querySelector("#root")!);

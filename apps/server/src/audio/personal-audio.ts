@@ -14,6 +14,8 @@ export class PersonalAudio {
   private currentAudioSrc: string | undefined;
   private currentAudioByPlayer = new Map<string, string | undefined>();
   private sourceForPlayer: (participantId: string) => string | undefined = () => undefined;
+  private readonly phaseOverrides = new Map<string, Phase>();
+  private readonly playerRevisions = new Map<string, number>();
   private readonly playedGeneration = new Map<string, number>();
   private work: Promise<void> = Promise.resolve();
   private timer: ReturnType<typeof setInterval> | undefined;
@@ -111,14 +113,16 @@ export class PersonalAudio {
   }
 
   transition(phase: Phase, groupFor: (participantId: string) => string | null = () => null): void {
+    this.phaseOverrides.clear();
     const generation = ++this.generation;
     this.currentAudioSrc = phase.kind === "idle" || phase.kind === "group-branch" ? undefined : phase.phoneAudioSrc;
     this.sourceForPlayer = (id) => {
       const groupId = groupFor(id);
-      return phase.kind === "idle" ? undefined
-        : phase.kind === "group-branch"
-          ? phase.branches.find((branch) => branch.groupId === groupId)?.phoneAudioSrc
-          : (groupId === null ? undefined : phase.phoneAudioByGroup?.[groupId]) ?? phase.phoneAudioSrc;
+      const localPhase = this.phaseOverrides.get(id) ?? phase;
+      return localPhase.kind === "idle" ? undefined
+        : localPhase.kind === "group-branch"
+          ? localPhase.branches.find((branch) => branch.groupId === groupId)?.phoneAudioSrc
+          : (groupId === null ? undefined : localPhase.phoneAudioByGroup?.[groupId]) ?? localPhase.phoneAudioSrc;
     };
     this.currentAudioByPlayer = new Map([...this.players.keys()].map((id) => [id, this.sourceForPlayer(id)]));
     this.work = this.work.then(async () => {
@@ -142,12 +146,14 @@ export class PersonalAudio {
   async refreshParticipant(id: string): Promise<void> {
     if (!this.players.has(id) || this.stopped) return;
     const generation = this.generation;
-    const src = this.sourceForPlayer(id) ?? this.currentAudioSrc;
+    const revision = (this.playerRevisions.get(id) ?? 0) + 1;
+    this.playerRevisions.set(id, revision);
+    const src = this.sourceForPlayer(id);
     this.currentAudioByPlayer.set(id, src);
     const refreshed = this.work.then(async () => {
-      if (!this.players.has(id) || this.stopped || generation !== this.generation) return;
+      if (!this.players.has(id) || this.stopped || generation !== this.generation || revision !== this.playerRevisions.get(id)) return;
       const file = src ? await this.upload(src) : undefined;
-      if (!this.players.has(id) || this.stopped || generation !== this.generation) return;
+      if (!this.players.has(id) || this.stopped || generation !== this.generation || revision !== this.playerRevisions.get(id)) return;
       await this.call(`/players/${encodeURIComponent(id)}/reset`, "POST");
       if (file) {
         await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
@@ -157,6 +163,14 @@ export class PersonalAudio {
     });
     this.work = refreshed.catch((error: unknown) => this.failed(error));
     await refreshed;
+  }
+
+  /** A local path advances without resetting any other group's stream. */
+  transitionParticipants(ids: readonly string[], phase: Phase): void {
+    for (const id of ids) {
+      this.phaseOverrides.set(id, phase);
+      void this.refreshParticipant(id).catch(() => { /* refreshParticipant reports errors via work. */ });
+    }
   }
 
   /** Play an authored MP3 immediately for rehearsal without changing show state. */
@@ -197,6 +211,8 @@ export class PersonalAudio {
     ++this.generation;
     this.currentAudioSrc = undefined;
     this.currentAudioByPlayer.clear();
+    this.phaseOverrides.clear();
+    this.playerRevisions.clear();
     this.sourceForPlayer = () => undefined;
     const ids = [...this.players.keys()];
     this.players.clear();

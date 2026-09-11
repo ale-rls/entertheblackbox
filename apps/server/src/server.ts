@@ -129,8 +129,15 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       displayToken: config.displayToken,
       participantLeaseTtlMs: admission.participantLeaseTtlMs,
       autoStartOnFirstParticipant: false,
+      onParticipantPhase: (ids, phase) => audio?.transitionParticipants(ids, phase),
+      onPhase: (phase) => audio?.transition(phase, (id) => groups?.groupFor(id) ?? null),
       groupSelection: {
         current: (participantId) => groups?.groupFor(participantId) ?? null,
+        begin: (phase, ids) => {
+          const cohort = ids.filter((id) => !phase.sourceGroupIds || phase.sourceGroupIds.includes(groups?.groupFor(id) ?? ""));
+          groups?.applyBranch(phase, ids);
+          return cohort;
+        },
         select: (participantId, groupId) => {
           groups?.assign(participantId, groupId);
           void audio?.refreshParticipant(participantId);
@@ -153,11 +160,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       onCheckpoint: (checkpoint) => {
         adminData?.recordCheckpoint?.(checkpoint);
         if (checkpoint.kind === "transition") {
-          const phase = readiness.scenario.phases.find((p) => p.id === checkpoint.phaseId);
           const participantIds = admission.registry.values().map((participant) => participant.clientId);
           if (checkpoint.reason === "session-start" || checkpoint.reason === "admin-restart") groups?.beginSession(participantIds);
-          if (phase?.kind === "group-branch") groups?.applyBranch(phase, participantIds);
-          if (phase) audio?.transition(phase, (participantId) => groups?.groupFor(participantId) ?? null);
         }
       },
       onVoteSnapshotEnqueued: (snapshot) => {

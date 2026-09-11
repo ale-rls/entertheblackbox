@@ -37,11 +37,15 @@ export const currentPhase = (session: PreviewSession): Phase => {
   if (!phase) throw new Error(`Preview phase “${session.phaseId}” does not exist.`);
   return phase;
 };
-export function advancePreview(session: PreviewSession): PreviewSession {
+export function advancePreview(session: PreviewSession, groupId?: string): PreviewSession {
   const phase = currentPhase(session);
   if (phase.kind === "idle") return session;
   let target: string;
-  if (phase.kind === "video" || phase.kind === "group-branch") target = phase.next;
+  if (phase.kind === "group-branch") {
+    const branch = phase.branches.find((branch) => branch.groupId === groupId);
+    if (groupId !== undefined && !branch) throw new Error(`Unknown group option “${groupId}”.`);
+    target = branch?.next ?? phase.next;
+  } else if (phase.kind === "video") target = phase.next;
   else {
     if (phase.next.type !== "fixed") throw new Error("Choose an outcome for this question.");
     target = phase.next.target;
