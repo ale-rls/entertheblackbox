@@ -1,4 +1,6 @@
-FROM node:20-alpine
+# uWebSockets.js publishes native Linux binaries linked against glibc.
+# Alpine uses musl, so the module cannot load there.
+FROM node:20-bookworm-slim
 
 # Set working directory
 WORKDIR /app

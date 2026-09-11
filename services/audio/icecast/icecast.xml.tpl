@@ -18,13 +18,13 @@
     </limits>
 
     <authentication>
-        <source-password>${ICECAST_SOURCE_PASSWORD}</source-password>
-        <relay-password>${ICECAST_RELAY_PASSWORD}</relay-password>
+        <source-password>${ICECAST_SOURCE_PASSWORD_XML}</source-password>
+        <relay-password>${ICECAST_RELAY_PASSWORD_XML}</relay-password>
         <admin-user>admin</admin-user>
-        <admin-password>${ICECAST_ADMIN_PASSWORD}</admin-password>
+        <admin-password>${ICECAST_ADMIN_PASSWORD_XML}</admin-password>
     </authentication>
 
-    <hostname>${ICECAST_HOSTNAME}</hostname>
+    <hostname>${ICECAST_HOSTNAME_XML}</hostname>
 
     <listen-socket>
         <port>8000</port>
