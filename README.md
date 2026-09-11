@@ -13,6 +13,7 @@ The server is authoritative: it manages admission, room state, timed vote snapsh
 - `apps/phone` — mobile React controller used by participants.
 - `apps/admin` — protected operational interface.
 - `apps/studio` — local visual editor for importing, authoring, validating, previewing, and exporting shows.
+- `apps/realtime-ws-coolify` — room-scoped, batched low-latency cursor relay, included in the production Coolify stack.
 
 Shared runtime contracts live in `packages/protocol`, `packages/scenario`, `packages/shared`, and `packages/studio-adapter`.
 

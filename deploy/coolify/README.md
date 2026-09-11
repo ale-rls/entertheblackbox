@@ -2,9 +2,9 @@
 
 This is the production Compose entry point for replacing the current
 `enter-the-blackbox` Coolify Git resource with this canonical repository. It
-deploys the installation server and its four browser bundles, PocketBase, and
-the personal-audio stack. The realtime cursor relay remains its existing
-separate Coolify resource.
+deploys the installation server and its four browser bundles, PocketBase, the
+personal-audio stack, and the low-latency realtime cursor relay as one Coolify
+Compose resource.
 
 The Compose project name, public service names, and volume names deliberately
 match the current resource:
@@ -12,6 +12,7 @@ match the current resource:
 | Existing name | New implementation | Internal port |
 |---|---|---:|
 | `frontend` | canonical Fastify server plus phone/display/admin/Studio | 80 |
+| `realtime` | room-scoped, batched cursor relay | 9001 |
 | `pocketbase` | canonical PocketBase image and migrations | 8090 |
 | `bridge` | authenticated audio control and public phone streams | 8090 |
 | `icecast` | private stream origin | 8000 |
@@ -28,13 +29,13 @@ recreate `pocketbase-data` during the switch.
 
 1. Back up the current `pocketbase-data` volume in Coolify and verify the
    backup completed.
-2. Record the three existing public domains for `frontend`, `pocketbase`, and
-   `bridge`. Keep their internal ports at 80, 8090, and 8090 respectively.
+2. Record the four public domains for `frontend`, `realtime`, `pocketbase`, and
+   `bridge`. Keep their internal ports at 80, 9001, 8090, and 8090 respectively.
 3. Copy [`deploy/coolify/.env.example`](.env.example) into the Coolify
    environment editor. Replace every placeholder and use the current
    PocketBase superuser credentials.
-4. Confirm the existing separate realtime relay is healthy and set its
-   public `wss://` URL as `REALTIME_WS_URL`.
+4. Set the realtime relay's public `wss://` URL as `REALTIME_WS_URL`. The relay
+   is built from `apps/realtime-ws-coolify` by this Compose resource.
 5. In Coolify's Advanced build settings, enable **Include Source Commit in
    Build**. This keeps the server and browser build version tied to each
    deployed commit.
@@ -106,7 +107,7 @@ or insecure phone-audio settings again at startup.
 | Variable | Scope | Requirement |
 |---|---|---|
 | `VITE_POCKETBASE_URL` | build | public PocketBase `https://` URL |
-| `REALTIME_WS_URL` | build | public cursor relay `wss://` URL |
+| `REALTIME_WS_URL` | build | public `realtime` service `wss://` URL |
 | `PHONE_JOIN_BASE_URL` | runtime | public frontend URL ending in `/phone/` |
 | `PUBLIC_STREAM_BASE` | runtime | public bridge `https://` URL; also handed to phones |
 | `ICECAST_HOSTNAME` | runtime | audio hostname only, without scheme/path/port |
@@ -148,6 +149,24 @@ The combined Compose file sets internal service URLs, fixed container values,
 and `REQUIRE_PHONE_AUDIO=true` itself. Do not add a public domain to `icecast`
 or `liquidsoap`.
 
+## Recommended domain assignment
+
+Assign these values in Coolify's domain fields. The port suffix selects the
+container target; it is not part of the browser-visible HTTPS/WSS address.
+
+| Service | Coolify domain field | Public value used by clients |
+|---|---|---|
+| `frontend` | `https://bb-frontend.enabler.space` | `https://bb-frontend.enabler.space` |
+| `realtime` | `https://bb-realtime.enabler.space:9001` | `wss://bb-realtime.enabler.space` |
+| `pocketbase` | `https://bb-pocketbase.enabler.space:8090` | `https://bb-pocketbase.enabler.space` |
+| `bridge` | `https://bb-bridge.enabler.space:8090` | `https://bb-bridge.enabler.space` |
+| `icecast` | none | internal only: `icecast:8000` |
+| `liquidsoap` | none | internal only: `liquidsoap:1234` |
+
+Keep the available `bb-icecast.enabler.space` and
+`bb-liquidsoap.enabler.space` hostnames unassigned. They are not required by
+the public architecture.
+
 ## Post-deploy checks
 
 Run these before opening admission:
@@ -157,6 +176,7 @@ curl https://play.example.org/healthz
 curl https://play.example.org/readyz
 curl -fsS -o /dev/null https://play.example.org/admin/
 curl -fsS -o /dev/null https://play.example.org/studio/
+curl https://realtime.example.org/health
 curl https://pb.example.org/api/health
 curl https://audio.example.org/health
 curl -H "Authorization: Bearer $BRIDGE_TOKEN" https://audio.example.org/status

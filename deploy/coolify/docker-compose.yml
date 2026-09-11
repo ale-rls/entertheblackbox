@@ -20,6 +20,8 @@ services:
         condition: service_healthy
       bridge:
         condition: service_healthy
+      realtime:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
@@ -51,6 +53,27 @@ services:
       timeout: 5s
       retries: 8
       start_period: 30s
+
+  realtime:
+    build:
+      context: ../../apps/realtime-ws-coolify
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "9001"
+    environment:
+      NODE_ENV: production
+      WS_PORT: "9001"
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD", "wget", "-qO/dev/null", "http://127.0.0.1:9001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
 
   pocketbase:
     build:

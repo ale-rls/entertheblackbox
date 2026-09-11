@@ -69,10 +69,15 @@ for the display's cursor *visualization*.
 
 ## Deployment
 
-Same shape as the reference deployment: `Dockerfile` here, `WS_PORT` env var
-(default 9001). Point Studio/production installations at the same host the
-existing `aidemocracy-websockets.enabler.space` deployment already uses, or
-run a project-specific instance.
+The canonical production deployment builds this directory as the `realtime`
+service in `deploy/coolify/docker-compose.yml`. Assign that service an HTTPS
+domain targeting internal port 9001 and set the browser build variable
+`REALTIME_WS_URL` to the same hostname with a `wss://` scheme. See
+`deploy/coolify/README.md` for the complete stack and domain map.
+
+For a standalone relay or migration from the earlier runner, the deployment
+still has the same shape as the reference: `Dockerfile` here and `WS_PORT`
+(default 9001):
 
 1. **New Resource -> Application -> Dockerfile build pack**, pointed at
    this repo/branch.
