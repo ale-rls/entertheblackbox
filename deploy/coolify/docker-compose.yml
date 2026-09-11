@@ -6,7 +6,7 @@ name: enter-the-blackbox
 services:
   frontend:
     build:
-      context: ../..
+      context: .
       dockerfile: apps/server/Dockerfile
       args:
         VITE_POCKETBASE_URL: ${VITE_POCKETBASE_URL:?set to the public PocketBase HTTPS URL}
@@ -54,7 +54,7 @@ services:
 
   pocketbase:
     build:
-      context: ../../pocketbase
+      context: pocketbase
       dockerfile: Dockerfile
       args:
         PB_VERSION: ${PB_VERSION:-0.39.11}
@@ -73,7 +73,7 @@ services:
 
   icecast:
     build:
-      context: ../../services/audio/icecast
+      context: services/audio/icecast
       dockerfile: Dockerfile
     restart: unless-stopped
     expose:
@@ -94,7 +94,7 @@ services:
 
   liquidsoap:
     build:
-      context: ../../services/audio
+      context: services/audio
       dockerfile: liquidsoap/Dockerfile
     restart: unless-stopped
     expose:
@@ -114,7 +114,7 @@ services:
 
   bridge:
     build:
-      context: ../../services/audio
+      context: services/audio
       dockerfile: bridge/Dockerfile
     restart: unless-stopped
     expose:
