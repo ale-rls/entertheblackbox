@@ -12,6 +12,7 @@ import { PhaseEngine } from "./engine/phase-engine.js";
 import type { GhostPool } from "./ghosts/index.js";
 import { MovementConsentManager } from "./movement/index.js";
 import { GroupManager } from "./groups/group-manager.js";
+import { CueFeed } from "./cues/feed.js";
 import { DEFAULT_INSTALLATION_POLICY } from "@entertheblackbox/shared";
 import { createOperatorTokenVerifier } from "./persistence/operator-auth.js";
 import { readServerConfigOverride, writeActiveShowId, writeTargetAudienceSize } from "./persistence/installation-config.js";
@@ -60,6 +61,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   const readiness = options.readiness ?? (await loadScenarioReadiness(config));
   const startedAt = Date.now();
   const app = Fastify({ logger: config.nodeEnv !== "test" });
+  const cueFeed = new CueFeed();
+  cueFeed.register(app, config.displayToken);
   const webSockets = new WebSocketServer({
     noServer: true,
     maxPayload: WEBSOCKET_MAX_PAYLOAD_BYTES,
@@ -131,8 +134,10 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       autoStartOnFirstParticipant: false,
       onParticipantPhase: (ids, phase) => audio?.transitionParticipants(ids, phase),
       onPhase: (phase) => audio?.transition(phase, (id) => groups?.groupFor(id) ?? null),
+      onCueEvent: (event) => { cueFeed.publish(event); },
       groupSelection: {
         current: (participantId) => groups?.groupFor(participantId) ?? null,
+        method: (participantId) => groups?.votingMethodFor(participantId),
         begin: (phase, ids) => {
           const cohort = ids.filter((id) => !phase.sourceGroupIds || phase.sourceGroupIds.includes(groups?.groupFor(id) ?? ""));
           groups?.applyBranch(phase, ids);

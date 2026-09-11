@@ -57,6 +57,12 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       {(project.scenario.groups ?? []).map((group, index) => <div key={group.id}>
         <label className="sc-tool-label"><span>Group ID</span><input className="sc-tool-field" value={group.id} onChange={(event) => { const id = event.target.value; const groups = (project.scenario.groups ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, id } : item); onGroupsChange(groups, (project.scenario.initialGroupIds ?? []).map((value) => value === group.id ? id : value)); }} /></label>
         <label className="sc-tool-label"><span>Label</span><input className="sc-tool-field" value={group.label} onChange={(event) => onGroupsChange((project.scenario.groups ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item), project.scenario.initialGroupIds ?? [])} /></label>
+        <label className="sc-tool-label"><span>Voting method</span><select className="sc-tool-select" value={group.votingMethod ?? ""} onChange={(event) => onGroupsChange((project.scenario.groups ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, votingMethod: event.target.value === "" ? undefined : event.target.value as "physical" | "phone-cursor" | "phone-buttons" } : item), project.scenario.initialGroupIds ?? [])}>
+          <option value="">Legacy physical + phone cursor</option>
+          <option value="physical">Physical position</option>
+          <option value="phone-cursor">Phone cursor</option>
+          <option value="phone-buttons">Phone buttons</option>
+        </select></label>
         <label className="sc-tool-checkbox"><input type="checkbox" checked={(project.scenario.initialGroupIds ?? []).includes(group.id)} onChange={(event) => { const current = project.scenario.initialGroupIds ?? []; onGroupsChange(project.scenario.groups ?? [], event.target.checked ? [...current, group.id] : current.filter((id) => id !== group.id)); }} />Assign members to this group at show start</label>
         <button className="sc-tool-button" type="button" disabled={(project.scenario.groups?.length ?? 0) <= 2} onClick={() => onGroupsChange((project.scenario.groups ?? []).filter((_, itemIndex) => itemIndex !== index), (project.scenario.initialGroupIds ?? []).filter((id) => id !== group.id))}>Remove group</button>
       </div>)}
@@ -175,6 +181,10 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, subtitles: [...(phase.subtitles ?? []), { text: "New subtitle", startAtMs: 0, endAtMs: Math.min(phase.expectedDurationMs, 5_000) }] })}>Add subtitle</button>
       </fieldset>
     </>}
+    {phase.kind !== "idle" && <fieldset><legend>External show cues</legend>
+      {text("Cue names (comma separated)", "outgoingCues", (phase.outgoingCues ?? []).join(", "), (value) => onChange({ ...phase, outgoingCues: value.split(",").map((cue) => cue.trim()).filter(Boolean) }))}
+      <p className="sc-tool-copy field-hint">Sent once to TouchDesigner or another show-control receiver when this scene starts.</p>
+    </fieldset>}
     {phase.kind === "group-branch" && <fieldset><legend>Group branching moment</legend>
       <fieldset><legend>Group options</legend>
         {(project.scenario.groups ?? []).map((group) => {

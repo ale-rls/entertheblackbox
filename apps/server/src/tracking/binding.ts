@@ -1,10 +1,9 @@
 /**
  * Which tracked body is holding which phone.
  *
- * Voting does not need this: counting GIDs per floor zone already works
- * without knowing who anyone is. Personal audio does, because sending one
- * participant's cue to another person's headphones is the failure this whole
- * module exists to avoid.
+ * Shared-timeline voting does not need this: counting GIDs per floor zone
+ * already works without knowing who anyone is. Group-scoped physical voting
+ * and personal audio do need it so events reach the participant's own path.
  *
  * The state machine is ported from `bindings.py` in the sibling Python runner,
  * whose design is sound:

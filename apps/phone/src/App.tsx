@@ -320,6 +320,17 @@ export function App() {
     });
   };
 
+  const voteByButton = (outcome: string) => {
+    if (state.sessionId === null) return;
+    connection?.send({
+      t: "button_vote",
+      v: PROTOCOL_VERSION,
+      sessionId: state.sessionId,
+      phaseEpoch: state.phaseEpoch,
+      outcome,
+    });
+  };
+
   return (
     <main
       className="phone-root"
@@ -360,7 +371,32 @@ export function App() {
           onPointerUp={onPointerEnd}
           onPointerCancel={onPointerEnd}
         >
-          <p className="trackpad-instruction">Wische um deine Cursor zu bewegen</p>
+          {(state.voting === null || state.voting.method === "phone-cursor") && (
+            <p className="trackpad-instruction">Wische um deinen Cursor zu bewegen</p>
+          )}
+          {state.voting?.method === "physical" && (
+            <p className="trackpad-instruction">Antworte mit deiner Position im Raum.</p>
+          )}
+          {state.voting?.method === "phone-buttons" && (
+            <section className="group-selection" aria-label="Antwort wählen">
+              <h1>{state.voting.question}</h1>
+              <div className="group-selection-options">
+                {state.voting.options.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      voteByButton(option.id);
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
           {state.phoneDisplayText !== null && <p className="phone-phase-text" aria-live="polite">{state.phoneDisplayText}</p>}
           {identity && <div className="live-cursor-field" aria-hidden="true"><span
               ref={cursorMarker}
