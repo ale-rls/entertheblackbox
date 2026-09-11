@@ -7,7 +7,14 @@
         <clients>${ICECAST_MAX_CLIENTS}</clients>
         <!-- one liquidsoap source per player mount -->
         <sources>${ICECAST_MAX_SOURCES}</sources>
-        <queue-size>524288</queue-size>
+        <!-- Icecast's stock default is 524288 (~32s @128kbps). That lets a
+             client that's briefly slow (wifi hiccup, backgrounding) accumulate
+             a large backlog instead of being dropped, and once it catches up
+             an <audio> element plays that backlog sequentially rather than
+             skipping to the live edge — the delay becomes permanent. Kept
+             just above burst-size, so a lagging client disconnects quickly
+             and the phone's watchdog reconnects fresh (SPEC §4.3, §5). -->
+        <queue-size>65536</queue-size>
         <client-timeout>30</client-timeout>
         <header-timeout>15</header-timeout>
         <source-timeout>10</source-timeout>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AudioProgress } from "./audio-progress";
+import { AudioProgress, drifted } from "./audio-progress";
 
 describe("audio recovery grace", () => {
   it("gives each reconnect a full buffering window after a stall", () => {
@@ -17,5 +17,14 @@ describe("audio recovery grace", () => {
     expect(progress.stalled(10, 60_000)).toBe(false);
     progress.reset(10, 120_000);
     expect(progress.stalled(10, 125_000)).toBe(false);
+  });
+});
+
+describe("drifted", () => {
+  it("tolerates the shallow buffer-ahead of normal live delivery", () => {
+    expect(drifted(101.5, 100)).toBe(false);
+  });
+  it("flags a caught-up backlog as drift so the phone can resync", () => {
+    expect(drifted(112, 100)).toBe(true);
   });
 });
