@@ -29,6 +29,11 @@ export type RegisterAdminOptions = {
   engine: () => PhaseEngine | null;
   ready: boolean;
   audioStatus?: () => Promise<unknown>;
+  audioSoundcheck?: {
+    sources: readonly string[];
+    play: (src: string, participantId?: string) => Promise<number>;
+    stop: (participantId?: string) => Promise<number>;
+  };
   groupControl?: {
     catalogue: readonly { id: string; label: string; color?: string | undefined }[];
     memberships: () => readonly { participantId: string; groupId: string | null }[];
@@ -143,6 +148,20 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         phaseId: engine?.currentPhaseId ?? null,
         phaseEpoch: engine?.currentPhaseEpoch ?? null,
       };
+    });
+    admin.post<{ Body: { action?: unknown; src?: unknown; participantId?: unknown } }>("/audio/soundcheck", async (request, reply) => {
+      const soundcheck = options.audioSoundcheck;
+      if (!soundcheck) return reply.code(503).send({ error: "audio_unavailable" });
+      if (options.engine()?.lifecycleState === "active") return reply.code(409).send({ error: "show_active" });
+      const { action, src, participantId } = request.body ?? {};
+      if (participantId !== undefined && (typeof participantId !== "string" || !participantId)) return reply.code(400).send({ error: "invalid_request" });
+      try {
+        if (action === "stop") return { ok: true, affected: await soundcheck.stop(participantId as string | undefined) };
+        if (action !== "play" || typeof src !== "string" || !soundcheck.sources.includes(src)) return reply.code(400).send({ error: "invalid_audio_source" });
+        return { ok: true, affected: await soundcheck.play(src, participantId as string | undefined) };
+      } catch (error) {
+        return reply.code(409).send({ error: error instanceof Error ? error.message : "soundcheck_failed" });
+      }
     });
     admin.post<{ Body: { participantId?: unknown; groupId?: unknown } }>("/groups/assign", async (request, reply) => {
       if (!options.groupControl) return reply.code(503).send({ error: "groups_unavailable" });

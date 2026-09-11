@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 export type Status = {
-  audio?: { configured: boolean; error?: string | null; poll_age_s?: number | null; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number }> };
+  audio?: { configured: boolean; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number }> };
   healthy: boolean;
   ready: boolean;
   uptimeMs: number;
@@ -194,6 +194,9 @@ export function App() {
   const [lobbyInfo, setLobbyInfo] = useState<LobbyInfo | null>(null);
   const [newStartTime, setNewStartTime] = useState("");
   const [savingLobby, setSavingLobby] = useState(false);
+  const [soundcheckSource, setSoundcheckSource] = useState("");
+  const [soundcheckTarget, setSoundcheckTarget] = useState("");
+  const [soundchecking, setSoundchecking] = useState(false);
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
   const controlsHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -344,6 +347,25 @@ export function App() {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not adjust the next start." });
     } finally {
       setSavingLobby(false);
+    }
+  };
+
+  const soundcheck = async (action: "play" | "stop") => {
+    setSoundchecking(true);
+    setFeedback(null);
+    try {
+      const response = await api("audio/soundcheck", connectedToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...(action === "play" ? { src: soundcheckSource } : {}), ...(soundcheckTarget ? { participantId: soundcheckTarget } : {}) }),
+      });
+      const result = await response.json() as { affected: number };
+      setFeedback({ status: "success", message: `${action === "play" ? "Soundcheck started on" : "Audio stopped on"} ${result.affected} phone${result.affected === 1 ? "" : "s"}.` });
+      await refresh();
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Soundcheck failed." });
+    } finally {
+      setSoundchecking(false);
     }
   };
 
@@ -612,6 +634,21 @@ export function App() {
               <strong>{player.name ?? player.player_id}</strong>
               <span>{player.connected ? `${player.listeners} listener(s)` : player.flagged ? "No listener — check headphones" : "Waiting for listener"}</span>
             </li>)}</ul>
+            <div className="admin-connection-form" aria-label="Phone audio soundcheck">
+              <label className="sc-tool-label"><span>Test MP3</span><select className="sc-tool-select" value={soundcheckSource} onChange={(event) => setSoundcheckSource(event.target.value)}>
+                <option value="">Choose authored audio…</option>
+                {(status.audio.soundcheckSources ?? []).map((src) => <option key={src} value={src}>{src}</option>)}
+              </select></label>
+              <label className="sc-tool-label"><span>Send to</span><select className="sc-tool-select" value={soundcheckTarget} onChange={(event) => setSoundcheckTarget(event.target.value)}>
+                <option value="">All registered phones</option>
+                {status.audio.players.map((player) => <option key={player.player_id} value={player.player_id}>{player.name ?? player.player_id}</option>)}
+              </select></label>
+              <div className="admin-control-list">
+                <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={soundchecking || !soundcheckSource || isActive} onClick={() => void soundcheck("play")}>Play on phone</button><span>{isActive ? "Disabled while a show is active" : "Interrupts current phone audio"}</span></div>
+                <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={soundchecking || isActive} onClick={() => void soundcheck("stop")}>Stop phone audio</button><span>Resets the selected phone stream</span></div>
+              </div>
+              {(status.audio.soundcheckSources?.length ?? 0) === 0 && <p className="sc-tool-help">No MP3 files are present in the active show’s published media manifest.</p>}
+            </div>
           </>}
         </section>
         <section className="sc-tool-panel" aria-labelledby="admin-participants-heading">
