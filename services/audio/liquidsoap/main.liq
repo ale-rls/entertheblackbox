@@ -4,7 +4,7 @@
 #   int_{id}   request.queue  — interrupt: cuts whatever is playing
 #   nar_{id}   request.queue  — narration: plays after the current item
 #   bed_{id}   playlist       — looping ambient bed (keeps the stream
-#                               audibly alive between narration items)
+#                               open between narration items)
 #   out_{id}   output.icecast — mount /p/{id}.mp3
 #
 # The fallback chain means a mount NEVER dries up: Icecast never drops
@@ -68,8 +68,7 @@ def mkplayer(pid) =
   )
 
   # If the bed dir is missing/empty, mksafe pads with silence rather than
-  # letting the mount die. Silence is a failure state, not a feature —
-  # beds must exist (SPEC §6).
+  # letting the mount die. The default bed is intentionally silent.
   s = mksafe(s)
 
   output.icecast(

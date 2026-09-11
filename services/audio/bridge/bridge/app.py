@@ -269,12 +269,29 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             raise HTTPException(502, f"personal stream unavailable: {exc}") from exc
 
         async def chunks():
+            started = time.monotonic()
+            sent = 0
+            reason = "upstream-eof"
+            log.info("stream opened player=%s mount=%s", player_id, player.stream_id)
             try:
                 async for chunk in response.aiter_raw():
                     if registry.get(player_id) is not player:
+                        reason = "registration-removed"
                         break
+                    sent += len(chunk)
                     yield chunk
+            except asyncio.CancelledError:
+                reason = "downstream-disconnected"
+                raise
+            except httpx.HTTPError:
+                reason = "upstream-error"
+                log.exception("stream upstream failed player=%s", player_id)
+                raise
             finally:
+                log.info(
+                    "stream closed player=%s mount=%s reason=%s duration_s=%.1f bytes=%d",
+                    player_id, player.stream_id, reason, time.monotonic() - started, sent,
+                )
                 await response.aclose()
                 await upstream.aclose()
 

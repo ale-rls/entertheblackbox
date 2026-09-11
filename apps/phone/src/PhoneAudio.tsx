@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AudioProgress } from "./lib/audio-progress";
 
 /** One native media element stays mounted across scene and WebSocket changes. */
 export function PhoneAudio({ participantLease }: { participantLease: string }) {
@@ -8,6 +9,8 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
   const wanted = useRef(false);
   const retry = useRef<ReturnType<typeof setTimeout>>();
   const attempts = useRef(0);
+  const progress = useRef(new AudioProgress());
+  const playGeneration = useRef(0);
 
   useEffect(() => {
     const abort = new AbortController();
@@ -39,7 +42,11 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
     // Reconnect at the live edge; never resume buffered narration from a paused scene.
     audio.src = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
     audio.load();
+    progress.current.reset(audio.currentTime);
+    const generation = ++playGeneration.current;
     void audio.play().catch((error: unknown) => {
+      if (generation !== playGeneration.current || !wanted.current) return;
+      if (error instanceof DOMException && error.name === "AbortError") return;
       if (error instanceof DOMException && error.name === "NotAllowedError") {
         wanted.current = false;
         setStatus("Tap Start headphones to allow playback.");
@@ -58,15 +65,15 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
   useEffect(() => {
     if (!url) return;
     const audio = element.current!;
-    let lastTime = audio.currentTime;
-    let unchanged = 0;
+    progress.current.reset(audio.currentTime);
     const watchdog = setInterval(() => {
       if (!wanted.current || document.hidden) return;
-      unchanged = audio.currentTime === lastTime ? unchanged + 1 : 0;
-      lastTime = audio.currentTime;
-      if (unchanged >= 3 || audio.ended || audio.error) scheduleRetry();
+      if (progress.current.stalled(audio.currentTime) || audio.ended || audio.error) scheduleRetry();
     }, 5_000);
-    const visible = () => { if (!document.hidden && wanted.current && (audio.paused || audio.error)) play(); };
+    const visible = () => {
+      progress.current.reset(audio.currentTime);
+      if (!document.hidden && wanted.current && (audio.paused || audio.error)) play();
+    };
     document.addEventListener("visibilitychange", visible);
     const mediaSession = navigator.mediaSession;
     if (mediaSession) {
@@ -81,6 +88,7 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
     return () => {
       clearInterval(watchdog); clearTimeout(retry.current); retry.current = undefined;
       wanted.current = false;
+      ++playGeneration.current;
       document.removeEventListener("visibilitychange", visible);
       mediaSession?.setActionHandler("play", null); mediaSession?.setActionHandler("pause", null);
       audio.pause(); audio.removeAttribute("src"); audio.load();
@@ -89,7 +97,7 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
 
   return <section className="phone-audio" aria-label="Headphone audio" onPointerDown={(event) => event.stopPropagation()}>
     <audio ref={element} preload="none" onError={scheduleRetry} onEnded={scheduleRetry}
-      onPlaying={() => { attempts.current = 0; clearTimeout(retry.current); retry.current = undefined; setStatus("Headphones playing. You can lock your phone."); }} />
+      onPlaying={() => { progress.current.reset(element.current?.currentTime ?? 0); attempts.current = 0; clearTimeout(retry.current); retry.current = undefined; setStatus("Headphones playing. You can lock your phone."); }} />
     <p role="status">{status}</p>
     <button type="button" disabled={!url} onClick={play}>Start headphones</button>
   </section>;
