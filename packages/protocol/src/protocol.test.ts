@@ -22,6 +22,7 @@ const clientMessages: ClientToServerMessage[] = [
   { t: "reaction", v: 2, sessionId: "s1", phaseEpoch: 3, kind: "applause" },
   { t: "reaction", v: 2, sessionId: "s1", phaseEpoch: 3, kind: "boo" },
   { t: "group_selection", v: 2, sessionId: "s1", phaseEpoch: 3, groupId: "machines" },
+  { t: "button_vote", v: 2, sessionId: "s1", phaseEpoch: 3, outcome: "max" },
   { t: "ping", v: 2, clientTime: 1_752_000_000_000 },
   {
     t: "display_join",
@@ -183,6 +184,7 @@ const serverMessages: ServerToClientMessage[] = [
   { t: "join_rejected", v: 2, reason: "show_in_progress" },
   { t: "status", v: 2, phaseId: "intro", message: "watch the screen" },
   { t: "group_selection_options", v: 2, sessionId: "s1", phaseEpoch: 3, title: "Choose", groups: [{ id: "workers", label: "Workers" }, { id: "machines", label: "Machines", color: "#ff00aa" }], selectedGroupId: null },
+  { t: "voting_options", v: 2, sessionId: "s1", phaseEpoch: 3, method: "phone-buttons", question: "Choose", options: [{ id: "min", label: "No" }, { id: "max", label: "Yes" }] },
   { t: "pong", v: 2, echoClientTime: 4, serverTime: 5 },
 ];
 

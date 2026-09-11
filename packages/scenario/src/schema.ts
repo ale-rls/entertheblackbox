@@ -32,11 +32,15 @@ const phoneAudioFileSchema = z.string().min(1).regex(/^(?![\\/])(?!.*(?:^|[\\/])
 const phoneAudioSrcSchema = phoneAudioFileSchema.optional();
 const groupIdSchema = z.string().min(1, "group id must be non-empty").regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, "group id must use letters, numbers, hyphens, or underscores");
 const phoneAudioByGroupSchema = z.record(groupIdSchema, phoneAudioFileSchema).optional();
+export const votingMethodSchema = z.enum(["physical", "phone-cursor", "phone-buttons"]);
+const outgoingCueSchema = z.string().trim().min(1).max(120);
 const phoneAudioFields = {
   /** Fallback/broadcast MP3. Used for every participant without a group-specific override. */
   phoneAudioSrc: phoneAudioSrcSchema,
   /** Per-group MP3 overrides, keyed by stable authored group id. */
   phoneAudioByGroup: phoneAudioByGroupSchema,
+  /** Named one-shot cues emitted to external show-control receivers on phase entry. */
+  outgoingCues: z.array(outgoingCueSchema).max(32).optional(),
 };
 
 const phaseIdSchema = z.string().min(1, "phase id must be non-empty");
@@ -424,6 +428,8 @@ export const audienceGroupSchema = z.object({
   id: groupIdSchema,
   label: z.string().min(1, "group label must be non-empty"),
   color: z.string().regex(/^#[0-9a-f]{6}$/i, "group color must be a six-digit hex color").optional(),
+  /** How members answer position questions. Omitted preserves legacy physical + phone cursor input. */
+  votingMethod: votingMethodSchema.optional(),
 });
 
 const groupBranchSchema = z.object({
@@ -452,6 +458,7 @@ export const groupAssignmentSchema = z.discriminatedUnion("type", [
  */
 export const groupBranchPhaseSchema = z.object({
   kind: z.literal("group-branch"),
+  outgoingCues: z.array(outgoingCueSchema).max(32).optional(),
   id: phaseIdSchema,
   title: z.string().min(1).optional(),
   sourceGroupIds: z.array(groupIdSchema).min(1).optional(),
@@ -569,6 +576,7 @@ export type PolygonZonesPluralityNext = z.infer<typeof polygonZonesPluralityNext
 export type RatingConfig = z.infer<typeof ratingConfigSchema>;
 export type Subtitle = z.infer<typeof subtitleSchema>;
 export type AudienceGroup = z.infer<typeof audienceGroupSchema>;
+export type VotingMethod = z.infer<typeof votingMethodSchema>;
 export type GroupAssignment = z.infer<typeof groupAssignmentSchema>;
 export type GroupBranchPhase = z.infer<typeof groupBranchPhaseSchema>;
 export type IdlePhase = z.infer<typeof idlePhaseSchema>;

@@ -59,4 +59,21 @@ describe("GroupManager", () => {
     groups.assign("one", "b");
     expect(groups.groupFor("one")).toBe("b");
   });
+
+  it("switches voting method with the group", () => {
+    const groups = new GroupManager({
+      ...scenario,
+      groups: [
+        { id: "a", label: "A", votingMethod: "physical" },
+        { id: "b", label: "B", votingMethod: "phone-buttons" },
+        { id: "c", label: "C", votingMethod: "phone-cursor" },
+      ],
+    });
+    groups.beginSession(["one"]);
+    expect(groups.votingMethodFor("one")).toBe("physical");
+    groups.applyBranch(branch({ type: "self-select" }), ["one"]);
+    expect(groups.votingMethodFor("one")).toBeUndefined();
+    groups.assign("one", "b");
+    expect(groups.votingMethodFor("one")).toBe("phone-buttons");
+  });
 });

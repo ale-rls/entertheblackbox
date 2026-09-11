@@ -7,7 +7,7 @@ import {
   type PhaseSnapshotMessage,
   type ServerToClientMessage,
 } from "@entertheblackbox/protocol";
-import type { Scenario, Phase } from "@entertheblackbox/scenario";
+import type { Scenario, Phase, VotingMethod } from "@entertheblackbox/scenario";
 import { DEFAULT_INSTALLATION_POLICY } from "@entertheblackbox/shared";
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
@@ -33,6 +33,7 @@ import {
   type VoteResolution,
 } from "../votes/index.js";
 import { VideoPhaseHandler } from "./video.js";
+import { acceptsVotingInput, pointForOutcome, votingOptions } from "../groups/voting.js";
 
 export type EngineLifecycle = "idle" | "lobby" | "active";
 
@@ -76,6 +77,16 @@ export type PhaseDeadlineEvent = {
   deadlineAt: number;
 };
 
+export type ShowCueEvent = {
+  type: "phase" | "cue" | "result" | "reset";
+  timelineId: string;
+  sessionId: string;
+  phaseId: string;
+  phaseEpoch: number;
+  timestamp: number;
+  payload: Record<string, unknown>;
+};
+
 export type PhaseEngineOptions = {
   scenario: Scenario;
   registry: ParticipantRegistry;
@@ -90,6 +101,7 @@ export type PhaseEngineOptions = {
   onCheckpoint?: (checkpoint: PhaseCheckpoint) => void;
   onPhaseDeadline?: (event: PhaseDeadlineEvent) => void;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
+  onCueEvent?: (event: ShowCueEvent) => void;
   onSessionEnded?: (event: { reason: string; sessionId: string; endedAt: number }) => void;
   onMovementRecordingStarted?: (event: MovementRecordingStarted) => void;
   onMovementBatchFlushed?: (event: MovementBatchFlushed) => void;
@@ -105,6 +117,7 @@ export type PhaseEngineOptions = {
   autoStartOnFirstParticipant?: boolean;
   groupSelection?: {
     current: (participantId: string) => string | null;
+    method?: (participantId: string) => VotingMethod | undefined;
     select: (participantId: string, groupId: string) => void;
     begin?: (phase: Extract<Phase, { kind: "group-branch" }>, participantIds: readonly string[]) => readonly string[];
   };
@@ -186,8 +199,8 @@ export class PhaseEngine {
   private readonly votes: VoteEngine;
   private readonly ratings = new RatingEngine();
   private readonly cursors: CursorPipeline;
-  /** GID-to-phone bindings, for personal audio. Empty until a phone claims a
-   * body; voting works without it. */
+  /** GID-to-phone bindings for personal audio and group-scoped physical votes.
+   * Shared-timeline physical voting still works with anonymous bodies. */
   readonly bindings = new BindingRegistry();
   private readonly movement: MovementRecorder;
   private readonly ghosts: GhostCursorPlayer;
@@ -223,7 +236,7 @@ export class PhaseEngine {
   private readonly onLobbyScheduleChanged: ((startTimes: readonly number[]) => void) | undefined;
   private readonly groupSelection: PhaseEngineOptions["groupSelection"];
 
-  constructor(options: PhaseEngineOptions, private readonly path?: { stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; onPhase: (phase: Phase) => void }) {
+  constructor(options: PhaseEngineOptions, private readonly path?: { timelineId: string; stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; onPhase: (phase: Phase) => void; displayForGroup: (groupId: string) => WebSocket | undefined }) {
     this.options = options;
     this.scenario = options.scenario;
     this.registry = options.registry;
@@ -614,6 +627,7 @@ export class PhaseEngine {
       !(this.currentPhase() as Extract<Phase, { kind: "group-branch" }>).sourceGroupIds) this.selectionCohort.add(_participant.clientId);
     this.send(socket, this.getSnapshotMessage());
     this.sendGroupSelectionOptions(socket);
+    this.sendVotingOptions(socket);
     this.queueQuestionStatus();
     if (this.lifecycle === "idle" && this.displaySocket !== undefined && this.registry.connectedCount >= 1) {
       this.startLobby(this.now());
@@ -648,7 +662,7 @@ export class PhaseEngine {
   handleClientMessage(message: ClientToServerMessage, socket: WebSocket, _request?: IncomingMessage): void {
     if (message.t !== "display_join") {
       const id = this.participantIds.get(socket);
-      const localPath = id === undefined ? [...this.paths.values()].find(({ engine }) => engine.displaySocket === socket)?.engine : this.pathForParticipant(id);
+      const localPath = id === undefined ? this.pathForDisplay(socket) : this.pathForParticipant(id);
       if (localPath) {
         if (id !== undefined && message.t === "input" && message.sessionId === localPath.sessionId && message.phaseEpoch === localPath.phaseEpoch) {
           this.movement.recordSample(id, message.x, message.y, this.now());
@@ -674,11 +688,11 @@ export class PhaseEngine {
           }
           const previous = this.groupDisplays.get(message.groupId);
           if (previous && previous !== socket) {
-            this.paths.get(message.groupId)?.engine.socketClosed(previous);
+            this.pathForGroup(message.groupId)?.socketClosed(previous);
             this.close(previous, DISPLAY_REPLACED_CLOSE_CODE, "display replaced");
           }
           this.groupDisplays.set(message.groupId, socket);
-          const localPath = this.paths.get(message.groupId)?.engine;
+          const localPath = this.pathForGroup(message.groupId);
           if (localPath) localPath.connectDisplay(socket);
           else this.sendBlankDisplay(socket);
         } else this.connectDisplay(socket);
@@ -736,6 +750,20 @@ export class PhaseEngine {
         }
         return;
       }
+      case "button_vote": {
+        const participantId = this.participantIds.get(socket);
+        const phase = this.currentPhase();
+        if (
+          participantId !== undefined &&
+          (phase.kind === "position-question" || phase.kind === "video-position-question") &&
+          acceptsVotingInput(this.groupSelection?.method?.(participantId), "phone-buttons") &&
+          this.matches(message.sessionId, phase.id, message.phaseEpoch)
+        ) {
+          const point = pointForOutcome(phase.field, message.outcome);
+          if (point !== null) this.recordInput(this.now(), participantId, point.x, point.y);
+        }
+        return;
+      }
       case "input":
         if (
           this.participantSockets.has(socket) &&
@@ -757,7 +785,9 @@ export class PhaseEngine {
                     this.now() >= this.phaseStartedAt + activePhase.openAtMs &&
                     this.now() < this.phaseStartedAt + activePhase.closeAtMs)
                 ) {
-                  this.recordInput(this.now(), participantId, message.x, message.y);
+                  if (acceptsVotingInput(this.groupSelection?.method?.(participantId), "phone-cursor")) {
+                    this.recordInput(this.now(), participantId, message.x, message.y);
+                  }
                 }
               }
             }
@@ -799,21 +829,23 @@ export class PhaseEngine {
       switch (action.type) {
         case "join": {
           this.bindings.gidSeen(action.gid, null, now);
-          this.votes.addParticipant(
-            { participantId: this.trackedParticipantId(action.gid), connected: true, lastHeartbeatAt: now },
-            now,
-          );
+          const participantId = this.trackedParticipantId(action.gid);
+          this.addPhysicalParticipant(participantId, now);
           break;
         }
         case "position": {
           this.bindings.gidSeen(action.gid, { x: action.x, y: action.y }, now);
           const participantId = this.trackedParticipantId(action.gid);
+          const localPath = this.pathForParticipant(participantId);
+          if (localPath !== undefined) {
+            localPath.recordPhysicalInput(participantId, action.x, action.y, now);
+            break;
+          }
           // votes.recordInput drops input for a participant with no vote entry,
           // and the entry a body needs changes the moment a phone claims it.
           // Seeding here keeps a mid-question claim, or a phone that joined
           // after the question was seeded, from voting into nothing.
-          this.votes.addParticipant({ participantId, connected: true, lastHeartbeatAt: now }, now);
-          this.recordInput(now, participantId, action.x, action.y);
+          this.recordPhysicalInput(participantId, action.x, action.y, now);
           break;
         }
         case "leave": {
@@ -823,11 +855,52 @@ export class PhaseEngine {
           // Mirrors a phone dropping off: the vote already cast still counts
           // under the scenario's countedStatuses, which is what we want for
           // someone briefly occluded mid-question.
-          this.votes.setConnected(participantId, false, now);
+          this.setPhysicalParticipantConnected(participantId, false, now);
           break;
         }
       }
     }
+    this.queueQuestionStatus(now);
+  }
+
+  private recordPhysicalInput(participantId: string, x: number, y: number, now: number): void {
+    const localPath = this.pathForParticipant(participantId);
+    if (localPath !== undefined) {
+      localPath.recordPhysicalInput(participantId, x, y, now);
+      return;
+    }
+    if (!acceptsVotingInput(this.groupSelection?.method?.(participantId), "physical")) return;
+    this.votes.addParticipant({ participantId, connected: true, lastHeartbeatAt: now }, now);
+    this.recordInput(now, participantId, x, y);
+  }
+
+  private addPhysicalParticipant(participantId: string, now: number): void {
+    const localPath = this.pathForParticipant(participantId);
+    if (localPath !== undefined) {
+      localPath.addPhysicalParticipant(participantId, now);
+      return;
+    }
+    this.votes.addParticipant({ participantId, connected: true, lastHeartbeatAt: now }, now);
+    this.queueQuestionStatus(now);
+  }
+
+  private setPhysicalParticipantConnected(participantId: string, connected: boolean, now: number): void {
+    const localPath = this.pathForParticipant(participantId);
+    if (localPath !== undefined) {
+      localPath.setPhysicalParticipantConnected(participantId, connected, now);
+      return;
+    }
+    this.votes.setConnected(participantId, connected, now);
+    this.queueQuestionStatus(now);
+  }
+
+  private transferPhysicalVote(fromParticipantId: string, toParticipantId: string, now: number): void {
+    const localPath = this.pathForParticipant(toParticipantId);
+    if (localPath !== undefined) {
+      localPath.transferPhysicalVote(fromParticipantId, toParticipantId, now);
+      return;
+    }
+    this.votes.transferVote(fromParticipantId, toParticipantId, now);
     this.queueQuestionStatus(now);
   }
 
@@ -841,8 +914,7 @@ export class PhaseEngine {
   claimTrackedBody(participantId: string, gid: number, now = this.now()): void {
     const anonymousId = participantIdForGid(gid);
     this.bindings.claim(participantId, gid, now);
-    this.votes.transferVote(anonymousId, participantId, now);
-    this.queueQuestionStatus(now);
+    this.transferPhysicalVote(anonymousId, participantId, now);
   }
 
   /**
@@ -1006,6 +1078,7 @@ export class PhaseEngine {
       this.ratings.clear();
       this.video.cancel();
       this.path.onPhase({ kind: "idle", id: "idle" });
+      this.emitOutgoingPhase("path-waiting");
       this.broadcast({ ...this.getSnapshotMessage(now), t: "phase" });
       return;
     }
@@ -1095,6 +1168,18 @@ export class PhaseEngine {
   private transition(reason: string, sessionEnded?: { reason: string; sessionId: string; endedAt: number }): void {
     this.emitCheckpoint("transition", reason);
     const phase = this.currentPhase();
+    if (reason === "group-branch-complete" || phase.kind === "idle") {
+      this.options.onCueEvent?.({
+        type: "reset",
+        timelineId: "main",
+        sessionId: this.sessionId,
+        phaseId: phase.id,
+        phaseEpoch: this.phaseEpoch,
+        timestamp: this.now(),
+        payload: { reason },
+      });
+    }
+    this.emitOutgoingPhase(reason);
     if (phase.kind === "group-branch" && this.groupSelection?.begin) {
       this.selectionCohort = new Set(this.groupSelection.begin(phase, this.registry.values().map((participant) => participant.clientId)));
     }
@@ -1110,8 +1195,26 @@ export class PhaseEngine {
       phase: this.getSnapshot(),
       serverTime: this.now(),
     });
-    for (const socket of this.participantSockets) this.sendGroupSelectionOptions(socket);
+    for (const socket of this.participantSockets) {
+      this.sendGroupSelectionOptions(socket);
+      this.sendVotingOptions(socket);
+    }
     if (sessionEnded !== undefined) this.onSessionEnded?.(sessionEnded);
+  }
+
+  private emitOutgoingPhase(reason: string): void {
+    const phase = this.currentPhase();
+    const base = {
+      timelineId: this.path?.timelineId ?? "main",
+      sessionId: this.sessionId,
+      phaseId: phase.id,
+      phaseEpoch: this.phaseEpoch,
+      timestamp: this.now(),
+    };
+    this.options.onCueEvent?.({ type: "phase", ...base, payload: { reason, phase: this.getSnapshot() } });
+    for (const cue of phase.kind === "idle" ? [] : phase.outgoingCues ?? []) {
+      this.options.onCueEvent?.({ type: "cue", ...base, payload: { cue } });
+    }
   }
 
   private emitCheckpoint(kind: "transition" | "recovery", reason: string): void {
@@ -1220,6 +1323,19 @@ export class PhaseEngine {
     phase: Extract<Phase, { kind: "position-question" | "video-position-question" }>,
     now: number,
   ): void {
+    this.options.onCueEvent?.({
+      type: "result",
+      timelineId: this.path?.timelineId ?? "main",
+      sessionId: this.sessionId,
+      phaseId: phase.id,
+      phaseEpoch: this.phaseEpoch,
+      timestamp: now,
+      payload: {
+        winner: resolution.winner,
+        quadrantCounts: resolution.quadrantCounts,
+        resolvedTarget: resolution.resolvedTarget,
+      },
+    });
     this.sendToDisplay({
       t: "question_resolved",
       v: PROTOCOL_VERSION,
@@ -1313,6 +1429,25 @@ export class PhaseEngine {
     return [...this.paths.values()].find(({ members }) => members.has(id))?.engine;
   }
 
+  private pathForGroup(groupId: string): PhaseEngine | undefined {
+    const direct = this.paths.get(groupId)?.engine;
+    if (direct !== undefined) return direct;
+    for (const { engine } of this.paths.values()) {
+      const nested = engine.pathForGroup(groupId);
+      if (nested !== undefined) return nested;
+    }
+    return undefined;
+  }
+
+  private pathForDisplay(socket: WebSocket): PhaseEngine | undefined {
+    for (const { engine } of this.paths.values()) {
+      if (engine.displaySocket === socket) return engine;
+      const nested = engine.pathForDisplay(socket);
+      if (nested !== undefined) return nested;
+    }
+    return undefined;
+  }
+
   /** The same vote/media engine runs against a scoped roster for each group. */
   private startGroupPaths(phase: Extract<Phase, { kind: "group-branch" }>, now: number): void {
     this.pathsStarted = true;
@@ -1330,11 +1465,14 @@ export class PhaseEngine {
         installationId: this.installationId, roomId: this.roomId, showId: this.showId,
         displayToken: this.displayToken, now: this.now, policy: this.policy,
         autoStartOnFirstParticipant: false,
+        ...(this.groupSelection === undefined ? {} : { groupSelection: this.groupSelection }),
         ...(this.options.participantLeaseTtlMs === undefined ? {} : { participantLeaseTtlMs: this.options.participantLeaseTtlMs }),
         ...(this.options.onVoteSnapshotEnqueued === undefined ? {} : { onVoteSnapshotEnqueued: this.options.onVoteSnapshotEnqueued }),
+        ...(this.options.onCueEvent === undefined ? {} : { onCueEvent: this.options.onCueEvent }),
       }, {
-        stopAt: phase.next, waitingPhase: phase, nextEpoch: () => this.nextEpoch(),
+        timelineId: branch.groupId, stopAt: phase.next, waitingPhase: phase, nextEpoch: () => this.nextEpoch(),
         onPhase: (localPhase) => this.options.onParticipantPhase?.([...members], localPhase),
+        displayForGroup: (groupId) => this.path?.displayForGroup(groupId) ?? this.groupDisplays.get(groupId),
       });
       this.paths.set(branch.groupId, { engine: child, members });
       child.lifecycle = "active";
@@ -1348,7 +1486,7 @@ export class PhaseEngine {
         const participant = this.registry.values().find((participant) => participant.clientId === id);
         if (participant) child.cursors.join(id, participant.color);
       }
-      const display = this.groupDisplays.get(branch.groupId);
+      const display = this.path?.displayForGroup(branch.groupId) ?? this.groupDisplays.get(branch.groupId);
       if (display) {
         child.displaySocket = display;
         child.clients.add(display);
@@ -1404,6 +1542,24 @@ export class PhaseEngine {
       ...(phase.title === undefined ? {} : { title: phase.title }),
       groups,
       selectedGroupId: this.groupSelection?.current(participantId) ?? null,
+    });
+  }
+
+  private sendVotingOptions(socket: WebSocket): void {
+    const participantId = this.participantIds.get(socket);
+    const phase = this.currentPhase();
+    if (
+      participantId === undefined ||
+      (phase.kind !== "position-question" && phase.kind !== "video-position-question")
+    ) return;
+    this.send(socket, {
+      t: "voting_options",
+      v: PROTOCOL_VERSION,
+      sessionId: this.sessionId,
+      phaseEpoch: this.phaseEpoch,
+      method: this.groupSelection?.method?.(participantId) ?? "phone-cursor",
+      question: phase.text,
+      options: votingOptions(phase),
     });
   }
 

@@ -35,6 +35,8 @@ export type DisplayConnectionOptions = {
   now?: () => number;
 };
 
+const WEBSOCKET_OPEN_STATE = 1;
+
 export class DisplayConnection {
   readonly clock = new ServerClock();
 
@@ -72,7 +74,7 @@ export class DisplayConnection {
   }
 
   send(message: DisplayToServerMessage): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if (this.ws && this.ws.readyState === WEBSOCKET_OPEN_STATE) {
       this.ws.send(encodeMessage(message));
     }
   }

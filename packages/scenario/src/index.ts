@@ -2,7 +2,7 @@
  * Scenario types, validation, and graph utilities (plan §5).
  */
 
-export const SCENARIO_SCHEMA_VERSION = 5;
+export const SCENARIO_SCHEMA_VERSION = 6;
 
 export {
   arenaEllipseSchema,
@@ -13,6 +13,7 @@ export {
   fourQuadrantFieldSchema,
   fourQuadrantPluralityNextSchema,
   audienceGroupSchema,
+  votingMethodSchema,
   groupAssignmentSchema,
   groupBranchPhaseSchema,
   idlePhaseSchema,
@@ -44,6 +45,7 @@ export type {
   ArenaQuad,
   Axis,
   AudienceGroup,
+  VotingMethod,
   CountablePositionVoteStatus,
   FourQuadrantField,
   FourQuadrantPluralityNext,

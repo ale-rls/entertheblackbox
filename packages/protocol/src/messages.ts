@@ -135,12 +135,22 @@ export const groupSelectionSchema = z.object({
   groupId: nonEmpty,
 });
 
+/** A direct phone-button answer, represented by one of the active field's stable outcome IDs. */
+export const buttonVoteSchema = z.object({
+  t: z.literal("button_vote"),
+  v,
+  sessionId: nonEmpty,
+  phaseEpoch: z.number().int().nonnegative(),
+  outcome: nonEmpty,
+});
+
 export const phoneToServerSchema = z.discriminatedUnion("t", [
   joinSchema,
   inputSchema,
   pingSchema,
   reactionSchema,
   groupSelectionSchema,
+  buttonVoteSchema,
 ]);
 
 // -------------------------------------------------------------- display → server
@@ -205,6 +215,7 @@ export const clientToServerSchema = z.discriminatedUnion("t", [
   pingSchema,
   reactionSchema,
   groupSelectionSchema,
+  buttonVoteSchema,
   displayJoinSchema,
   videoEndedSchema,
   displayHeartbeatSchema,
@@ -407,6 +418,16 @@ export const groupSelectionOptionsSchema = z.object({
   selectedGroupId: nonEmpty.nullable(),
 });
 
+export const votingOptionsSchema = z.object({
+  t: z.literal("voting_options"),
+  v,
+  sessionId: nonEmpty,
+  phaseEpoch: z.number().int().nonnegative(),
+  method: z.enum(["physical", "phone-cursor", "phone-buttons"]),
+  question: z.string(),
+  options: z.array(z.object({ id: nonEmpty, label: nonEmpty })),
+});
+
 export const pongSchema = z.object({
   t: z.literal("pong"),
   v,
@@ -431,6 +452,7 @@ export const serverToClientSchema = z.union([
   joinRejectedSchema,
   statusSchema,
   groupSelectionOptionsSchema,
+  votingOptionsSchema,
   pongSchema,
 ]);
 
@@ -448,6 +470,7 @@ export type InputMessage = z.infer<typeof inputSchema>;
 export type PingMessage = z.infer<typeof pingSchema>;
 export type ReactionMessage = z.infer<typeof reactionSchema>;
 export type GroupSelectionMessage = z.infer<typeof groupSelectionSchema>;
+export type ButtonVoteMessage = z.infer<typeof buttonVoteSchema>;
 export type PhoneToServerMessage = z.infer<typeof phoneToServerSchema>;
 
 export type DisplayJoinMessage = z.infer<typeof displayJoinSchema>;

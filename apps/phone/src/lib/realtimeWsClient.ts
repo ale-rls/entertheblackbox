@@ -18,6 +18,8 @@ export type RealtimeCursorPublisherOptions = {
   rng?: () => number;
 };
 
+const WEBSOCKET_OPEN_STATE = 1;
+
 export class RealtimeCursorPublisher {
   private ws: WebSocket | null = null;
   private stopped = true;
@@ -43,7 +45,7 @@ export class RealtimeCursorPublisher {
   }
 
   send(x: number, y: number): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if (this.ws && this.ws.readyState === WEBSOCKET_OPEN_STATE) {
       this.ws.send(JSON.stringify({ t: "cursor_update", x, y }));
     }
   }

@@ -225,6 +225,27 @@ describe("phone group selection", () => {
   });
 });
 
+describe("phone voting method", () => {
+  it("opens cursor input only for cursor voting and clears options on transition", () => {
+    const current = { ...initialPhoneState, sessionId: "s1", phaseEpoch: 3, inputOpen: true };
+    const buttons = apply(current, {
+      t: "voting_options", v: PROTOCOL_VERSION, sessionId: "s1", phaseEpoch: 3,
+      method: "phone-buttons", question: "Choose", options: [{ id: "min", label: "No" }, { id: "max", label: "Yes" }],
+    });
+    expect(buttons.voting?.method).toBe("phone-buttons");
+    expect(buttons.inputOpen).toBe(false);
+    expect(apply(buttons, phase("video", 4)).voting).toBeNull();
+  });
+
+  it("ignores stale voting options", () => {
+    const current = { ...initialPhoneState, sessionId: "s1", phaseEpoch: 4 };
+    expect(apply(current, {
+      t: "voting_options", v: PROTOCOL_VERSION, sessionId: "s1", phaseEpoch: 3,
+      method: "physical", question: "Choose", options: [],
+    })).toBe(current);
+  });
+});
+
 const phase = (
   kind: "idle" | "video" | "position-question" | "video-position-question",
   epoch: number,

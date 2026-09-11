@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { quadrantOfField } from "@entertheblackbox/shared";
-import type { GroupBranchPhase, PositionField, Scenario } from "@entertheblackbox/scenario";
+import type { GroupBranchPhase, PositionField, Scenario, VotingMethod } from "@entertheblackbox/scenario";
 import type { FinalVoteSnapshot } from "../votes/vote-engine.js";
 
 export type GroupMembership = { participantId: string; groupId: string | null };
@@ -39,6 +39,10 @@ export class GroupManager {
 
   groupFor(participantId: string): string | null {
     return this.membership.get(participantId) ?? null;
+  }
+
+  votingMethodFor(participantId: string): VotingMethod | undefined {
+    return this.scenario.groups?.find((group) => group.id === this.groupFor(participantId))?.votingMethod;
   }
 
   assign(participantId: string, groupId: string): void {
