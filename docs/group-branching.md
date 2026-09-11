@@ -4,7 +4,7 @@ Runtime schema version 5 makes audience groups first-class show state. Studio au
 
 ## Authoring in Studio
 
-Open the show properties with no component selected to edit the group catalogue and the initial groups. A show can begin with two or more initial groups; the server balances admitted participants across them when the session starts.
+Use **Groups** in the Studio toolbar (or click empty canvas) to edit the labelled group catalogue and initial groups. A show can begin with two or more initial groups; the server balances admitted participants across them when the session starts. In any existing group scene, use **Group options** to add catalogue groups or remove options, with a minimum of two. Removing a catalogue group updates its references, but is blocked if a scene would be left with fewer than two options.
 
 Add a **Group branch** component at the moment membership should change. Its inputs are an optional source cohort and one assignment rule. Its outputs are two or more group memberships:
 
@@ -12,7 +12,11 @@ Add a **Group branch** component at the moment membership should change. Its inp
 - **From vote** maps each participant's result from an earlier position question to a group, with a required fallback.
 - **Manual** keeps a participant's operator-assigned output group and sends anyone else to the fallback.
 
-The component is synchronized: it changes membership atomically, plays each output group's phone cue for its authored duration, and then advances the shared display timeline through `next`. It does not yet create independent display timelines for each group.
+**Chosen by participants on their phones** presents the scene's labelled group options until its duration expires. A selection can be changed before the deadline, not after paths start. Reconnecting does not assign an unchosen phone automatically.
+
+Each group has a separate outgoing port. Connect it to that group's first scene (`branches[].next`), then connect **Rejoin (all groups)** to the shared reunion scene (`next`). Groups run their own media, voting, results and phone audio independently. A group arriving at the reunion (or End) waits silently; the shared scene begins once all occupied paths finish. Empty groups do not delay the reunion. Missing branch targets preserve the old membership-only behavior: that group waits directly at the reunion.
+
+The main display is black throughout selection and independent paths: no media, sound, title, QR or cursors. It resumes at the shared reunion. On group scenes, optional branch phone narration plays during selection; subsequent path scenes use their own phone narration. Keep phone-only audio in **Phone headphones**, not the display audio fields.
 
 On ordinary components, **Phone headphones** accepts a broadcast MP3 plus optional per-group MP3 overrides. A group override wins; the broadcast file is used for participants without an override. Omitting both produces silence and resets the phone's previous cue.
 
@@ -63,6 +67,10 @@ The protected admin dashboard shows every connected participant's current group.
 
 Assignments are process-local session state and contain participant IDs only; they are cleared when the session ends. Vote-derived membership uses the finalized individual outcome from the referenced question. Balanced assignment is deterministic and weighted, so reconnects do not randomly reshuffle the room.
 
-## Current boundary
+## Multiple displays and rehearsal
 
-This release branches **membership and phone content**, while the installation display and phase clock remain shared. Fully independent per-group visual paths require a later multi-lane scheduler with explicit regroup barriers; the current model deliberately avoids implying that those independent timelines already exist.
+Open the usual display URL with `group=<group-id>` added to its query string, for example `/display/?group=red`. Keep the same installation, room and display credentials. A display without `group` is the main display. Each group has one authenticated display slot; reconnecting or replacing a group display does not replace main or another group display. Group displays stay black outside their active paths and use only their own roster's cursor feed. Media duration fallback still advances a path when its group display is unavailable.
+
+Membership is frozen into path rosters at selection close. An operator assignment during a path changes the membership/audio override, not the phone's active path; use a later group scene to route it again. Late visitors without a path wait for the shared reunion. A new split must be at or after the reunion; nested splits inside a running group path are rejected on validation. The outcome preview can follow one selected group path at a time.
+
+Rebuild and deploy Studio, display, phone, and server together, then hard-refresh displays to replace their service-worker bundle. Rehearse with two phones and a display per group: pick different groups, finish one first, check that main remains black, then finish the other and check the shared reunion. Automated tests cover this routing but do not replace a venue rehearsal.

@@ -9,21 +9,25 @@ export type GroupMembership = { participantId: string; groupId: string | null };
 export class GroupManager {
   private readonly membership = new Map<string, string>();
   private readonly answers = new Map<string, Map<string, string>>();
+  private readonly awaitingSelection = new Set<string>();
 
   constructor(private readonly scenario: Scenario) {}
 
   beginSession(participantIds: readonly string[]): void {
     this.membership.clear();
     this.answers.clear();
+    this.awaitingSelection.clear();
     for (const participantId of participantIds) this.ensureParticipant(participantId);
   }
 
   endSession(): void {
     this.membership.clear();
     this.answers.clear();
+    this.awaitingSelection.clear();
   }
 
   ensureParticipant(participantId: string): string | null {
+    if (this.awaitingSelection.has(participantId)) return null;
     const current = this.membership.get(participantId);
     if (current !== undefined) return current;
     const initial = this.scenario.initialGroupIds;
@@ -39,6 +43,7 @@ export class GroupManager {
 
   assign(participantId: string, groupId: string): void {
     if (!this.scenario.groups?.some((group) => group.id === groupId)) throw new Error(`Unknown audience group “${groupId}”`);
+    this.awaitingSelection.delete(participantId);
     this.membership.set(participantId, groupId);
   }
 
@@ -66,6 +71,7 @@ export class GroupManager {
     for (const participantId of ordered) {
       if (phase.assignment.type === "self-select") {
         this.membership.delete(participantId);
+        this.awaitingSelection.add(participantId);
         continue;
       }
       let groupId: string;
@@ -80,6 +86,7 @@ export class GroupManager {
         groupId = this.leastWeighted(phase, counts);
       }
       this.membership.set(participantId, groupId);
+      this.awaitingSelection.delete(participantId);
       counts.set(groupId, (counts.get(groupId) ?? 0) + 1);
     }
     return participantIds.map((participantId) => ({ participantId, groupId: this.groupFor(participantId) }));

@@ -428,6 +428,8 @@ export const audienceGroupSchema = z.object({
 
 const groupBranchSchema = z.object({
   groupId: groupIdSchema,
+  /** Group-local entry; omitted means wait at the shared reunion. */
+  next: phaseIdSchema.optional(),
   weight: z.number().int().positive().default(1),
   phoneAudioSrc: phoneAudioFileSchema.optional(),
 });
@@ -445,9 +447,8 @@ export const groupAssignmentSchema = z.discriminatedUnion("type", [
 ]);
 
 /**
- * An instantaneous membership branching moment. It transforms the selected
- * source cohort into N authored groups, then the shared show timeline
- * continues at `next`. Subsequent phases can vary phone audio by group.
+ * After selection, groups follow branches[].next independently. The shared
+ * timeline resumes at `next` once every occupied group has reached it.
  */
 export const groupBranchPhaseSchema = z.object({
   kind: z.literal("group-branch"),

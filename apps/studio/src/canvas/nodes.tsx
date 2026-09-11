@@ -19,7 +19,7 @@ const OutPort = ({ id, label, tone }: { id: string; label: string; tone?: "quad"
   <div className={`port port-out ${tone ?? ""}`} data-port-tone={tone ?? "default"}><span className="port-name">{label}</span><Handle aria-label={`${label} output`} className="sc-tool-graph-port" id={id} type="source" position={Position.Right} /></div>
 );
 
-export function nodeDataForPhase(phase: Phase): NodeData {
+export function nodeDataForPhase(phase: Phase, groups: StudioProject["scenario"]["groups"] = []): NodeData {
   const data: NodeData = {
     label: phase.kind === "position-question" || phase.kind === "video-position-question"
       ? phase.text
@@ -27,7 +27,10 @@ export function nodeDataForPhase(phase: Phase): NodeData {
     kind: phase.kind,
   };
   if (phase.kind === "group-branch") {
-    data.groupOutputs = phase.branches.map((branch) => branch.groupId);
+    data.outcomes = [
+      ...phase.branches.map((branch) => ({ id: `group:${branch.groupId}`, label: groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId, tone: "quad" as const })),
+      { id: "next", label: "Rejoin (all groups)", tone: "special" },
+    ];
     return data;
   }
   if ((phase.kind !== "position-question" && phase.kind !== "video-position-question") || phase.next.type !== "quadrant-plurality") return data;

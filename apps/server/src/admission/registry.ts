@@ -72,6 +72,16 @@ export class ParticipantRegistry {
     return [...this.participants.values()];
   }
 
+  /** Read-through roster for an independent group timeline; leases remain owned here. */
+  scoped(ids: ReadonlySet<string>): ParticipantRegistry {
+    const parent = this;
+    return new class extends ParticipantRegistry {
+      constructor() { super(Math.max(1, ids.size)); }
+      override values(): readonly ParticipantRecord[] { return parent.values().filter((record) => ids.has(record.clientId)); }
+      override get connectedCount(): number { return this.values().filter((record) => socketIsConnected(record.socket)).length; }
+    }();
+  }
+
   canAdmitNew(now = Date.now()): boolean {
     this.pruneExpired(now);
     // A disconnected lease still holds its slot during the grace period, but

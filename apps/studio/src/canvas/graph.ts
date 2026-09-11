@@ -24,6 +24,7 @@ export function withoutOutputEdge(edges: Edge[], source: string | null, sourceHa
 
 export function phaseOutputHandles(phase: Phase | undefined): readonly string[] {
   if (!phase || phase.kind === "idle") return [];
+  if (phase.kind === "group-branch") return [...phase.branches.map((branch) => `group:${branch.groupId}`), FIXED_HANDLE];
   return (phase.kind === "position-question" || phase.kind === "video-position-question") && phase.next.type === "quadrant-plurality"
     ? phase.field.type === "two-quadrant"
       ? TWO_OUTCOME_HANDLES
@@ -76,7 +77,8 @@ export function reconcilePhaseOutputEdges(edges: Edge[], phase: Phase): Edge[] {
       const existing = edges.find((edge) => edge.source === phase.id && (edge.sourceHandle ?? FIXED_HANDLE) === handle);
       if (existing) return { ...existing, id: `${phase.id}:${handle}`, sourceHandle: handle };
       let runtime = "idle";
-      if (phase.kind === "video" || phase.kind === "group-branch") runtime = phase.next;
+      if (phase.kind === "group-branch") runtime = phase.branches.find((branch) => `group:${branch.groupId}` === handle)?.next ?? phase.next;
+      else if (phase.kind === "video") runtime = phase.next;
       else if (phase.next.type === "fixed") runtime = phase.next.target;
       else if (handle === "tie" || handle === "empty") runtime = phase.next[handle];
       else runtime = (phase.next.map as Record<string, string>)[handle] ?? "idle";
@@ -89,7 +91,11 @@ export function graphEdges(project: StudioProject): Edge[] {
   const edges: Edge[] = [{ id: "entry", source: ENTRY_NODE_ID, sourceHandle: FIXED_HANDLE, target: edgeTarget(project.scenario.entryPhaseId) }];
   for (const phase of project.scenario.phases) {
     if (phase.kind === "idle") continue;
-    if (phase.kind === "video" || phase.kind === "group-branch") {
+    if (phase.kind === "group-branch") {
+      edges.push(...reconcilePhaseOutputEdges([], phase));
+      continue;
+    }
+    if (phase.kind === "video") {
       edges.push({ id: `${phase.id}:next`, source: phase.id, sourceHandle: FIXED_HANDLE, target: edgeTarget(phase.next) });
       continue;
     }
@@ -133,6 +139,11 @@ export function applyEdges(project: StudioProject, edges: Edge[]): StudioProject
       const edge = edgeFor(phase.id, FIXED_HANDLE);
       if (!edge) throw new Error(`Phase “${phase.id}” has a dangling next output.`);
       const target = runtimeTarget(edge.target);
+      if (phase.kind === "group-branch") return { ...phase, next: target, branches: phase.branches.map((branch) => {
+        const branchEdge = edgeFor(phase.id, `group:${branch.groupId}`);
+        if (!branchEdge) throw new Error(`Phase “${phase.id}” has a dangling ${branch.groupId} output.`);
+        return { ...branch, next: runtimeTarget(branchEdge.target) };
+      }) };
       return { ...phase, next: target };
     }
     if (phase.next.type === "fixed") {

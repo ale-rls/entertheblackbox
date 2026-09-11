@@ -46,6 +46,7 @@ const config = {
   installationId:
     new URLSearchParams(location.search).get("installation") ?? "inst-1",
   roomId: new URLSearchParams(location.search).get("room") ?? "room-1",
+  ...(new URLSearchParams(location.search).get("group") ? { groupId: new URLSearchParams(location.search).get("group")! } : {}),
   displayToken:
     new URLSearchParams(location.search).get("token")
       ?? (typeof __DISPLAY_TOKEN__ === "string" ? __DISPLAY_TOKEN__ : ""),
@@ -112,6 +113,9 @@ export function App() {
   );
 
   useEffect(() => {
+    // The low-latency room feed is unscoped. Group kiosks use only the
+    // authoritative server's group-filtered cursor batches.
+    if (config.groupId !== undefined) return;
     realtimeWs.start();
     return () => realtimeWs.stop();
   }, [realtimeWs]);
@@ -179,6 +183,7 @@ export function App() {
   const media = useMedia();
   const phase = state.phase;
   const isIdle = phase === null || phase.kind === "idle";
+  const displayInactive = phase?.kind === "group-branch" || (config.groupId !== undefined && isIdle);
   const mediaReady = media.status.state === "ready";
 
   // Do not authenticate the installation display until every manifest
@@ -252,6 +257,9 @@ export function App() {
   useEffect(() => {
     void media.showMedia(phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc);
   }, [phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc]);
+
+  // Unmount all media and overlays, rather than covering still-playing audio.
+  if (displayInactive) return <main className="display-root" aria-label="Display inactive" style={{ background: "#000" }} />;
 
   return (
     <main className="display-root">
@@ -359,9 +367,6 @@ export function App() {
         )}
         {phase?.kind === "video" && phase.title && (
           <VideoTitle title={phase.title} layout={phase.titleLayout} />
-        )}
-        {phase?.kind === "group-branch" && phase.title && (
-          <div className="group-branch-title">{phase.title}</div>
         )}
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && <PhaseSubtitles phase={phase} clock={connection.clock} />}
         {phase?.kind === "video-position-question" && (

@@ -52,7 +52,8 @@ export function renamePhase(project: StudioProject, currentId: string, nextId: s
   const phases = project.scenario.phases.map((phase) => {
     const id = remap(phase.id);
     if (phase.kind === "idle") return { ...phase, id };
-    if (phase.kind === "video" || phase.kind === "group-branch") return { ...phase, id, next: remap(phase.next) };
+    if (phase.kind === "group-branch") return { ...phase, id, next: remap(phase.next), branches: phase.branches.map((branch) => ({ ...branch, ...(branch.next === undefined ? {} : { next: remap(branch.next) }) })) };
+    if (phase.kind === "video") return { ...phase, id, next: remap(phase.next) };
     if (phase.next.type === "fixed") return { ...phase, id, next: { ...phase.next, target: remap(phase.next.target) } };
     return { ...phase, id, next: { ...phase.next, map: Object.fromEntries(Object.entries(phase.next.map).map(([key, value]) => [key, remap(value)])) as typeof phase.next.map, tie: remap(phase.next.tie), empty: remap(phase.next.empty) } };
   }) as StudioProject["scenario"]["phases"];

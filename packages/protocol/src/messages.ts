@@ -147,6 +147,8 @@ export const phoneToServerSchema = z.discriminatedUnion("t", [
 
 export const displayJoinSchema = z.object({
   t: z.literal("display_join"),
+  /** Omit for the main display. Group displays only render that group's path. */
+  groupId: z.string().min(1).optional(),
   v,
   clientVersion: nonEmpty,
   installationId: nonEmpty,

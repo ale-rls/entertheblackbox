@@ -37,7 +37,8 @@ function targetsOf(phase: Phase): Array<{ label: string; target: string }> {
     case "video":
       return [{ label: "next", target: phase.next }];
     case "group-branch":
-      return [{ label: "next", target: phase.next }];
+      return [{ label: "next", target: phase.next }, ...phase.branches.flatMap((branch) =>
+        branch.next === undefined ? [] : [{ label: `branches.${branch.groupId}.next`, target: branch.next }])];
     case "position-question":
     case "video-position-question": {
       const next = phase.next;
@@ -107,6 +108,21 @@ export function validateScenario(
       }
     }
     if (phase.kind === "group-branch") {
+      // Each split owns its paths until its reunion. Re-splitting is authored
+      // at/after that reunion; nested ownership of the same display is ambiguous.
+      const visited = new Set<string>();
+      const pending = phase.branches.flatMap((branch) => branch.next ? [branch.next] : []);
+      while (pending.length) {
+        const id = pending.pop()!;
+        if (id === phase.next || id === "idle" || visited.has(id)) continue;
+        visited.add(id);
+        const local = byId.get(id);
+        if (!local) continue;
+        if (local.kind === "group-branch") {
+          errors.push({ severity: "error", code: "invalid-group-branch", phaseId: phase.id,
+            message: `group path from "${phase.id}" reaches split "${id}" before rejoining at "${phase.next}"; rejoin before splitting again` });
+        } else pending.push(...targetsOf(local).map(({ target }) => target));
+      }
       const referenced = [
         ...(phase.sourceGroupIds ?? []),
         ...phase.branches.map((branch) => branch.groupId),
