@@ -1,6 +1,6 @@
-# uWebSockets.js publishes native Linux binaries linked against glibc.
-# Alpine uses musl, so the module cannot load there.
-FROM node:20-bookworm-slim
+# uWebSockets.js v20.56.0's Node 20 Linux binary requires glibc 2.38+.
+# Debian 12/Bookworm only has glibc 2.36; Debian 13/Trixie is new enough.
+FROM node:20-trixie-slim
 
 # Set working directory
 WORKDIR /app
