@@ -20,6 +20,8 @@ export class PersonalAudio {
   private work: Promise<void> = Promise.resolve();
   private timer: ReturnType<typeof setInterval> | undefined;
   private lastError: string | null = null;
+  private readonly deliveryErrors = new Map<string, string>();
+  private reconciling = false;
   private stopped = false;
 
   constructor(readonly config: AudioConfig, private readonly mediaDir: string,
@@ -66,17 +68,29 @@ export class PersonalAudio {
       await this.call(`/players/${encodeURIComponent(id)}/reset`, "POST");
       await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
       this.playedGeneration.set(id, generation);
+      this.deliveryErrors.delete(id);
     });
-    this.work = registered.catch((error: unknown) => this.failed(error));
+    this.work = registered.catch((error: unknown) => {
+      this.deliveryErrors.set(id, error instanceof Error ? error.message : String(error));
+      this.failed(error);
+    });
     await registered;
     return `${this.config.publicUrl.replace(/\/$/, "")}/stream/${encodeURIComponent(participant.clientId)}`;
   }
 
   private async reconcile(): Promise<void> {
-    for (const player of this.players.values()) {
-      if (this.stopped) return;
-      await this.call(`/players/${encodeURIComponent(player.clientId)}/active`, "PUT", { active: true });
-    }
+    if (this.reconciling) return;
+    this.reconciling = true;
+    try {
+      // One failed participant must not stop registration/recovery for others.
+      await Promise.all([...this.players.values()].map(async (player) => {
+        if (this.stopped) return;
+        try {
+          await this.call(`/players/${encodeURIComponent(player.clientId)}/active`, "PUT", { active: true });
+          if (this.deliveryErrors.has(player.clientId)) await this.refreshParticipant(player.clientId);
+        } catch (error) { this.failed(error); }
+      }));
+    } finally { this.reconciling = false; }
   }
 
   private upload(src: string): Promise<string> {
@@ -114,6 +128,7 @@ export class PersonalAudio {
 
   transition(phase: Phase, groupFor: (participantId: string) => string | null = () => null): void {
     this.phaseOverrides.clear();
+    this.deliveryErrors.clear();
     const generation = ++this.generation;
     this.currentAudioSrc = phase.kind === "idle" || phase.kind === "group-branch" ? undefined : phase.phoneAudioSrc;
     this.sourceForPlayer = (id) => {
@@ -128,17 +143,23 @@ export class PersonalAudio {
     this.work = this.work.then(async () => {
       if (generation !== this.generation || this.stopped) return;
       await Promise.all([...this.players.keys()].map(async (id) => {
-        const src = this.currentAudioByPlayer.get(id);
-        const file = src ? await this.upload(src) : undefined;
-        if (generation !== this.generation || this.stopped) return;
-        // Reset on every transition, including silent scenes and manual skips.
-        await this.call(`/players/${encodeURIComponent(id)}/reset`, "POST");
-        if (file && generation === this.generation && this.players.has(id)) {
-          await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
-          this.playedGeneration.set(id, generation);
+        try {
+          const src = this.currentAudioByPlayer.get(id);
+          const file = src ? await this.upload(src) : undefined;
+          if (generation !== this.generation || this.stopped) return;
+          // Reset on every transition, including silent scenes and manual skips.
+          await this.call(`/players/${encodeURIComponent(id)}/reset`, "POST");
+          if (file && generation === this.generation && this.players.has(id)) {
+            await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
+            this.playedGeneration.set(id, generation);
+          }
+          this.deliveryErrors.delete(id);
+        } catch (error) {
+          if (generation === this.generation) this.deliveryErrors.set(id, error instanceof Error ? error.message : String(error));
+          this.failed(error);
         }
       }));
-      this.lastError = null;
+      if (!this.deliveryErrors.size) this.lastError = null;
     }).catch((error: unknown) => this.failed(error));
   }
 
@@ -159,9 +180,15 @@ export class PersonalAudio {
         await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
         this.playedGeneration.set(id, generation);
       }
-      this.lastError = null;
+      this.deliveryErrors.delete(id);
+      if (!this.deliveryErrors.size) this.lastError = null;
     });
-    this.work = refreshed.catch((error: unknown) => this.failed(error));
+    this.work = refreshed.catch((error: unknown) => {
+      if (generation === this.generation && revision === this.playerRevisions.get(id)) {
+        this.deliveryErrors.set(id, error instanceof Error ? error.message : String(error));
+      }
+      this.failed(error);
+    });
     await refreshed;
   }
 
@@ -198,12 +225,13 @@ export class PersonalAudio {
   async status(): Promise<unknown> {
     try {
       const status = await this.call("/status");
-      return { configured: true, error: this.lastError, ...status,
+      return { ...status, configured: true, error: this.lastError,
+        deliveryFailures: Object.fromEntries(this.deliveryErrors),
         players: (status.players ?? []).filter((p: { player_id: string }) => this.players.has(p.player_id))
           .map((p: { player_id: string }) => ({ ...p, name: this.players.get(p.player_id)?.name })) };
     } catch (error) {
       this.failed(error);
-      return { configured: true, error: this.lastError, players: [] };
+      return { configured: true, error: this.lastError, deliveryFailures: Object.fromEntries(this.deliveryErrors), players: [] };
     }
   }
 
@@ -217,6 +245,7 @@ export class PersonalAudio {
     const ids = [...this.players.keys()];
     this.players.clear();
     this.playedGeneration.clear();
+    this.deliveryErrors.clear();
     this.work = this.work.then(async () => {
       for (const id of ids) await this.call(`/players/${encodeURIComponent(id)}`, "DELETE");
     }).catch((error: unknown) => this.failed(error));

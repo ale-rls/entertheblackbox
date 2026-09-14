@@ -1,120 +1,78 @@
 import { useEffect, useRef, useState } from "react";
-import { AudioProgress, DriftWatch, catchUpTarget, drifted } from "./lib/audio-progress";
+import { AudioPlayback, playbackAction, playbackMessage, type PlaybackState } from "./lib/audio-playback";
 
 /** One native media element stays mounted across scene and WebSocket changes. */
 export function PhoneAudio({ participantLease }: { participantLease: string }) {
   const element = useRef<HTMLAudioElement>(null);
+  const player = useRef<AudioPlayback>();
   const [url, setUrl] = useState<string | null>(null);
-  const [status, setStatus] = useState("Preparing headphones…");
-  const wanted = useRef(false);
-  const retry = useRef<ReturnType<typeof setTimeout>>();
-  const attempts = useRef(0);
-  const progress = useRef(new AudioProgress());
-  const driftWatch = useRef(new DriftWatch());
-  const playGeneration = useRef(0);
+  const [state, setState] = useState<PlaybackState>("ready");
+  const [registration, setRegistration] = useState("Preparing headphones…");
 
   useEffect(() => {
     const abort = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     async function register() {
+      const requestAbort = new AbortController();
+      const cancel = () => requestAbort.abort();
+      abort.signal.addEventListener("abort", cancel);
+      const deadline = setTimeout(cancel, 15_000);
       try {
         const response = await fetch("/api/audio/register", { method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ participantLease }), signal: abort.signal });
-        if (!response.ok) throw new Error("Headphone stream unavailable. Retrying…");
-        const data = await response.json() as { streamUrl: string };
-        if (!abort.signal.aborted) { setUrl(data.streamUrl); setStatus("Tap Start headphones before locking your phone."); }
+          body: JSON.stringify({ participantLease }),
+          signal: requestAbort.signal });
+        if (!response.ok) throw new Error("Headphone audio unavailable. Retrying… Please keep this page open.");
+        const data = await response.json() as { streamUrl?: unknown };
+        if (typeof data.streamUrl !== "string" || !data.streamUrl) throw new Error("Headphone audio unavailable. Please ask the staff.");
+        if (!abort.signal.aborted) setUrl(data.streamUrl);
       } catch (error) {
         if (abort.signal.aborted) return;
-        setStatus(error instanceof Error ? error.message : "Headphone stream unavailable");
+        setRegistration(error instanceof Error ? error.message : "Headphone audio unavailable. Retrying…");
         timer = setTimeout(() => void register(), 5_000);
+      } finally {
+        clearTimeout(deadline);
+        abort.signal.removeEventListener("abort", cancel);
       }
     }
     void register();
     return () => { abort.abort(); clearTimeout(timer); };
   }, [participantLease]);
 
-  const play = () => {
-    const audio = element.current;
-    if (!audio || !url) return;
-    clearTimeout(retry.current); retry.current = undefined;
-    wanted.current = true;
-    setStatus("Connecting headphones…");
-    // Reconnect at the live edge; never resume buffered narration from a paused scene.
-    audio.src = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
-    audio.load();
-    progress.current.reset(audio.currentTime);
-    driftWatch.current.reset();
-    const generation = ++playGeneration.current;
-    void audio.play().catch((error: unknown) => {
-      if (generation !== playGeneration.current || !wanted.current) return;
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      if (error instanceof DOMException && error.name === "NotAllowedError") {
-        wanted.current = false;
-        setStatus("Tap Start headphones to allow playback.");
-      } else scheduleRetry();
-    });
-  };
-  const scheduleRetry = () => {
-    if (!wanted.current || retry.current !== undefined) return;
-    setStatus("Audio interrupted. Reconnecting…");
-    retry.current = setTimeout(() => {
-      retry.current = undefined;
-      play();
-    }, Math.min(8_000, 500 * 2 ** Math.min(attempts.current++, 4)));
-  };
-
   useEffect(() => {
     if (!url) return;
-    const audio = element.current!;
-    progress.current.reset(audio.currentTime);
-    driftWatch.current.reset();
-    const watchdog = setInterval(() => {
-      if (!wanted.current || document.hidden) return;
-      const bufferedEnd = audio.buffered.length > 0 ? audio.buffered.end(audio.buffered.length - 1) : audio.currentTime;
-      const backlogPersists = driftWatch.current.persists(drifted(bufferedEnd, audio.currentTime));
-      if (progress.current.stalled(audio.currentTime) || audio.ended || audio.error || backlogPersists) scheduleRetry();
-    }, 5_000);
-    const visible = () => {
-      progress.current.reset(audio.currentTime);
-      driftWatch.current.reset();
-      if (!document.hidden && wanted.current && (audio.paused || audio.error)) play();
-    };
-    document.addEventListener("visibilitychange", visible);
-    // Trim backlog continuously (free — already-downloaded data, no rebuffer)
-    // instead of letting it accumulate toward a full reconnect (§ drifted()).
-    const catchUp = () => {
-      if (!wanted.current || document.hidden || audio.paused) return;
-      const bufferedEnd = audio.buffered.length > 0 ? audio.buffered.end(audio.buffered.length - 1) : audio.currentTime;
-      const target = catchUpTarget(bufferedEnd, audio.currentTime);
-      if (target !== null && target > audio.currentTime) audio.currentTime = target;
-    };
-    audio.addEventListener("timeupdate", catchUp);
     const mediaSession = navigator.mediaSession;
+    const playback = new AudioPlayback(element.current!, url, (next) => {
+      setState(next);
+      if (mediaSession) mediaSession.playbackState = next === "playing" ? "playing" : next === "paused" ? "paused" : "none";
+    });
+    player.current = playback;
+    setState("ready");
+    const visible = () => { if (!document.hidden) playback.check(); };
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("pageshow", playback.check);
+    window.addEventListener("online", playback.check);
     if (mediaSession) {
-      mediaSession.metadata = new MediaMetadata({ title: "Enter the Blackbox", artist: "Your headphones" });
-      mediaSession.setActionHandler("play", play);
-      mediaSession.setActionHandler("pause", () => {
-        wanted.current = false;
-        clearTimeout(retry.current); retry.current = undefined;
-        audio.pause(); setStatus("Headphones paused. Tap Start headphones to resume.");
-      });
+      if (typeof MediaMetadata !== "undefined") mediaSession.metadata = new MediaMetadata({ title: "Enter the Blackbox", artist: "Your headphones" });
+      mediaSession.setActionHandler("play", playback.play);
+      mediaSession.setActionHandler("pause", playback.pause);
     }
     return () => {
-      clearInterval(watchdog); clearTimeout(retry.current); retry.current = undefined;
-      wanted.current = false;
-      ++playGeneration.current;
       document.removeEventListener("visibilitychange", visible);
-      audio.removeEventListener("timeupdate", catchUp);
-      mediaSession?.setActionHandler("play", null); mediaSession?.setActionHandler("pause", null);
-      audio.pause(); audio.removeAttribute("src"); audio.load();
+      window.removeEventListener("pageshow", playback.check);
+      window.removeEventListener("online", playback.check);
+      mediaSession?.setActionHandler("play", null);
+      mediaSession?.setActionHandler("pause", null);
+      if (mediaSession) mediaSession.playbackState = "none";
+      playback.dispose();
+      player.current = undefined;
     };
   }, [url]);
 
+  const action = url ? playbackAction(state) : null;
   return <section className="phone-audio" aria-label="Headphone audio" onPointerDown={(event) => event.stopPropagation()}>
-    <audio ref={element} preload="none" onError={scheduleRetry} onEnded={scheduleRetry}
-      onPlaying={() => { progress.current.reset(element.current?.currentTime ?? 0); driftWatch.current.reset(); attempts.current = 0; clearTimeout(retry.current); retry.current = undefined; setStatus("Headphones playing. You can lock your phone."); }} />
-    <p role="status">{status}</p>
-    <button type="button" disabled={!url} onClick={play}>Start headphones</button>
+    <audio ref={element} preload="none" />
+    <p role="status">{url ? playbackMessage[state] : registration}</p>
+    {action && <button type="button" onClick={() => player.current?.play()}>{action}</button>}
   </section>;
 }

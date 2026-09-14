@@ -226,7 +226,7 @@ env AUDIO_BRIDGE_URL=http://127.0.0.1:8300 \
 ```
 
 After joining, each participant taps **Start headphones** once, waits for
-**Headphones playing**, and can then lock the phone. The native audio stream
+**Headphone audio is playing**. The start button disappears while playback is active. The native audio stream
 continues while locked; the Admin page reports connected, waiting, and missing
 listeners. HTTPS phone pages require an HTTPS `AUDIO_PUBLIC_URL`.
 
@@ -339,3 +339,27 @@ This repository forked from the smartphonecracy production, which supplied the r
 ## License
 
 No license has been declared yet. All rights are reserved unless a license file is added.
+
+
+### Headphone reliability checks
+
+The phone keeps one native stream across WebSocket reconnects and scene changes.
+It does not seek toward the buffered edge: downloaded audio ahead of playback is
+not a measurement of live latency, and seeking can skip narration. Unexpected
+pauses, errors, ended streams, and 15 seconds without playback progress trigger
+a fresh stream request with bounded retry backoff. A deliberate lock-screen pause
+stays paused; resume uses a fresh user gesture. Browsers can suspend background
+JavaScript, so these recovery mechanisms cannot guarantee recovery during an OS
+suspension or a network outage.
+
+Failed cue injections are reported per participant in Admin and retried every
+five seconds for the current scene only. Successful recipients are not replayed.
+Hold the show when Admin reports a delivery failure; a listener count only proves
+that a stream connection exists, not that a participant heard a cue.
+
+Before giving the audience a lock-screen instruction, rehearse the **deployed
+/phone/** route on real iOS Safari and Android devices over the venue network for
+the full show duration. Include silent gaps followed by cues, lock/unlock cycles,
+brief network loss, and explicit lock-screen pause/resume. Verify complete speech
+without skipped words and watch the bridge's stream-close reasons and Admin
+errors. Desktop unit tests do not certify locked-screen playback.
