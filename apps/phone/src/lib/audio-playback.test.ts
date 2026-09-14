@@ -40,10 +40,28 @@ describe("continuous phone audio", () => {
     expect(media.play).toHaveBeenCalledTimes(2);
     player.dispose();
   });
-  it("retries stalled playback without error events", async () => {
+  it("reconnects quickly when playback stalls after it started, without error events", async () => {
     const {media, player} = setup();
     player.play(); media.emit("playing");
-    await vi.advanceTimersByTimeAsync(17_000);
+    await vi.advanceTimersByTimeAsync(8_000);
+    expect(media.load).toHaveBeenCalledTimes(2);
+    player.dispose();
+  });
+  it("gives a fresh connection the full buffering window before forcing a reconnect", async () => {
+    const {media, player} = setup();
+    player.play();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(media.load).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(7_500);
+    expect(media.load).toHaveBeenCalledTimes(2);
+    player.dispose();
+  });
+  it("retries immediately on reconnection instead of sitting out the queued backoff", async () => {
+    const {media, player} = setup();
+    player.play(); media.emit("playing"); media.emit("error");
+    expect(player.state).toBe("reconnecting");
+    player.online();
+    await Promise.resolve();
     expect(media.load).toHaveBeenCalledTimes(2);
     player.dispose();
   });

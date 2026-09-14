@@ -10,6 +10,12 @@ describe("audio recovery grace", () => {
     expect(progress.stalled(0, 20_000)).toBe(false);
     expect(progress.stalled(0, 30_500)).toBe(true);
   });
+  it("accepts a shorter grace window for a stream that already recovered once", () => {
+    const progress = new AudioProgress();
+    progress.reset(12, 0);
+    expect(progress.stalled(12, 4_000, 5_000)).toBe(false);
+    expect(progress.stalled(12, 5_500, 5_000)).toBe(true);
+  });
   it("preserves advancing playback and resets grace on visibility resume", () => {
     const progress = new AudioProgress();
     progress.reset(0, 0);

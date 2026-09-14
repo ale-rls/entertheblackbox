@@ -55,7 +55,7 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
     const visible = () => { if (!document.hidden) playback.check(); };
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("pageshow", playback.check);
-    window.addEventListener("online", playback.check);
+    window.addEventListener("online", playback.online);
     if (mediaSession) {
       if (typeof MediaMetadata !== "undefined") mediaSession.metadata = new MediaMetadata({ title: "Enter the Blackbox", artist: "Your headphones" });
       mediaSession.setActionHandler("play", playback.play);
@@ -64,7 +64,7 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
     return () => {
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("pageshow", playback.check);
-      window.removeEventListener("online", playback.check);
+      window.removeEventListener("online", playback.online);
       mediaSession?.setActionHandler("play", null);
       mediaSession?.setActionHandler("pause", null);
       if (mediaSession) mediaSession.playbackState = "none";
