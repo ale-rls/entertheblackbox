@@ -5,3 +5,5 @@ __pycache__/
 .pytest_cache/
 # generated audio (regenerate: scripts/make_default_bed.sh); keep committed
 # samples if you prefer — they're small
+/audio/
+/beds/
