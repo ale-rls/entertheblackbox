@@ -1587,6 +1587,21 @@ export class PhaseEngine {
     });
   }
 
+  /**
+   * Tells one phone its personal-audio stream URL changed (e.g. an admin
+   * live-switched the audio backend), so it re-points its <audio> element
+   * without a page reload. Works regardless of whether the participant is on
+   * the shared timeline or inside an active group-branch path -- the
+   * top-level engine retains every participant's socket in `participantIds`
+   * even after it's copied into a child path engine (see startGroupPaths()),
+   * so no path delegation is needed here.
+   */
+  notifyAudioBridgeChanged(clientId: string, streamUrl: string): void {
+    for (const [socket, id] of this.participantIds) {
+      if (id === clientId) { this.send(socket, { t: "audio_bridge_changed", v: PROTOCOL_VERSION, streamUrl }); return; }
+    }
+  }
+
   private broadcast(message: ServerToClientMessage): void {
     const openSockets = [...this.clients].filter((socket) => isOpen(socket) &&
       !(this.pathsStarted && this.participantIds.has(socket) && this.pathForParticipant(this.participantIds.get(socket)!)));

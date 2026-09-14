@@ -4,12 +4,16 @@ import { createHash } from "node:crypto";
 import type { Phase } from "@entertheblackbox/scenario";
 
 export type AudioConfig = { url: string; token: string; publicUrl: string };
+export type AudioBackend = { kind: "remote" } | { kind: "local"; config: AudioConfig; label: string };
 export type AudioParticipant = { clientId: string; name: string };
 export type PlaybackState = "ready" | "connecting" | "playing" | "reconnecting" | "blocked" | "paused";
 type Telemetry = { state: PlaybackState; clientAt: number; reconnectedAt: number | null; reconnects: number; lastRecoveryMs: number | null };
+type Active = { kind: "remote" | "local"; config: AudioConfig; label: string };
 
 /** The delivery roster survives sleeping phones and their disconnected WebSockets. */
 export class PersonalAudio {
+  private readonly remote: AudioConfig;
+  private active: Active;
   private readonly players = new Map<string, AudioParticipant>();
   private readonly uploaded = new Map<string, Promise<string>>();
   private generation = 0;
@@ -27,9 +31,73 @@ export class PersonalAudio {
   private reconciling = false;
   private stopped = false;
 
-  constructor(readonly config: AudioConfig, private readonly mediaDir: string,
+  constructor(remoteConfig: AudioConfig, private readonly mediaDir: string,
     private readonly report: (error: unknown) => void,
-    private readonly request: typeof fetch = fetch) {}
+    private readonly request: typeof fetch = fetch,
+    private readonly notifyStreamUrl: (clientId: string, streamUrl: string) => void = () => {}) {
+    this.remote = remoteConfig;
+    this.active = { kind: "remote", config: remoteConfig, label: "Remote" };
+  }
+
+  private get config(): AudioConfig { return this.active.config; }
+
+  private streamUrl(id: string): string {
+    return `${this.active.config.publicUrl.replace(/\/$/, "")}/stream/${encodeURIComponent(id)}`;
+  }
+
+  /**
+   * Live-switches which bridge (Icecast/Liquidsoap stack) is active, e.g. an
+   * admin's ad hoc local rig instead of the boot-time remote deployment.
+   * Health-checks the target first and never mutates state on failure -- a
+   * bad switch must not strand the show without audio. On success, every
+   * known player is re-registered and replayed against the new backend and
+   * notified of its new stream URL; a player whose push fails keeps its old
+   * URL until the existing reconcile-loop recovery heals it (see reconcile()
+   * / refreshParticipant()), at which point it is notified too.
+   */
+  async setBackend(target: AudioBackend): Promise<{ ok: true } | { ok: false; error: string }> {
+    const config = target.kind === "remote" ? this.remote : target.config;
+    const label = target.kind === "remote" ? "Remote" : target.label;
+    try {
+      const response = await this.request(`${config.url.replace(/\/$/, "")}/health`, {
+        headers: { Authorization: `Bearer ${target.kind === "remote" ? this.remote.token : target.config.token}` },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) return { ok: false, error: `Audio bridge health check failed: HTTP ${response.status}` };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+    this.active = { kind: target.kind, config, label };
+    this.uploaded.clear();
+    this.deliveryErrors.clear();
+    this.playedGeneration.clear();
+    const ids = [...this.players.keys()];
+    const switched = this.work.then(() => Promise.all(ids.map((id) => this.pushToBackend(id).catch((error: unknown) => {
+      this.deliveryErrors.set(id, error instanceof Error ? error.message : String(error));
+      this.failed(error);
+    }))).then(() => undefined));
+    this.work = switched.catch((error: unknown) => this.failed(error));
+    await switched;
+    return { ok: true };
+  }
+
+  private async pushToBackend(id: string): Promise<void> {
+    if (!this.players.has(id) || this.stopped) return;
+    await this.call(`/players/${encodeURIComponent(id)}/active`, "PUT", { active: true });
+    const generation = this.generation;
+    const src = this.currentAudioByPlayer.has(id)
+      ? this.currentAudioByPlayer.get(id)
+      : this.sourceForPlayer(id) ?? this.currentAudioSrc;
+    if (src) {
+      const file = await this.upload(src);
+      if (!this.players.has(id) || this.stopped || generation !== this.generation) return;
+      await this.call(`/players/${encodeURIComponent(id)}/reset`, "POST");
+      await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
+      this.playedGeneration.set(id, generation);
+    }
+    this.deliveryErrors.delete(id);
+    this.notifyStreamUrl(id, this.streamUrl(id));
+  }
 
   async call(path: string, method = "GET", body?: unknown): Promise<any> {
     const response = await this.request(`${this.config.url.replace(/\/$/, "")}${path}`, {
@@ -78,7 +146,7 @@ export class PersonalAudio {
       this.failed(error);
     });
     await registered;
-    return `${this.config.publicUrl.replace(/\/$/, "")}/stream/${encodeURIComponent(participant.clientId)}`;
+    return this.streamUrl(participant.clientId);
   }
 
   /** Client-reported playback-state transition, aggregated for `status()`. */
@@ -196,6 +264,7 @@ export class PersonalAudio {
         this.playedGeneration.set(id, generation);
       }
       this.deliveryErrors.delete(id);
+      this.notifyStreamUrl(id, this.streamUrl(id));
       if (!this.deliveryErrors.size) this.lastError = null;
     });
     this.work = refreshed.catch((error: unknown) => {
@@ -241,6 +310,7 @@ export class PersonalAudio {
     try {
       const status = await this.call("/status");
       return { ...status, configured: true, error: this.lastError,
+        backend: this.active.kind, backendLabel: this.active.label,
         deliveryFailures: Object.fromEntries(this.deliveryErrors),
         players: (status.players ?? []).filter((p: { player_id: string }) => this.players.has(p.player_id))
           .map((p: { player_id: string }) => ({ ...p, name: this.players.get(p.player_id)?.name,
@@ -251,7 +321,8 @@ export class PersonalAudio {
             } : {}) })) };
     } catch (error) {
       this.failed(error);
-      return { configured: true, error: this.lastError, deliveryFailures: Object.fromEntries(this.deliveryErrors), players: [] };
+      return { configured: true, error: this.lastError, backend: this.active.kind, backendLabel: this.active.label,
+        deliveryFailures: Object.fromEntries(this.deliveryErrors), players: [] };
     }
   }
 

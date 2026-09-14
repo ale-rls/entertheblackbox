@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 export type Status = {
-  audio?: { configured: boolean; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; reconnects?: number; lastRecoveryMs?: number | null }> };
+  audio?: { configured: boolean; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; backend?: "remote" | "local"; backendLabel?: string; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; reconnects?: number; lastRecoveryMs?: number | null }> };
   healthy: boolean;
   ready: boolean;
   uptimeMs: number;
@@ -67,6 +67,10 @@ async function api(path: string, token: string, init?: RequestInit): Promise<Res
   if (!response.ok) {
     if (response.status === 401) throw new Error("Your session has expired. Sign in again.");
     if (response.status === 409) throw new Error("The server refused this action in the current show state.");
+    if (response.status === 502) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(body?.error ?? `Request failed (${response.status})`);
+    }
     throw new Error(`Request failed (${response.status})`);
   }
   return response;
@@ -211,6 +215,11 @@ export function App() {
   const [soundcheckSource, setSoundcheckSource] = useState("");
   const [soundcheckTarget, setSoundcheckTarget] = useState("");
   const [soundchecking, setSoundchecking] = useState(false);
+  const [localBridgeUrl, setLocalBridgeUrl] = useState("");
+  const [localBridgeToken, setLocalBridgeToken] = useState("");
+  const [localPublicUrl, setLocalPublicUrl] = useState("");
+  const [localNetworkLabel, setLocalNetworkLabel] = useState("");
+  const [switchingAudioBackend, setSwitchingAudioBackend] = useState(false);
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
   const controlsHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -380,6 +389,27 @@ export function App() {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Soundcheck failed." });
     } finally {
       setSoundchecking(false);
+    }
+  };
+
+  const switchAudioBackend = async (mode: "remote" | "local") => {
+    setSwitchingAudioBackend(true);
+    setFeedback(null);
+    try {
+      const response = await api("audio/bridge", connectedToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mode === "remote" ? { mode } : {
+          mode, url: localBridgeUrl, token: localBridgeToken, publicUrl: localPublicUrl, label: localNetworkLabel,
+        }),
+      });
+      const result = await response.json() as { backend: string; label?: string };
+      setFeedback({ status: "success", message: mode === "remote" ? "Switched back to the remote audio backend." : `Switched to local audio backend “${result.label}”.` });
+      await refresh();
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not switch the audio backend." });
+    } finally {
+      setSwitchingAudioBackend(false);
     }
   };
 
@@ -699,6 +729,7 @@ export function App() {
         <section className="sc-tool-panel" aria-label="Headphone streams">
           <h2>Headphone streams</h2>
           {!status.audio?.configured ? <p>Audio bridge is not configured.</p> : <>
+            <p>Active backend: <strong>{status.audio.backend === "local" ? status.audio.backendLabel ?? "Local" : "Remote"}</strong></p>
             {status.audio.error && <p role="alert">{status.audio.error}</p>}
             {Object.keys(status.audio.deliveryFailures ?? {}).length > 0 && <p role="alert">
               Narration delivery failed for {Object.keys(status.audio.deliveryFailures ?? {}).join(", ")}. Retrying automatically; hold the show until resolved.
@@ -727,6 +758,17 @@ export function App() {
                 <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={soundchecking || isActive} onClick={() => void soundcheck("stop")}>Stop phone audio</button><span>Resets the selected phone stream</span></div>
               </div>
               {(status.audio.soundcheckSources?.length ?? 0) === 0 && <p className="sc-tool-help">No MP3 files are present in the active show’s published media manifest.</p>}
+            </div>
+            <div className="admin-connection-form" aria-label="Local audio backend">
+              <p className="sc-tool-help">If Icecast/Liquidsoap feels laggy over the network, start the local rig (<code>services/audio</code>, <code>make up</code>) on this or another machine on the venue LAN, then switch to it here. Audience phones stay on the same network — this is an operator control only.</p>
+              <label className="sc-tool-label"><span>Local bridge control URL</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="http://192.168.1.42:8300" value={localBridgeUrl} onChange={(event) => setLocalBridgeUrl(event.target.value)} /></label>
+              <label className="sc-tool-label"><span>Bridge token</span><input className="sc-tool-field sc-tool-mono" type="password" value={localBridgeToken} onChange={(event) => setLocalBridgeToken(event.target.value)} /></label>
+              <label className="sc-tool-label"><span>Public stream URL (phone-reachable)</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="http://192.168.1.42:8300" value={localPublicUrl} onChange={(event) => setLocalPublicUrl(event.target.value)} /></label>
+              <label className="sc-tool-label"><span>Network label</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. Stage-LAN (5GHz)" value={localNetworkLabel} onChange={(event) => setLocalNetworkLabel(event.target.value)} /></label>
+              <div className="admin-control-list">
+                <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={switchingAudioBackend || !localBridgeUrl || !localBridgeToken || !localPublicUrl || !localNetworkLabel} onClick={() => void switchAudioBackend("local")}>Test &amp; switch to local</button><span>Health-checks the local bridge first; nothing changes if it fails</span></div>
+                {status.audio.backend === "local" && <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={switchingAudioBackend} onClick={() => void switchAudioBackend("remote")}>Switch back to remote</button><span>Returns to the deployment's default backend</span></div>}
+              </div>
             </div>
           </>}
         </section>

@@ -103,6 +103,14 @@ The canonical Fastify server and React phone app implement this contract:
    terminates old stream responses, and releases every slot.
 5. The Admin dashboard shows current listeners and flags an active stream that
    has gone unheard for longer than `FLAG_AFTER_S`.
+6. If the deployed bridge's round trip is too slow for a live cue (e.g. it's
+   hosted off-venue), an admin can run this same stack locally (`make up`, as
+   above) on a machine on the venue LAN and live-switch the running show to it
+   from the Admin dashboard's "Local audio backend" control -- no server
+   restart. It health-checks the local bridge before switching and re-plays
+   current narration there; switching back to the deployment's default is one
+   click. This does not change which network audience phones are on, only
+   which bridge the server talks to.
 
 The server automatically uploads each MP3 from its synced `content/media`
 directory before cueing it. `AUDIO_BRIDGE_TOKEN` must match this service's

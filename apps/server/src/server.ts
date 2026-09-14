@@ -95,7 +95,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         ...(options.movementConsentTimeoutMs === undefined ? {} : { timeoutMs: options.movementConsentTimeoutMs }),
         onError: (error) => app.log.error({ error }, "failed to delete unconsented movement recording"),
       });
-  const audio = config.audio ? new PersonalAudio(config.audio, config.mediaDir, (error) => app.log.error({ error }, "personal audio failed")) : null;
+  const audio = config.audio ? new PersonalAudio(
+    config.audio, config.mediaDir, (error) => app.log.error({ error }, "personal audio failed"), undefined,
+    // `engine` is assigned below; this closure only runs after buildServer() has finished setting it up.
+    (clientId, streamUrl) => engine?.notifyAudioBridgeChanged(clientId, streamUrl),
+  ) : null;
   const groups = readiness.ready ? new GroupManager(readiness.scenario) : null;
   audio?.start();
   if (readiness.ready) audio?.prepare(readiness.scenario.phases);
@@ -312,6 +316,13 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       sources: readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)),
       play: (src: string, participantId?: string) => audio.soundcheck(src, participantId),
       stop: (participantId?: string) => audio.stopSoundcheck(participantId),
+    } }),
+    ...(audio === null ? {} : { audioBridgeControl: {
+      switchBackend: (target: { kind: "remote" } | { kind: "local"; url: string; token: string; publicUrl: string; label: string }) =>
+        audio.setBackend(target.kind === "remote" ? { kind: "remote" } : {
+          kind: "local", label: target.label,
+          config: { url: target.url, token: target.token, publicUrl: target.publicUrl },
+        }),
     } }),
     ...(groups === null ? {} : { groupControl: {
       catalogue: readiness.ready ? readiness.scenario.groups ?? [] : [],

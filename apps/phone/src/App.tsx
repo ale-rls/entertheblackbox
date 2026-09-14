@@ -68,6 +68,7 @@ export function App() {
   const [submittedName, setSubmittedName] = useState<string | null>(null);
   const [joinConfig, setJoinConfig] = useState<JoinConfig | null>(null);
   const [audioIdentity, setAudioIdentity] = useState<{ clientId: string; participantLease: string } | null>(null);
+  const [audioBridgeUrl, setAudioBridgeUrl] = useState<string | null>(null);
   const [configError, setConfigError] = useState("");
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
@@ -106,13 +107,17 @@ export function App() {
         ...joinConfig,
         name: submittedName,
         onMessage: (message) => {
-          if (message.t === "identity") setAudioIdentity(message);
+          // A fresh identity means a new registration is about to happen --
+          // drop any stale override so it can't briefly out-race the new one.
+          if (message.t === "identity") { setAudioIdentity(message); setAudioBridgeUrl(null); }
+          if (message.t === "audio_bridge_changed") setAudioBridgeUrl(message.streamUrl);
           dispatch({ type: "server-message", message, receivedAtMs: Date.now() });
         },
         onSocketOpen: () => dispatch({ type: "socket-open" }),
         onSocketLost: () => dispatch({ type: "socket-lost" }),
         onSessionEnded: (session) => {
           setAudioIdentity(null);
+          setAudioBridgeUrl(null);
           if (session !== null && session.sessionId !== "idle" && session.sessionId !== "lobby") {
             setConsent({ session, deadlineAt: Date.now() + CONSENT_TIMEOUT_MS, status: "prompt", error: null });
           } else {
@@ -460,7 +465,7 @@ export function App() {
         </div>
       )}
 
-      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} />}
+      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} />}
       <footer className="hud">
         {identity && (
           <span

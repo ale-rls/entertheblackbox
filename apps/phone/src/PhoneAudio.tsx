@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AudioPlayback, playbackAction, playbackMessage, type PlaybackState } from "./lib/audio-playback";
 
 /** One native media element stays mounted across scene and WebSocket changes. */
-export function PhoneAudio({ participantLease }: { participantLease: string }) {
+export function PhoneAudio({ participantLease, streamUrlOverride }: { participantLease: string; streamUrlOverride?: string | null }) {
   const element = useRef<HTMLAudioElement>(null);
   const player = useRef<AudioPlayback>();
   const [url, setUrl] = useState<string | null>(null);
@@ -38,6 +38,13 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
     void register();
     return () => { abort.abort(); clearTimeout(timer); };
   }, [participantLease]);
+
+  // An admin live-switching the audio backend re-points this element at the
+  // new bridge's stream without a page reload -- the effect below is keyed
+  // on `url`, so updating it here does the full clean teardown/reinit.
+  useEffect(() => {
+    if (streamUrlOverride) setUrl(streamUrlOverride);
+  }, [streamUrlOverride]);
 
   useEffect(() => {
     if (!url) return;

@@ -435,6 +435,13 @@ export const pongSchema = z.object({
   serverTime: timestamp,
 });
 
+/** Sent when an admin live-switches the personal-audio backend (SPEC in services/audio) -- the phone must re-point its <audio> element at this URL without a page reload. */
+export const audioBridgeChangedSchema = z.object({
+  t: z.literal("audio_bridge_changed"),
+  v,
+  streamUrl: nonEmpty,
+});
+
 /** Everything a client can receive from the server. */
 export const serverToClientSchema = z.union([
   snapshotSchema,
@@ -454,6 +461,7 @@ export const serverToClientSchema = z.union([
   groupSelectionOptionsSchema,
   votingOptionsSchema,
   pongSchema,
+  audioBridgeChangedSchema,
 ]);
 
 // ------------------------------------------------------------------------- types
@@ -497,4 +505,5 @@ export type IdentityMessage = z.infer<typeof identitySchema>;
 export type JoinRejectedMessage = z.infer<typeof joinRejectedSchema>;
 export type StatusMessage = z.infer<typeof statusSchema>;
 export type PongMessage = z.infer<typeof pongSchema>;
+export type AudioBridgeChangedMessage = z.infer<typeof audioBridgeChangedSchema>;
 export type ServerToClientMessage = z.infer<typeof serverToClientSchema>;

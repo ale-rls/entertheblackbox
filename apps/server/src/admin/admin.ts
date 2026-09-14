@@ -34,6 +34,11 @@ export type RegisterAdminOptions = {
     play: (src: string, participantId?: string) => Promise<number>;
     stop: (participantId?: string) => Promise<number>;
   };
+  /** Live-switch between the boot-time remote personal-audio backend and an ad hoc local one. */
+  audioBridgeControl?: {
+    switchBackend: (target: { kind: "remote" } | { kind: "local"; url: string; token: string; publicUrl: string; label: string }) =>
+      Promise<{ ok: true } | { ok: false; error: string }>;
+  };
   groupControl?: {
     catalogue: readonly { id: string; label: string; color?: string | undefined }[];
     memberships: () => readonly { participantId: string; groupId: string | null }[];
@@ -174,6 +179,25 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       } catch (error) {
         return reply.code(409).send({ error: error instanceof Error ? error.message : "soundcheck_failed" });
       }
+    });
+    admin.post<{ Body: { mode?: unknown; url?: unknown; token?: unknown; publicUrl?: unknown; label?: unknown } }>("/audio/bridge", async (request, reply) => {
+      const control = options.audioBridgeControl;
+      if (!control) return reply.code(503).send({ error: "audio_unavailable" });
+      const { mode, url, token, publicUrl, label } = request.body ?? {};
+      if (mode === "remote") {
+        const result = await control.switchBackend({ kind: "remote" });
+        if (!result.ok) return reply.code(502).send({ error: result.error });
+        options.data?.audit({ action: "switch-audio-backend", at: new Date().toISOString(), detail: { mode: "remote" } });
+        return { ok: true, backend: "remote" };
+      }
+      if (mode !== "local" || typeof url !== "string" || !url || typeof token !== "string" || !token
+        || typeof publicUrl !== "string" || !publicUrl || typeof label !== "string" || !label) {
+        return reply.code(400).send({ error: "invalid_request" });
+      }
+      const result = await control.switchBackend({ kind: "local", url, token, publicUrl, label });
+      if (!result.ok) return reply.code(502).send({ error: result.error });
+      options.data?.audit({ action: "switch-audio-backend", at: new Date().toISOString(), detail: { mode: "local", label } });
+      return { ok: true, backend: "local", label };
     });
     admin.post<{ Body: { participantId?: unknown; groupId?: unknown } }>("/groups/assign", async (request, reply) => {
       if (!options.groupControl) return reply.code(503).send({ error: "groups_unavailable" });
