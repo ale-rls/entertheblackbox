@@ -41,9 +41,15 @@ function setup(options: {
         { id: "q1", kind: "position-question", title: "Choose", routes: [{ outcome: "next", target: "idle" }] },
       ],
     },
+    groupPathsStarted: false,
+    groupPaths: [],
     adminStart: vi.fn(() => ({ ok: false, reason: "wrong-phase" })),
     adminIdle: vi.fn(() => ({ ok: true })), adminSkip: vi.fn(() => ({ ok: true })), adminRestart: vi.fn(() => ({ ok: true })),
     adminJump: vi.fn((phaseId: string) => phaseId === "missing" ? ({ ok: false, reason: "invalid-target" }) : ({ ok: true })),
+    adminSkipGroup: vi.fn(() => ({ ok: true })),
+    adminJumpGroup: vi.fn(() => ({ ok: true })),
+    adminStartGroupPaths: vi.fn(() => ({ ok: true })),
+    adminForceReunion: vi.fn(() => ({ ok: true })),
   } as unknown as PhaseEngine;
   const data: AdminDataSource = {
     audit, recentErrors: async () => [{ message: "example" }],
@@ -171,7 +177,7 @@ describe("admin API", () => {
 
     const jumped = await app.inject({ method: "POST", url: "/api/admin/jump", headers, payload: { phaseId: "intro" } });
     expect(jumped.statusCode).toBe(200);
-    expect(engine.adminJump).toHaveBeenCalledWith("intro");
+    expect(engine.adminJump).toHaveBeenCalledWith("intro", undefined, undefined);
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({
       action: "jump",
       detail: { phaseId: "intro", ok: true },
@@ -179,6 +185,68 @@ describe("admin API", () => {
 
     expect((await app.inject({ method: "POST", url: "/api/admin/jump", headers, payload: { phaseId: 42 } })).statusCode).toBe(400);
     expect((await app.inject({ method: "POST", url: "/api/admin/jump", headers, payload: { phaseId: "missing" } })).statusCode).toBe(409);
+  });
+
+  it("scopes skip and jump to a single group when a groupId is given, and passes through expectedPhaseId", async () => {
+    const { app, engine, audit } = setup();
+    const headers = { authorization: "Bearer strong-admin-token" };
+
+    const skipped = await app.inject({ method: "POST", url: "/api/admin/skip", headers, payload: { groupId: "a", expectedPhaseId: "split" } });
+    expect(skipped.statusCode).toBe(200);
+    expect(engine.adminSkipGroup).toHaveBeenCalledWith("a", undefined, "split");
+    expect(engine.adminSkip).not.toHaveBeenCalled();
+
+    const jumped = await app.inject({ method: "POST", url: "/api/admin/jump", headers, payload: { phaseId: "together", groupId: "a" } });
+    expect(jumped.statusCode).toBe(200);
+    expect(engine.adminJumpGroup).toHaveBeenCalledWith("a", "together", undefined, undefined);
+    expect(engine.adminJump).not.toHaveBeenCalled();
+
+    expect((await app.inject({ method: "POST", url: "/api/admin/skip", headers, payload: { groupId: "" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/admin/skip", headers, payload: { expectedPhaseId: 42 } })).statusCode).toBe(400);
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "skip" }));
+  });
+
+  it("starts group paths and forces reunion through their own routes, refusing invalid expectedPhaseId payloads", async () => {
+    const { app, engine, audit } = setup();
+    const headers = { authorization: "Bearer strong-admin-token" };
+
+    const started = await app.inject({ method: "POST", url: "/api/admin/groups/start-paths", headers, payload: {} });
+    expect(started.statusCode).toBe(200);
+    expect(engine.adminStartGroupPaths).toHaveBeenCalledWith(undefined, undefined);
+
+    const reunited = await app.inject({ method: "POST", url: "/api/admin/groups/reunion", headers, payload: { expectedPhaseId: "split" } });
+    expect(reunited.statusCode).toBe(200);
+    expect(engine.adminForceReunion).toHaveBeenCalledWith(undefined, "split");
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "start-group-paths" }));
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "force-reunion" }));
+
+    expect((await app.inject({ method: "POST", url: "/api/admin/groups/start-paths", headers, payload: { expectedPhaseId: "" } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/admin/groups/reunion", headers, payload: { expectedPhaseId: 7 } })).statusCode).toBe(400);
+  });
+
+  it("exposes per-group path status enriched with group labels and scene titles on /status", async () => {
+    const headers = { authorization: "Bearer strong-admin-token" };
+    const engineWithPaths = {
+      lifecycleState: "active", currentSessionId: "s1", currentPhaseId: "split", currentPhaseEpoch: 3,
+      isDisplayConnected: true, displayHeartbeatAgeMs: 1, connectedParticipantCount: 2,
+      participantPresence: [],
+      adminFlow: { entryPhaseId: "split", scenes: [{ id: "vote", kind: "position-question", title: "Choose", routes: [] }] },
+      groupPathsStarted: true,
+      groupPaths: [{ groupId: "a", memberIds: ["p1", "p2"], phaseId: "vote", phaseEpoch: 5, done: false }],
+    } as unknown as import("../engine/phase-engine.js").PhaseEngine;
+    const app2 = Fastify();
+    registerAdminRoutes(app2, {
+      verifyToken: async (token) => token === "strong-admin-token",
+      engine: () => engineWithPaths,
+      ready: true,
+      startedAt: Date.now(),
+      groupControl: { catalogue: [{ id: "a", label: "Actors", color: "#f00" }], memberships: () => [], assign: () => {} },
+    });
+    const status = await app2.inject({ url: "/api/admin/status", headers });
+    expect(status.json()).toMatchObject({
+      groupPathsStarted: true,
+      groupPaths: [{ groupId: "a", memberIds: ["p1", "p2"], phaseId: "vote", phaseEpoch: 5, done: false, label: "Actors", color: "#f00", phaseTitle: "Choose" }],
+    });
   });
 
   it("returns recent errors and JSON/CSV session exports", async () => {

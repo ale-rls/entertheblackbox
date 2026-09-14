@@ -287,4 +287,113 @@ describe("independent group paths", () => {
     expect(theater.snapshot.phase.id).toBe("film");
     h.engine.stop();
   });
+
+  it("rejects the ambiguous generic skip during a group-branch phase, before and after paths start", () => {
+    const h = setup();
+    h.display();
+    const a = h.phone("one");
+    const b = h.phone("two");
+    h.engine.adminStart();
+    h.choose(a, "a");
+    h.choose(b, "b");
+    // Selection still open -- paths haven't started yet.
+    expect(h.engine.adminSkip()).toEqual({ ok: false, reason: "wrong-phase" });
+    expect(h.engine.currentPhaseId).toBe("split");
+    h.tick(100);
+    expect(h.engine.groupPathsStarted).toBe(true);
+    // Paths running -- the generic skip must not collapse them or end the show.
+    expect(h.engine.adminSkip()).toEqual({ ok: false, reason: "wrong-phase" });
+    expect(h.engine.currentPhaseId).toBe("split");
+    expect(h.engine.lifecycleState).toBe("active");
+    expect(a.snapshot.phase.id).toBe("vote");
+    expect(b.snapshot.phase.id).toBe("film");
+    expect(h.ended).toEqual([]);
+    h.engine.stop();
+  });
+
+  it("starts group paths immediately via adminStartGroupPaths, without waiting for the selection deadline", () => {
+    const h = setup();
+    h.display();
+    const a = h.phone("one");
+    h.engine.adminStart();
+    h.choose(a, "a");
+    expect(h.engine.groupPathsStarted).toBe(false);
+    expect(h.engine.adminStartGroupPaths()).toEqual({ ok: true });
+    expect(h.engine.groupPathsStarted).toBe(true);
+    expect(a.snapshot.phase.id).toBe("vote");
+    // Only valid once, from the group-branch phase, before paths have started.
+    expect(h.engine.adminStartGroupPaths()).toEqual({ ok: false, reason: "wrong-phase" });
+    h.engine.stop();
+  });
+
+  it("skips only one group's current scene via adminSkipGroup, leaving the other group running", () => {
+    const h = setup();
+    h.display();
+    const a = h.phone("one");
+    const b = h.phone("two");
+    h.engine.adminStart();
+    h.choose(a, "a");
+    h.choose(b, "b");
+    h.tick(100);
+    expect(a.snapshot.phase.id).toBe("vote");
+    expect(b.snapshot.phase.id).toBe("film");
+    expect(h.engine.adminSkipGroup("b")).toEqual({ ok: true });
+    expect(b.snapshot.phase).toMatchObject({ id: "split", title: "Waiting for other groups" });
+    expect(a.snapshot.phase.id).toBe("vote");
+    expect(h.engine.currentPhaseId).toBe("split");
+    expect(h.engine.lifecycleState).toBe("active");
+    expect(h.engine.adminSkipGroup("missing-group")).toEqual({ ok: false, reason: "wrong-phase" });
+    h.engine.stop();
+  });
+
+  it("forces reunion via adminForceReunion, ending every running group path at once", () => {
+    const h = setup();
+    const main = h.display();
+    const a = h.phone("one");
+    const b = h.phone("two");
+    h.engine.adminStart();
+    h.choose(a, "a");
+    h.choose(b, "b");
+    h.tick(100);
+    expect(h.engine.adminForceReunion()).toEqual({ ok: true });
+    expect(h.engine.currentPhaseId).toBe("together");
+    expect(main.snapshot.phase.id).toBe("together");
+    expect(h.engine.groupPathsStarted).toBe(false);
+    // No longer a running group-branch phase, so this is refused too.
+    expect(h.engine.adminForceReunion()).toEqual({ ok: false, reason: "wrong-phase" });
+    h.engine.stop();
+  });
+
+  it("rejects a whole-timeline jump while group paths are running, but allows jumping a single group", () => {
+    const h = setup();
+    h.display();
+    const a = h.phone("one");
+    const b = h.phone("two");
+    h.engine.adminStart();
+    h.choose(a, "a");
+    h.choose(b, "b");
+    h.tick(100);
+    expect(h.engine.adminJump("together")).toEqual({ ok: false, reason: "wrong-phase" });
+    expect(h.engine.currentPhaseId).toBe("split");
+    expect(h.engine.adminJumpGroup("b", "together")).toEqual({ ok: true });
+    expect(b.snapshot.phase).toMatchObject({ id: "split", title: "Waiting for other groups" });
+    expect(a.snapshot.phase.id).toBe("vote");
+    h.engine.stop();
+  });
+
+  it("rejects stale commands whose expectedPhaseId no longer matches the running phase", () => {
+    const h = setup();
+    h.display();
+    const a = h.phone("one");
+    h.engine.adminStart();
+    expect(h.engine.currentPhaseId).toBe("split");
+    expect(h.engine.adminSkip(undefined, "wrong-id")).toEqual({ ok: false, reason: "stale" });
+    expect(h.engine.adminJump("together", undefined, "wrong-id")).toEqual({ ok: false, reason: "stale" });
+    expect(h.engine.adminStartGroupPaths(undefined, "wrong-id")).toEqual({ ok: false, reason: "stale" });
+    h.choose(a, "a");
+    h.tick(100);
+    expect(h.engine.adminForceReunion(undefined, "wrong-id")).toEqual({ ok: false, reason: "stale" });
+    expect(h.engine.adminSkipGroup("a", undefined, "wrong-id")).toEqual({ ok: false, reason: "stale" });
+    h.engine.stop();
+  });
 });

@@ -129,6 +129,8 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
     admin.get("/status", async () => {
       const engine = options.engine();
       const memberships = new Map(options.groupControl?.memberships().map((row) => [row.participantId, row.groupId]) ?? []);
+      const catalogueById = new Map((options.groupControl?.catalogue ?? []).map((group) => [group.id, group]));
+      const flowScenes = new Map((engine?.adminFlow.scenes ?? []).map((scene) => [scene.id, scene]));
       return {
         audio: await options.audioStatus?.() ?? { configured: false, players: [] },
         healthy: true,
@@ -147,6 +149,16 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         lifecycle: engine?.lifecycleState ?? null,
         phaseId: engine?.currentPhaseId ?? null,
         phaseEpoch: engine?.currentPhaseEpoch ?? null,
+        // Authoritative per-group progress while a group-branch phase runs --
+        // the top-level phaseId/phaseEpoch above stay pinned to that shared
+        // scene the whole time, so this is the only source of "who is where."
+        groupPathsStarted: engine?.groupPathsStarted ?? false,
+        groupPaths: (engine?.groupPaths ?? []).map((path) => ({
+          ...path,
+          label: catalogueById.get(path.groupId)?.label ?? path.groupId,
+          color: catalogueById.get(path.groupId)?.color ?? null,
+          phaseTitle: flowScenes.get(path.phaseId)?.title ?? path.phaseId,
+        })),
       };
     });
     admin.post<{ Body: { action?: unknown; src?: unknown; participantId?: unknown } }>("/audio/soundcheck", async (request, reply) => {
@@ -305,27 +317,75 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       if (request.query.format === "csv") return reply.type("text/csv; charset=utf-8").send(result.csv);
       return result.json;
     });
-    admin.post<{ Body: { phaseId?: unknown } }>("/jump", async (request, reply) => {
-      const { phaseId } = request.body ?? {};
+    admin.post<{ Body: { phaseId?: unknown; groupId?: unknown; expectedPhaseId?: unknown } }>("/jump", async (request, reply) => {
+      const { phaseId, groupId, expectedPhaseId } = request.body ?? {};
       if (typeof phaseId !== "string" || phaseId === "") {
         return reply.code(400).send({ error: "invalid_phase_id" });
+      }
+      if (groupId !== undefined && (typeof groupId !== "string" || groupId === "")) {
+        return reply.code(400).send({ error: "invalid_request" });
+      }
+      if (expectedPhaseId !== undefined && (typeof expectedPhaseId !== "string" || expectedPhaseId === "")) {
+        return reply.code(400).send({ error: "invalid_request" });
       }
       const engine = options.engine();
       const result: TransitionResult = engine === null
         ? { ok: false, reason: "wrong-phase" }
-        : engine.adminJump(phaseId);
-      options.data?.audit({ action: "jump", at: new Date().toISOString(), detail: { phaseId, ...result } });
+        : typeof groupId === "string"
+          ? engine.adminJumpGroup(groupId, phaseId, undefined, expectedPhaseId)
+          : engine.adminJump(phaseId, undefined, expectedPhaseId);
+      options.data?.audit({ action: "jump", at: new Date().toISOString(), detail: { phaseId, groupId, ...result } });
       return result.ok ? result : reply.code(409).send(result);
     });
-    for (const action of ["start", "idle", "skip", "restart"] as const) {
+    admin.post<{ Body: { groupId?: unknown; expectedPhaseId?: unknown } }>("/skip", async (request, reply) => {
+      const { groupId, expectedPhaseId } = request.body ?? {};
+      if (groupId !== undefined && (typeof groupId !== "string" || groupId === "")) {
+        return reply.code(400).send({ error: "invalid_request" });
+      }
+      if (expectedPhaseId !== undefined && (typeof expectedPhaseId !== "string" || expectedPhaseId === "")) {
+        return reply.code(400).send({ error: "invalid_request" });
+      }
+      const engine = options.engine();
+      const result: TransitionResult = engine === null
+        ? { ok: false, reason: "wrong-phase" }
+        : typeof groupId === "string"
+          ? engine.adminSkipGroup(groupId, undefined, expectedPhaseId)
+          : engine.adminSkip(undefined, expectedPhaseId);
+      options.data?.audit({ action: "skip", at: new Date().toISOString(), detail: { groupId, ...result } });
+      return result.ok ? result : reply.code(409).send(result);
+    });
+    admin.post<{ Body: { expectedPhaseId?: unknown } }>("/groups/start-paths", async (request, reply) => {
+      const { expectedPhaseId } = request.body ?? {};
+      if (expectedPhaseId !== undefined && (typeof expectedPhaseId !== "string" || expectedPhaseId === "")) {
+        return reply.code(400).send({ error: "invalid_request" });
+      }
+      const engine = options.engine();
+      const result: TransitionResult = engine === null
+        ? { ok: false, reason: "wrong-phase" }
+        : engine.adminStartGroupPaths(undefined, expectedPhaseId);
+      options.data?.audit({ action: "start-group-paths", at: new Date().toISOString(), detail: result });
+      return result.ok ? result : reply.code(409).send(result);
+    });
+    admin.post<{ Body: { expectedPhaseId?: unknown } }>("/groups/reunion", async (request, reply) => {
+      const { expectedPhaseId } = request.body ?? {};
+      if (expectedPhaseId !== undefined && (typeof expectedPhaseId !== "string" || expectedPhaseId === "")) {
+        return reply.code(400).send({ error: "invalid_request" });
+      }
+      const engine = options.engine();
+      const result: TransitionResult = engine === null
+        ? { ok: false, reason: "wrong-phase" }
+        : engine.adminForceReunion(undefined, expectedPhaseId);
+      options.data?.audit({ action: "force-reunion", at: new Date().toISOString(), detail: result });
+      return result.ok ? result : reply.code(409).send(result);
+    });
+    for (const action of ["start", "idle", "restart"] as const) {
       admin.post(`/${action}`, async (_request, reply) => {
         const engine = options.engine();
         const result: TransitionResult = engine === null
           ? { ok: false, reason: "wrong-phase" }
           : action === "start" ? engine.adminStart()
             : action === "idle" ? engine.adminIdle()
-              : action === "skip" ? engine.adminSkip()
-                : engine.adminRestart();
+              : engine.adminRestart();
         options.data?.audit({ action, at: new Date().toISOString(), detail: result });
         return result.ok ? result : reply.code(409).send(result);
       });
