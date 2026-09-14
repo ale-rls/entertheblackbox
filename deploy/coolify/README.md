@@ -195,3 +195,11 @@ mobile background playback.
 If deployment fails, keep the old containers and volume, correct the reported
 missing variable or health check, and redeploy. Do not create a fresh
 PocketBase volume as a recovery step.
+
+## Personal audio too slow over the deployed bridge
+
+`frontend` stays on this Coolify deployment; only the Icecast/Liquidsoap
+bridge needs to move closer to the audience. See
+[`services/audio/README.md`](../../services/audio/README.md#keeping-appsserver-remote-while-audio-runs-at-the-venue)
+for the recommended Tailscale-based setup and the Admin control that switches
+to it live, with no redeploy of this stack.
