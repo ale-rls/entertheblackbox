@@ -112,6 +112,46 @@ The canonical Fastify server and React phone app implement this contract:
    click. This does not change which network audience phones are on, only
    which bridge the server talks to.
 
+### Keeping `apps/server` remote while audio runs at the venue
+
+You do not need to move the whole installation server to the venue just to
+get local audio. `AudioConfig` already splits into two independent URLs, and
+the "Local audio backend" form in Admin exposes both separately:
+
+- **Local bridge control URL** -- used only by `apps/server` itself (health
+  check, MP3 upload, play/reset). Latency here is irrelevant: it's not in the
+  audience's ear, and the existing multi-second cue-to-ear buffer plus the
+  engine's per-venue `LATENCY_COMP` constant already absorb a network hop.
+- **Public stream URL** -- handed straight to phones, who fetch
+  `/stream/{id}` *directly from the bridge*, never through `apps/server`.
+  Point this at the bridge's bare venue-LAN address (e.g.
+  `http://192.168.1.42:8300`); phones are already on that network, so the
+  actual audio bytes never leave the venue. `<audio>`/`<video>` `src` is
+  passive mixed content -- browsers, including Safari, don't block an
+  `http://` stream embedded in an `https://` page the way they'd block a
+  script or `fetch` call -- but confirm this on your actual target devices
+  during the locked-screen soak test (SPEC.md §10 T1) rather than assuming it.
+
+The only real gap is getting the remote server a network path to the local
+bridge's control port. **Recommended: Tailscale, installed on the host
+machine underneath the remote deployment -- not as a sidecar container.** A
+sidecar sharing `frontend`'s network namespace (the usual Docker pattern)
+would replace its network stack and break the Compose service-name DNS it
+uses to reach `pocketbase`/`bridge`/`realtime` (see
+`deploy/coolify/docker-compose.yml`), risking the live show's ingress for no
+good reason. Installed at the host level instead, Docker's default bridge
+networking already routes container egress through the host's routing table,
+so containers get tailnet reachability automatically -- zero
+`docker-compose.yml` changes, zero risk to existing service networking.
+
+Setup, done once outside show hours:
+
+1. On the venue machine running this stack: install the [Tailscale app](https://tailscale.com/download) (or `brew install --cask tailscale`) and sign in with the account that should own this venue's tailnet -- ideally a shared/team one, since it needs to stay authenticated through the show.
+2. On the host machine underneath the remote deployment (SSH in; this is *not* a container change): `curl -fsSL https://tailscale.com/install.sh | sh` then `sudo tailscale up`, signed into the same tailnet.
+3. Find the venue machine's tailnet address (`tailscale ip -4`, or its MagicDNS name from the Tailscale admin console).
+4. In Admin's "Local audio backend" form: **Local bridge control URL** = that tailnet address plus the bridge's control port (e.g. `http://100.x.y.z:8300`); **Public stream URL** = the bridge's plain venue-LAN address (e.g. `http://192.168.1.42:8300`); **Bridge token** = this stack's `BRIDGE_TOKEN`.
+5. "Test & switch to local" health-checks over the tailnet before committing -- nothing changes if that fails.
+
 The server automatically uploads each MP3 from its synced `content/media`
 directory before cueing it. `AUDIO_BRIDGE_TOKEN` must match this service's
 `BRIDGE_TOKEN`, and `AUDIO_PUBLIC_URL` must point to the browser-reachable
