@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 export type Status = {
-  audio?: { configured: boolean; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number }> };
+  audio?: { configured: boolean; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; reconnects?: number; lastRecoveryMs?: number | null }> };
   healthy: boolean;
   ready: boolean;
   uptimeMs: number;
@@ -636,6 +636,11 @@ export function App() {
             <ul className="admin-participant-list">{status.audio.players.map((player) => <li key={player.player_id}>
               <strong>{player.name ?? player.player_id}</strong>
               <span>{player.connected ? `${player.listeners} listener(s)` : player.flagged ? "No listener — check headphones" : "Waiting for listener"}</span>
+              {player.reconnects !== undefined && <span>
+                {player.playbackState === "reconnecting" ? "reconnecting now" : player.playbackState}
+                {" · "}{player.reconnects} reconnect{player.reconnects === 1 ? "" : "s"}
+                {player.lastRecoveryMs != null && ` · last recovery ${(player.lastRecoveryMs / 1000).toFixed(1)}s`}
+              </span>}
             </li>)}</ul>
             <div className="admin-connection-form" aria-label="Phone audio soundcheck">
               <label className="sc-tool-label"><span>Test MP3</span><select className="sc-tool-select" value={soundcheckSource} onChange={(event) => setSoundcheckSource(event.target.value)}>

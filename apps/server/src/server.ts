@@ -232,6 +232,22 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     try { return { streamUrl: await audio.register(participant) }; }
     catch { return reply.code(503).send({ error: "audio_unavailable" }); }
   });
+  const audioEventBodySchema = z.object({
+    participantLease: z.string().min(1).max(4096),
+    state: z.enum(["ready", "connecting", "playing", "reconnecting", "blocked", "paused"]),
+    at: z.number().finite(),
+  });
+  app.post<{ Body: unknown }>("/api/audio/event", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!audio) return reply.code(503).send({ error: "audio_not_configured" });
+    const body = audioEventBodySchema.safeParse(request.body);
+    if (!body.success) return reply.code(400).send({ error: "invalid_request" });
+    const lease = verifyParticipantLease(body.data.participantLease, { secret: config.joinGrantSecret, installationId: config.installationId });
+    const participant = admission.registry.get(body.data.participantLease);
+    if (!lease || !participant || participant.clientId !== lease.clientId) return reply.code(401).send({ error: "invalid_participant_lease" });
+    audio.recordEvent(participant.clientId, body.data.state, body.data.at);
+    return { ok: true };
+  });
   const movementConsentBodySchema = z.object({
     sessionId: z.string().min(1).max(200),
     participantLease: z.string().min(1).max(4_096),

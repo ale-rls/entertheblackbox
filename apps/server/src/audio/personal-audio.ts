@@ -5,6 +5,8 @@ import type { Phase } from "@entertheblackbox/scenario";
 
 export type AudioConfig = { url: string; token: string; publicUrl: string };
 export type AudioParticipant = { clientId: string; name: string };
+export type PlaybackState = "ready" | "connecting" | "playing" | "reconnecting" | "blocked" | "paused";
+type Telemetry = { state: PlaybackState; clientAt: number; reconnectedAt: number | null; reconnects: number; lastRecoveryMs: number | null };
 
 /** The delivery roster survives sleeping phones and their disconnected WebSockets. */
 export class PersonalAudio {
@@ -21,6 +23,7 @@ export class PersonalAudio {
   private timer: ReturnType<typeof setInterval> | undefined;
   private lastError: string | null = null;
   private readonly deliveryErrors = new Map<string, string>();
+  private readonly telemetry = new Map<string, Telemetry>();
   private reconciling = false;
   private stopped = false;
 
@@ -76,6 +79,18 @@ export class PersonalAudio {
     });
     await registered;
     return `${this.config.publicUrl.replace(/\/$/, "")}/stream/${encodeURIComponent(participant.clientId)}`;
+  }
+
+  /** Client-reported playback-state transition, aggregated for `status()`. */
+  recordEvent(id: string, state: PlaybackState, clientAt: number): void {
+    if (!this.players.has(id)) return;
+    const previous = this.telemetry.get(id);
+    if (previous && clientAt < previous.clientAt) return; // Out-of-order delivery.
+    const reconnects = (previous?.reconnects ?? 0) + (state === "reconnecting" && previous?.state !== "reconnecting" ? 1 : 0);
+    const reconnectedAt = state === "reconnecting" ? clientAt : previous?.reconnectedAt ?? null;
+    const recovered = state === "playing" && previous?.state === "reconnecting" && previous.reconnectedAt !== null;
+    const lastRecoveryMs = recovered ? Math.max(0, clientAt - previous!.reconnectedAt!) : previous?.lastRecoveryMs ?? null;
+    this.telemetry.set(id, { state, clientAt, reconnectedAt: recovered ? null : reconnectedAt, reconnects, lastRecoveryMs });
   }
 
   private async reconcile(): Promise<void> {
@@ -228,7 +243,12 @@ export class PersonalAudio {
       return { ...status, configured: true, error: this.lastError,
         deliveryFailures: Object.fromEntries(this.deliveryErrors),
         players: (status.players ?? []).filter((p: { player_id: string }) => this.players.has(p.player_id))
-          .map((p: { player_id: string }) => ({ ...p, name: this.players.get(p.player_id)?.name })) };
+          .map((p: { player_id: string }) => ({ ...p, name: this.players.get(p.player_id)?.name,
+            ...(this.telemetry.get(p.player_id) ? {
+              playbackState: this.telemetry.get(p.player_id)!.state,
+              reconnects: this.telemetry.get(p.player_id)!.reconnects,
+              lastRecoveryMs: this.telemetry.get(p.player_id)!.lastRecoveryMs,
+            } : {}) })) };
     } catch (error) {
       this.failed(error);
       return { configured: true, error: this.lastError, deliveryFailures: Object.fromEntries(this.deliveryErrors), players: [] };
@@ -246,6 +266,7 @@ export class PersonalAudio {
     this.players.clear();
     this.playedGeneration.clear();
     this.deliveryErrors.clear();
+    this.telemetry.clear();
     this.work = this.work.then(async () => {
       for (const id of ids) await this.call(`/players/${encodeURIComponent(id)}`, "DELETE");
     }).catch((error: unknown) => this.failed(error));
