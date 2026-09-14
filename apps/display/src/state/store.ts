@@ -128,6 +128,7 @@ export function displayReducer(
     case "voting_options":
     case "status":
     case "pong":
+    case "audio_bridge_changed":
       return state;
   }
 }

@@ -190,4 +190,68 @@ describe("PersonalAudio", () => {
 
     await audio.stop();
   });
+
+  it("live-switches to a healthy local backend, replays current narration there, and notifies connected phones", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+    await writeFile(join(dir, "voice.mp3"), "voice");
+    const calls: string[] = [];
+    const request = vi.fn(async (url: string | URL | Request) => {
+      const value = String(url);
+      calls.push(value);
+      if (value.endsWith("/health")) return new Response("{}", { status: 200 });
+      if (value.endsWith("/status")) return new Response('{"players":[]}', { status: 200 });
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    const notified: Array<{ id: string; url: string }> = [];
+    const audio = new PersonalAudio(
+      { url: "http://bridge", token: "secret", publicUrl: "https://audio.example" }, dir, vi.fn(), request,
+      (clientId, streamUrl) => notified.push({ id: clientId, url: streamUrl }),
+    );
+    await audio.register({ clientId: "one", name: "One" });
+    audio.transition(phase("voice.mp3"));
+    await audio.register({ clientId: "one", name: "One" });
+    notified.length = 0;
+
+    const result = await audio.setBackend({ kind: "local", config: { url: "http://local-bridge", token: "local-secret", publicUrl: "http://192.168.1.42:8300" }, label: "Stage LAN" });
+
+    expect(result).toEqual({ ok: true });
+    expect((await audio.status() as { backend: string; backendLabel: string }).backend).toBe("local");
+    expect((await audio.status() as { backend: string; backendLabel: string }).backendLabel).toBe("Stage LAN");
+    expect(calls).toContain("http://local-bridge/health");
+    expect(calls.some((call) => call.startsWith("http://local-bridge/players/one/play"))).toBe(true);
+    expect(notified).toEqual([{ id: "one", url: "http://192.168.1.42:8300/stream/one" }]);
+    await audio.stop();
+  });
+
+  it("does not switch backends when the target's health check fails", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+    const request = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).endsWith("/health")) return new Response("down", { status: 503 });
+      return new Response('{"players":[]}', { status: 200 });
+    }) as unknown as typeof fetch;
+    const audio = new PersonalAudio({ url: "http://bridge", token: "secret", publicUrl: "https://audio.example" }, dir, vi.fn(), request);
+    await audio.register({ clientId: "one", name: "One" });
+
+    const result = await audio.setBackend({ kind: "local", config: { url: "http://local-bridge", token: "x", publicUrl: "http://192.168.1.42:8300" }, label: "Stage LAN" });
+
+    expect(result.ok).toBe(false);
+    expect((await audio.status() as { backend: string }).backend).toBe("remote");
+    expect(await audio.register({ clientId: "one", name: "One" })).toBe("https://audio.example/stream/one");
+    await audio.stop();
+  });
+
+  it("switches back to the remote backend without needing the caller to re-supply its config", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+    const request = vi.fn(async () => new Response('{"players":[]}', { status: 200 })) as unknown as typeof fetch;
+    const audio = new PersonalAudio({ url: "http://bridge", token: "secret", publicUrl: "https://audio.example" }, dir, vi.fn(), request);
+    await audio.register({ clientId: "one", name: "One" });
+    await audio.setBackend({ kind: "local", config: { url: "http://local-bridge", token: "x", publicUrl: "http://192.168.1.42:8300" }, label: "Stage LAN" });
+
+    const result = await audio.setBackend({ kind: "remote" });
+
+    expect(result).toEqual({ ok: true });
+    expect((await audio.status() as { backend: string }).backend).toBe("remote");
+    expect(await audio.register({ clientId: "one", name: "One" })).toBe("https://audio.example/stream/one");
+    await audio.stop();
+  });
 });

@@ -23,6 +23,10 @@ function setup(options: {
     play: (src: string, participantId?: string) => Promise<number>;
     stop: (participantId?: string) => Promise<number>;
   };
+  audioBridgeControl?: {
+    switchBackend: (target: { kind: "remote" } | { kind: "local"; url: string; token: string; publicUrl: string; label: string }) =>
+      Promise<{ ok: true } | { ok: false; error: string }>;
+  };
 } = {}) {
   const audit = vi.fn();
   let lobbyTimes = [20_000, 40_000];
@@ -126,6 +130,30 @@ describe("admin API", () => {
 
     const active = setup({ audioSoundcheck: { sources: ["voice.mp3"], play, stop } });
     expect((await active.app.inject({ method: "POST", url: "/api/admin/audio/soundcheck", headers, payload: { action: "play", src: "voice.mp3" } })).statusCode).toBe(409);
+  });
+
+  it("switches the audio backend, validates the local payload, and surfaces a failed health check without a 500", async () => {
+    const headers = { authorization: "Bearer strong-admin-token" };
+    const switchBackend = vi.fn(async (target: { kind: string }) =>
+      target.kind === "local" ? { ok: true as const } : { ok: false as const, error: "down" });
+    const { app, audit } = setup({ audioBridgeControl: { switchBackend } });
+
+    const missing = await app.inject({ method: "POST", url: "/api/admin/audio/bridge", headers, payload: { mode: "local", url: "http://x" } });
+    expect(missing.statusCode).toBe(400);
+    expect(switchBackend).not.toHaveBeenCalled();
+
+    const local = await app.inject({ method: "POST", url: "/api/admin/audio/bridge", headers,
+      payload: { mode: "local", url: "http://192.168.1.42:8300", token: "t", publicUrl: "http://192.168.1.42:8300", label: "Stage LAN" } });
+    expect(local.json()).toEqual({ ok: true, backend: "local", label: "Stage LAN" });
+    expect(switchBackend).toHaveBeenCalledWith({ kind: "local", url: "http://192.168.1.42:8300", token: "t", publicUrl: "http://192.168.1.42:8300", label: "Stage LAN" });
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "switch-audio-backend", detail: { mode: "local", label: "Stage LAN" } }));
+
+    const failed = await app.inject({ method: "POST", url: "/api/admin/audio/bridge", headers, payload: { mode: "remote" } });
+    expect(failed.statusCode).toBe(502);
+    expect(failed.json()).toEqual({ error: "down" });
+
+    const unavailable = setup();
+    expect((await unavailable.app.inject({ method: "POST", url: "/api/admin/audio/bridge", headers, payload: { mode: "remote" } })).statusCode).toBe(503);
   });
 
   it("authenticates and rate-limits admin routes even when their path is percent-encoded", async () => {

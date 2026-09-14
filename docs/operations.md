@@ -56,6 +56,10 @@ the server behind one shared address.
   locked media files and manifest. Do not replace files during opening hours.
 - **Repeated session aborts:** use the admin `idle` control once and escalate
   with timestamps and the visible phase/session identifiers.
+- **Personal-audio cue-to-ear delay feels off during a live run:** start the
+  local audio rig (`services/audio`, `make up`) on a machine on the venue LAN
+  and switch to it from the Admin "Local audio backend" control -- no
+  restart. See `services/audio/README.md`.
 - **Disk, memory, or temperature warning:** close the installation before the
   computer becomes unstable and contact the technical operator.
 
