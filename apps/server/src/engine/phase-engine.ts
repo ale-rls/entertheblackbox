@@ -161,6 +161,18 @@ export type AdminFlow = {
   scenes: AdminFlowScene[];
 };
 
+/** Authoritative progress for one running group branch -- the parent's own
+ * phaseId stays pinned to the group-branch scene for the whole time these
+ * run, so this is the only way an operator can see where each group is. */
+export type AdminGroupPathStatus = {
+  groupId: string;
+  memberIds: readonly string[];
+  phaseId: string;
+  phaseEpoch: number;
+  /** True once this group has reached the reunion point and is waiting on the others. */
+  done: boolean;
+};
+
 function adminRoutesForPhase(phase: Exclude<Phase, { kind: "idle" }>): AdminFlowRoute[] {
   if (phase.kind === "group-branch") return [...phase.branches.map((branch) => ({ outcome: branch.groupId, target: branch.next ?? phase.next })), { outcome: "rejoin", target: phase.next }];
   if (phase.kind === "video") return [{ outcome: "next", target: phase.next }];
@@ -387,17 +399,23 @@ export class PhaseEngine {
     return { ok: true };
   }
 
-  adminSkip(now = this.now()): TransitionResult {
+  adminSkip(now = this.now(), expectedPhaseId?: string): TransitionResult {
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
+    if (expectedPhaseId !== undefined && expectedPhaseId !== this.phaseId) return { ok: false, reason: "stale" };
     const phase = this.currentPhase();
-    if (phase.kind === "video" || phase.kind === "group-branch") return this.advanceTo(phase.next, now, "admin-skip");
+    // A group-branch scene runs several independent group timelines at once,
+    // so there is no single "next" a generic skip could mean -- the operator
+    // must either skip one group's own scene (adminSkipGroup) or explicitly
+    // force everyone to the reunion point (adminForceReunion).
+    if (phase.kind === "group-branch") return { ok: false, reason: "wrong-phase" };
+    if (phase.kind === "video") return this.advanceTo(phase.next, now, "admin-skip");
     if (phase.kind === "video-position-question") {
+      if (this.questionResolutionTarget !== null) {
+        return this.advanceTo(this.questionResolutionTarget, now, "admin-skip");
+      }
       this.beginCompositeVoteIfDue(now, phase, true);
       this.resolveCompositeQuestion(now, phase);
-      const target = this.questionResolutionTarget;
-      return target === null
-        ? { ok: false, reason: "wrong-phase" }
-        : this.advanceTo(target, now, "admin-skip");
+      return { ok: true };
     }
     if (phase.kind === "position-question") {
       if (this.questionResolutionTarget !== null) {
@@ -409,11 +427,69 @@ export class PhaseEngine {
     return { ok: false, reason: "wrong-phase" };
   }
 
-  adminJump(target: string, now = this.now()): TransitionResult {
+  /** Skips only the given group's own current scene, leaving every other
+   * running group path untouched. */
+  adminSkipGroup(groupId: string, now = this.now(), expectedPhaseId?: string): TransitionResult {
+    const child = this.pathForGroup(groupId);
+    if (!child) return { ok: false, reason: "wrong-phase" };
+    return child.adminSkip(now, expectedPhaseId);
+  }
+
+  /** Starts a group-branch phase's branches immediately instead of waiting
+   * for its selection deadline -- "finish assignment, begin the branches." */
+  adminStartGroupPaths(now = this.now(), expectedPhaseId?: string): TransitionResult {
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
+    if (expectedPhaseId !== undefined && expectedPhaseId !== this.phaseId) return { ok: false, reason: "stale" };
+    const phase = this.currentPhase();
+    if (phase.kind !== "group-branch" || this.pathsStarted) return { ok: false, reason: "wrong-phase" };
+    this.startGroupPaths(phase, now);
+    return { ok: true };
+  }
+
+  /** Explicitly ends every still-running group path and advances to the
+   * shared reunion scene -- the deliberate, confirmed counterpart to the
+   * generic skip this replaces for group-branch phases. */
+  adminForceReunion(now = this.now(), expectedPhaseId?: string): TransitionResult {
+    if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
+    if (expectedPhaseId !== undefined && expectedPhaseId !== this.phaseId) return { ok: false, reason: "stale" };
+    const phase = this.currentPhase();
+    if (phase.kind !== "group-branch" || !this.pathsStarted) return { ok: false, reason: "wrong-phase" };
+    return this.advanceTo(phase.next, now, "admin-force-reunion");
+  }
+
+  adminJump(target: string, now = this.now(), expectedPhaseId?: string): TransitionResult {
+    if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
+    if (expectedPhaseId !== undefined && expectedPhaseId !== this.phaseId) return { ok: false, reason: "stale" };
+    // Same ambiguity as the generic skip: a whole-timeline jump while group
+    // paths are running would silently clear all of them (enterPhase always
+    // clears paths). Route group-scoped jumps through adminJumpGroup instead.
+    if (this.pathsStarted) return { ok: false, reason: "wrong-phase" };
     const phase = this.scenario.phases.find((candidate) => candidate.id === target);
     if (!phase || phase.kind === "idle") return { ok: false, reason: "invalid-target" };
     return this.advanceTo(target, now, "admin-jump");
+  }
+
+  /** Jumps only the given group's own path to a scene, including its own
+   * reunion point (leaving it to wait while other groups keep running). */
+  adminJumpGroup(groupId: string, target: string, now = this.now(), expectedPhaseId?: string): TransitionResult {
+    const child = this.pathForGroup(groupId);
+    if (!child) return { ok: false, reason: "wrong-phase" };
+    return child.adminJump(target, now, expectedPhaseId);
+  }
+
+  get groupPathsStarted(): boolean {
+    return this.pathsStarted;
+  }
+
+  /** Authoritative per-group progress while a group-branch phase is running; empty otherwise. */
+  get groupPaths(): AdminGroupPathStatus[] {
+    return [...this.paths.entries()].map(([groupId, { engine, members }]) => ({
+      groupId,
+      memberIds: [...members],
+      phaseId: engine.phaseId,
+      phaseEpoch: engine.phaseEpoch,
+      done: engine.pathDone,
+    }));
   }
 
   adminRestart(now = this.now()): TransitionResult {

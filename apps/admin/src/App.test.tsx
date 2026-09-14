@@ -35,6 +35,8 @@ const activeStatus: Status = {
   lifecycle: "active",
   phaseId: "question-02",
   phaseEpoch: 7,
+  groupPathsStarted: false,
+  groupPaths: [],
 };
 
 const sceneFlow = {
@@ -85,14 +87,14 @@ function button(label: string): HTMLButtonElement {
   return match;
 }
 
-function createAdminFetch(options?: { status?: Status; rejectAction?: string }) {
+function createAdminFetch(options?: { status?: Status; rejectAction?: string; flow?: typeof sceneFlow }) {
   const requests: Array<{ url: string; method: string; body?: string }> = [];
   const mock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     requests.push({ url, method, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
     if (url.endsWith("/status")) return jsonResponse(options?.status ?? activeStatus);
-    if (url.endsWith("/flow")) return jsonResponse(sceneFlow);
+    if (url.endsWith("/flow")) return jsonResponse(options?.flow ?? sceneFlow);
     if (url.endsWith("/shows") && method === "GET") {
       return jsonResponse({ active: "show-a", pending: null, shows: [{ showId: "show-a", name: "Election night", version: "1.0.0", publishedAt: 1_000 }] });
     }
@@ -156,7 +158,7 @@ describe("Admin operations UI", () => {
     expect(button("Skip current phase").disabled).toBe(false);
     await act(async () => { button("Skip current phase").click(); });
     await flush();
-    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST" });
+    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST", body: "{}" });
 
     const restartTrigger = button("Restart show");
     await act(async () => { restartTrigger.click(); });
@@ -234,6 +236,63 @@ describe("Admin operations UI", () => {
     await act(async () => { button("Skip current phase").click(); });
     await flush();
     expect(document.querySelector('[role="alert"]')?.textContent).toContain("server refused this action");
+  });
+
+  it("offers a single 'Start group paths' control while a group-branch phase is still assigning", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    const groupFlow = {
+      entryPhaseId: "split",
+      scenes: [{ id: "split", kind: "group-branch" as const, title: "Choose a role", routes: [{ outcome: "a", target: "vote" }, { outcome: "rejoin", target: "together" }] }],
+    };
+    const { requests } = createAdminFetch({
+      flow: groupFlow,
+      status: { ...activeStatus, phaseId: "split", groupPathsStarted: false, groupPaths: [] },
+    });
+    await renderApp();
+
+    expect(document.body.textContent).not.toContain("Skip current phase");
+    const startButton = button("Start group paths");
+    expect(startButton.disabled).toBe(false);
+    await act(async () => { startButton.click(); });
+    await flush();
+    expect(requests).toContainEqual({ url: "/api/admin/groups/start-paths", method: "POST" });
+  });
+
+  it("lets an operator advance one running group independently and force a reunion for the rest", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    const groupFlow = {
+      entryPhaseId: "split",
+      scenes: [{ id: "split", kind: "group-branch" as const, title: "Choose a role", routes: [{ outcome: "a", target: "vote" }, { outcome: "rejoin", target: "together" }] }],
+    };
+    const { requests } = createAdminFetch({
+      flow: groupFlow,
+      status: {
+        ...activeStatus,
+        phaseId: "split",
+        groupPathsStarted: true,
+        groupPaths: [
+          { groupId: "a", memberIds: ["p1", "p2"], phaseId: "vote", phaseEpoch: 3, done: false, label: "Actors", color: "#f00", phaseTitle: "Choose" },
+          { groupId: "b", memberIds: ["p3"], phaseId: "together", phaseEpoch: 4, done: true, label: "Builders", color: "#0f0", phaseTitle: "Reunion" },
+        ],
+      },
+    });
+    await renderApp();
+
+    expect(document.body.textContent).not.toContain("Skip current phase");
+    expect(document.body.textContent).toContain("Builders — waiting");
+
+    const groupButton = button("Next scene for Actors — 2 people");
+    await act(async () => { groupButton.click(); });
+    await flush();
+    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST", body: JSON.stringify({ groupId: "a" }) });
+
+    const reunionTrigger = button("Bring all groups to reunion");
+    await act(async () => { reunionTrigger.click(); });
+    const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+    expect(dialog.textContent).toContain("Bring all groups to reunion?");
+    await act(async () => { dialog.querySelector<HTMLButtonElement>('[data-sc-tool-variant="danger"]')?.click(); });
+    await flush();
+    expect(requests).toContainEqual({ url: "/api/admin/groups/reunion", method: "POST" });
   });
 
   it("surfaces a blocked phase video as a live operational failure", async () => {
