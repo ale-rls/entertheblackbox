@@ -20,10 +20,19 @@ export class AudioPlayback {
   private disposed = false;
   private generation = 0;
   private attempts = 0;
+  private everPlayed = false;
   private retry: ReturnType<typeof setTimeout> | undefined;
   private watchdog: ReturnType<typeof setInterval>;
   private progress = new AudioProgress();
   private readonly handlers: Record<string, () => void>;
+
+  /**
+   * A fresh connection needs room to fill its buffer (SPEC-tuned Icecast
+   * queue-size is ~16s); a stream that was already playing and then stalls
+   * is a real dropout and should not sit silent for that long before we
+   * force a reconnect.
+   */
+  private stallThresholdMs(): number { return this.everPlayed ? 5_000 : 15_000; }
 
   constructor(private audio: HTMLAudioElement, private url: string,
     private changed: (state: PlaybackState) => void) {
@@ -32,13 +41,14 @@ export class AudioPlayback {
         if (!this.wanted) return;
         this.progress.reset(audio.currentTime);
         this.attempts = 0;
+        this.everPlayed = true;
         this.clearRetry();
         this.setState("playing");
       },
       timeupdate: () => {
         if (!this.wanted || audio.paused || audio.seeking) return;
         // Check actual progress; repeated timeupdate events can occur at a stall.
-        if (!this.progress.stalled(audio.currentTime) && audio.readyState >= 3) {
+        if (!this.progress.stalled(audio.currentTime, undefined, this.stallThresholdMs()) && audio.readyState >= 3) {
           this.clearRetry();
           this.setState("playing");
         }
@@ -67,6 +77,7 @@ export class AudioPlayback {
     if (this.disposed || (this.state === "playing" && !this.audio.paused && !this.audio.error)) return;
     this.clearRetry();
     this.wanted = true;
+    this.everPlayed = false;
     this.setState("connecting");
     const generation = ++this.generation;
     this.audio.src = `${this.url}${this.url.includes("?") ? "&" : "?"}t=${Date.now()}`;
@@ -103,9 +114,17 @@ export class AudioPlayback {
 
   check = (): void => {
     if (!this.wanted || this.disposed) return;
-    if (this.audio.error || this.audio.ended || this.audio.paused || this.progress.stalled(this.audio.currentTime)) {
+    if (this.audio.error || this.audio.ended || this.audio.paused
+      || this.progress.stalled(this.audio.currentTime, undefined, this.stallThresholdMs())) {
       this.scheduleRetry();
     }
+  };
+
+  /** The network coming back is a strong signal; don't sit out a queued backoff. */
+  online = (): void => {
+    if (!this.wanted || this.disposed) return;
+    if (this.retry !== undefined) { this.clearRetry(); this.play(); return; }
+    this.check();
   };
 
   dispose(): void {

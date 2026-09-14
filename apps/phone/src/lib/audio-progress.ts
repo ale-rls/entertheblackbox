@@ -8,8 +8,8 @@ export class AudioProgress {
     this.progressedAt = now;
   }
 
-  stalled(position: number, now = Date.now()): boolean {
+  stalled(position: number, now = Date.now(), thresholdMs = 15_000): boolean {
     if (position !== this.position) this.reset(position, now);
-    return now - this.progressedAt >= 15_000;
+    return now - this.progressedAt >= thresholdMs;
   }
 }
