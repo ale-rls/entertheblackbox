@@ -158,5 +158,36 @@ describe("PersonalAudio", () => {
       expect(plays.filter(url => url.includes("/two/"))).toHaveLength(2);
     } finally { await audio.stop(); vi.useRealTimers(); }
   });
+  it("aggregates client-reported playback telemetry into status(), guarding against double-counts and stale/unknown events", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+    const request = vi.fn(async (url: string | URL | Request) => {
+      const value = String(url);
+      if (value.endsWith("/status")) return new Response(JSON.stringify({ players: [{ player_id: "one", connected: true, flagged: false, listeners: 1 }] }), { status: 200 });
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    const audio = new PersonalAudio({ url: "http://bridge", token: "secret", publicUrl: "https://audio.test" }, dir, vi.fn(), request);
+    await audio.register({ clientId: "one", name: "One" });
 
+    audio.recordEvent("one", "connecting", 1000);
+    audio.recordEvent("one", "playing", 1200);
+    audio.recordEvent("one", "reconnecting", 5000);
+    audio.recordEvent("one", "playing", 6500); // Recovered 1.5s after the stall was first reported.
+    let status = await audio.status() as { players: Array<Record<string, unknown>> };
+    expect(status.players[0]).toMatchObject({ playbackState: "playing", reconnects: 1, lastRecoveryMs: 1500 });
+
+    audio.recordEvent("one", "reconnecting", 7000);
+    audio.recordEvent("one", "reconnecting", 7200); // Repeated native events for one stall must not double-count.
+    status = await audio.status() as { players: Array<Record<string, unknown>> };
+    expect(status.players[0]).toMatchObject({ reconnects: 2 });
+
+    audio.recordEvent("one", "playing", 6900); // Out-of-order delivery: ignored, does not clear the open stall.
+    status = await audio.status() as { players: Array<Record<string, unknown>> };
+    expect(status.players[0]).toMatchObject({ playbackState: "reconnecting", reconnects: 2 });
+
+    audio.recordEvent("gone", "reconnecting", 8000); // Never-registered participant leaves no trace.
+    status = await audio.status() as { players: Array<Record<string, unknown>> };
+    expect(status.players.find((p) => p.player_id === "gone")).toBeUndefined();
+
+    await audio.stop();
+  });
 });

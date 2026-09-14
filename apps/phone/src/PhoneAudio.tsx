@@ -45,6 +45,10 @@ export function PhoneAudio({ participantLease }: { participantLease: string }) {
     const playback = new AudioPlayback(element.current!, url, (next) => {
       setState(next);
       if (mediaSession) mediaSession.playbackState = next === "playing" ? "playing" : next === "paused" ? "paused" : "none";
+      void fetch("/api/audio/event", { method: "POST", keepalive: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantLease, state: next, at: Date.now() }) })
+        .catch(() => { /* Best-effort diagnostics; must never affect playback. */ });
     });
     player.current = playback;
     setState("ready");
