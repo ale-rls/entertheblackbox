@@ -759,12 +759,14 @@ export function App() {
               </div>
               {(status.audio.soundcheckSources?.length ?? 0) === 0 && <p className="sc-tool-help">No MP3 files are present in the active show’s published media manifest.</p>}
             </div>
-            <div className="admin-connection-form" aria-label="Local audio backend">
+            <div className="admin-audio-backend-form" aria-label="Local audio backend">
               <p className="sc-tool-help">If Icecast/Liquidsoap feels laggy over the network, start the local rig (<code>services/audio</code>, <code>make up</code>) on this or another machine on the venue LAN, then switch to it here. Audience phones stay on the same network — this is an operator control only.</p>
-              <label className="sc-tool-label"><span>Local bridge control URL</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="http://192.168.1.42:8300" value={localBridgeUrl} onChange={(event) => setLocalBridgeUrl(event.target.value)} /></label>
-              <label className="sc-tool-label"><span>Bridge token</span><input className="sc-tool-field sc-tool-mono" type="password" value={localBridgeToken} onChange={(event) => setLocalBridgeToken(event.target.value)} /></label>
-              <label className="sc-tool-label"><span>Public stream URL (phone-reachable)</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="http://192.168.1.42:8300" value={localPublicUrl} onChange={(event) => setLocalPublicUrl(event.target.value)} /></label>
-              <label className="sc-tool-label"><span>Network label</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. Stage-LAN (5GHz)" value={localNetworkLabel} onChange={(event) => setLocalNetworkLabel(event.target.value)} /></label>
+              <div className="admin-audio-backend-fields">
+                <label className="sc-tool-label"><span>Local bridge control URL</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="http://192.168.1.42:8300" value={localBridgeUrl} onChange={(event) => setLocalBridgeUrl(event.target.value)} /></label>
+                <label className="sc-tool-label"><span>Bridge token</span><input className="sc-tool-field sc-tool-mono" type="password" value={localBridgeToken} onChange={(event) => setLocalBridgeToken(event.target.value)} /></label>
+                <label className="sc-tool-label"><span>Public stream URL (phone-reachable)</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="http://192.168.1.42:8300" value={localPublicUrl} onChange={(event) => setLocalPublicUrl(event.target.value)} /></label>
+                <label className="sc-tool-label"><span>Network label</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. Stage-LAN (5GHz)" value={localNetworkLabel} onChange={(event) => setLocalNetworkLabel(event.target.value)} /></label>
+              </div>
               <div className="admin-control-list">
                 <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={switchingAudioBackend || !localBridgeUrl || !localBridgeToken || !localPublicUrl || !localNetworkLabel} onClick={() => void switchAudioBackend("local")}>Test &amp; switch to local</button><span>Health-checks the local bridge first; nothing changes if it fails</span></div>
                 {status.audio.backend === "local" && <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={switchingAudioBackend} onClick={() => void switchAudioBackend("remote")}>Switch back to remote</button><span>Returns to the deployment's default backend</span></div>}

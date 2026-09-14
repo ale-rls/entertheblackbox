@@ -22,6 +22,9 @@
 .admin-session-facts div:last-child { border-inline-end: 0; }
 .admin-session-facts dt { color: var(--sc-tool-color-text-muted); font-size: var(--sc-tool-font-size-0); }
 .admin-session-facts dd { overflow: hidden; margin: var(--sc-tool-space-2) 0 0; text-overflow: ellipsis; white-space: nowrap; }
+.admin-audio-backend-form { display: grid; gap: var(--sc-tool-space-4); margin-block-start: var(--sc-tool-space-6); }
+.admin-audio-backend-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sc-tool-space-4); }
+.admin-audio-backend-fields .sc-tool-field { width: 100%; min-width: 0; }
 .admin-control-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sc-tool-space-4); }
 .admin-control-list > div { display: grid; align-content: start; gap: var(--sc-tool-space-2); }
 .admin-control-list .sc-tool-button { width: 100%; }
@@ -66,6 +69,7 @@
   .admin-session-facts div { padding: var(--sc-tool-space-3) 0; border-inline-end: 0; border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); }
   .admin-session-facts div:last-child { border-block-end: 0; }
   .admin-control-list { grid-template-columns: minmax(0, 1fr); }
+  .admin-audio-backend-fields { grid-template-columns: minmax(0, 1fr); }
   .admin-flow-list { grid-template-columns: minmax(0, 1fr); padding: var(--sc-tool-space-3); }
   .admin-time-adjustments { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
