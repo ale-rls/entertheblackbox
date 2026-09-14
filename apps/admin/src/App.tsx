@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 export type Status = {
-  audio?: { configured: boolean; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number }> };
+  audio?: { configured: boolean; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number }> };
   healthy: boolean;
   ready: boolean;
   uptimeMs: number;
@@ -629,6 +629,9 @@ export function App() {
           <h2>Headphone streams</h2>
           {!status.audio?.configured ? <p>Audio bridge is not configured.</p> : <>
             {status.audio.error && <p role="alert">{status.audio.error}</p>}
+            {Object.keys(status.audio.deliveryFailures ?? {}).length > 0 && <p role="alert">
+              Narration delivery failed for {Object.keys(status.audio.deliveryFailures ?? {}).join(", ")}. Retrying automatically; hold the show until resolved.
+            </p>}
             {status.audio.poll_age_s == null || status.audio.poll_age_s > 15 ? <p role="alert">Listener status is unavailable or stale.</p> : null}
             <ul className="admin-participant-list">{status.audio.players.map((player) => <li key={player.player_id}>
               <strong>{player.name ?? player.player_id}</strong>

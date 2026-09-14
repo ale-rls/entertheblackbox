@@ -128,4 +128,35 @@ describe("PersonalAudio", () => {
     expect(calls.filter((url) => url.endsWith("/players/one/reset"))).toHaveLength(2);
     await audio.stop();
   });
+  it("reports and retries only failed narration recipients while phones sleep", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+    await writeFile(join(dir, "voice.mp3"), "voice");
+    const plays: string[] = [];
+    let broken = true;
+    const request = vi.fn(async (url: string | URL | Request) => {
+      const value = String(url);
+      if (value.endsWith("/play")) {
+        plays.push(value);
+        if (broken && value.includes("/two/")) return new Response("unavailable", {status: 503});
+      }
+      return new Response('{"players":[]}', {status: 200});
+    }) as unknown as typeof fetch;
+    const audio = new PersonalAudio({url: "http://bridge", token: "secret", publicUrl: "https://audio.test"}, dir, vi.fn(), request);
+    await audio.register({clientId: "one", name: "One"});
+    await audio.register({clientId: "two", name: "Two"});
+    audio.transition(phase("voice.mp3"));
+    await audio.register({clientId: "one", name: "One"}); // Wait for all delivery results.
+    expect(await audio.status()).toMatchObject({deliveryFailures: {two: expect.stringContaining("503")}});
+    broken = false;
+    vi.useFakeTimers();
+    try {
+      audio.start();
+      await vi.advanceTimersByTimeAsync(5000);
+      await audio.register({clientId: "one", name: "One"});
+      expect(await audio.status()).toMatchObject({deliveryFailures: {}});
+      expect(plays.filter(url => url.includes("/one/"))).toHaveLength(1);
+      expect(plays.filter(url => url.includes("/two/"))).toHaveLength(2);
+    } finally { await audio.stop(); vi.useRealTimers(); }
+  });
+
 });
