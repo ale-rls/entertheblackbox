@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, patch
 import td_receive_production as consumer
 from td_receive_production import State, events, label_rows
@@ -10,6 +11,27 @@ def event(kind, sequence, **extra):
 
 
 class CueTests(unittest.TestCase):
+    def test_execute_loader_retains_class_and_state_between_callbacks(self):
+        root = Path(__file__).parent
+        source = Mock(text=(root / 'td_receive_production.py').read_text(), path='/receiver')
+        storage = {}
+        owner = Mock()
+        owner.fetch.side_effect = lambda key, default=None, **kwargs: storage.get(key, default)
+        owner.store.side_effect = lambda key, value: storage.update({key: value})
+        component = Mock()
+        component.op.return_value = { (0, 0): 'test-token' }
+        env = {'me': owner, 'parent': lambda: component, 'op': lambda name: source}
+        exec((root / 'td_cue_execute.py').read_text(), env, env)
+        with patch('threading.Thread.start'):
+            env['onStart']()
+            first = storage['cue_namespace']['_client']
+            self.assertIsInstance(first, storage['cue_namespace']['Receiver'])
+            env['onStart']()
+            self.assertTrue(first.stopped.is_set())
+        env['onExit']()
+        env['onFrameStart'](1)
+        self.assertIsNone(storage['cue_namespace'])
+
     def test_callbacks_with_missing_client_global(self):
         consumer.__dict__.pop('_client', None)
         consumer.pump()

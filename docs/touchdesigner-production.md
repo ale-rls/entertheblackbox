@@ -14,20 +14,19 @@ It needs no Python packages and does not occupy the browser display slot.
    `DISPLAY_TOKEN`. Keep it out of git.
 3. Create Table DATs named `labels`, `timelines`, and `cue_status` beside it.
 4. Create an Execute DAT in the same component. Enable **Start**, **Exit**, and
-   **Frame Start**, and use these callbacks:
+   **Frame Start**, name it `cue_execute`, and load
+   `services/trackingbox/td_scripts/td_cue_execute.py` as its callbacks.
+   The loader executes the full receiver in one shared namespace and retains
+   it in operator storage, avoiding missing class/global names in DAT execution.
 
 ```python
-def onStart():
-    mod('td_receive_production').start()
-
-def onFrameStart(frame):
-    mod('td_receive_production').pump()
-
-def onExit():
-    mod('td_receive_production').stop()
+# Start or restart the receiver in an already open project:
+op('cue_execute').module.onStart()
 ```
 
-For an already open project run `mod('td_receive_production').start()` once.
+Run that command from the component containing the DATs. After editing the
+receiver Text DAT, run it again to reload the full source. Do not use the old
+`mod('td_receive_production')` callbacks alongside this loader.
 Network reads run in a background thread; only the frame callback updates DATs.
 
 The labels table contains `key, timeline, slot, text, phase_id`.
@@ -46,7 +45,7 @@ Vertical spectra use `y_min`/`y_max`; cross questions expose all four slots;
 polygon fields use their zone IDs. Match these slots to the physical monitor
 placement. A phase without labels clears that timeline's labels.
 
-Optional one-shot cues: call `pump(on_cue=my_callback)` from the frame callback.
+Optional one-shot cues: call `namespace['pump'](on_cue=my_callback)` from the frame callback.
 The callback receives the full event; its cue name is `event['payload']['cue']`.
 Reconnect snapshots restore state without replaying one-shot cues. Missed
 one-shot cues during an outage are not replayed. The status DAT reports the
