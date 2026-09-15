@@ -1,11 +1,12 @@
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
+import { AudioDiagnostics } from "./AudioDiagnostics";
 import PocketBase from "pocketbase";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 
 const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 export type Status = {
-  audio?: { configured: boolean; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; backend?: "remote" | "local"; backendLabel?: string; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; reconnects?: number; lastRecoveryMs?: number | null }> };
+  audio?: { configured: boolean; capacity?: { total: number; assigned: number; available: number }; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; backend?: "remote" | "local"; backendLabel?: string; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; phoneReportAgeMs?: number; reconnects?: number; lastRecoveryMs?: number | null }> };
   healthy: boolean;
   ready: boolean;
   uptimeMs: number;
@@ -186,6 +187,9 @@ function sceneKindLabel(kind: FlowScene["kind"]): string {
 }
 
 export function App() {
+  const audioOnly = new URLSearchParams(window.location.search).get("view") === "audio";
+  const [statusReceivedAt, setStatusReceivedAt] = useState<number | null>(null);
+  const refreshInFlight = useRef(false);
   // localStorage rather than sessionStorage: the operator token is valid
   // for 30 days (operators auth collection), so the session should survive
   // closing the tab/browser too, not just page reloads within one tab.
@@ -232,19 +236,25 @@ export function App() {
   const targetAudienceSizeTouched = useRef(false);
 
   const refresh = useCallback(async () => {
-    if (!connectedToken) return;
+    if (!connectedToken || refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    const abort = new AbortController();
+    const timeout = window.setTimeout(() => abort.abort(), 10_000);
     setRefreshing(true);
     try {
-      const response = await api("status", connectedToken);
+      const response = await api("status", connectedToken, { signal: abort.signal });
       const nextStatus = await response.json() as Status;
       statusRef.current = nextStatus;
       setStatus(nextStatus);
+      setStatusReceivedAt(Date.now());
       setStatusStale(false);
       setConnectionError("");
     } catch (error) {
       setStatusStale(statusRef.current !== null);
       setConnectionError(error instanceof Error ? error.message : "Could not connect to the admin API.");
     } finally {
+      clearTimeout(timeout);
+      refreshInFlight.current = false;
       setRefreshing(false);
     }
   }, [connectedToken]);
@@ -305,21 +315,25 @@ export function App() {
   useEffect(() => {
     if (!connectedToken) return;
     void refresh();
-    void loadShows();
-    void loadGhosts();
-    void loadLobby();
-    void loadFlow();
+    if (!audioOnly) {
+      void loadShows();
+      void loadGhosts();
+      void loadLobby();
+      void loadFlow();
+    }
     // shows/ghosts poll alongside status so these controls can't go stale
     // while this tab sits open -- selecting/typing a value that fell out
     // of date used to 400 instead of just re-populating.
     const timer = window.setInterval(() => {
       void refresh();
-      void loadShows();
-      void loadGhosts();
-      void loadLobby();
+      if (!audioOnly) {
+        void loadShows();
+        void loadGhosts();
+        void loadLobby();
+      }
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [connectedToken, refresh, loadShows, loadGhosts, loadLobby, loadFlow]);
+  }, [connectedToken, refresh, loadShows, loadGhosts, loadLobby, loadFlow, audioOnly]);
 
   const saveLobbyTimes = async (startTimes: number[], successMessage: string) => {
     setSavingLobby(true);
@@ -629,8 +643,8 @@ export function App() {
   return <div data-sc-tool-density="standard" data-sc-tool-root>
     <main className="admin-app">
       <header className="admin-header">
-        <div><p className="sc-tool-eyebrow">Live installation / operator console</p><h1>Operations</h1></div>
-        <StatusLabel status={globalStatus}>{globalLabel}</StatusLabel>
+        <div><p className="sc-tool-eyebrow">Live installation / operator console</p><h1>{audioOnly ? "Audio diagnostics" : "Operations"}</h1></div>
+        {audioOnly ? <a href="/admin/">Back to operations</a> : <StatusLabel status={globalStatus}>{globalLabel}</StatusLabel>}
       </header>
 
       <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
@@ -638,7 +652,7 @@ export function App() {
           <div><p className="sc-tool-eyebrow">Secure access</p><h2 id="admin-connection-heading">Admin connection</h2></div>
           {status && <StatusLabel status={statusStale ? "warning" : "success"}>{statusStale ? "Last status received" : "Authenticated"}</StatusLabel>}
         </div>
-        <form className="admin-connection-form" onSubmit={(event) => void connect(event)}>
+        {(!audioOnly || !status || connectionError) && <form className="admin-connection-form" onSubmit={(event) => void connect(event)}>
           <label className="sc-tool-label" htmlFor="admin-email">Operator email
             <input id="admin-email" className="sc-tool-field" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} />
           </label>
@@ -646,7 +660,7 @@ export function App() {
             <input id="admin-password" className="sc-tool-field sc-tool-mono" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} aria-describedby="admin-token-help" />
           </label>
           <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={refreshing || signingIn}>{status ? "Reconnect" : signingIn ? "Signing in…" : refreshing ? "Connecting…" : "Sign in"}</button>
-        </form>
+        </form>}
         <p id="admin-token-help" className="sc-tool-help">Stays signed in on this device for 30 days. Connected sessions refresh every 2 seconds.</p>
         {connectionError && <p className="sc-tool-feedback admin-feedback" data-sc-tool-status={statusStale ? "warning" : "danger"} role="alert"><StatusIcon status={statusStale ? "warning" : "danger"} /><span>{connectionError}{statusStale ? " Showing the last received status." : ""}</span></p>}
       </section>
@@ -657,7 +671,7 @@ export function App() {
         <p className="sc-tool-eyebrow">Operational data</p>
         <h2>{refreshing ? "Loading live status…" : "Connect to load live status"}</h2>
         <p className="sc-tool-copy">No operational values are shown until the admin API authenticates this browser session.</p>
-      </section> : <div className="admin-grid">
+      </section> : audioOnly ? <AudioDiagnostics status={status} receivedAt={statusReceivedAt} failed={statusStale} /> : <div className="admin-grid">
         <section className="sc-tool-panel" aria-labelledby="admin-status-heading">
           <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">Live topology</p><h2 id="admin-status-heading">Operational status</h2></div><span className="sc-tool-mono admin-section-count">Live</span></div>
           <div className="admin-operation-list">
@@ -728,6 +742,7 @@ export function App() {
 
         <section className="sc-tool-panel" aria-label="Headphone streams">
           <h2>Headphone streams</h2>
+          <p><a href="/admin/?view=audio">Open live audio diagnostics →</a></p>
           {!status.audio?.configured ? <p>Audio bridge is not configured.</p> : <>
             <p>Active backend: <strong>{status.audio.backend === "local" ? status.audio.backendLabel ?? "Local" : "Remote"}</strong></p>
             {status.audio.error && <p role="alert">{status.audio.error}</p>}

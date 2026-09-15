@@ -196,6 +196,20 @@ describe("PersonalAudio", () => {
     await audio.stop();
   });
 
+  it("reports telemetry age using server receipt time and ignores out-of-order refreshes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+    const request = vi.fn(async () => new Response(JSON.stringify({ players: [{ player_id: "one" }] }))) as unknown as typeof fetch;
+    const audio = new PersonalAudio({ url: "http://bridge", token: "secret", publicUrl: "https://audio.test" }, dir, vi.fn(), request);
+    await audio.register({ clientId: "one", name: "One" });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(100000);
+    try {
+      audio.recordEvent("one", "playing", 999999999); // Phone clock may differ.
+      clock.mockReturnValue(105000);
+      audio.recordEvent("one", "paused", 100); // Ignored; must not refresh the age.
+      expect(await audio.status()).toMatchObject({ players: [{ playbackState: "playing", phoneReportAgeMs: 5000 }] });
+    } finally { clock.mockRestore(); await audio.stop(); }
+  });
+
   it("live-switches to a healthy local backend, replays current narration there, and notifies connected phones", async () => {
     const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
     await writeFile(join(dir, "voice.mp3"), "voice");
