@@ -1,5 +1,11 @@
 # TouchDesigner integration scripts
 
+For monitor labels from the production show server, use
+[`td_receive_production.py`](td_receive_production.py) and follow
+[Production monitor labels](../../../docs/touchdesigner-production.md).
+It connects to `https://bb-frontend.enabler.space/api/cues` and automatically
+restores labels after reconnects and server redeploys.
+
 Drop-in Python for wiring TouchDesigner to a local `audience-tracker serve`
 process. Full setup is in the runbook:
 [Run with TouchDesigner](../docs/touchdesigner.md).
