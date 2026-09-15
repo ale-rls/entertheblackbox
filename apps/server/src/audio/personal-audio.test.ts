@@ -184,6 +184,11 @@ describe("PersonalAudio", () => {
     status = await audio.status() as { players: Array<Record<string, unknown>> };
     expect(status.players[0]).toMatchObject({ playbackState: "reconnecting", reconnects: 2 });
 
+    audio.recordEvent("one", "connecting", 7300); // A new transport may buffer before recovery.
+    audio.recordEvent("one", "playing", 8000);
+    status = await audio.status() as { players: Array<Record<string, unknown>> };
+    expect(status.players[0]).toMatchObject({ reconnects: 2, lastRecoveryMs: 1000 });
+
     audio.recordEvent("gone", "reconnecting", 8000); // Never-registered participant leaves no trace.
     status = await audio.status() as { players: Array<Record<string, unknown>> };
     expect(status.players.find((p) => p.player_id === "gone")).toBeUndefined();

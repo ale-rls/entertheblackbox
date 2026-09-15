@@ -102,7 +102,8 @@ The canonical Fastify server and React phone app implement this contract:
 4. Silent transitions clear narration, and ending a session clears queues,
    terminates old stream responses, and releases every slot.
 5. The Admin dashboard shows current listeners and flags an active stream that
-   has gone unheard for longer than `FLAG_AFTER_S`.
+   has had no stream connection for longer than `FLAG_AFTER_S`. A listener count
+   does not establish audible playback; the phone reports playback separately.
 6. If the deployed bridge's round trip is too slow for a live cue (e.g. it's
    hosted off-venue), an admin can run this same stack locally (`make up`, as
    above) on a machine on the venue LAN and live-switch the running show to it
@@ -119,18 +120,19 @@ get local audio. `AudioConfig` already splits into two independent URLs, and
 the "Local audio backend" form in Admin exposes both separately:
 
 - **Local bridge control URL** -- used only by `apps/server` itself (health
-  check, MP3 upload, play/reset). Latency here is irrelevant: it's not in the
-  audience's ear, and the existing multi-second cue-to-ear buffer plus the
-  engine's per-venue `LATENCY_COMP` constant already absorb a network hop.
+  check, MP3 upload, play/reset). Control round trips contribute to cue-to-ear latency: reset and play
+  requests must reach the bridge before the new narration can enter the stream.
+  Measure this path as well as the phone playback buffer.
 - **Public stream URL** -- handed straight to phones, who fetch
   `/stream/{id}` *directly from the bridge*, never through `apps/server`.
-  Point this at the bridge's bare venue-LAN address (e.g.
-  `http://192.168.1.42:8300`); phones are already on that network, so the
-  actual audio bytes never leave the venue. `<audio>`/`<video>` `src` is
-  passive mixed content -- browsers, including Safari, don't block an
-  `http://` stream embedded in an `https://` page the way they'd block a
-  script or `fetch` call -- but confirm this on your actual target devices
-  during the locked-screen soak test (SPEC.md §10 T1) rather than assuming it.
+  For production HTTPS pages, use a phone-reachable HTTPS stream URL with a
+  trusted certificate, including for a venue-local bridge. Do not assume an
+  HTTP LAN address will work inside an HTTPS page: browsers may upgrade or
+  block mixed audio requests. Chrome documents this behavior in
+  [No More Mixed Messages About HTTPS](https://security.googleblog.com/2019/10/no-more-mixed-messages-about-https_3.html).
+  Local-network permissions also depend on browser/version; validate the
+  actual phone-facing URL on the supported devices.
+
 
 The only real gap is getting the remote server a network path to the local
 bridge's control port. **Recommended: Tailscale, installed on the host
@@ -177,3 +179,7 @@ written and unit-tested against that command surface. Liquidsoap 2.4 changes
 minor-version APIs; upgrade it only in staging with the locked-phone soak test,
 then change both `services/audio/liquidsoap/Dockerfile` and the local Compose
 image together.
+
+## Continuity and recovery verification
+
+See [the continuity audit and device rehearsal procedure](CONTINUITY.md).

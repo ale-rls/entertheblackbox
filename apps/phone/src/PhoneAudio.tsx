@@ -6,6 +6,11 @@ export function PhoneAudio({ participantLease, streamUrlOverride }: { participan
   const element = useRef<HTMLAudioElement>(null);
   const player = useRef<AudioPlayback>();
   const [url, setUrl] = useState<string | null>(null);
+  const override = useRef(streamUrlOverride);
+  override.current = streamUrlOverride;
+  const hasUrl = url !== null;
+  const lease = useRef(participantLease);
+  lease.current = participantLease;
   const [state, setState] = useState<PlaybackState>("ready");
   const [registration, setRegistration] = useState("Preparing headphones…");
 
@@ -25,7 +30,7 @@ export function PhoneAudio({ participantLease, streamUrlOverride }: { participan
         if (!response.ok) throw new Error("Headphone audio unavailable. Retrying… Please keep this page open.");
         const data = await response.json() as { streamUrl?: unknown };
         if (typeof data.streamUrl !== "string" || !data.streamUrl) throw new Error("Headphone audio unavailable. Please ask the staff.");
-        if (!abort.signal.aborted) setUrl(data.streamUrl);
+        if (!abort.signal.aborted) setUrl(override.current || data.streamUrl);
       } catch (error) {
         if (abort.signal.aborted) return;
         setRegistration(error instanceof Error ? error.message : "Headphone audio unavailable. Retrying…");
@@ -39,9 +44,8 @@ export function PhoneAudio({ participantLease, streamUrlOverride }: { participan
     return () => { abort.abort(); clearTimeout(timer); };
   }, [participantLease]);
 
-  // An admin live-switching the audio backend re-points this element at the
-  // new bridge's stream without a page reload -- the effect below is keyed
-  // on `url`, so updating it here does the full clean teardown/reinit.
+  // Clearing the override during identity renewal must not switch back to an
+  // old registration URL while the new registration request is pending.
   useEffect(() => {
     if (streamUrlOverride) setUrl(streamUrlOverride);
   }, [streamUrlOverride]);
@@ -51,33 +55,43 @@ export function PhoneAudio({ participantLease, streamUrlOverride }: { participan
     const mediaSession = navigator.mediaSession;
     const playback = new AudioPlayback(element.current!, url, (next) => {
       setState(next);
-      if (mediaSession) mediaSession.playbackState = next === "playing" ? "playing" : next === "paused" ? "paused" : "none";
+      try {
+        if (mediaSession) mediaSession.playbackState = next === "paused" || next === "blocked" ? "paused"
+          : next === "ready" ? "none" : "playing";
+      } catch { /* Optional OS integration must not interrupt the stream. */ }
       void fetch("/api/audio/event", { method: "POST", keepalive: true,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ participantLease, state: next, at: Date.now() }) })
+        body: JSON.stringify({ participantLease: lease.current, state: next, at: Date.now() }) })
         .catch(() => { /* Best-effort diagnostics; must never affect playback. */ });
     });
     player.current = playback;
     setState("ready");
-    const visible = () => { if (!document.hidden) playback.check(); };
+    const visible = () => { if (!document.hidden) playback.foreground(); };
     document.addEventListener("visibilitychange", visible);
-    window.addEventListener("pageshow", playback.check);
+    window.addEventListener("pageshow", playback.foreground);
     window.addEventListener("online", playback.online);
     if (mediaSession) {
-      if (typeof MediaMetadata !== "undefined") mediaSession.metadata = new MediaMetadata({ title: "Enter the Blackbox", artist: "Your headphones" });
-      mediaSession.setActionHandler("play", playback.play);
-      mediaSession.setActionHandler("pause", playback.pause);
+      try {
+        if (typeof MediaMetadata !== "undefined") mediaSession.metadata = new MediaMetadata({ title: "Enter the Blackbox", artist: "Your headphones" });
+      } catch { /* Optional metadata. */ }
+      try { mediaSession.setActionHandler("play", playback.play); } catch { /* Unsupported action. */ }
+      try { mediaSession.setActionHandler("pause", playback.pause); } catch { /* Unsupported action. */ }
     }
     return () => {
       document.removeEventListener("visibilitychange", visible);
-      window.removeEventListener("pageshow", playback.check);
+      window.removeEventListener("pageshow", playback.foreground);
       window.removeEventListener("online", playback.online);
-      mediaSession?.setActionHandler("play", null);
-      mediaSession?.setActionHandler("pause", null);
-      if (mediaSession) mediaSession.playbackState = "none";
+      try { mediaSession?.setActionHandler("play", null); } catch { /* Unsupported action. */ }
+      try { mediaSession?.setActionHandler("pause", null); } catch { /* Unsupported action. */ }
+      try { if (mediaSession) mediaSession.playbackState = "none"; } catch { /* Optional API. */ }
       playback.dispose();
       player.current = undefined;
     };
+    // URL/lease changes must not dispose a playing native media session.
+  }, [hasUrl]);
+
+  useEffect(() => {
+    if (url) player.current?.setUrl(url);
   }, [url]);
 
   const action = url ? playbackAction(state) : null;

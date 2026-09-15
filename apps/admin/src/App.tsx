@@ -735,12 +735,13 @@ export function App() {
               Narration delivery failed for {Object.keys(status.audio.deliveryFailures ?? {}).join(", ")}. Retrying automatically; hold the show until resolved.
             </p>}
             {status.audio.poll_age_s == null || status.audio.poll_age_s > 15 ? <p role="alert">Listener status is unavailable or stale.</p> : null}
+            <p>A stream connection does not confirm audible playback. Phone reports can be delayed while the screen is locked.</p>
             <ul className="admin-participant-list">{status.audio.players.map((player) => <li key={player.player_id}>
               <strong>{player.name ?? player.player_id}</strong>
-              <span>{player.connected ? `${player.listeners} listener(s)` : player.flagged ? "No listener — check headphones" : "Waiting for listener"}</span>
+              <span>{player.connected ? `${player.listeners} stream connection(s)` : player.flagged ? "No listener — check headphones" : "Waiting for listener"}</span>
               {player.reconnects !== undefined && <span>
-                {player.playbackState === "reconnecting" ? "reconnecting now" : player.playbackState}
-                {" · "}{player.reconnects} reconnect{player.reconnects === 1 ? "" : "s"}
+                Last phone report: {player.playbackState === "reconnecting" ? "audio interrupted, recovering" : player.playbackState}
+                {" · "}{player.reconnects} interruption{player.reconnects === 1 ? "" : "s"}
                 {player.lastRecoveryMs != null && ` · last recovery ${(player.lastRecoveryMs / 1000).toFixed(1)}s`}
               </span>}
             </li>)}</ul>
