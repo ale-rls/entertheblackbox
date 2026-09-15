@@ -74,3 +74,21 @@
   .admin-time-adjustments { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (forced-colors: active) { .admin-page-feedback { border-color: CanvasText; } }
+
+.audio-diagnostics { min-width: 0; grid-template-columns: minmax(0, 1fr); display: grid; gap: var(--sc-tool-space-6); margin-block-start: var(--sc-tool-space-6); }
+.audio-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sc-tool-space-5); margin-block: var(--sc-tool-space-7); }
+.audio-summary > div { border-inline-start: 2px solid var(--sc-tool-color-rule); padding-inline-start: var(--sc-tool-space-5); }
+.audio-summary dt { font-size: var(--sc-tool-font-size-1); color: var(--sc-tool-color-text-secondary); }
+.audio-summary dd { margin: var(--sc-tool-space-3) 0 0; font-size: var(--sc-tool-font-size-5); }
+.audio-summary small, .audio-table small { display: block; font-size: var(--sc-tool-font-size-0); color: var(--sc-tool-color-text-muted); font-weight: normal; }
+.audio-filters { display: flex; align-items: end; flex-wrap: wrap; gap: var(--sc-tool-space-6); margin-block-end: var(--sc-tool-space-6); }
+.audio-filters .sc-tool-label { width: min(100%, 24rem); }
+.audio-table-scroll { overflow-x: auto; }
+.audio-table { width: 100%; border-collapse: collapse; text-align: left; font-size: var(--sc-tool-font-size-1); }
+.audio-table th, .audio-table td { padding: var(--sc-tool-space-5); border-block-end: 1px solid var(--sc-tool-color-rule); vertical-align: top; }
+.audio-table thead th { color: var(--sc-tool-color-text-secondary); white-space: nowrap; }
+.audio-table tbody th { min-width: 12rem; overflow-wrap: anywhere; }
+.audio-table .sc-tool-status { white-space: nowrap; }
+@media (max-width: 800px) { .audio-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.audio-diagnostics > section { min-width: 0; }

@@ -125,6 +125,7 @@ The server also exposes:
 
 - `/phone/` — participant controller
 - `/admin/` — operations interface
+- `/admin/?view=audio` — authenticated, read-only audio diagnostics; polls every 2 seconds with stream connections, playback reports, interruption counts, recovery times, and report freshness. Phone reports are state changes, not heartbeats; this page does not measure audible output or cue-to-ear latency.
 - `/healthz` and `/readyz` — health and readiness checks
 
 ### Public video phase map

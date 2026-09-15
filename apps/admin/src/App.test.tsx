@@ -57,6 +57,7 @@ afterEach(async () => {
   if (root) await act(async () => root?.unmount());
   root = null;
   document.body.replaceChildren();
+  window.history.replaceState({}, "", "/");
   localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -106,6 +107,17 @@ function createAdminFetch(options?: { status?: Status; rejectAction?: string; fl
 }
 
 describe("Admin operations UI", () => {
+  it("provides an authenticated read-only audio page that polls only status", async () => {
+    window.history.replaceState({}, "", "/admin/?view=audio");
+    localStorage.setItem("admin-token", "operator-token");
+    const { requests } = createAdminFetch();
+    await renderApp();
+    expect(document.querySelector("h1")?.textContent).toBe("Audio diagnostics");
+    expect(document.body.textContent).toContain("Per-phone connectivity");
+    expect(document.body.textContent).not.toContain("Start show");
+    expect(requests.map(request => request.url)).toEqual(["/api/admin/status"]);
+  });
+
   it("shows an honest unauthenticated state without requesting or fabricating operational data", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
