@@ -79,6 +79,48 @@ describe("phone audio lifecycle", () => {
     await act(async () => resolve({ ok: true, json: async () => ({ streamUrl: "https://local.test/stream/one" }) }));
     expect(load).toHaveBeenCalledTimes(2);
   });
+  it("retains Media Session metadata and resume handlers across a system pause", async () => {
+    const actions = new Map<string, (() => void) | null>();
+    const session = { metadata: null, playbackState: "none", setActionHandler: vi.fn((name: string, action: (() => void) | null) => actions.set(name, action)) };
+    vi.stubGlobal("MediaMetadata", class { constructor(public data: unknown) {} });
+    Object.defineProperty(navigator, "mediaSession", { configurable: true, value: session });
+    try {
+      await render(); await start();
+      const audio = host.querySelector("audio")!;
+      const metadata = session.metadata;
+      const resume = actions.get("play");
+      await act(async () => actions.get("pause")!());
+      expect(session.playbackState).toBe("paused");
+      expect(session.metadata).toBe(metadata);
+      expect(metadata).not.toBeNull();
+      expect(actions.get("play")).toBe(resume);
+      expect(audio.getAttribute("src")).toBeTruthy();
+      expect(load).toHaveBeenCalledTimes(1);
+      await render("lease-two");
+      expect(session.playbackState).toBe("paused");
+      expect(actions.get("play")).toBe(resume);
+      await act(async () => resume!());
+      await act(async () => audio.dispatchEvent(new Event("playing")));
+      expect(session.playbackState).toBe("playing");
+    } finally { Reflect.deleteProperty(navigator, "mediaSession"); }
+  });
+  it.each([false, true])("honors native pause and resume when pause handler registration is unavailable (API present: %s)", async (present) => {
+    if (present) Object.defineProperty(navigator, "mediaSession", { configurable: true, value: {
+      setActionHandler: () => { throw new Error("unsupported"); },
+    } });
+    try {
+      await render(); await start();
+      const audio = host.querySelector("audio")!;
+      Object.defineProperty(audio, "paused", { configurable: true, value: true });
+      await act(async () => audio.dispatchEvent(new Event("pause")));
+      expect(host.textContent).toContain("Headphones paused.");
+      expect(load).toHaveBeenCalledTimes(1);
+      Object.defineProperty(audio, "paused", { configurable: true, value: false });
+      await act(async () => audio.dispatchEvent(new Event("play")));
+      await act(async () => audio.dispatchEvent(new Event("playing")));
+      expect(host.textContent).toContain("Headphone audio is playing.");
+    } finally { Reflect.deleteProperty(navigator, "mediaSession"); }
+  });
   it("keeps playback and cleanup working when optional media session actions throw", async () => {
     Object.defineProperty(navigator, "mediaSession", { configurable: true, value: {
       setActionHandler: () => { throw new Error("unsupported"); },

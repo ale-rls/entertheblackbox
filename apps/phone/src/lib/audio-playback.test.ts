@@ -30,6 +30,32 @@ describe("continuous phone audio", () => {
     expect(playbackAction("blocked")).toBe("Resume headphones");
     for (const state of ["playing", "connecting", "reconnecting"] as const) expect(playbackAction(state)).toBeNull();
   });
+  it("honors legacy native pause while hidden and rejoins live audio on native resume", async () => {
+    vi.stubGlobal("document", { hidden: true });
+    const { media, player } = setup();
+    player.setNativePauseFallback(true);
+    player.play(); media.emit("playing"); await Promise.resolve();
+    media.pause();
+    expect(player.state).toBe("paused");
+    await vi.advanceTimersByTimeAsync(60_000);
+    player.foreground(); player.online();
+    expect(media.play).toHaveBeenCalledTimes(1);
+    expect(media.load).toHaveBeenCalledTimes(1);
+    expect(media.removeAttribute).not.toHaveBeenCalled();
+    media.paused = false; media.emit("play"); media.emit("playing");
+    expect(player.state).toBe("playing");
+    expect(media.load).toHaveBeenCalledTimes(2);
+    player.dispose();
+  });
+  it("still recovers a failed source in native-control fallback mode", async () => {
+    const { media, player } = setup();
+    player.setNativePauseFallback(true);
+    player.play(); media.emit("playing"); await Promise.resolve();
+    media.error = new Error("network"); media.pause(); media.emit("error");
+    await vi.advanceTimersByTimeAsync(500);
+    expect(media.load).toHaveBeenCalledTimes(2);
+    player.dispose();
+  });
   it("recovers an unexpected native pause even while hidden", async () => {
     vi.stubGlobal("document", { hidden: true });
     const {media, player} = setup();

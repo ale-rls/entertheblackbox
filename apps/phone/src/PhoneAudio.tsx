@@ -70,13 +70,15 @@ export function PhoneAudio({ participantLease, streamUrlOverride }: { participan
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("pageshow", playback.foreground);
     window.addEventListener("online", playback.online);
+    let handlesPause = false;
     if (mediaSession) {
       try {
         if (typeof MediaMetadata !== "undefined") mediaSession.metadata = new MediaMetadata({ title: "Enter the Blackbox", artist: "Your headphones" });
       } catch { /* Optional metadata. */ }
       try { mediaSession.setActionHandler("play", playback.play); } catch { /* Unsupported action. */ }
-      try { mediaSession.setActionHandler("pause", playback.pause); } catch { /* Unsupported action. */ }
+      try { mediaSession.setActionHandler("pause", playback.pause); handlesPause = true; } catch { /* Unsupported action. */ }
     }
+    playback.setNativePauseFallback(!handlesPause);
     return () => {
       document.removeEventListener("visibilitychange", visible);
       window.removeEventListener("pageshow", playback.foreground);

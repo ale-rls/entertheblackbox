@@ -17,6 +17,7 @@ export function playbackAction(state: PlaybackState): string | null {
 export class AudioPlayback {
   state: PlaybackState = "ready";
   private wanted = false;
+  private nativePauseFallback = false;
   private disposed = false;
   private generation = 0;
   private attempts = 0;
@@ -40,6 +41,11 @@ export class AudioPlayback {
   constructor(private audio: HTMLAudioElement, private url: string,
     private changed: (state: PlaybackState) => void) {
     this.handlers = {
+      // Older browsers can dispatch native control events without invoking
+      // Media Session action handlers. Adopt their resume as playback intent.
+      play: () => {
+        if (!audio.paused && !this.wanted && (this.state === "paused" || this.state === "blocked")) this.play();
+      },
       playing: () => {
         if (!this.wanted || !this.loaded || audio.paused || audio.error || audio.ended) return;
         this.resuming = false;
@@ -53,7 +59,15 @@ export class AudioPlayback {
       waiting: () => { if (this.wanted) this.setState("reconnecting"); },
       // A stalled download can still have playable buffered audio.
       stalled: () => this.check(),
-      pause: () => { if (this.wanted && this.state !== "connecting") this.scheduleRetry(); },
+      pause: () => {
+        if (!this.wanted || !audio.paused) return;
+        // Without a pause action handler there is no way to distinguish a
+        // system interruption from the listener pressing native Pause.
+        // Respect the pause instead of overriding a possible user command.
+        if (this.nativePauseFallback && this.everPlayed && !this.playPending && !audio.error && !audio.ended) {
+          this.pause();
+        } else if (this.state !== "connecting") this.scheduleRetry();
+      },
       error: () => { this.loaded = false; this.scheduleRetry(); },
       ended: () => { this.loaded = false; this.scheduleRetry(); },
     };
@@ -63,6 +77,9 @@ export class AudioPlayback {
     // deliberately skip them. Native media events also initiate recovery.
     this.watchdog = setInterval(this.check, 2000);
   }
+
+  /** Enable only when the browser cannot register a Media Session pause action. */
+  setNativePauseFallback(enabled: boolean): void { this.nativePauseFallback = enabled; }
 
   private setState(state: PlaybackState): void {
     if (this.disposed || this.state === state) return;
