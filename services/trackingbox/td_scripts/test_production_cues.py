@@ -1,4 +1,6 @@
 import unittest
+from unittest.mock import Mock, patch
+import td_receive_production as consumer
 from td_receive_production import State, events, label_rows
 
 
@@ -8,6 +10,19 @@ def event(kind, sequence, **extra):
 
 
 class CueTests(unittest.TestCase):
+    def test_callbacks_with_missing_client_global(self):
+        consumer.__dict__.pop('_client', None)
+        consumer.pump()
+        consumer.stop()
+        self.assertIsNone(consumer._client)
+        consumer.__dict__.pop('_client', None)
+        receiver = Mock()
+        with patch.object(consumer, 'Receiver', return_value=receiver):
+            consumer.start('test-token')
+        self.assertIs(consumer._client, receiver)
+        consumer.stop()
+        receiver.stopped.set.assert_called_once()
+
     def test_sse_unicode_and_heartbeat(self):
         self.assertEqual(list(events([b': heartbeat\n', b'\n',
             'data: {"text": "Nähe"}\r\n'.encode(), b'\r\n'])), [{'text': 'Nähe'}])

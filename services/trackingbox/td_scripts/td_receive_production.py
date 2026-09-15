@@ -139,8 +139,9 @@ def start(token=None):
 
 def stop():
     global _client
-    if _client:
-        _client.stopped.set()
+    client = globals().get('_client')
+    if client is not None:
+        client.stopped.set()
     _client = None
 
 
@@ -156,7 +157,7 @@ def _replace(name, headers, rows):
 
 def pump(on_cue=None):
     """Call in Execute DAT onFrameStart; optional on_cue(event) runs here."""
-    client = _client
+    client = globals().get('_client')
     if client is None:
         return
     changed = False
