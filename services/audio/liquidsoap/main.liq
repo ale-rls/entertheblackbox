@@ -81,6 +81,9 @@ def mkplayer(pid) =
     name="blackbox player #{pid}",
     description="personal narrative stream",
     public=false,
+    # The phone supplies Media Session labels; per-track ICY HTTP updates are
+    # unused and must not stall the audio clock at synchronized bed boundaries.
+    send_icy_metadata=false,
     s
   )
 end
