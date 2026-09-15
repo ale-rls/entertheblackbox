@@ -111,3 +111,73 @@ Record device, OS/browser version, battery mode, build revision and network.
 Capture the bridge's stream open/close logs and Android remote debugging media
 errors for any failure. Do not accept a permanently “reconnecting” phone just
 because Icecast still counts its socket.
+
+## Deployed reproduction, 2026-09-15
+
+The deployed phone bundle contained PR #59's controller methods. Two independent
+HTTP consumers of one registered diagnostic stream reproduced a server-side
+interruption without any browser audio element:
+
+- First stream: EOF at 92.378 seconds; 1,472,800 bytes; approximately 11 seconds
+  without new bytes before EOF. A narration was injected only into this test
+  participant during capture.
+- Second stream: EOF at 81.023 seconds; 1,687,000 bytes; approximately 11 seconds
+  without bytes before EOF. No second soundcheck was injected. Its MP3 duration
+  was 105.422 seconds, exceeding wall time by about 24 seconds even including
+  the final idle interval. Delivery initially ran substantially faster than the
+  nominal 16,000 bytes/second. Buffering or source catch-up can therefore add
+  delay even when the network has ample throughput.
+- An isolated local stack with the same source script and one encoder survived
+  three eight-second generated tones at 5, 25 and 45 seconds, followed by silence,
+  for the full 80-second capture. Maximum read gap was 385 ms; reset/play API
+  round trips were 15–25 ms. This does not validate the deployed 100-encoder load
+  or Android acoustic latency.
+
+The end-of-narration fallback alone was not established as the root cause by
+these captures. The subsequently supplied production logs below confirmed the
+source timeouts and shared-clock lag.
+
+For post-deployment verification, run `scripts/probe_stream.py` simultaneously against the
+public bridge and its corresponding internal Icecast mount, using the same
+participant mapping. Capture Liquidsoap late-clock/catch-up, source disconnect,
+and Icecast timeout logs plus container CPU throttling/restart counters. Avoid
+changing source timeout or shrinking listener buffers to mask the symptom.
+The probe prints timings and byte counts without retaining narration.
+
+### Production logs confirmed the source failure
+
+The supplied ten-minute deployment log contains 468 Icecast source socket
+timeouts and Liquidsoap `clock.main` catch-up warnings reaching 36.66 seconds.
+The two-minute default-bed boundaries repeatedly precede the failures. The
+bridge's `upstream-eof` records match both diagnostic connection endings.
+This establishes an upstream-source interruption, independent of phone
+visibility or autoplay policy.
+
+The fix disables `send_icy_metadata` on each MP3 output. Those per-track Icecast
+metadata HTTP updates are unused: the phone sets its own Media Session labels
+and the bridge does not request ICY metadata in the audio response. Removing
+these calls avoids synchronous metadata work on the audio clock when 100 beds
+roll over together. Queue/burst sizes and source timeout are unchanged.
+
+An independent-clock experiment was rejected because it increased scheduling
+lag at 100 encoders on the test machine. It is not part of the final patch.
+The improved `scripts/loadtest.sh` now fails on early EOF, HTTP errors, missing
+audio, and low-speed timeouts instead of discarding curl failures. It must run
+longer than 240 seconds to cover multiple default-bed loop boundaries.
+
+### Final local verification
+
+With only ICY updates disabled, 100 simultaneous bridge streams survived
+280.118 seconds with zero errors, crossing multiple default-bed boundaries.
+Generated narration was injected into three mounts during the run. The largest
+observed read gap was 1.242 seconds.
+
+Startup catch-up was still draining at the beginning: each stream delivered
+about 4.70 MB (294 seconds of encoded audio) over 280 seconds of wall time.
+This verifies continuity under the tested load, not a low-latency startup or
+Android background-playback guarantee. Production deployment and cue-to-ear
+measurements on Android remain necessary.
+
+Liquidsoap 2.2.5 configuration validation, workspace typecheck, and all 720 tests
+passed. The load-test harness passed with live streams and correctly failed for
+an unavailable endpoint and clean premature EOF.
