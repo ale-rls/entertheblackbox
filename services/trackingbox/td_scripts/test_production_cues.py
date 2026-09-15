@@ -1,0 +1,40 @@
+import unittest
+from td_receive_production import State, events, label_rows
+
+
+def event(kind, sequence, **extra):
+    return dict(version=1, bootId='boot', sequence=sequence, type=kind,
+                timelineId='ki', phaseId='q', phaseEpoch=2, payload={}, **extra)
+
+
+class CueTests(unittest.TestCase):
+    def test_sse_unicode_and_heartbeat(self):
+        self.assertEqual(list(events([b': heartbeat\n', b'\n',
+            'data: {"text": "Nähe"}\r\n'.encode(), b'\r\n'])), [{'text': 'Nähe'}])
+
+    def test_reconnect_restores_labels_without_replaying_cues(self):
+        state = State()
+        phase = event('phase', 1)
+        phase['payload'] = {'phase': {'field': {'type': 'two-quadrant', 'axis': 'x',
+            'labels': {'minLabel': 'Low', 'maxLabel': 'High'}}}}
+        snapshot = event('snapshot', 2, timelines=[phase])
+        self.assertIsNone(state.apply(snapshot))
+        self.assertEqual(label_rows(state.timelines)[0], ['ki:x_min', 'ki', 'x_min', 'Low', 'q'])
+        cue = event('cue', 3)
+        self.assertEqual(state.apply(cue), cue)
+        self.assertIsNone(state.apply(cue))
+        state.apply(event('snapshot', 0, timelines=[] ) | {'bootId': 'new-boot'})
+        self.assertEqual(label_rows(state.timelines), [])
+
+    def test_reset_and_gap(self):
+        state = State()
+        state.apply(event('snapshot', 0, timelines=[]))
+        state.apply(event('phase', 1))
+        state.apply(event('reset', 2))
+        self.assertEqual(state.timelines, {})
+        with self.assertRaises(ValueError):
+            state.apply(event('phase', 4))
+
+
+if __name__ == '__main__':
+    unittest.main()
