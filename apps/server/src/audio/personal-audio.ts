@@ -155,9 +155,10 @@ export class PersonalAudio {
     const previous = this.telemetry.get(id);
     if (previous && clientAt < previous.clientAt) return; // Out-of-order delivery.
     const reconnects = (previous?.reconnects ?? 0) + (state === "reconnecting" && previous?.state !== "reconnecting" ? 1 : 0);
-    const reconnectedAt = state === "reconnecting" ? clientAt : previous?.reconnectedAt ?? null;
-    const recovered = state === "playing" && previous?.state === "reconnecting" && previous.reconnectedAt !== null;
-    const lastRecoveryMs = recovered ? Math.max(0, clientAt - previous!.reconnectedAt!) : previous?.lastRecoveryMs ?? null;
+    const reconnectedAt = state === "reconnecting" && previous?.state !== "reconnecting"
+      ? clientAt : previous?.reconnectedAt ?? null;
+    const recovered = state === "playing" && reconnectedAt !== null;
+    const lastRecoveryMs = recovered ? Math.max(0, clientAt - reconnectedAt!) : previous?.lastRecoveryMs ?? null;
     this.telemetry.set(id, { state, clientAt, reconnectedAt: recovered ? null : reconnectedAt, reconnects, lastRecoveryMs });
   }
 

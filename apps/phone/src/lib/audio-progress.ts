@@ -8,8 +8,14 @@ export class AudioProgress {
     this.progressedAt = now;
   }
 
+  advanced(position: number, now = Date.now()): boolean {
+    if (!Number.isFinite(position) || position === this.position) return false;
+    this.reset(position, now);
+    return true;
+  }
+
   stalled(position: number, now = Date.now(), thresholdMs = 15_000): boolean {
-    if (position !== this.position) this.reset(position, now);
+    this.advanced(position, now);
     return now - this.progressedAt >= thresholdMs;
   }
 }

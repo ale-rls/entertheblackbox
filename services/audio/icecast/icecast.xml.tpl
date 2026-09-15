@@ -7,20 +7,12 @@
         <clients>${ICECAST_MAX_CLIENTS}</clients>
         <!-- one liquidsoap source per player mount -->
         <sources>${ICECAST_MAX_SOURCES}</sources>
-        <!-- Icecast's stock default is 524288 (~32s @128kbps): enough backlog
-             that a client catching up from a brief wifi hiccup plays it back
-             sequentially instead of skipping to the live edge, so the delay
-             becomes permanent. Cutting this to just above burst-size (as a
-             first attempt did) overcorrected: it turned every few-second wifi
-             blip — the exact case SPEC §9 says should "ride the buffer" —
-             into a hard disconnect, so phones spent the show reconnecting
-             instead of just drifting a little. 262144 (~16s @128kbps) still
-             halves the worst-case permanent drift, gives real hiccups room to
-             recover on their own, and sits above the phone's own drift
-             threshold (audio-progress.ts) so the client's proactive resync
-             fires first in the common case — this queue-size is the fallback
-             safety net for a genuinely dead connection, not the primary
-             recovery path (SPEC §4.3, §5, §9). -->
+        <!-- 16 seconds at 128 kbps of maximum unsent backlog per listener.
+             This is NOT a startup buffer or a target playback latency.
+             Keep headroom for brief Wi-Fi interruptions; shrinking this queue
+             disconnects slow listeners. The native player consumes the burst
+             below and manages its own playback buffer. Do not reload healthy
+             phone streams to chase latency: that discards continuity. -->
         <queue-size>262144</queue-size>
         <client-timeout>30</client-timeout>
         <header-timeout>15</header-timeout>

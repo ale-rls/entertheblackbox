@@ -21,14 +21,17 @@ export class AudioPlayback {
   private generation = 0;
   private attempts = 0;
   private everPlayed = false;
+  private loaded = false;
+  private resuming = false;
+  private playPending = false;
   private retry: ReturnType<typeof setTimeout> | undefined;
   private watchdog: ReturnType<typeof setInterval>;
   private progress = new AudioProgress();
   private readonly handlers: Record<string, () => void>;
 
   /**
-   * A fresh connection needs room to fill its buffer (SPEC-tuned Icecast
-   * queue-size is ~16s); a stream that was already playing and then stalls
+   * Allow native startup buffering independently of the Icecast queue limit.
+   * A stream that was already playing and then stalls
    * is a real dropout and should not sit silent for that long before we
    * force a reconnect.
    */
@@ -38,26 +41,21 @@ export class AudioPlayback {
     private changed: (state: PlaybackState) => void) {
     this.handlers = {
       playing: () => {
-        if (!this.wanted) return;
+        if (!this.wanted || !this.loaded || audio.paused || audio.error || audio.ended) return;
+        this.resuming = false;
         this.progress.reset(audio.currentTime);
         this.attempts = 0;
         this.everPlayed = true;
         this.clearRetry();
         this.setState("playing");
       },
-      timeupdate: () => {
-        if (!this.wanted || audio.paused || audio.seeking) return;
-        // Check actual progress; repeated timeupdate events can occur at a stall.
-        if (!this.progress.stalled(audio.currentTime, undefined, this.stallThresholdMs()) && audio.readyState >= 3) {
-          this.clearRetry();
-          this.setState("playing");
-        }
-      },
+      timeupdate: () => { this.observeProgress(); },
       waiting: () => { if (this.wanted) this.setState("reconnecting"); },
-      stalled: () => { if (this.wanted && audio.readyState < 3) this.setState("reconnecting"); },
+      // A stalled download can still have playable buffered audio.
+      stalled: () => this.check(),
       pause: () => { if (this.wanted && this.state !== "connecting") this.scheduleRetry(); },
-      error: () => this.scheduleRetry(),
-      ended: () => this.scheduleRetry(),
+      error: () => { this.loaded = false; this.scheduleRetry(); },
+      ended: () => { this.loaded = false; this.scheduleRetry(); },
     };
     for (const [event, fn] of Object.entries(this.handlers)) audio.addEventListener(event, fn);
     this.progress.reset(audio.currentTime);
@@ -67,32 +65,79 @@ export class AudioPlayback {
   }
 
   private setState(state: PlaybackState): void {
-    if (this.disposed) return;
+    if (this.disposed || this.state === state) return;
     this.state = state;
     this.changed(state);
   }
   private clearRetry(): void { clearTimeout(this.retry); this.retry = undefined; }
 
   play = (): void => {
-    if (this.disposed || (this.state === "playing" && !this.audio.paused && !this.audio.error)) return;
-    this.clearRetry();
+    if (this.disposed) return;
+    const deliberateResume = this.state === "paused";
+    if (this.wanted && !this.needsRecovery()) return;
     this.wanted = true;
-    this.everPlayed = false;
-    this.setState("connecting");
+    // A deliberate pause may leave minutes of old narration buffered.
+    this.start(deliberateResume || !this.loaded || !!this.audio.error || this.audio.ended);
+  };
+
+  /** Only replace a dead transport; an OS pause can resume the existing stream. */
+  private start(reload: boolean): void {
+    this.clearRetry();
+    this.setState(this.everPlayed ? "reconnecting" : "connecting");
     const generation = ++this.generation;
-    this.audio.src = `${this.url}${this.url.includes("?") ? "&" : "?"}t=${Date.now()}`;
-    this.audio.load();
+    if (reload) {
+      this.everPlayed = false;
+      this.resuming = false;
+      this.loaded = true;
+      this.audio.src = `${this.url}${this.url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+      this.audio.load();
+    } else this.resuming = true;
     this.progress.reset(this.audio.currentTime);
-    void this.audio.play().catch((error: unknown) => {
+    this.playPending = true;
+    void this.audio.play().then(() => {
+      if (generation === this.generation) this.playPending = false;
+    }, (error: unknown) => {
       if (generation !== this.generation || !this.wanted || this.disposed) return;
+      this.playPending = false;
       const name = (error as { name?: string } | null)?.name;
-      if (name === "AbortError") return;
       if (name === "NotAllowedError") {
         this.wanted = false;
         this.clearRetry();
         this.setState("blocked");
       } else this.scheduleRetry();
     });
+  }
+
+  /** Backend changes retain the user's playback intent and native element. */
+  setUrl(url: string): void {
+    if (this.disposed || url === this.url) return;
+    this.url = url;
+    this.loaded = false;
+    if (this.wanted) this.start(true);
+  }
+
+  private observeProgress(): boolean {
+    if (!this.wanted || !this.loaded || this.audio.paused || this.audio.seeking || this.audio.error || this.audio.ended) return false;
+    if (!this.progress.advanced(this.audio.currentTime)) return false;
+    this.everPlayed = true;
+    this.resuming = false;
+    this.attempts = 0;
+    this.clearRetry();
+    this.setState("playing");
+    return true;
+  }
+
+  private needsRecovery(): boolean {
+    if (this.observeProgress()) return false;
+    return !this.loaded || !!this.audio.error || this.audio.ended || (this.audio.paused && !this.playPending)
+      || this.progress.stalled(this.audio.currentTime, undefined, this.stallThresholdMs());
+  }
+
+  private recover = (): void => {
+    if (!this.wanted || this.disposed) return;
+    // A delayed timer must recheck: native playback may have healed while JS slept.
+    if (!this.needsRecovery()) return;
+    this.start(!this.loaded || !!this.audio.error || this.audio.ended || !this.audio.paused || this.resuming);
   };
 
   pause = (): void => {
@@ -108,22 +153,29 @@ export class AudioPlayback {
     this.setState("reconnecting");
     this.retry = setTimeout(() => {
       this.retry = undefined;
-      this.play();
+      this.recover();
     }, Math.min(8000, 500 * 2 ** Math.min(this.attempts++, 4)));
   }
 
   check = (): void => {
     if (!this.wanted || this.disposed) return;
-    if (this.audio.error || this.audio.ended || this.audio.paused
-      || this.progress.stalled(this.audio.currentTime, undefined, this.stallThresholdMs())) {
+    if (this.needsRecovery()) {
       this.scheduleRetry();
     }
+  };
+
+  /** Give the native pipeline a chance to update its clock after page suspension. */
+  foreground = (): void => {
+    if (!this.wanted || this.disposed) return;
+    this.progress.reset(this.audio.currentTime);
+    this.clearRetry();
+    this.recover();
   };
 
   /** The network coming back is a strong signal; don't sit out a queued backoff. */
   online = (): void => {
     if (!this.wanted || this.disposed) return;
-    if (this.retry !== undefined) { this.clearRetry(); this.play(); return; }
+    if (this.retry !== undefined) { this.clearRetry(); this.recover(); return; }
     this.check();
   };
 
