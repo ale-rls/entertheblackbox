@@ -170,7 +170,7 @@ describe("Admin operations UI", () => {
     expect(button("Skip current phase").disabled).toBe(false);
     await act(async () => { button("Skip current phase").click(); });
     await flush();
-    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST", body: "{}" });
+    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST", body: JSON.stringify({ expectedPhaseId: "question-02" }) });
 
     const restartTrigger = button("Restart show");
     await act(async () => { restartTrigger.click(); });
@@ -201,13 +201,15 @@ describe("Admin operations UI", () => {
 
     expect(document.body.textContent).toContain("Scene navigator");
     expect(document.body.textContent).toContain("Opening film");
-    expect(document.body.textContent).toContain("next → question-02");
-    const current = document.querySelector<HTMLButtonElement>('[aria-current="step"]')!;
-    expect(current.disabled).toBe(true);
+    expect(document.body.textContent).toContain("next → idle");
+    const current = document.querySelector<HTMLButtonElement>('[aria-label="Inspect Choose a position"]')!;
+    expect(current.disabled).toBe(false);
     expect(current.textContent).toContain("Choose a position");
 
-    const opening = document.querySelector<HTMLButtonElement>('[aria-label="Opening film, jump to this scene"]')!;
+    const opening = document.querySelector<HTMLButtonElement>('[aria-label="Inspect Opening film"]')!;
     await act(async () => { opening.click(); });
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    await act(async () => { button("Jump whole show to this scene").click(); });
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Jump to “Opening film”?");
     await act(async () => { button("Jump to scene").click(); });
     await flush();
@@ -215,12 +217,12 @@ describe("Admin operations UI", () => {
     expect(requests).toContainEqual({
       url: "/api/admin/jump",
       method: "POST",
-      body: JSON.stringify({ phaseId: "intro" }),
+      body: JSON.stringify({ phaseId: "intro", expectedPhaseId: "question-02", expectedEpoch: 7, sessionId: "5H7D-A2" }),
     });
     expect(document.body.textContent).toContain("Jumped to “Opening film”.");
   });
 
-  it("adds a show start five minutes from now and keeps the scene navigator last", async () => {
+  it("adds a show start five minutes from now and keeps the live graph first", async () => {
     localStorage.setItem("admin-token", "operator-secret");
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     const { requests } = createAdminFetch();
@@ -237,7 +239,7 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).toContain("Show added in 5 minutes.");
 
     const panels = Array.from(document.querySelectorAll(".admin-grid > section"));
-    expect(panels.at(-1)?.querySelector("#admin-flow-heading")).not.toBeNull();
+    expect(panels[0]?.querySelector("#admin-flow-heading")).not.toBeNull();
   });
 
   it("keeps server-refused actions visible as inline failure feedback", async () => {
@@ -296,7 +298,7 @@ describe("Admin operations UI", () => {
     const groupButton = button("Next scene for Actors — 2 people");
     await act(async () => { groupButton.click(); });
     await flush();
-    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST", body: JSON.stringify({ groupId: "a" }) });
+    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST", body: JSON.stringify({ groupId: "a", expectedPhaseId: "vote" }) });
 
     const reunionTrigger = button("Bring all groups to reunion");
     await act(async () => { reunionTrigger.click(); });

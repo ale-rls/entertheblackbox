@@ -20,6 +20,8 @@ export class PersonalAudio {
   private currentAudioSrc: string | undefined;
   private currentAudioByPlayer = new Map<string, string | undefined>();
   private sourceForPlayer: (participantId: string) => string | undefined = () => undefined;
+  private phaseStartedAt: number | undefined;
+  private readonly participantStartedAt = new Map<string, number | undefined>();
   private readonly phaseOverrides = new Map<string, Phase>();
   private readonly playerRevisions = new Map<string, number>();
   private readonly playedGeneration = new Map<string, number>();
@@ -34,7 +36,8 @@ export class PersonalAudio {
   constructor(remoteConfig: AudioConfig, private readonly mediaDir: string,
     private readonly report: (error: unknown) => void,
     private readonly request: typeof fetch = fetch,
-    private readonly notifyStreamUrl: (clientId: string, streamUrl: string) => void = () => {}) {
+    private readonly notifyStreamUrl: (clientId: string, streamUrl: string) => void = () => {},
+    private readonly now: () => number = Date.now) {
     this.remote = remoteConfig;
     this.active = { kind: "remote", config: remoteConfig, label: "Remote" };
   }
@@ -85,18 +88,25 @@ export class PersonalAudio {
     if (!this.players.has(id) || this.stopped) return;
     await this.call(`/players/${encodeURIComponent(id)}/active`, "PUT", { active: true });
     const generation = this.generation;
+    const revision = this.playerRevisions.get(id);
     const src = this.currentAudioByPlayer.has(id)
       ? this.currentAudioByPlayer.get(id)
       : this.sourceForPlayer(id) ?? this.currentAudioSrc;
     if (src) {
       const file = await this.upload(src);
-      if (!this.players.has(id) || this.stopped || generation !== this.generation) return;
+      if (!this.players.has(id) || this.stopped || generation !== this.generation || revision !== this.playerRevisions.get(id)) return;
       await this.call(`/players/${encodeURIComponent(id)}/reset`, "POST");
-      await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
+      if (!this.players.has(id) || this.stopped || generation !== this.generation || revision !== this.playerRevisions.get(id)) return;
+      await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", this.playBody(id, file));
       this.playedGeneration.set(id, generation);
     }
     this.deliveryErrors.delete(id);
     this.notifyStreamUrl(id, this.streamUrl(id));
+  }
+
+  private playBody(id: string, file: string): { file: string; mode: "interrupt"; offsetSeconds?: number } {
+    const startedAt = this.participantStartedAt.has(id) ? this.participantStartedAt.get(id) : this.phaseStartedAt;
+    return { file, mode: "interrupt", ...(startedAt === undefined ? {} : { offsetSeconds: Math.max(0, this.now() - startedAt) / 1000 }) };
   }
 
   async call(path: string, method = "GET", body?: unknown): Promise<any> {
@@ -130,14 +140,16 @@ export class PersonalAudio {
       if (!this.players.has(id) || this.stopped) return;
       await this.call(`/players/${encodeURIComponent(id)}/active`, "PUT", { active: true });
       const generation = this.generation;
+      const revision = this.playerRevisions.get(id);
       const src = this.currentAudioByPlayer.has(id)
         ? this.currentAudioByPlayer.get(id)
         : this.sourceForPlayer(id) ?? this.currentAudioSrc;
       if (!src || this.playedGeneration.get(id) === generation) return;
       const file = await this.upload(src);
-      if (!this.players.has(id) || this.stopped || generation !== this.generation) return;
+      if (!this.players.has(id) || this.stopped || generation !== this.generation || revision !== this.playerRevisions.get(id)) return;
       await this.call(`/players/${encodeURIComponent(id)}/reset`, "POST");
-      await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
+      if (!this.players.has(id) || this.stopped || generation !== this.generation || revision !== this.playerRevisions.get(id)) return;
+      await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", this.playBody(id, file));
       this.playedGeneration.set(id, generation);
       this.deliveryErrors.delete(id);
     });
@@ -210,7 +222,9 @@ export class PersonalAudio {
     }
   }
 
-  transition(phase: Phase, groupFor: (participantId: string) => string | null = () => null): void {
+  transition(phase: Phase, groupFor: (participantId: string) => string | null = () => null, startedAt?: number): void {
+    this.phaseStartedAt = startedAt;
+    this.participantStartedAt.clear();
     this.phaseOverrides.clear();
     this.deliveryErrors.clear();
     const generation = ++this.generation;
@@ -228,13 +242,15 @@ export class PersonalAudio {
       if (generation !== this.generation || this.stopped) return;
       await Promise.all([...this.players.keys()].map(async (id) => {
         try {
+          const revision = this.playerRevisions.get(id);
           const src = this.currentAudioByPlayer.get(id);
           const file = src ? await this.upload(src) : undefined;
-          if (generation !== this.generation || this.stopped) return;
+          if (generation !== this.generation || this.stopped || revision !== this.playerRevisions.get(id)) return;
           // Reset on every transition, including silent scenes and manual skips.
           await this.call(`/players/${encodeURIComponent(id)}/reset`, "POST");
-          if (file && generation === this.generation && this.players.has(id)) {
-            await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
+          if (generation !== this.generation || this.stopped || revision !== this.playerRevisions.get(id) || !this.players.has(id)) return;
+          if (file) {
+            await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", this.playBody(id, file));
             this.playedGeneration.set(id, generation);
           }
           this.deliveryErrors.delete(id);
@@ -260,8 +276,9 @@ export class PersonalAudio {
       const file = src ? await this.upload(src) : undefined;
       if (!this.players.has(id) || this.stopped || generation !== this.generation || revision !== this.playerRevisions.get(id)) return;
       await this.call(`/players/${encodeURIComponent(id)}/reset`, "POST");
+      if (!this.players.has(id) || this.stopped || generation !== this.generation || revision !== this.playerRevisions.get(id)) return;
       if (file) {
-        await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", { file, mode: "interrupt" });
+        await this.call(`/players/${encodeURIComponent(id)}/play`, "POST", this.playBody(id, file));
         this.playedGeneration.set(id, generation);
       }
       this.deliveryErrors.delete(id);
@@ -278,9 +295,10 @@ export class PersonalAudio {
   }
 
   /** A local path advances without resetting any other group's stream. */
-  transitionParticipants(ids: readonly string[], phase: Phase): void {
+  transitionParticipants(ids: readonly string[], phase: Phase, startedAt?: number): void {
     for (const id of ids) {
       this.phaseOverrides.set(id, phase);
+      this.participantStartedAt.set(id, startedAt);
       void this.refreshParticipant(id).catch(() => { /* refreshParticipant reports errors via work. */ });
     }
   }
@@ -333,6 +351,8 @@ export class PersonalAudio {
     this.currentAudioSrc = undefined;
     this.currentAudioByPlayer.clear();
     this.phaseOverrides.clear();
+    this.phaseStartedAt = undefined;
+    this.participantStartedAt.clear();
     this.playerRevisions.clear();
     this.sourceForPlayer = () => undefined;
     const ids = [...this.players.keys()];

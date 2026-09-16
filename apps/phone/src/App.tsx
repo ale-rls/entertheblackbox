@@ -390,6 +390,7 @@ export function App() {
                   <button
                     key={option.id}
                     type="button"
+                    disabled={state.voting?.closed}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -412,7 +413,7 @@ export function App() {
               }}
             /></div>}
           {!state.inputOpen && (
-            <p className="watch-screen">{state.join.kind === "accepted" ? `${submittedName}, watch the screen` : "Joining…"}</p>
+            <p className="watch-screen">{state.voting?.closed ? "Abstimmung beendet" : state.join.kind === "accepted" ? `${submittedName}, watch the screen` : "Joining…"}</p>
           )}
           {state.groupSelection !== null && (
             <section className="group-selection" aria-labelledby="group-selection-title">

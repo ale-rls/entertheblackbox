@@ -42,7 +42,7 @@ export type RegisterAdminOptions = {
   groupControl?: {
     catalogue: readonly { id: string; label: string; color?: string | undefined }[];
     memberships: () => readonly { participantId: string; groupId: string | null }[];
-    assign: (participantId: string, groupId: string) => void;
+    assign: (participantId: string, groupId: string, expectedEpoch?: number) => void;
   };
   startedAt: number;
   data?: AdminDataSource;
@@ -199,16 +199,18 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       options.data?.audit({ action: "switch-audio-backend", at: new Date().toISOString(), detail: { mode: "local", label } });
       return { ok: true, backend: "local", label };
     });
-    admin.post<{ Body: { participantId?: unknown; groupId?: unknown } }>("/groups/assign", async (request, reply) => {
+    admin.post<{ Body: { participantId?: unknown; groupId?: unknown; expectedEpoch?: unknown; sessionId?: unknown } }>("/groups/assign", async (request, reply) => {
       if (!options.groupControl) return reply.code(503).send({ error: "groups_unavailable" });
-      const { participantId, groupId } = request.body ?? {};
+      const { participantId, groupId, expectedEpoch, sessionId } = request.body ?? {};
+      if ((expectedEpoch !== undefined && (!Number.isSafeInteger(expectedEpoch) || (expectedEpoch as number) < 0)) || (sessionId !== undefined && typeof sessionId !== "string")) return reply.code(400).send({ error: "invalid_request" });
+      if (sessionId !== undefined && sessionId !== options.engine()?.currentSessionId) return reply.code(409).send({ error: "stale" });
       if (typeof participantId !== "string" || !participantId || typeof groupId !== "string" || !groupId) {
         return reply.code(400).send({ error: "invalid_request" });
       }
       const participant = options.engine()?.participantPresence.find((row) => row.clientId === participantId);
       if (!participant) return reply.code(404).send({ error: "participant_not_found" });
-      try { options.groupControl.assign(participantId, groupId); }
-      catch { return reply.code(400).send({ error: "unknown_group" }); }
+      try { options.groupControl.assign(participantId, groupId, expectedEpoch as number | undefined); }
+      catch (error) { return reply.code(409).send({ error: error instanceof Error ? error.message : "assignment_failed" }); }
       options.data?.audit({ action: "assign-participant-group", at: new Date().toISOString(), detail: { participantId, groupId } });
       return { ok: true, participantId, groupId };
     });
@@ -341,8 +343,12 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       if (request.query.format === "csv") return reply.type("text/csv; charset=utf-8").send(result.csv);
       return result.json;
     });
-    admin.post<{ Body: { phaseId?: unknown; groupId?: unknown; expectedPhaseId?: unknown } }>("/jump", async (request, reply) => {
-      const { phaseId, groupId, expectedPhaseId } = request.body ?? {};
+    admin.post<{ Body: { phaseId?: unknown; groupId?: unknown; expectedPhaseId?: unknown; expectedEpoch?: unknown; sessionId?: unknown } }>("/jump", async (request, reply) => {
+      const { phaseId, groupId, expectedPhaseId, expectedEpoch, sessionId } = request.body ?? {};
+      if ((expectedEpoch !== undefined && !Number.isSafeInteger(expectedEpoch)) || (sessionId !== undefined && typeof sessionId !== "string")) return reply.code(400).send({ error: "invalid_request" });
+      const current = options.engine();
+      const epoch = typeof groupId === "string" ? current?.groupPaths.find((path) => path.groupId === groupId)?.phaseEpoch : current?.currentPhaseEpoch;
+      if ((expectedEpoch !== undefined && expectedEpoch !== epoch) || (sessionId !== undefined && sessionId !== current?.currentSessionId)) return reply.code(409).send({ error: "stale" });
       if (typeof phaseId !== "string" || phaseId === "") {
         return reply.code(400).send({ error: "invalid_phase_id" });
       }

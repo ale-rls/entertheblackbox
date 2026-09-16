@@ -87,6 +87,84 @@ function setup(value = scenario) {
 }
 
 describe("independent group paths", () => {
+  it("moves a late arrival into the live scene without replaying cues or changing its clock", () => {
+    const h = setup(); h.display();
+    const b = h.phone("two"); h.engine.adminStart(); h.choose(b, "b"); h.tick(100);
+    h.setNow(450);
+    const late = h.phone("late");
+    const before = h.cues.length;
+    expect(h.engine.adminAssignGroup("late", "b", h.engine.currentPhaseEpoch)).toEqual({ ok: true });
+    expect(late.snapshot.phase).toEqual(b.snapshot.phase);
+    expect(late.snapshot.phase.startedAt).toBe(100);
+    expect(late.snapshot.phaseEpoch).toBe(b.snapshot.phaseEpoch);
+    expect(late.snapshot.routingEpoch).toBe(1);
+    expect(h.cues).toHaveLength(before);
+    expect(h.engine.groupPaths[0]?.memberIds).toEqual(["two", "late"]);
+    h.engine.socketClosed(late.ws); h.registry.releaseSocket(late.ws, 450);
+    const restored = h.phone("late");
+    expect(restored.snapshot.phase.id).toBe("film");
+    expect(restored.snapshot.routingEpoch).toBe(1);
+    h.engine.stop();
+  });
+
+  it("transfers open votes and sockets without leaving a vote in the source group", () => {
+    const h = setup(); h.display();
+    const a = h.phone("one"); const other = h.phone("other"); const b = h.phone("two");
+    h.engine.adminStart(); h.choose(a, "a"); h.choose(other, "a"); h.choose(b, "b"); h.tick(100);
+    const oldEpoch = a.snapshot.phaseEpoch;
+    h.send(a, { t: "input", v: 2, sessionId: "visit", phaseEpoch: oldEpoch, seq: 1, x: 0.8, y: 0.5 });
+    h.setNow(150);
+    expect(h.engine.adminAssignGroup("one", "b")).toEqual({ ok: true });
+    expect(h.groups.groupFor("one")).toBe("b");
+    expect(a.snapshot.phase.id).toBe("film");
+    h.send(a, { t: "input", v: 2, sessionId: "visit", phaseEpoch: oldEpoch, seq: 2, x: 0.2, y: 0.5 });
+    h.tick(200);
+    expect(h.votes[0]?.votes.map((v) => v.participantId)).toEqual(["other"]);
+    expect(a.snapshot.phase.id).toBe("film"); // Source completion cannot deliver to the transferred socket.
+    h.engine.stop();
+  });
+
+  it("admits a transfer to an open vote, silences waiting destinations, and lets empty sources finish", () => {
+    const h = setup(); h.display();
+    const a = h.phone("one"); const b = h.phone("two"); const c = h.phone("three");
+    h.engine.adminStart(); h.choose(a, "a"); h.choose(b, "b"); h.choose(c, "c"); h.tick(100);
+    h.setNow(150);
+    expect(h.engine.adminAssignGroup("two", "a")).toEqual({ ok: true });
+    h.send(b, { t: "input", v: 2, sessionId: "visit", phaseEpoch: b.snapshot.phaseEpoch, seq: 1, x: 0.8, y: 0.5 });
+    expect(h.engine.groupPaths.find((p) => p.groupId === "b")?.done).toBe(true);
+    h.tick(200);
+    expect(h.votes[0]?.votes.map((v) => v.participantId)).toEqual(["one", "two"]);
+    const late = h.phone("late");
+    expect(h.engine.adminAssignGroup("late", "a")).toEqual({ ok: true });
+    expect(late.snapshot.phase.title).toBe("Waiting for other groups");
+    expect(h.audio.at(-1)).toEqual({ ids: ["late"], phase: "idle" });
+    expect(h.engine.adminSkipGroup("c")).toEqual({ ok: true });
+    h.tick(201);
+    expect(h.engine.currentPhaseId).toBe("together");
+    h.engine.stop();
+  });
+
+  it("rejects stale transfers, absent paths, and jumps outside a group's route", () => {
+    const h = setup(); h.display(); const a = h.phone("one");
+    h.engine.adminStart(); h.choose(a, "a"); h.tick(100);
+    expect(h.engine.adminAssignGroup("one", "a", -1)).toEqual({ ok: false, reason: "stale" });
+    expect(h.engine.adminAssignGroup("one", "b")).toEqual({ ok: false, reason: "invalid-target" });
+    expect(h.engine.adminJumpGroup("a", "film")).toEqual({ ok: false, reason: "invalid-target" });
+    expect(h.engine.adminJumpGroup("a", "split")).toEqual({ ok: false, reason: "invalid-target" });
+    expect(h.groups.groupFor("one")).toBe("a");
+    expect(h.engine.groupPaths[0]?.jumpTargets).toEqual(["vote", "together"]);
+    h.engine.stop();
+  });
+
+  it("keeps disconnected transfers on their destination when they reconnect", () => {
+    const h = setup(); h.display(); const a = h.phone("one"); const b = h.phone("two");
+    h.engine.adminStart(); h.choose(a, "a"); h.choose(b, "b"); h.tick(100);
+    h.engine.socketClosed(a.ws); h.registry.releaseSocket(a.ws, 110); a.close();
+    h.engine.adminAssignGroup("one", "b");
+    expect(h.phone("one").snapshot.phase.id).toBe("film");
+    h.engine.stop();
+  });
+
   it("scopes votes, media completion, reconnects and reunion without advancing the main display", () => {
     const h = setup();
     const main = h.display();
@@ -255,7 +333,7 @@ describe("independent group paths", () => {
           : phase),
         { kind: "group-branch", id: "roles", title: "Choose KI role", sourceGroupIds: ["a"], durationMs: 100,
           assignment: { type: "self-select" },
-          branches: [{ groupId: "c", next: "role-vote" }, { groupId: "d", next: "role-vote" }, { groupId: "e", next: "role-vote" }], next: "ki-after" },
+          branches: [{ groupId: "a", next: "role-vote" }, { groupId: "d", next: "role-vote" }, { groupId: "e", next: "role-vote" }], next: "ki-after" },
         { kind: "position-question", id: "role-vote", text: "Choose", durationMs: 100, freezeMs: 0,
           connectionStaleAfterMs: 1_000, showLiveCounts: true,
           field: { type: "two-quadrant", axis: "x", variant: "split", labels: { minLabel: "No", maxLabel: "Yes" } },
@@ -273,12 +351,22 @@ describe("independent group paths", () => {
     h.choose(ki, "a"); h.choose(theater, "b"); h.tick(100);
     expect(ki.snapshot.phase.id).toBe("roles");
     expect(theater.snapshot.phase.id).toBe("film");
-    expect(ki.sent.at(-1).groups.map((group: { label: string }) => group.label)).toEqual(["Chorus", "Direction", "Decision"]);
+    expect(ki.sent.at(-1).groups.map((group: { label: string }) => group.label)).toEqual(["Actors", "Direction", "Decision"]);
     h.choose(ki, "e"); h.tick(200);
     expect(h.groups.groupFor("one")).toBe("e");
     expect(ki.snapshot.phase.id).toBe("role-vote");
     expect(ki.sent.at(-1)).toMatchObject({ t: "voting_options", method: "phone-buttons" });
     expect(decisionScreen.snapshot.phase.id).toBe("role-vote");
+    const late = h.phone("late");
+    expect(h.engine.adminAssignGroup("late", "e")).toEqual({ ok: true });
+    expect(late.snapshot.phase.id).toBe("role-vote");
+    expect(h.audio.at(-1)).toEqual({ ids: ["late"], phase: "role-vote" });
+    expect(h.engine.groupPaths.find((p) => p.groupId === "e")?.memberIds).toEqual(["one", "late"]);
+    expect(h.engine.groupPaths.find((p) => p.groupId === "a")?.memberIds).toEqual([]);
+    expect(h.engine.adminAssignGroup("late", "b")).toEqual({ ok: true });
+    expect(late.snapshot.phase.id).toBe("film");
+    expect(h.engine.groupPaths.find((p) => p.groupId === "e")?.memberIds).toEqual(["one"]);
+    expect(h.audio.at(-1)).toEqual({ ids: ["late"], phase: "film" });
     expect(theater.snapshot.phase.id).toBe("film");
     h.send(ki, { t: "button_vote", v: 2, sessionId: "visit", phaseEpoch: ki.snapshot.phaseEpoch, outcome: "max" });
     h.tick(300);
@@ -286,6 +374,20 @@ describe("independent group paths", () => {
     expect(ki.snapshot.phase.id).toBe("ki-after");
     expect(theater.snapshot.phase.id).toBe("film");
     h.engine.stop();
+
+    // The nested branch can retain the parent's catalogue group ID.
+    const reused = setup(nested); reused.display();
+    const original = reused.phone("original"); const other = reused.phone("other");
+    reused.engine.adminStart(); reused.choose(original, "a"); reused.choose(other, "b"); reused.tick(100);
+    reused.choose(original, "a"); reused.tick(200);
+    const newcomer = reused.phone("newcomer");
+    expect(reused.engine.adminAssignGroup("newcomer", "a")).toEqual({ ok: true });
+    expect(newcomer.snapshot.phase.id).toBe("role-vote");
+    expect(reused.engine.groupPaths.filter((p) => p.groupId === "a")).toHaveLength(1);
+    expect(reused.engine.adminJumpGroup("a", "ki-after")).toEqual({ ok: true });
+    reused.tick(201);
+    expect(original.snapshot.phase.id).toBe("ki-after");
+    reused.engine.stop();
   });
 
   it("rejects the ambiguous generic skip during a group-branch phase, before and after paths start", () => {

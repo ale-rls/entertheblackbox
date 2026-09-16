@@ -229,6 +229,7 @@ export const snapshotSchema = z.object({
   t: z.literal("snapshot"),
   v,
   sessionId: nonEmpty,
+  routingEpoch: z.number().int().nonnegative().optional(),
   phaseEpoch: z.number().int().nonnegative(),
   phase: phaseSnapshotSchema,
   serverTime: timestamp,
@@ -238,6 +239,7 @@ export const phaseMessageSchema = z.object({
   t: z.literal("phase"),
   v,
   sessionId: nonEmpty,
+  routingEpoch: z.number().int().nonnegative().optional(),
   phaseEpoch: z.number().int().nonnegative(),
   phase: phaseSnapshotSchema,
   serverTime: timestamp,
@@ -424,6 +426,7 @@ export const votingOptionsSchema = z.object({
   sessionId: nonEmpty,
   phaseEpoch: z.number().int().nonnegative(),
   method: z.enum(["physical", "phone-cursor", "phone-buttons"]),
+  closed: z.boolean().optional(),
   question: z.string(),
   options: z.array(z.object({ id: nonEmpty, label: nonEmpty })),
 });

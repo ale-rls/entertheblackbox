@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { InMemoryIpRateLimiter } from "../admission/rate-limit.js";
 import type { PhaseEngine } from "../engine/phase-engine.js";
 import type { PublishedShowArtifact, PublishedShowSummary } from "../readiness.js";
-import { registerAdminRoutes, type AdminDataSource, type AdminRateLimiters } from "./admin.js";
+import { registerAdminRoutes, type AdminDataSource, type AdminRateLimiters, type RegisterAdminOptions } from "./admin.js";
 
 function setup(options: {
   rateLimiters?: AdminRateLimiters;
@@ -18,6 +18,7 @@ function setup(options: {
     publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown }) => Promise<PublishedShowSummary>;
   };
   lifecycle?: "idle" | "active";
+  groupControl?: NonNullable<RegisterAdminOptions["groupControl"]>;
   audioSoundcheck?: {
     sources: readonly string[];
     play: (src: string, participantId?: string) => Promise<number>;
@@ -80,6 +81,29 @@ function rateLimiters(maxAuthenticatedRequests: number, maxAuthenticationFailure
 }
 
 describe("admin API", () => {
+  it("rejects stale jump sessions and epochs before dispatch", async () => {
+    const { app, engine } = setup();
+    const headers = { authorization: "Bearer strong-admin-token" };
+    for (const payload of [{ phaseId: "intro", expectedEpoch: 1 }, { phaseId: "intro", sessionId: "old-session" }]) {
+      expect((await app.inject({ method: "POST", url: "/api/admin/jump", headers, payload })).statusCode).toBe(409);
+    }
+    expect(engine.adminJump).not.toHaveBeenCalled();
+    expect((await app.inject({ method: "POST", url: "/api/admin/jump", headers, payload: { phaseId: "intro", sessionId: "s1", expectedEpoch: 2 } })).statusCode).toBe(200);
+  });
+
+  it("passes assignment concurrency checks and reports unavailable paths without success", async () => {
+    const assign = vi.fn();
+    const { app } = setup({ groupControl: { catalogue: [{ id: "a", label: "Actors" }], memberships: () => [], assign } });
+    const headers = { authorization: "Bearer strong-admin-token" };
+    const request = (payload: unknown) => app.inject({ method: "POST", url: "/api/admin/groups/assign", headers, payload: payload as object });
+    expect((await request({ participantId: "p1", groupId: "a", sessionId: "old" })).statusCode).toBe(409);
+    expect(assign).not.toHaveBeenCalled();
+    expect((await request({ participantId: "p1", groupId: "a", sessionId: "s1", expectedEpoch: 2 })).statusCode).toBe(200);
+    expect(assign).toHaveBeenCalledWith("p1", "a", 2);
+    assign.mockImplementation(() => { throw new Error("invalid-target"); });
+    expect((await request({ participantId: "p1", groupId: "a" })).statusCode).toBe(409);
+  });
+
   it("protects every admin endpoint and exposes operational status", async () => {
     const { app } = setup();
     expect((await app.inject({ url: "/api/admin/status" })).statusCode).toBe(401);

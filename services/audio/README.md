@@ -46,7 +46,7 @@ token is set (always set it for a show).
 |---|---|---|
 | `POST /players/{id}/register` | – | allocate a stable stream slot to any player id |
 | `PUT /audio/{file}.mp3` | raw MP3 body | authenticated upload from a remote runner |
-| `POST /players/{id}/play` | `{"file": "x.mp3", "mode": "interrupt"\|"queue"}` | interrupt cuts what's playing; queue plays after it |
+| `POST /players/{id}/play` | `{"file": "x.mp3", "mode": "interrupt"\|"queue", "offsetSeconds": 12.5}` | interrupt cuts what's playing; queue plays after it |
 | `POST /players/{id}/bed` | `{"bed": "forest"}` | switch ambient bed to `beds/forest/` |
 | `POST /players/{id}/skip` | – | cut the current item |
 | `PUT /players/{id}/active` | `{"active": true}` | mark claimed (also implied by first play) |
@@ -54,6 +54,15 @@ token is set (always set it for a show).
 | `GET /status` | – | all players + `flagged` list for the operator dashboard |
 | `GET /health` | – | public liveness for Coolify |
 | `GET /metrics` | – | protected Prometheus metrics |
+
+`offsetSeconds` is optional (default zero), finite and non-negative. The bridge
+passes it as `liq_cue_in` request metadata, supported by the pinned
+[Liquidsoap 2.2.5 request resolver](https://www.liquidsoap.info/doc-2.2.5/reference/liquidsoap).
+The show server computes it from the destination scene's start time immediately
+before sending the play command, so late arrivals and group transfers join the
+current narration rather than replaying it. Deploy bridge, server and phone
+updates together; older bridges ignore the offset. Encoder and phone buffering
+still require a venue synchronization check.
 
 Phones use the unauthenticated `GET /stream/{player_id}` gateway. The runner
 first registers the player through the protected control API; public requests

@@ -19,7 +19,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import icecast
 from .config import BED_NAME_RE, PLAYER_ID_RE, Settings
@@ -34,6 +34,7 @@ log = logging.getLogger("bridge")
 class PlayRequest(BaseModel):
     file: str
     mode: Literal["interrupt", "queue"] = "interrupt"
+    offsetSeconds: float = Field(default=0, ge=0, allow_inf_nan=False)
 
 
 class BedRequest(BaseModel):
@@ -126,6 +127,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             else f"nar_{player.stream_id}"
         )
         uri = f"{settings.liq_audio_dir}/{body.file}"
+        # Liquidsoap 2.2 resolves cue-in metadata before decoding the request.
+        if body.offsetSeconds > 0:
+            uri = f'annotate:liq_cue_in="{body.offsetSeconds:.3f}":{uri}'
         try:
             rid = await liq.push(queue, uri)
         except LiquidsoapError as exc:
