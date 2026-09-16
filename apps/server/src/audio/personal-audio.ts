@@ -7,7 +7,7 @@ export type AudioConfig = { url: string; token: string; publicUrl: string };
 export type AudioBackend = { kind: "remote" } | { kind: "local"; config: AudioConfig; label: string };
 export type AudioParticipant = { clientId: string; name: string };
 export type PlaybackState = "ready" | "connecting" | "playing" | "reconnecting" | "blocked" | "paused";
-type Telemetry = { state: PlaybackState; clientAt: number; reconnectedAt: number | null; reconnects: number; lastRecoveryMs: number | null };
+type Telemetry = { state: PlaybackState; clientAt: number; receivedAt: number; reconnectedAt: number | null; reconnects: number; lastRecoveryMs: number | null };
 type Active = { kind: "remote" | "local"; config: AudioConfig; label: string };
 
 /** The delivery roster survives sleeping phones and their disconnected WebSockets. */
@@ -171,7 +171,7 @@ export class PersonalAudio {
       ? clientAt : previous?.reconnectedAt ?? null;
     const recovered = state === "playing" && reconnectedAt !== null;
     const lastRecoveryMs = recovered ? Math.max(0, clientAt - reconnectedAt!) : previous?.lastRecoveryMs ?? null;
-    this.telemetry.set(id, { state, clientAt, reconnectedAt: recovered ? null : reconnectedAt, reconnects, lastRecoveryMs });
+    this.telemetry.set(id, { state, clientAt, receivedAt: Date.now(), reconnectedAt: recovered ? null : reconnectedAt, reconnects, lastRecoveryMs });
   }
 
   private async reconcile(): Promise<void> {
@@ -335,6 +335,7 @@ export class PersonalAudio {
           .map((p: { player_id: string }) => ({ ...p, name: this.players.get(p.player_id)?.name,
             ...(this.telemetry.get(p.player_id) ? {
               playbackState: this.telemetry.get(p.player_id)!.state,
+              phoneReportAgeMs: Math.max(0, Date.now() - this.telemetry.get(p.player_id)!.receivedAt),
               reconnects: this.telemetry.get(p.player_id)!.reconnects,
               lastRecoveryMs: this.telemetry.get(p.player_id)!.lastRecoveryMs,
             } : {}) })) };
