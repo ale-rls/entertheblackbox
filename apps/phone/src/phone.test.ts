@@ -312,6 +312,26 @@ const phase = (
 });
 
 describe("phoneReducer", () => {
+  it("accepts an older destination scene on transfer and rejects delayed source frames", () => {
+    const source = apply(initialPhoneState, phase("position-question", 20));
+    const destination = { ...phase("video", 5), routingEpoch: 1 } as ServerToClientMessage;
+    const moved = apply(source, destination);
+    expect(moved.currentPhaseId).toBe("v");
+    expect(moved.phaseEpoch).toBe(5);
+    expect(moved.routingEpoch).toBe(1);
+    expect(apply(moved, phase("position-question", 21))).toBe(moved);
+    const newer = apply(moved, { ...phase("position-question", 22), routingEpoch: 1 } as ServerToClientMessage);
+    expect(newer.currentPhaseId).toBe("q");
+    expect(apply(newer, destination)).toBe(newer);
+  });
+
+  it("does not reopen a destination vote that has already closed", () => {
+    const current = apply(initialPhoneState, phase("position-question", 4));
+    const closed = apply(current, { t: "voting_options", v: 2, sessionId: "s1", phaseEpoch: 4, method: "phone-cursor", closed: true, question: "Choose", options: [] });
+    expect(closed.inputOpen).toBe(false);
+    expect(closed.voting?.closed).toBe(true);
+  });
+
   it("opens cursor input during the waiting room, videos, and position questions", () => {
     let s = apply(initialPhoneState, phase("idle", 1, "lobby"));
     expect(s.inputOpen).toBe(true);

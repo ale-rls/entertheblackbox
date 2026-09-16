@@ -13,6 +13,63 @@ const phase = (phoneAudioSrc?: string): Extract<Phase, { kind: "position-questio
 });
 
 describe("PersonalAudio", () => {
+  it("does not play superseded audio when a transfer happens during reset", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+    await Promise.all([writeFile(join(dir, "a.mp3"), "a"), writeFile(join(dir, "b.mp3"), "b")]);
+    let release: (() => void) | undefined;
+    let resetStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => { resetStarted = resolve; });
+    let hold = false;
+    const plays: unknown[] = [];
+    const request = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/reset") && hold) {
+        hold = false;
+        await new Promise<void>((resolve) => { release = resolve; resetStarted!(); });
+      }
+      if (String(url).endsWith("/play")) plays.push(JSON.parse(String(init?.body)));
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    const audio = new PersonalAudio({ url: "http://bridge", token: "x", publicUrl: "http://audio" }, dir, vi.fn(), request);
+    await audio.register({ clientId: "one", name: "One" });
+    audio.transition(phase());
+    await audio.register({ clientId: "one", name: "One" });
+    hold = true;
+    audio.transitionParticipants(["one"], phase("a.mp3"));
+    await started;
+    audio.transitionParticipants(["one"], phase("b.mp3"));
+    release!();
+    await audio.register({ clientId: "one", name: "One" });
+    expect(plays).toHaveLength(1);
+    await audio.stop();
+  });
+
+  it("joins current playback after upload/reset latency and keeps that clock on recovery", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+    await writeFile(join(dir, "voice.mp3"), "voice");
+    let now = 1000;
+    const plays: Array<{ url: string; offsetSeconds: number }> = [];
+    const request = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(url).endsWith("/reset")) now += 250;
+      if (String(url).endsWith("/play")) plays.push({ url: String(url), ...JSON.parse(String(init?.body)) });
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    const audio = new PersonalAudio({ url: "http://bridge", token: "x", publicUrl: "http://audio" }, dir, vi.fn(), request, () => {}, () => now);
+    await audio.register({ clientId: "one", name: "One" });
+    audio.transition(phase());
+    await audio.register({ clientId: "one", name: "One" });
+    now = 4500;
+    audio.transitionParticipants(["one", "late"], phase("voice.mp3"), 1000);
+    await audio.register({ clientId: "late", name: "Late" });
+    expect(plays.map((p) => p.offsetSeconds)).toEqual([3.75, 4]);
+    now = 8000;
+    await audio.refreshParticipant("one");
+    expect(plays.at(-1)?.offsetSeconds).toBe(7.25);
+    now = 9000;
+    await audio.setBackend({ kind: "remote" });
+    expect(plays.slice(-2).every((p) => p.offsetSeconds >= 8)).toBe(true);
+    await audio.stop();
+  });
+
   it("advances one group without interrupting another, silences waiting phones and routes late audio registration", async () => {
     const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
     await Promise.all([writeFile(join(dir, "a.mp3"), "a"), writeFile(join(dir, "b.mp3"), "b")]);

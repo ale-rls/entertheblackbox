@@ -86,6 +86,7 @@ const phaseSnapshot = {
 };
 
 const serverMessages: ServerToClientMessage[] = [
+  { t: "snapshot", v: 2, sessionId: "s1", routingEpoch: 3, phaseEpoch: 1, phase: phaseSnapshot, serverTime: 1 },
   { t: "snapshot", v: 2, sessionId: "s1", phaseEpoch: 2, phase: phaseSnapshot, serverTime: 1 },
   { t: "snapshot", v: 2, sessionId: "s2", phaseEpoch: 1, phase: {
     kind: "video",

@@ -1,3 +1,4 @@
+import { LiveGraph } from "./LiveGraph.js";
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import PocketBase from "pocketbase";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
@@ -36,6 +37,9 @@ export type Status = {
   groupPaths: Array<{
     groupId: string;
     memberIds: string[];
+    jumpTargets?: string[];
+    acceptingParticipants?: boolean;
+    reunionPhaseId?: string;
     phaseId: string;
     phaseEpoch: number;
     done: boolean;
@@ -47,13 +51,13 @@ export type Status = {
 
 type Feedback = { status: "success" | "danger"; message: string };
 type ConfirmAction = "idle" | "restart" | "reunion";
-type FlowScene = {
+export type FlowScene = {
   id: string;
   kind: "video" | "position-question" | "video-position-question" | "group-branch";
   title: string;
   routes: Array<{ outcome: string; target: string }>;
 };
-type SceneFlow = { entryPhaseId: string; scenes: FlowScene[] };
+export type SceneFlow = { entryPhaseId: string; scenes: FlowScene[] };
 type PublishedShow = { showId: string; name: string; version: string; publishedAt: number };
 type ShowsInfo = { active: string | null; pending: string | null; shows: PublishedShow[] };
 type GhostsInfo = { active: number; pending: number | null };
@@ -143,7 +147,7 @@ function ConfirmationDialog({ action, onCancel, onConfirm }: { action: ConfirmAc
   </div>;
 }
 
-function JumpConfirmationDialog({ scene, onCancel, onConfirm }: { scene: FlowScene; onCancel: () => void; onConfirm: () => void }) {
+function JumpConfirmationDialog({ scene, scope, onCancel, onConfirm }: { scene: FlowScene; scope: string; onCancel: () => void; onConfirm: () => void }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const titleId = "admin-jump-confirmation-title";
   const descriptionId = "admin-jump-confirmation-description";
@@ -169,7 +173,7 @@ function JumpConfirmationDialog({ scene, onCancel, onConfirm }: { scene: FlowSce
     <div className="sc-tool-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} onKeyDown={handleKeyDown}>
       <p className="sc-tool-eyebrow">Scene jump</p>
       <h2 id={titleId}>Jump to “{scene.title}”?</h2>
-      <p id={descriptionId}>This immediately leaves the current scene, clears its in-progress vote or playback state, and starts <span className="sc-tool-mono">{scene.id}</span>.</p>
+      <p id={descriptionId}>{scope}: this immediately leaves the current scene, clears its in-progress vote or playback state, and starts <span className="sc-tool-mono">{scene.id}</span>.</p>
       <div className="sc-tool-dialog-actions">
         <button ref={cancelRef} className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={onCancel}>Keep current scene</button>
         <button className="sc-tool-button" data-sc-tool-variant="primary" type="button" onClick={onConfirm}>Jump to scene</button>
@@ -202,6 +206,7 @@ export function App() {
   const [workingAction, setWorkingAction] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [flow, setFlow] = useState<SceneFlow | null>(null);
+  const [jumpScope, setJumpScope] = useState<{ groupId?: string; label: string; epoch: number | null; sessionId: string | null; phaseId: string | null }>({ label: "Whole show", epoch: null, sessionId: null, phaseId: null });
   const [jumpScene, setJumpScene] = useState<FlowScene | null>(null);
   const [showsInfo, setShowsInfo] = useState<ShowsInfo | null>(null);
   const [selectedShowId, setSelectedShowId] = useState("");
@@ -507,7 +512,7 @@ export function App() {
       await api("skip", connectedToken, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(groupId ? { groupId } : {}),
+        body: JSON.stringify(groupId ? { groupId, expectedPhaseId: status?.groupPaths.find((path) => path.groupId === groupId)?.phaseId } : { expectedPhaseId: status?.phaseId }),
       });
       setFeedback({ status: "success", message: groupLabel ? `${groupLabel}’s current scene skipped.` : "Current phase skipped." });
       await refresh();
@@ -545,16 +550,17 @@ export function App() {
   };
   const assignGroup = async (participantId: string, groupId: string) => {
     setFeedback(null);
+    setWorkingAction("assign");
     try {
       await api("groups/assign", connectedToken, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ participantId, groupId }),
+        body: JSON.stringify({ participantId, groupId, expectedEpoch: status?.phaseEpoch, sessionId: status?.sessionId }),
       });
-      setFeedback({ status: "success", message: "Participant group updated." });
+      setFeedback({ status: "success", message: status?.groupPathsStarted ? "Participant joined the group’s current scene and playback position." : "Participant group updated." });
       await refresh();
     } catch (error) {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not update the participant group." });
-    }
+    } finally { setWorkingAction(null); }
   };
 
   const jumpToScene = async (scene: FlowScene) => {
@@ -564,7 +570,7 @@ export function App() {
       await api("jump", connectedToken, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phaseId: scene.id }),
+        body: JSON.stringify({ phaseId: scene.id, groupId: jumpScope.groupId, expectedPhaseId: jumpScope.phaseId, expectedEpoch: jumpScope.epoch, sessionId: jumpScope.sessionId }),
       });
       setFeedback({ status: "success", message: `Jumped to “${scene.title}”.` });
       await refresh();
@@ -594,7 +600,9 @@ export function App() {
       });
     });
   };
-  const requestJump = (scene: FlowScene, trigger: HTMLButtonElement) => {
+  const requestJump = (scene: FlowScene, trigger: HTMLButtonElement, groupId?: string) => {
+    const path = status?.groupPaths.find((p) => p.groupId === groupId);
+    setJumpScope({ ...(groupId ? { groupId } : {}), label: path ? `${path.label} · ${path.memberIds.length} participants` : "Whole show", epoch: path?.phaseEpoch ?? status?.phaseEpoch ?? null, sessionId: status?.sessionId ?? null, phaseId: path?.phaseId ?? status?.phaseId ?? null });
     confirmTriggerRef.current = trigger;
     setJumpScene(scene);
   };
@@ -658,6 +666,14 @@ export function App() {
         <h2>{refreshing ? "Loading live status…" : "Connect to load live status"}</h2>
         <p className="sc-tool-copy">No operational values are shown until the admin API authenticates this browser session.</p>
       </section> : <div className="admin-grid">
+        <section className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
+          <div className="admin-section-heading">
+            <div><p className="sc-tool-eyebrow">Live show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Scene navigator</h2></div>
+            <StatusLabel status={isActive && !status.groupPathsStarted ? "success" : "info"}>{status.groupPathsStarted ? "Groups running" : isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
+          </div>
+          <p className="sc-tool-copy admin-flow-intro">The published show graph with live group locations. Select a scene to inspect its participants or move a group.</p>
+          {flow?.scenes.length ? <LiveGraph flow={flow} status={status} busy={busy} onJump={requestJump} onAssign={assignGroup} /> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}
+        </section>
         <section className="sc-tool-panel" aria-labelledby="admin-status-heading">
           <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">Live topology</p><h2 id="admin-status-heading">Operational status</h2></div><span className="sc-tool-mono admin-section-count">Live</span></div>
           <div className="admin-operation-list">
@@ -680,7 +696,7 @@ export function App() {
             <div><button className="sc-tool-button" data-sc-tool-variant={isActive ? "secondary" : "primary"} type="button" disabled={!canStart || busy} onClick={() => void control("start")}>Start show</button><span>{isActive ? "Unavailable while active" : !status.displayConnected ? "Display must be connected" : status.connectedParticipants < 1 ? "A participant must be connected" : "Begin a new live session"}</span></div>
             {inGroupBranch ? (status.groupPathsStarted ? <>
               {status.groupPaths.map((path) => <div key={path.groupId}>
-                <button className="sc-tool-button" data-sc-tool-variant={path.done ? "secondary" : "primary"} type="button" disabled={path.done || busy} onClick={() => void skipPhase(path.groupId, path.label)}>
+                <button className="sc-tool-button" data-sc-tool-variant={path.done ? "secondary" : "primary"} type="button" disabled={path.done || path.acceptingParticipants === false || busy} onClick={() => void skipPhase(path.groupId, path.label)}>
                   {path.done ? `${path.label} — waiting` : `Next scene for ${path.label} — ${path.memberIds.length} ${path.memberIds.length === 1 ? "person" : "people"}`}
                 </button>
                 <span>{path.done ? "At the reunion point, waiting on the other groups" : `Currently on “${path.phaseTitle}”`}</span>
@@ -792,10 +808,10 @@ export function App() {
           {status.participants.length === 0 ? <p className="sc-tool-copy">Nobody has joined this session yet.</p> : <ul className="admin-participant-list">
             {status.participants.map((participant) => <li key={participant.clientId}>
               <span className="admin-participant-color" style={{ backgroundColor: participant.color }} />
-              <div><strong>{participant.name}</strong><span>joined {new Date(participant.joinedAt).toLocaleTimeString([], { timeStyle: "short" })}</span>
-                {(status.groups?.length ?? 0) > 0 && <label className="sc-tool-label"><span>Audience group</span><select className="sc-tool-select" value={participant.groupId ?? ""} onChange={(event) => void assignGroup(participant.clientId, event.target.value)}>
+              <div><strong>{participant.name}</strong><span>{(() => { const path = status.groupPaths.find((p) => p.memberIds.includes(participant.clientId)); return path ? `${path.label} · ${path.done ? "Waiting at reunion" : path.phaseTitle}` : status.groupPathsStarted ? "Waiting / needs assignment" : sceneTitle(status.phaseId ?? "idle"); })()}</span><span>joined {new Date(participant.joinedAt).toLocaleTimeString([], { timeStyle: "short" })}</span>
+                {(status.groups?.length ?? 0) > 0 && <label className="sc-tool-label"><span>{status.groupPathsStarted ? "Move to group · current playback position" : "Audience group"}</span><select disabled={busy} className="sc-tool-select" value={status.groupPathsStarted ? status.groupPaths.find((p) => p.memberIds.includes(participant.clientId))?.groupId ?? "" : participant.groupId ?? ""} onChange={(event) => void assignGroup(participant.clientId, event.target.value)}>
                   <option value="" disabled>Unassigned</option>
-                  {status.groups!.map((group) => <option key={group.id} value={group.id}>{group.label}</option>)}
+                  {status.groups!.map((group) => <option key={group.id} value={group.id} disabled={status.groupPathsStarted && !status.groupPaths.some((path) => path.groupId === group.id && path.acceptingParticipants !== false)}>{group.label}{status.groupPathsStarted && !status.groupPaths.some((path) => path.groupId === group.id && path.acceptingParticipants !== false) ? " · not running" : ""}</option>)}
                 </select></label>}
               </div>
               <StatusLabel status={participant.connected ? "success" : "warning"}>{participant.connected ? "Connected" : "Disconnected"}</StatusLabel>
@@ -845,39 +861,11 @@ export function App() {
           <p className="sc-tool-help">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghosts and defers to whatever the published show sets. While a show is running, the change waits until that show ends.</p>
         </section>
 
-        <section className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
-          <div className="admin-section-heading">
-            <div><p className="sc-tool-eyebrow">Whole-show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Scene navigator</h2></div>
-            <StatusLabel status={isActive && !status.groupPathsStarted ? "success" : "info"}>{status.groupPathsStarted ? "Paused while groups run" : isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
-          </div>
-          <p className="sc-tool-copy admin-flow-intro">The published flow is shown in Studio order. Each node includes its outgoing route; branching scenes expose every possible outcome.{status.groupPathsStarted ? " Whole-show jumps are disabled while group branches are running — use the group controls above instead." : ""}</p>
-          {flow?.scenes.length ? <ol className="admin-flow-list" aria-label="Published show scenes">
-            {flow.scenes.map((scene, index) => {
-              const isCurrent = status.phaseId === scene.id;
-              const isEntry = flow.entryPhaseId === scene.id;
-              return <li key={scene.id}>
-                <button
-                  className="admin-flow-node sc-tool-graph-node"
-                  data-sc-tool-domain={scene.kind === "video" ? "video" : "question"}
-                  aria-current={isCurrent ? "step" : undefined}
-                  aria-label={`${isCurrent ? "Current scene, " : ""}${scene.title}${isCurrent ? ", already playing" : ", jump to this scene"}`}
-                  type="button"
-                  disabled={!isActive || busy || isCurrent || status.groupPathsStarted}
-                  onClick={(event) => requestJump(scene, event.currentTarget)}
-                >
-                  <span className="admin-flow-node-head"><span>{String(index + 1).padStart(2, "0")} · {sceneKindLabel(scene.kind)}</span>{isEntry && <span>Entry</span>}{isCurrent && <span>Now</span>}</span>
-                  <strong>{scene.title}</strong>
-                  <span className="sc-tool-mono admin-flow-node-id">{scene.id}</span>
-                  <span className="admin-flow-routes">{scene.routes.map((route) => <span key={`${route.outcome}:${route.target}`}><b>{route.outcome}</b> → {route.target === "idle" ? "End" : route.target}</span>)}</span>
-                </button>
-              </li>;
-            })}
-          </ol> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}
-        </section>
+
 
       </div>}
     </main>
     {confirmAction && <ConfirmationDialog action={confirmAction} onCancel={closeConfirmation} onConfirm={confirmControl} />}
-    {jumpScene && <JumpConfirmationDialog scene={jumpScene} onCancel={closeJumpConfirmation} onConfirm={confirmJump} />}
+    {jumpScene && <JumpConfirmationDialog scene={jumpScene} scope={jumpScope.label} onCancel={closeJumpConfirmation} onConfirm={confirmJump} />}
   </div>;
 }

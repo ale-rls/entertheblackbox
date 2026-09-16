@@ -175,3 +175,20 @@ async def test_metrics_plaintext(env):
     assert (
         await client.get("/metrics", headers={"Authorization": ""})
     ).status_code == 401
+
+
+async def test_play_at_current_group_position(env):
+    client, fake = env
+    command = 'int_1.push annotate:liq_cue_in="12.375":/audio/intro.mp3'
+    fake.responses[command] = "8"
+    r = await client.post("/players/1/play", json={"file": "intro.mp3", "offsetSeconds": 12.375})
+    assert r.status_code == 200
+    assert command in fake.commands
+
+
+@pytest.mark.parametrize("offset", [-1, "not-a-number", "inf", "nan"])
+async def test_play_rejects_invalid_offset(env, offset):
+    client, fake = env
+    r = await client.post("/players/1/play", json={"file": "intro.mp3", "offsetSeconds": offset})
+    assert r.status_code == 422
+    assert not any(".push" in command for command in fake.commands)
