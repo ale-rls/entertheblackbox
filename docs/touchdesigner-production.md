@@ -68,3 +68,6 @@ curl -N -H "Authorization: Bearer $DISPLAY_TOKEN" -H 'Accept-Encoding: identity'
 Expect an immediate `data:` snapshot, phase events when the show advances,
 and heartbeat comments every 15 seconds. A 401 means the token is missing or
 incorrect. Reconnect after redeploy should produce a new boot ID.
+
+For a monitor that displays the question title and switches to a final
+five-second countdown, see [Question title and countdown monitor](touchdesigner-question-monitor.md).
