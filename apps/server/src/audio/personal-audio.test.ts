@@ -331,3 +331,19 @@ describe("PersonalAudio", () => {
     await audio.stop();
   });
 });
+
+
+it("silences stream injection for synchronized scenes and restores ordinary narration", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "phone-audio-sync-"));
+  await writeFile(join(dir, "voice.mp3"), "voice");
+  const request = vi.fn(async () => new Response("{}")) as unknown as typeof fetch;
+  const audio = new PersonalAudio({ url: "http://bridge", token: "x", publicUrl: "http://audio" }, dir, vi.fn(), request);
+  await audio.register({ clientId: "one", name: "One" });
+  audio.transition({ kind: "video", id: "video", src: "video.mp4", expectedDurationMs: 1000, next: "idle", phoneAudioMode: "synchronized", phoneAudioSrc: "voice.mp3" });
+  await audio.register({ clientId: "one", name: "One" });
+  expect(vi.mocked(request).mock.calls.some(([url]) => String(url).endsWith("/play"))).toBe(false);
+  audio.transition(phase("voice.mp3"));
+  await audio.register({ clientId: "one", name: "One" });
+  expect(vi.mocked(request).mock.calls.some(([url]) => String(url).endsWith("/play"))).toBe(true);
+  await audio.stop();
+});

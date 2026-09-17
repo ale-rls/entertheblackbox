@@ -1,3 +1,4 @@
+import { SynchronizedPhoneAudio } from "./SynchronizedPhoneAudio";
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
 import { PhoneAudio } from "./PhoneAudio.js";
 import { PROTOCOL_VERSION } from "@entertheblackbox/protocol";
@@ -466,7 +467,13 @@ export function App() {
         </div>
       )}
 
-      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} />}
+      {audioIdentity && connection && <SynchronizedPhoneAudio key={audioIdentity.clientId} clock={connection.clock} cue={state.synchronizedPhase?.phoneAudioSrc ? {
+        key: `${state.sessionId}:${state.routingEpoch}:${state.phaseEpoch}`,
+        src: state.synchronizedPhase.phoneAudioSrc,
+        startedAt: state.synchronizedPhase.startedAt,
+        endsAt: state.synchronizedPhase.startedAt + state.synchronizedPhase.expectedDurationMs,
+      } : null} />}
+      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} suspended={state.synchronizedPhase !== null} />}
       <footer className="hud">
         {identity && (
           <span

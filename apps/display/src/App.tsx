@@ -207,6 +207,8 @@ export function App() {
     activeExtraAudioRef.current = audioElement;
   }, []);
   const enableSound = useCallback(() => {
+    const current = stateRef.current.phase;
+    if (current?.kind === "video" && current.phoneAudioMode === "synchronized") { setSoundEnabled(true); return; }
     for (const mediaElement of [activeMediaRef.current, activeExtraAudioRef.current]) {
       if (mediaElement === null) continue;
       // Keep this play() call inside the click handler: browsers require an
@@ -272,6 +274,7 @@ export function App() {
           mediaVisible={idleMediaVisible}
         />
         <PhaseVideoHandoff
+          clock={connection.clock}
           desiredKey={phaseVideoKey}
           candidate={phaseVideoCandidate}
           soundEnabled={soundEnabled}

@@ -1,3 +1,4 @@
+import { ServerClock } from "@entertheblackbox/shared";
 import {
   encodeMessage,
   parseServerMessage,
@@ -39,6 +40,7 @@ export type EndedPhoneSession = {
 };
 
 export class PhoneConnection {
+  readonly clock = new ServerClock();
   private ws: WebSocket | null = null;
   private stopped = false;
   private attempt = 0;
@@ -105,6 +107,7 @@ export class PhoneConnection {
         console.warn("phone: dropped invalid server message:", parsed.reason);
         return;
       }
+      if (parsed.message.t === "pong") this.clock.addSample(parsed.message.echoClientTime, this.now(), parsed.message.serverTime);
       if (parsed.message.t === "identity") {
         this.endedSession = {
           sessionId: parsed.message.sessionId,

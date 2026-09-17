@@ -328,6 +328,7 @@ The supported architecture is a local installation computer serving the applicat
 
 - [Operations runbook](docs/operations.md)
 - [Venue installation guide](docs/venue-installation.md)
+- [Video with synchronized phone audio](docs/synchronized-phone-audio.md)
 
 The application and Show Studio v1 are implemented and tested. A venue launch still requires production content, exact-hardware acceptance, a recovery image or spare computer, and the final soak test.
 

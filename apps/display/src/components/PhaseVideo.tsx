@@ -1,3 +1,4 @@
+import type { ServerClock } from "@entertheblackbox/shared";
 import { useCallback, useEffect, useRef } from "react";
 import {
   PROTOCOL_VERSION,
@@ -18,6 +19,8 @@ export type PhaseVideoProps = {
   src: string;
   extraAudioSrc?: string;
   soundEnabled: boolean;
+  clock?: ServerClock;
+  playbackEnabled?: boolean;
   onVideoElement?: (video: HTMLVideoElement | null) => void;
   onExtraAudioElement?: (audio: HTMLAudioElement | null) => void;
   onFirstFrame?: () => void;
@@ -31,11 +34,15 @@ export function PhaseVideo({
   src,
   extraAudioSrc,
   soundEnabled,
+  clock,
+  playbackEnabled = true,
   onVideoElement,
   onExtraAudioElement,
   onFirstFrame,
   send,
 }: PhaseVideoProps) {
+  const synchronized = phase.kind === "video" && phase.phoneAudioMode === "synchronized";
+  const videoOffsetMs = phase.kind === "video" ? phase.syncVideoOffsetMs ?? 0 : 0;
   const tailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const extraAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -48,6 +55,7 @@ export function PhaseVideo({
     phaseEpoch,
     mediaId: phase.src,
     videoUrl: src,
+    autoPlay: !synchronized,
     send,
   });
   const setVideoRef = useCallback((video: HTMLVideoElement | null) => {
@@ -90,7 +98,9 @@ export function PhaseVideo({
   }, [phaseEpoch, src]);
   const handleEnded = () => {
     extraAudioRef.current?.pause();
-    const tailDurationMs = phase.tailDurationMs ?? 0;
+    const tailDurationMs = synchronized && clock
+      ? Math.max(0, phase.startedAt + phase.expectedDurationMs + Math.max(0, videoOffsetMs) - clock.now())
+      : phase.tailDurationMs ?? 0;
     if (tailDurationMs === 0) {
       completePhase();
       return;
@@ -103,6 +113,40 @@ export function PhaseVideo({
       completePhase();
     }, tailDurationMs);
   };
+
+  useEffect(() => {
+    if (!synchronized) return;
+    const video = videoRef.current;
+    if (!video) return;
+    let pending = false;
+    let completed = false;
+    const ended = () => { completed = true; };
+    const update = () => {
+      if (!playbackEnabled || !clock?.hasSamples) { video.pause(); return; }
+      const target = (clock.now() - phase.startedAt - videoOffsetMs) / 1000;
+      if (target < 0) { video.pause(); return; }
+      if (completed || video.readyState < 1) return;
+      if (Number.isFinite(video.duration) && target >= video.duration) {
+        // Late joins beyond the last frame still report completion and honor the tail.
+        video.currentTime = Math.max(0, video.duration - 0.001);
+        completed = true;
+        handleEnded();
+        return;
+      }
+      const error = target - video.currentTime;
+      if (Math.abs(error) > 0.25) video.currentTime = target;
+      video.playbackRate = Math.abs(error) < 0.02 ? 1 : Math.max(0.98, Math.min(1.02, 1 + error * 0.1));
+      if (video.paused && !pending) {
+        pending = true;
+        void video.play()?.catch(() => diagnostics.onError()).finally(() => { pending = false; });
+      }
+    };
+    video.addEventListener("ended", ended);
+    video.addEventListener("loadedmetadata", update);
+    const timer = setInterval(update, 50);
+    update();
+    return () => { clearInterval(timer); video.removeEventListener("ended", ended); video.removeEventListener("loadedmetadata", update); video.pause(); video.playbackRate = 1; };
+  }, [synchronized, phase.startedAt, phaseEpoch, src, clock, playbackEnabled, videoOffsetMs]);
 
   const handlePlaying = () => {
     diagnostics.onPlaying();
@@ -140,15 +184,16 @@ export function PhaseVideo({
     <video
       ref={setVideoRef}
       src={src}
-      autoPlay
-      muted={!soundEnabled}
+      autoPlay={!synchronized}
+      preload="auto"
+      muted={synchronized || !soundEnabled}
       playsInline
       onEnded={handleEnded}
       onPlaying={handlePlaying}
       onStalled={handleStalled}
       onError={diagnostics.onError}
     />
-    {extraAudioSrc !== undefined && <audio
+    {!synchronized && extraAudioSrc !== undefined && <audio
       ref={setExtraAudioRef}
       src={extraAudioSrc}
       autoPlay

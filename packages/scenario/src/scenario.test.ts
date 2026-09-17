@@ -745,3 +745,16 @@ describe("validateMediaManifest", () => {
     expect(result.errors.some((e) => e.code === "budget-exceeded")).toBe(true);
   });
 });
+
+
+it("validates opt-in synchronized video without changing ordinary videos", () => {
+  const make = (fields: Record<string, unknown>) => ({ ...baseScenario, phases: baseScenario.phases.map((p) => p.id === "intro" ? { ...p, ...fields } : p) });
+  const fields = { phoneAudioMode: "synchronized", phoneAudioSrc: "voice.mp3", syncLeadMs: 3000, syncVideoOffsetMs: -100 };
+  expect(scenarioSchema.safeParse(make(fields)).success).toBe(true);
+  expect(scenarioSchema.safeParse(make({ ...fields, phoneAudioSrc: undefined })).success).toBe(false);
+  expect(scenarioSchema.safeParse(make({ ...fields, src: "still.png", audioSrc: "voice.mp3" })).success).toBe(false);
+  expect(scenarioSchema.safeParse(make({ ...fields, syncLeadMs: 0 })).success).toBe(false);
+  expect(scenarioSchema.safeParse(make({ ...fields, phoneAudioByGroup: { blue: "other.mp3" } })).success).toBe(false);
+  const regular = scenarioSchema.parse(baseScenario).phases.find((p) => p.id === "intro");
+  expect(regular).not.toHaveProperty("phoneAudioMode");
+});

@@ -214,7 +214,7 @@ export class PersonalAudio {
 
   prepare(phases: readonly Phase[]): void {
     for (const phase of phases) {
-      const sources = phase.kind === "idle" ? []
+      const sources = phase.kind === "idle" || (phase.kind === "video" && phase.phoneAudioMode === "synchronized") ? []
         : phase.kind === "group-branch"
           ? phase.branches.flatMap((branch) => branch.phoneAudioSrc ? [branch.phoneAudioSrc] : [])
           : [...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []), ...Object.values(phase.phoneAudioByGroup ?? {})];
@@ -228,11 +228,11 @@ export class PersonalAudio {
     this.phaseOverrides.clear();
     this.deliveryErrors.clear();
     const generation = ++this.generation;
-    this.currentAudioSrc = phase.kind === "idle" || phase.kind === "group-branch" ? undefined : phase.phoneAudioSrc;
+    this.currentAudioSrc = phase.kind === "idle" || phase.kind === "group-branch" || (phase.kind === "video" && phase.phoneAudioMode === "synchronized") ? undefined : phase.phoneAudioSrc;
     this.sourceForPlayer = (id) => {
       const groupId = groupFor(id);
       const localPhase = this.phaseOverrides.get(id) ?? phase;
-      return localPhase.kind === "idle" ? undefined
+      return localPhase.kind === "idle" || (localPhase.kind === "video" && localPhase.phoneAudioMode === "synchronized") ? undefined
         : localPhase.kind === "group-branch"
           ? localPhase.branches.find((branch) => branch.groupId === groupId)?.phoneAudioSrc
           : (groupId === null ? undefined : localPhase.phoneAudioByGroup?.[groupId]) ?? localPhase.phoneAudioSrc;

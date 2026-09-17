@@ -1242,11 +1242,11 @@ export class PhaseEngine {
     this.compositeVideoCompleted = false;
     this.displayPlaybackIssue = null;
     this.phaseId = target;
-    this.phaseStartedAt = now;
+    this.phaseStartedAt = now + (phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? phase.syncLeadMs ?? 3000 : 0);
     this.phaseEpoch = this.nextEpoch();
     this.video.cancel();
     this.deadlineAt = phase.kind === "video" || phase.kind === "video-position-question"
-      ? this.video.begin({ sessionId: this.sessionId, phaseId: target, phaseEpoch: this.phaseEpoch }, phase.expectedDurationMs, now)
+      ? this.video.begin({ sessionId: this.sessionId, phaseId: target, phaseEpoch: this.phaseEpoch }, phase.expectedDurationMs + (phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? Math.max(0, phase.syncVideoOffsetMs ?? 0) : 0), this.phaseStartedAt)
       : phase.kind === "group-branch"
         ? now + phase.durationMs
       : phase.kind === "position-question"
@@ -1264,7 +1264,7 @@ export class PhaseEngine {
     }
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
-    this.path?.onPhase(phase, now);
+    this.path?.onPhase(phase, this.phaseStartedAt);
     if ((phase.kind === "video" || phase.kind === "video-position-question") && phase.rating) {
       this.ratings.begin({
         sessionId: this.sessionId,
