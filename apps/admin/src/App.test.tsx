@@ -118,6 +118,19 @@ describe("Admin operations UI", () => {
     expect(requests.map(request => request.url)).toEqual(["/api/admin/status"]);
   });
 
+  it("allows starting a show without a connected display", async () => {
+    localStorage.setItem("admin-token", "operator-token");
+    const { requests } = createAdminFetch({
+      status: { ...activeStatus, lifecycle: "lobby", displayConnected: false },
+    });
+    await renderApp();
+    expect(button("Start show").disabled).toBe(false);
+    await act(async () => { button("Start show").click(); });
+    await flush();
+    expect(requests.some(request => request.method === "POST" && request.url.endsWith("/start"))).toBe(true);
+    expect(document.body.textContent).not.toContain("Display must be connected");
+  });
+
   it("shows an honest unauthenticated state without requesting or fabricating operational data", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

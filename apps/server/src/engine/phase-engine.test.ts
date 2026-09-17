@@ -294,16 +294,12 @@ describe("PhaseEngine lifecycle", () => {
     expect(stranger.sent).toEqual([]);
   });
 
-  it("keeps phones in idle until a healthy display joins, then runs the lobby", () => {
+  it("starts the lobby and show without a display", () => {
     let now = 1_000;
     const { engine, registry } = setup({ now: () => now });
     const phone = new MockSocket();
     addParticipant(registry, phone as unknown as WebSocket, now, "p1");
     engine.participantJoined(phone as unknown as WebSocket);
-    expect(engine.lifecycleState).toBe("idle");
-
-    const display = new MockSocket();
-    connectDisplay(engine, display as unknown as WebSocket);
     expect(engine.lifecycleState).toBe("lobby");
     expect(engine.currentPhaseId).toBe("idle");
     now = 1_100;
@@ -343,8 +339,53 @@ describe("PhaseEngine lifecycle", () => {
     expect(display.readyState).toBe(3);
     expect(engine.isDisplayConnected).toBe(false);
     expect(engine.displayHeartbeatAgeMs).toBeNull();
-    expect(engine.lifecycleState).toBe("idle");
-    expect(checkpoints.at(-1)?.reason).toBe("display-timeout");
+    expect(engine.lifecycleState).toBe("active");
+    expect(checkpoints.at(-1)?.reason).toBe("session-start");
+  });
+
+  it.each(["lobby", "active"] as const)("keeps the %s running after the display closes", (stage) => {
+    let now = 1_000;
+    const { engine, registry } = setup({
+      now: () => now,
+      displayDisconnectTimeoutMs: 10,
+      testScenario: longVideoScenario,
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket);
+    connectDisplay(engine, display as unknown as WebSocket);
+    if (stage === "active") expect(engine.adminStart(now)).toEqual({ ok: true });
+    engine.socketClosed(display as unknown as WebSocket);
+    now += 20;
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe(stage);
+    now = 1_200;
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe("active");
+  });
+
+  it.each([false, true])("starts without a display using scheduled=%s", (scheduled) => {
+    let now = 1_000;
+    const { engine, registry } = setup({
+      now: () => now,
+      autoStartOnFirstParticipant: false,
+      scheduledStartTimes: scheduled ? [1_100] : [],
+    });
+    if (scheduled) {
+      engine.tick(now);
+      expect(engine.lifecycleState).toBe("lobby");
+    }
+    const phone = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket);
+    if (scheduled) {
+      now = 1_100;
+      engine.tick(now);
+    } else {
+      expect(engine.adminStart(now)).toEqual({ ok: true });
+    }
+    expect(engine.lifecycleState).toBe("active");
   });
 
   it("keeps a live display connected while current-phase heartbeats arrive", () => {
@@ -671,11 +712,10 @@ describe("PhaseEngine lifecycle", () => {
     ]);
   });
 
-  it("aborts to idle on interactive inactivity, max duration, and display loss", () => {
+  it("aborts to idle on interactive inactivity and max duration", () => {
     const cases = [
       { label: "interactive-idle-timeout", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
       { label: "max-session-duration", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
-      { label: "display-timeout", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
     ] as const;
 
     for (const testCase of cases) {
@@ -685,7 +725,6 @@ describe("PhaseEngine lifecycle", () => {
         now: () => now,
         checkpoints,
         maxSessionDurationMs: testCase.label === "max-session-duration" ? 50 : 10_000,
-        displayDisconnectTimeoutMs: testCase.label === "display-timeout" ? 100 : 1_000_000,
       });
       const phone = new MockSocket();
       const display = new MockSocket();
@@ -695,7 +734,6 @@ describe("PhaseEngine lifecycle", () => {
       now = 1_100;
       engine.tick(now);
       engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
-      if (testCase.label === "display-timeout") engine.socketClosed(display as unknown as WebSocket);
       testCase.trigger(engine, now);
       expect(engine.lifecycleState, testCase.label).toBe("idle");
       expect(checkpoints.at(-1)?.reason, testCase.label).toBe(testCase.label);

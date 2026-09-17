@@ -236,7 +236,6 @@ export class PhaseEngine {
   private deadlineAt: number | null = null;
   private sessionStartedAt: number | null = null;
   private lastInputAt: number | null = null;
-  private displayDisconnectedAt: number | null = null;
   private displayHeartbeatAt: number | null = null;
   private displayPlaybackIssue: DisplayPlaybackIssue | null = null;
   private deadlineNotified = false;
@@ -394,7 +393,7 @@ export class PhaseEngine {
   }
 
   adminStart(now = this.now()): TransitionResult {
-    if (this.lifecycle === "active" || this.displaySocket === undefined || this.registry.connectedCount < 1) {
+    if (this.lifecycle === "active" || this.registry.connectedCount < 1) {
       return { ok: false, reason: "wrong-phase" };
     }
     this.startSession(now);
@@ -641,23 +640,13 @@ export class PhaseEngine {
     this.bindings.tick(now);
     this.expireStaleDisplay(now);
     if (this.lifecycle === "idle") {
-      if (this.displaySocket !== undefined && this.nextLobbyStartAt !== null) this.startLobby(now);
+      if (this.nextLobbyStartAt !== null) this.startLobby(now);
       return;
-    }
-
-    if (this.displaySocket === undefined && !this.path) {
-      this.displayDisconnectedAt ??= now;
-      if (now - this.displayDisconnectedAt >= this.policy.displayDisconnectTimeoutMs) {
-        this.abortToIdle("display-timeout", now);
-        return;
-      }
-    } else {
-      this.displayDisconnectedAt = null;
     }
 
     if (this.lifecycle === "lobby") {
       if (this.deadlineAt !== null && now >= this.deadlineAt) {
-        if (this.displaySocket !== undefined && this.registry.connectedCount > 0) {
+        if (this.registry.connectedCount > 0) {
           this.startSession(now);
         } else {
           this.consumeScheduledStart(this.deadlineAt);
@@ -791,7 +780,7 @@ export class PhaseEngine {
     this.sendGroupSelectionOptions(socket);
     this.sendVotingOptions(socket);
     this.queueQuestionStatus();
-    if (this.lifecycle === "idle" && this.displaySocket !== undefined && this.registry.connectedCount >= 1) {
+    if (this.lifecycle === "idle" && this.registry.connectedCount >= 1) {
       this.startLobby(this.now());
     }
   }
@@ -813,7 +802,6 @@ export class PhaseEngine {
     }
     if (this.displaySocket === socket) {
       this.displaySocket = undefined;
-      this.displayDisconnectedAt = this.now();
       this.displayHeartbeatAt = null;
     }
     if (this.lifecycle === "lobby" && this.registry.connectedCount === 0 && this.nextLobbyStartAt === null) {
@@ -861,7 +849,6 @@ export class PhaseEngine {
         return;
       case "display_heartbeat":
         if (socket === this.displaySocket && this.matches(message.sessionId, message.phaseId, message.phaseEpoch)) {
-          this.displayDisconnectedAt = null;
           this.displayHeartbeatAt = this.now();
         }
         return;
@@ -1090,14 +1077,6 @@ export class PhaseEngine {
     return this.bindings.participantForGid(gid) ?? participantIdForGid(gid);
   }
 
-  setDisplayConnected(connected: boolean, now = this.now()): void {
-    if (connected) {
-      this.displayDisconnectedAt = null;
-      return;
-    }
-    this.displayDisconnectedAt ??= now;
-  }
-
   completeVideo(sessionId: string, phaseId: string, phaseEpoch: number, now = this.now()): TransitionResult {
     const phase = this.currentPhase();
     if (phase.kind !== "video" && phase.kind !== "video-position-question") return { ok: false, reason: "wrong-phase" };
@@ -1156,7 +1135,6 @@ export class PhaseEngine {
     this.displayHeartbeatAt = this.now();
     this.displayPlaybackIssue = null;
     this.clients.add(socket);
-    this.displayDisconnectedAt = null;
     this.send(socket, this.getSnapshotMessage());
     this.send(socket, { t: "presence", v: PROTOCOL_VERSION, count: this.registry.connectedCount });
     const phase = this.currentPhase();
@@ -1179,10 +1157,8 @@ export class PhaseEngine {
     ) return;
 
     const socket = this.displaySocket;
-    const lastHeartbeatAt = this.displayHeartbeatAt;
     this.displaySocket = undefined;
     this.displayHeartbeatAt = null;
-    this.displayDisconnectedAt = lastHeartbeatAt;
     this.clients.delete(socket);
     socket.terminate();
   }
@@ -1190,7 +1166,6 @@ export class PhaseEngine {
   private startLobby(now: number): void {
     if (
       this.lifecycle !== "idle" ||
-      this.displaySocket === undefined ||
       (this.registry.connectedCount < 1 && this.nextLobbyStartAt === null)
     ) return;
     this.lifecycle = "lobby";
@@ -1309,7 +1284,6 @@ export class PhaseEngine {
 
   private abortToIdle(reason: string, now: number): void {
     this.enterPhase("idle", now, reason);
-    this.displayDisconnectedAt = this.displaySocket === undefined ? now : null;
   }
 
   private recordDisplayPlaybackStatus(message: DisplayPlaybackStatusMessage): void {
@@ -1417,7 +1391,7 @@ export class PhaseEngine {
   private syncLobbyDeadline(now: number, reason: string): void {
     if (this.lifecycle === "active") return;
     if (this.lifecycle === "idle") {
-      if (this.nextLobbyStartAt !== null && this.displaySocket !== undefined) this.startLobby(now);
+      if (this.nextLobbyStartAt !== null) this.startLobby(now);
       return;
     }
     this.deadlineAt = this.nextLobbyStartAt;
