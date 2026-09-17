@@ -7,7 +7,7 @@ import {
 /**
  * display_heartbeat loop (plan §7): tells the server this display is
  * still alive for the session/phase it last observed, so the server can
- * clear `displayDisconnectedAt` and avoid aborting to idle on a brief
+ * keep connection health diagnostics current across a brief
  * hiccup. The server's idle-session convention (apps/server phase-engine)
  * uses the literal string "idle" for both `sessionId` and `phaseId` while
  * no session/phase has started, which also satisfies the protocol's
