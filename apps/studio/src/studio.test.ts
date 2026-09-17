@@ -12,7 +12,7 @@ class MemoryDb implements DraftDatabase {
   history: Draft[] = [];
   async list() { return this.latest; }
   async revisions(id: string) { return this.history.filter((draft) => draft.id === id).sort((a, b) => b.updatedAt - a.updatedAt); }
-  async put(draft: Draft) { this.latest = [structuredClone(draft)]; this.history.unshift(structuredClone(draft)); this.history = this.history.slice(0, 20); }
+  async put(draft: Draft) { this.latest = [structuredClone(draft), ...this.latest.filter((existing) => existing.id !== draft.id)]; this.history.unshift(structuredClone(draft)); this.history = this.history.slice(0, 20); }
   async delete(id: string) { this.latest = this.latest.filter((draft) => draft.id !== id); this.history = this.history.filter((draft) => draft.id !== id); }
 }
 
@@ -38,8 +38,35 @@ describe("Studio shell", () => {
 
   it("round-trips a versioned Studio backup", () => {
     const draft = importRuntime(scenario, manifest);
-    expect(importBackup({ format: "entertheblackbox-studio-backup", version: 1, draft })).toEqual(draft);
+    const imported = importBackup(exportBackup(draft));
+    expect(imported.id).not.toBe(draft.id);
+    expect(imported).toEqual({ ...draft, id: imported.id, updatedAt: imported.updatedAt });
     expect(() => importBackup({ version: 99 })).toThrow("supported Studio backup");
+  });
+
+  it("keeps the original and repeated backup imports as separate saved drafts", async () => {
+    const db = new MemoryDb();
+    const source = importRuntime(scenario, manifest, "Original show");
+    source.updatedAt = 1;
+    source.document.viewport = { x: 140, y: -70, zoom: 0.8 };
+    source.document.notes = { "intro-video": "Opening cue" };
+    const backup = exportBackup(source);
+    const existing = { ...structuredClone(source), name: "Edited since backup" };
+    await db.put(existing);
+
+    for (let index = 0; index < 2; index++) {
+      const { draft, message } = importStudioFiles([{ name: "show-backup.json", value: backup }]);
+      expect(draft.updatedAt).toBeGreaterThan(source.updatedAt);
+      expect(draft).toEqual({ ...source, id: draft.id, updatedAt: draft.updatedAt });
+      expect(message).toContain("new draft");
+      await db.put(draft);
+    }
+
+    const saved = await db.list();
+    expect(saved).toHaveLength(3);
+    expect(new Set(saved.map((draft) => draft.id)).size).toBe(3);
+    expect(saved.find((draft) => draft.id === source.id)).toEqual(existing);
+    expect(backup).toEqual(exportBackup(source));
   });
 
   it("imports runtime artifacts by content regardless of selection order", () => {
