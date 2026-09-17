@@ -173,7 +173,8 @@ export function importBackup(raw: unknown): Draft {
   }
   compileStudioGraph(draft.project);
   const document = parseStudioDocument(draft.document, draft.project);
-  return { ...structuredClone(draft), document };
+  // Imports are independent drafts; reusing the backup ID overwrites its source.
+  return { ...structuredClone(draft), id: crypto.randomUUID(), updatedAt: Date.now(), document };
 }
 
 export function importStudioFiles(files: readonly StudioImportFile[]): StudioImportResult {
@@ -197,7 +198,7 @@ export function importStudioFiles(files: readonly StudioImportFile[]): StudioImp
   const backup = byKind.get("backup")?.[0];
   if (backup) {
     if (files.length !== 1) throw new Error("A Studio backup must be imported by itself.");
-    return { draft: importBackup(backup.value), kind: "backup", message: "Imported complete Studio backup." };
+    return { draft: importBackup(backup.value), kind: "backup", message: "Imported complete Studio backup as a new draft." };
   }
 
   const scenario = byKind.get("scenario")?.[0];
