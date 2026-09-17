@@ -4,6 +4,7 @@ export type Phase = StudioProject["scenario"]["phases"][number];
 export type PhaseKind = Phase["kind"];
 export type AuthorablePhaseKind = Exclude<PhaseKind, "idle">;
 export type AuthorableComponentType =
+  | "synchronized-video"
   | "video"
   | "image-audio"
   | "position-question"
@@ -13,6 +14,7 @@ export type AuthorableComponentType =
 
 export function componentTypeForPhase(phase: Phase): AuthorableComponentType | "idle" {
   if (phase.kind === "idle" || phase.kind === "position-question" || phase.kind === "group-branch") return phase.kind;
+  if (phase.kind === "video" && phase.phoneAudioMode === "synchronized") return "synchronized-video";
   if (phase.kind === "video-position-question") {
     return phase.audioSrc === undefined ? "video-position-question" : "image-audio-position-question";
   }
@@ -20,6 +22,7 @@ export function componentTypeForPhase(phase: Phase): AuthorableComponentType | "
 }
 
 export function phaseKindForComponentType(type: AuthorableComponentType): AuthorablePhaseKind {
+  if (type === "synchronized-video") return "video";
   if (type === "image-audio") return "video";
   if (type === "image-audio-position-question") return "video-position-question";
   if (type === "group-branch") return "group-branch";

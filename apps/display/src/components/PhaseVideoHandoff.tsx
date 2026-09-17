@@ -1,3 +1,4 @@
+import type { ServerClock } from "@entertheblackbox/shared";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DisplayToServerMessage, PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import { PhaseVideo } from "./PhaseVideo.js";
@@ -27,6 +28,7 @@ export function PhaseVideoHandoff({
   desiredKey,
   candidate,
   soundEnabled,
+  clock,
   onVideoElement,
   onExtraAudioElement,
   onActiveKey,
@@ -35,6 +37,7 @@ export function PhaseVideoHandoff({
   desiredKey: string | null;
   candidate: PhaseVideoCandidate | null;
   soundEnabled: boolean;
+  clock?: ServerClock;
   onVideoElement?: (video: HTMLVideoElement | null) => void;
   onExtraAudioElement?: (audio: HTMLAudioElement | null) => void;
   onActiveKey?: (key: string) => void;
@@ -131,6 +134,8 @@ export function PhaseVideoHandoff({
             src={value.src}
             {...(value.extraAudioSrc === undefined ? {} : { extraAudioSrc: value.extraAudioSrc })}
             soundEnabled={soundEnabled}
+            {...(clock ? { clock } : {})}
+            playbackEnabled={value.key === desiredKey}
             onVideoElement={(video) => { videoRefs.current[slot] = video; }}
             onExtraAudioElement={(audio) => { audioRefs.current[slot] = audio; }}
             onFirstFrame={() => reveal(slot, value.key)}

@@ -13,6 +13,7 @@ export type VideoPlaybackDiagnosticsOptions = {
   phaseEpoch: number;
   mediaId: string | null;
   videoUrl: string | null;
+  autoPlay?: boolean;
   send: (message: DisplayToServerMessage) => void;
 };
 
@@ -32,6 +33,7 @@ export function useVideoPlaybackDiagnostics({
   phaseEpoch,
   mediaId,
   videoUrl,
+  autoPlay = true,
   send,
 }: VideoPlaybackDiagnosticsOptions) {
   const ref = useRef<HTMLMediaElement | null>(null);
@@ -51,7 +53,7 @@ export function useVideoPlaybackDiagnostics({
   }, [mediaId, phaseEpoch, phaseId, send, sessionId]);
 
   useEffect(() => {
-    if (videoUrl === null || phaseId === null) return;
+    if (!autoPlay || videoUrl === null || phaseId === null) return;
     const video = ref.current;
     if (video === null) return;
     try {
@@ -62,7 +64,7 @@ export function useVideoPlaybackDiagnostics({
     } catch (error) {
       report("autoplay-blocked", errorDetail(error));
     }
-  }, [phaseId, report, videoUrl]);
+  }, [phaseId, report, videoUrl, autoPlay]);
 
   return {
     ref,

@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -566,4 +566,25 @@ describe("WebSocket lifecycle", () => {
     first.close();
     second.close();
   });
+});
+
+
+it("preloads only synchronized soundtracks even without a stream backend", async () => {
+  const config = await fixture();
+  const scenario = JSON.parse(await readFile(config.scenarioPath, "utf8"));
+  scenario.phases[1].phoneAudioMode = "synchronized";
+  scenario.phases[1].phoneAudioSrc = "voice.mp3";
+  await writeFile(config.scenarioPath, JSON.stringify(scenario));
+  const manifest = JSON.parse(await readFile(config.mediaManifestPath, "utf8"));
+  manifest.files.push({ src: "voice.mp3", bytes: 5, hash: "voice" });
+  await writeFile(config.mediaManifestPath, JSON.stringify(manifest));
+  await writeFile(join(config.mediaDir, "voice.mp3"), "voice");
+  const runtime = await buildServer({ config });
+  try {
+    const response = await runtime.app.inject({ url: "/api/synchronized-audio" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(["voice.mp3"]);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect((await runtime.app.inject({ url: "/api/join-config" })).json().audioEnabled).toBe(false);
+  } finally { await runtime.app.close(); }
 });

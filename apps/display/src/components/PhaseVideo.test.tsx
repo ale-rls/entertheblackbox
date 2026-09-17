@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ServerClock } from "@entertheblackbox/shared";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -36,6 +37,7 @@ async function renderVideo(
   soundEnabled = false,
   videoPhase = phase,
   extraAudioSrc?: string,
+  clock?: ServerClock,
 ) {
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
   document.body.innerHTML = '<div id="root"></div>';
@@ -50,6 +52,7 @@ async function renderVideo(
         {...(extraAudioSrc === undefined ? {} : { extraAudioSrc })}
         soundEnabled={soundEnabled}
         send={send}
+        {...(clock ? { clock } : {})}
       />,
     );
     await Promise.resolve();
@@ -138,4 +141,27 @@ describe("PhaseVideo", () => {
     vi.advanceTimersByTime(1);
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ t: "video_ended", phaseId: "intro" }));
   });
+});
+
+
+it("waits for the shared start, mutes all video sound and catches up to the clock", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(1000);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  const clock = new ServerClock();
+  clock.addSample(1000, 1000, 5000);
+  const video = await renderVideo(vi.fn(), "session-1", true,
+    { ...phase, phoneAudioMode: "synchronized", phoneAudioSrc: "voice.mp3", startedAt: 6000 }, "blob:extra", clock);
+  Object.defineProperty(video, "readyState", { value: 4 });
+  Object.defineProperty(video, "duration", { value: 15 });
+  expect(video.autoplay).toBe(false);
+  expect(video.muted).toBe(true);
+  expect(document.querySelector("audio")).toBeNull();
+  expect(video.play).not.toHaveBeenCalled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(950); });
+  expect(video.play).not.toHaveBeenCalled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+  expect(video.play).toHaveBeenCalled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  expect(video.currentTime).toBeGreaterThan(0.8);
 });

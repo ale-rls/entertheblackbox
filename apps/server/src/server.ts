@@ -218,6 +218,12 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     startedAt,
     uptimeMs: Date.now() - startedAt,
   }));
+  app.get("/api/synchronized-audio", async (_request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!readiness.ready) return reply.code(503).send({ error: "scenario_unavailable" });
+    return [...new Set(readiness.scenario.phases.flatMap((phase) =>
+      phase.kind === "video" && phase.phoneAudioMode === "synchronized" && phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []))];
+  });
   app.get("/api/join-config", async () => ({
     installationId: config.installationId,
     roomId: config.roomId,

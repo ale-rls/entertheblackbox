@@ -266,6 +266,11 @@ export const videoPhaseSchema = z.object({
   ...phoneAudioFields,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
+  /** Opt-in local phone soundtrack scheduled against the scene clock. */
+  phoneAudioMode: z.literal("synchronized").optional(),
+  syncLeadMs: z.number().int().min(1000).max(30000).optional(),
+  /** Positive values delay the picture relative to the phone soundtrack. */
+  syncVideoOffsetMs: z.number().int().min(-2000).max(2000).optional(),
   /** Optional display treatment for the title. Omitted titles retain the standard top placement. */
   titleLayout: z.literal("centered-xl").optional(),
   src: z.string().min(1, "media src must be non-empty"),
@@ -283,6 +288,12 @@ export const videoPhaseSchema = z.object({
   rating: ratingConfigSchema.optional(),
   subtitles: z.array(subtitleSchema).optional(),
 }).superRefine((phase, ctx) => {
+  if (phase.phoneAudioMode === "synchronized") {
+    if ((phase.syncLeadMs ?? 3000) + Math.min(0, phase.syncVideoOffsetMs ?? 0) < 1000) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Preparation must leave at least one second before the adjusted picture start", path: ["syncLeadMs"] });
+    if (!phase.phoneAudioSrc) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Synchronized video requires a phone soundtrack", path: ["phoneAudioSrc"] });
+    if (phase.audioSrc) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Synchronized playback requires a video, not a still image", path: ["audioSrc"] });
+    if (Object.keys(phase.phoneAudioByGroup ?? {}).length) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Synchronized video uses one shared soundtrack; remove group overrides", path: ["phoneAudioByGroup"] });
+  }
   const problem = mediaCombinationError(phase.src, phase.audioSrc);
   if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem, path: [phase.audioSrc === undefined ? "src" : "audioSrc"] });
   const extraAudioProblem = extraAudioCombinationError(phase.src, phase.audioSrc, phase.extraAudioSrc);

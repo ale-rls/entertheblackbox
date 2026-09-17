@@ -1416,3 +1416,23 @@ describe("PhaseEngine lifecycle", () => {
     expect(display.sent.some((message) => message.t === "rating_status")).toBe(false);
   });
 });
+
+
+it("announces a future synchronized start and moves the fallback deadline with it", () => {
+  let now = 1000;
+  const testScenario = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map((p) => p.id === "intro" ? {
+    ...p, phoneAudioMode: "synchronized", phoneAudioSrc: "voice.mp3", syncLeadMs: 3000, syncVideoOffsetMs: 200,
+  } : p) });
+  const { engine, registry } = setup({ now: () => now, testScenario });
+  const phone = new MockSocket();
+  addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+  engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+  engine.adminStart(now);
+  expect(engine.getSnapshot()).toMatchObject({ id: "intro", startedAt: 4000, deadlineAt: 9300 });
+  expect(phone.sent.filter((m) => m.t === "phase").at(-1)).toMatchObject({ serverTime: 1000, phase: { startedAt: 4000, phoneAudioMode: "synchronized" } });
+  now = 6100; engine.tick(now);
+  expect(engine.currentPhaseId).toBe("intro");
+  now = 9300; engine.tick(now);
+  expect(engine.currentPhaseId).toBe("question");
+  engine.stop();
+});

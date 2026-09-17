@@ -93,6 +93,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
     {phase.kind !== "idle" && <label className="sc-tool-label">{label("Component type", "kind + media")}<select className="sc-tool-select" value={componentTypeForPhase(phase)} onChange={(event) => onComponentTypeChange(event.target.value as AuthorableComponentType, event.currentTarget)}>
       <option value="video">Video</option>
+      <option value="synchronized-video">Video + synchronized phone audio</option>
       <option value="image-audio">Still image + MP3</option>
       <option value="position-question">Position question</option>
       <option value="video-position-question">Video + position vote</option>
@@ -101,6 +102,12 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     </select></label>}
     {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
     {(phase.kind === "video" || phase.kind === "video-position-question") && <>
+      {phase.kind === "video" && phase.phoneAudioMode === "synchronized" && <>
+        <p className="sc-tool-copy field-hint">The display page plays muted video. Phones download the matching MP3 and play against the shared show clock. Keep phones open and enable synchronized audio before the scene.</p>
+        {number("Preparation interval (ms)", "syncLeadMs", phase.syncLeadMs ?? 3000, (syncLeadMs) => onChange({ ...phase, syncLeadMs: Math.max(1000, Math.min(30000, syncLeadMs)) }))}
+        <label className="sc-tool-label">Picture timing adjustment (ms)<input className="sc-tool-field" type="number" min="-2000" max="2000" value={phase.syncVideoOffsetMs ?? 0} onChange={(event) => onChange({ ...phase, syncVideoOffsetMs: Math.max(-2000, Math.min(2000, Number(event.target.value) || 0)) })} /></label>
+        <p className="sc-tool-copy field-hint">Positive values delay the picture; negative values advance it. Calibrate using the actual display and headphones. Existing extra display audio is muted for this mode.</p>
+      </>}
       {text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
       {phase.kind === "video" && <label className="sc-tool-label">{label("Title position", "titleLayout")}<select className="sc-tool-select" value={phase.titleLayout ?? "top"} onChange={(event) => onChange({
         ...phase,
@@ -229,7 +236,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       <p className="sc-tool-copy field-hint">Connect each group output to its own next scene. Connect Rejoin to the shared scene where everyone meets again. The main display stays black during selection and group paths. Groups arriving early wait; the shared scene starts once all occupied paths finish.</p>
     </fieldset>}
     {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone headphones</legend>
-      {mediaPicker("Phone stream narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}
+      {mediaPicker(phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? "Synchronized phone soundtrack (MP3)" : "Phone stream narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}
       {phase.phoneAudioSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, phoneAudioSrc: undefined })}>Remove phone narration</button>}
       {(project.scenario.groups ?? []).map((group) => text(
         `${group.label} override (MP3)`,

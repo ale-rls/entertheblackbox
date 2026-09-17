@@ -1,4 +1,5 @@
 import type {
+  PhaseSnapshotMessage,
   IdentityMessage,
   JoinRejectedMessage,
   ReloadMessage,
@@ -24,6 +25,7 @@ export type PhoneState = {
   join: JoinState;
   sessionId: string | null;
   phaseEpoch: number;
+  synchronizedPhase: Extract<PhaseSnapshotMessage, { kind: "video" }> | null;
   /** Advances on an operator transfer even when the destination scene epoch is older. */
   routingEpoch: number;
   /** Cursor input is accepted in the lobby, videos, and position questions. */
@@ -50,6 +52,7 @@ export const initialPhoneState: PhoneState = {
   join: { kind: "ready" },
   sessionId: null,
   phaseEpoch: -1,
+  synchronizedPhase: null,
   routingEpoch: 0,
   inputOpen: false,
   currentPhaseId: null,
@@ -125,6 +128,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         phaseEpoch: m.phaseEpoch,
         routingEpoch,
         currentPhaseId: m.phase.id,
+        synchronizedPhase: m.phase.kind === "video" && m.phase.phoneAudioMode === "synchronized" ? m.phase : null,
         inputOpen:
           m.phase.kind === "idle" ||
           m.phase.kind === "video" ||
