@@ -1,3 +1,4 @@
+import { DisplaySettingsPanel } from "./DisplaySettingsPanel.js";
 import { LiveGraph } from "./LiveGraph.js";
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import { AudioDiagnostics } from "./AudioDiagnostics";
@@ -688,6 +689,8 @@ export function App() {
         <p id="admin-token-help" className="sc-tool-help">Stays signed in on this device for 30 days. Connected sessions refresh every 2 seconds.</p>
         {connectionError && <p className="sc-tool-feedback admin-feedback" data-sc-tool-status={statusStale ? "warning" : "danger"} role="alert"><StatusIcon status={statusStale ? "warning" : "danger"} /><span>{connectionError}{statusStale ? " Showing the last received status." : ""}</span></p>}
       </section>
+      {!audioOnly && status && <DisplaySettingsPanel key={connectedToken} token={connectedToken} />}
+
 
       {feedback && <div className="sc-tool-feedback admin-page-feedback" data-sc-tool-status={feedback.status} role={feedback.status === "danger" ? "alert" : "status"}><StatusIcon status={feedback.status} /><span>{feedback.message}</span></div>}
 

@@ -1,3 +1,5 @@
+import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
+import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
 import { PersonalAudio } from "./audio/personal-audio.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
@@ -224,6 +226,10 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     return [...new Set(readiness.scenario.phases.flatMap((phase) =>
       phase.kind === "video" && phase.phoneAudioMode === "synchronized" && phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []))];
   });
+  app.get("/api/display-settings", async (_request, reply) => {
+    reply.header("cache-control", "no-store");
+    return options.pocketbase ? readDisplaySettings(options.pocketbase) : DEFAULT_DISPLAY_SETTINGS;
+  });
   app.get("/api/join-config", async () => ({
     installationId: config.installationId,
     roomId: config.roomId,
@@ -344,6 +350,10 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     } }),
     ...(adminData === undefined ? {} : { data: adminData }),
     ...(options.pocketbase === undefined ? {} : {
+      displaySettings: {
+        read: () => readDisplaySettings(options.pocketbase!),
+        write: (value) => writeDisplaySettings(options.pocketbase!, value),
+      },
       showConfig: {
         activeShowId: readiness.ready ? readiness.showId : null,
         list: () => listPublishedShows(options.pocketbase!),

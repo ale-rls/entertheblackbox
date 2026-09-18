@@ -1,3 +1,4 @@
+import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings } from "@entertheblackbox/protocol";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { InMemoryIpRateLimiter, requestIp } from "../admission/rate-limit.js";
 import type { PhaseCheckpoint, PhaseEngine, TransitionResult } from "../engine/phase-engine.js";
@@ -24,6 +25,7 @@ export interface AdminDataSource {
 }
 
 export type RegisterAdminOptions = {
+  displaySettings?: { read: () => Promise<DisplaySettings>; write: (value: DisplaySettings) => Promise<DisplaySettings> };
   /** Validates a bearer token against the operators auth collection. */
   verifyToken: (token: string) => Promise<boolean>;
   engine: () => PhaseEngine | null;
@@ -133,6 +135,20 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         });
       }
       if (!isAuthorized) return reply.code(401).send({ error: "unauthorized" });
+    });
+
+    admin.get("/settings/display", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      return { configured: Boolean(options.displaySettings), display: await options.displaySettings?.read() ?? DEFAULT_DISPLAY_SETTINGS };
+    });
+    admin.put<{ Body: unknown }>("/settings/display", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.displaySettings) return reply.code(503).send({ error: "persistence_unavailable" });
+      const parsed = displaySettingsSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_display_settings", issues: parsed.error.issues });
+      const display = await options.displaySettings.write(parsed.data);
+      options.data?.audit({ action: "set-display-settings", at: new Date().toISOString(), detail: { key: "display" } });
+      return { configured: true, display };
     });
 
     admin.get("/status", async () => {
