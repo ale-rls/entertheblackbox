@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { PhaseSnapshotMessage } from "@entertheblackbox/protocol";
+import { DEFAULT_DISPLAY_SETTINGS, type DisplaySettings, type PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
 
 export function formatLobbyCountdown(remainingMs: number): string {
@@ -25,13 +25,13 @@ function useLobbyRemaining(clock: ServerClock, deadlineAt: number): string {
   return remaining;
 }
 
-function LobbyHeading({ clock, deadlineAt }: { clock: ServerClock; deadlineAt: number | null }) {
+function LobbyHeading({ clock, deadlineAt, settings }: { clock: ServerClock; deadlineAt: number | null; settings: DisplaySettings }) {
   // The countdown hook must run unconditionally (Rules of Hooks), so it
   // always ticks against a real deadline; `clock.now()` is a harmless
   // stand-in for the no-deadline case, whose result is never rendered.
   const remaining = useLobbyRemaining(clock, deadlineAt ?? clock.now());
-  if (deadlineAt === null) return <>Join the show</>;
-  return <>Show starts in {remaining}</>;
+  if (deadlineAt === null) return <>{settings.heading}</>;
+  return <>{settings.countdownTemplate.replaceAll("{time}", remaining)}</>;
 }
 
 export function LobbyCountdown({
@@ -40,12 +40,14 @@ export function LobbyCountdown({
   clock,
   joinUrl,
   networkName = "Staedel_WiFi",
+  settings = DEFAULT_DISPLAY_SETTINGS,
 }: {
   sessionId: string | null;
   phase: PhaseSnapshotMessage | null;
   clock: ServerClock;
   joinUrl: string | null;
   networkName?: string;
+  settings?: DisplaySettings;
 }) {
   if (sessionId !== "lobby" || phase?.kind !== "idle") {
     return null;
@@ -55,12 +57,12 @@ export function LobbyCountdown({
 
   return (
     <div className="lobby-information">
-      <h1 className="lobby-heading" aria-live="polite"><LobbyHeading clock={clock} deadlineAt={phase.deadlineAt} /></h1>
+      <h1 className="lobby-heading" aria-live="polite"><LobbyHeading clock={clock} deadlineAt={phase.deadlineAt} settings={settings} /></h1>
       <div className="lobby-instructions">
-        <p>Verbinde dich mit dem Besucher-WLAN {networkName} oder nutze dein eigenes mobiles Netz.</p>
-        <p>Scanne den QR-Code mit deinem Smartphone und folge den Anleitungen auf deinem Display.</p>
+        {settings.networkInstructions && <p style={{ whiteSpace: "pre-line" }}>{settings.networkInstructions.replaceAll("{wifi}", networkName)}</p>}
+        {settings.joinInstructions && <p style={{ whiteSpace: "pre-line" }}>{settings.joinInstructions}</p>}
       </div>
-      {joinUrl !== null && (
+      {settings.showJoinUrl && joinUrl !== null && (
         <div className="lobby-join-url" aria-label="Phone join URL">{joinUrl}</div>
       )}
     </div>

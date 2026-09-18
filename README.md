@@ -365,3 +365,26 @@ the full show duration. Include silent gaps followed by cues, lock/unlock cycles
 brief network loss, and explicit lock-screen pause/resume. Verify complete speech
 without skipped words and watch the bridge's stream-close reasons and Admin
 errors. Desktop unit tests do not certify locked-screen playback.
+
+### Display text and platform settings
+
+In **Admin → Display text**, edit the join heading, countdown wording, network
+instructions, and joining instructions, or hide the phone join URL. The countdown
+wording must include `{time}`; network instructions may use `{wifi}` for the
+existing configured Wi-Fi name or contain the name directly. Blank headings or
+instruction lines are allowed. Scene titles/subtitles remain authored in Studio.
+
+Settings are stored in PocketBase's `platform_config` collection as a unique
+`key` plus JSON `value`; the first namespace is `display`. The collection is
+server-only. Operator-authenticated `/api/admin/settings/display` reads/writes
+validated display settings; public `/api/display-settings` exposes only display
+copy, never arbitrary configuration namespaces. Additional platform settings
+should get their own schemas and explicitly scoped routes.
+
+Deploy the PocketBase migration `1789740000_create_platform_config.js` alongside
+the server and rebuilt Admin/display clients. Existing text remains the default
+until the first save. Saved edits apply to open displays through polling in about
+five seconds, without restarting the show. During outages displays retain their
+last successfully loaded copy; after a page reload they use defaults until a
+successful fetch. Saving requires PocketBase; unavailable persistence is reported
+as a failure and never silently replaced with an in-memory save.

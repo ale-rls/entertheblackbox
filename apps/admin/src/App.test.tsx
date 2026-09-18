@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -94,6 +95,7 @@ function createAdminFetch(options?: { status?: Status; rejectAction?: string; fl
     const url = String(input);
     const method = init?.method ?? "GET";
     requests.push({ url, method, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
+    if (url.endsWith("/settings/display")) return jsonResponse({ configured: true, display: DEFAULT_DISPLAY_SETTINGS });
     if (url.endsWith("/status")) return jsonResponse(options?.status ?? activeStatus);
     if (url.endsWith("/flow")) return jsonResponse(options?.flow ?? sceneFlow);
     if (url.endsWith("/shows") && method === "GET") {
@@ -358,6 +360,7 @@ describe("Admin operations UI", () => {
     let failStatus = false;
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
+      if (url.endsWith("/settings/display")) return jsonResponse({ configured: true, display: DEFAULT_DISPLAY_SETTINGS });
       if (url.endsWith("/status")) return failStatus ? jsonResponse({ error: "unavailable" }, 503) : jsonResponse(activeStatus);
       if (url.endsWith("/installation")) return jsonResponse({ active: { installationId: "dev-installation", roomId: "main" }, pending: null });
       return jsonResponse({ ok: true });

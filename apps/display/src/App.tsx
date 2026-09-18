@@ -1,3 +1,4 @@
+import { useDisplaySettings } from "./lib/useDisplaySettings.js";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { DisplayToServerMessage } from "@entertheblackbox/protocol";
 import { CursorField } from "./cursors/cursorField.js";
@@ -55,6 +56,7 @@ const config = {
 };
 
 export function App() {
+  const displaySettings = useDisplaySettings();
   const [state, dispatch] = useReducer(displayReducer, initialDisplayState);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [presentedVideoKey, setPresentedVideoKey] = useState<string | null>(null);
@@ -346,6 +348,7 @@ export function App() {
           <QrBadge grant={state.qrGrant} qrHidden={state.qrHidden} clock={connection.clock} />
         )}
         <LobbyCountdown
+          settings={displaySettings}
           sessionId={state.sessionId}
           phase={phase}
           clock={connection.clock}

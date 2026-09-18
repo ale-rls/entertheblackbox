@@ -55,3 +55,15 @@ describe("LobbyCountdown", () => {
     expect(lobby).not.toContain("lobby-countdown");
   });
 });
+
+it("renders configured copy as text, substitutes countdown/Wi-Fi and hides optional lines", () => {
+  const settings = { heading: "<b>Willkommen</b>", countdownTemplate: "Beginn: {time}", networkInstructions: "Netz: {wifi}", joinInstructions: "", showJoinUrl: false };
+  const props = { sessionId: "lobby", clock: new ServerClock(), joinUrl: "https://join.example/phone/", networkName: "Venue", settings };
+  const manual = renderToStaticMarkup(<LobbyCountdown {...props} phase={idlePhase(null)} />);
+  expect(manual).toContain("&lt;b&gt;Willkommen&lt;/b&gt;");
+  expect(manual).toContain("Netz: Venue");
+  expect(manual).not.toContain("https://join.example");
+  expect(manual).not.toContain("Scanne den QR-Code");
+  const timed = renderToStaticMarkup(<LobbyCountdown {...props} phase={idlePhase(Date.now() + 10000)} />);
+  expect(timed).toContain("Beginn: 00:10");
+});
