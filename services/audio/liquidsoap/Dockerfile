@@ -5,4 +5,7 @@ FROM savonet/liquidsoap:v2.2.5
 COPY liquidsoap/main.liq /etc/liquidsoap/main.liq
 COPY beds /beds
 
+# Fail the image build if the bundled script cannot start on this exact version.
+RUN liquidsoap --check /etc/liquidsoap/main.liq
+
 CMD ["liquidsoap", "/etc/liquidsoap/main.liq"]

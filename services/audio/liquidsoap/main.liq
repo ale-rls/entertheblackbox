@@ -40,7 +40,7 @@ music_volume = ref(0.)
 music_uri = ref("")
 music = playlist.list(id="background_music", mode="normal", [])
 def music_play(uri) =
-  if uri != !music_uri then
+  if uri != music_uri() then
     music.reload(empty_queue=true, [uri])
     music.skip()
     music_uri := uri
@@ -99,7 +99,7 @@ def mkplayer(pid) =
   # letting the mount die. The default bed is intentionally silent.
   s = mksafe(s)
   # Normalize weights to retain headroom when music and narration overlap.
-  s = add(weights=[1., { !music_volume }], [s, music])
+  s = add(weights=[{ 1. }, { music_volume() }], [s, music])
 
   output.icecast(
     %mp3(bitrate=128, samplerate=44100, stereo=false),
