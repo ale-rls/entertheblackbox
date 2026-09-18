@@ -49,6 +49,7 @@ export function PhaseVideo({
   const firstFrameReported = useRef(false);
   const firstFrameCallback = useRef<{ video: HTMLVideoElement; id: number } | null>(null);
   const firstFrameAnimation = useRef<number | null>(null);
+  const firstFrameFallback = useRef<ReturnType<typeof setTimeout> | null>(null);
   const diagnostics = useVideoPlaybackDiagnostics({
     sessionId,
     phaseId: phase.id,
@@ -92,10 +93,12 @@ export function PhaseVideo({
       if (firstFrameAnimation.current !== null) {
         cancelAnimationFrame(firstFrameAnimation.current);
       }
+      if (firstFrameFallback.current !== null) clearTimeout(firstFrameFallback.current);
       firstFrameCallback.current = null;
       firstFrameAnimation.current = null;
+      firstFrameFallback.current = null;
     };
-  }, [phaseEpoch, src]);
+  }, [phaseEpoch, src, playbackEnabled]);
   const handleEnded = () => {
     extraAudioRef.current?.pause();
     const tailDurationMs = synchronized && clock
@@ -134,7 +137,9 @@ export function PhaseVideo({
         return;
       }
       const error = target - video.currentTime;
-      if (Math.abs(error) > 0.25) video.currentTime = target;
+      // Let an in-flight seek decode before making another correction. Slow
+      // decoders must not be kept seeking forever by the 50 ms clock tick.
+      if (!video.seeking && Math.abs(error) > 0.25) video.currentTime = target;
       video.playbackRate = Math.abs(error) < 0.02 ? 1 : Math.max(0.98, Math.min(1.02, 1 + error * 0.1));
       if (video.paused && !pending) {
         pending = true;
@@ -151,20 +156,47 @@ export function PhaseVideo({
   const handlePlaying = () => {
     diagnostics.onPlaying();
     const video = videoRef.current;
-    if (video !== null && !firstFrameReported.current && onFirstFrame !== undefined) {
+    if (video !== null && playbackEnabled && !firstFrameReported.current && onFirstFrame !== undefined) {
       firstFrameReported.current = true;
+      let revealed = false;
+      const reveal = () => {
+        if (revealed || videoRef.current !== video) return;
+        revealed = true;
+        if (firstFrameFallback.current !== null) clearTimeout(firstFrameFallback.current);
+        firstFrameFallback.current = null;
+        const callback = firstFrameCallback.current;
+        if (callback !== null) callback.video.cancelVideoFrameCallback(callback.id);
+        firstFrameCallback.current = null;
+        if (firstFrameAnimation.current !== null) cancelAnimationFrame(firstFrameAnimation.current);
+        firstFrameAnimation.current = null;
+        onFirstFrame();
+      };
+      // A transparent incoming slot can receive `playing` without receiving a
+      // compositor callback. Do not make becoming visible depend indefinitely
+      // on that callback. Require an actual decoded video frame before fallback.
+      const revealDecodedFrame = () => {
+        if (firstFrameFallback.current !== null) clearTimeout(firstFrameFallback.current);
+        firstFrameFallback.current = null;
+        if (videoRef.current !== video || revealed) return;
+        if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0
+          && !video.seeking && (!video.paused || video.ended)) {
+          reveal();
+        } else {
+          firstFrameFallback.current = setTimeout(revealDecodedFrame, 100);
+        }
+      };
+      firstFrameFallback.current = setTimeout(revealDecodedFrame, 250);
       if (typeof video.requestVideoFrameCallback === "function") {
         const id = video.requestVideoFrameCallback(() => {
           firstFrameCallback.current = null;
-          onFirstFrame();
+          reveal();
         });
         firstFrameCallback.current = { video, id };
       } else {
-        // `playing` can precede the compositor's paint. Waiting one animation
-        // frame keeps the readiness fallback from revealing a black element.
+        // Keep the existing paint-turn fallback for browsers without rVFC.
         firstFrameAnimation.current = requestAnimationFrame(() => {
           firstFrameAnimation.current = null;
-          onFirstFrame();
+          revealDecodedFrame();
         });
       }
     }

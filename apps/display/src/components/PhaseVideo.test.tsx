@@ -165,3 +165,26 @@ it("waits for the shared start, mutes all video sound and catches up to the cloc
   await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
   expect(video.currentTime).toBeGreaterThan(0.8);
 });
+
+
+it("lets an outstanding synchronized seek finish before correcting the clock again", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(5000);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  const clock = new ServerClock();
+  clock.addSample(5000, 5000, 5000);
+  const video = await renderVideo(vi.fn(), "session-1", false,
+    { ...phase, phoneAudioMode: "synchronized", phoneAudioSrc: "voice.mp3", startedAt: 1000 }, undefined, clock);
+  const seek = vi.fn();
+  Object.defineProperties(video, {
+    readyState: { value: 2 }, duration: { value: 15 },
+    seeking: { configurable: true, value: true },
+    currentTime: { get: () => 0, set: seek },
+  });
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  expect(seek).not.toHaveBeenCalled();
+  Object.defineProperty(video, "seeking", { value: false });
+  await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+  expect(seek).toHaveBeenCalledTimes(1);
+  expect(seek.mock.calls[0]![0]).toBeCloseTo(4.55);
+});
