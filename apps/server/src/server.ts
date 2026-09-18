@@ -314,9 +314,14 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       const status = audio ? await audio.status() : { configured: false, players: [] };
       return {
         ...(status as Record<string, unknown>),
+        backgroundMusic: audio?.backgroundMusic ?? null,
         soundcheckSources: readiness.ready ? readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)) : [],
       };
     },
+    ...(audio === null || !readiness.ready ? {} : { audioMusic: {
+      sources: readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)),
+      set: (src: string | null, volume: number) => audio.setMusic(src, volume),
+    } }),
     ...(audio === null || !readiness.ready ? {} : { audioSoundcheck: {
       sources: readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)),
       play: (src: string, participantId?: string) => audio.soundcheck(src, participantId),

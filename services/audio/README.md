@@ -192,3 +192,25 @@ image together.
 ## Continuity and recovery verification
 
 See [the continuity audit and device rehearsal procedure](CONTINUITY.md).
+
+### Background music
+
+In Admin → Headphone streams, choose a published MP3 under **Background music**, set
+its level (20% by default), and click **Play / apply music**. The track loops
+under narration on every personal stream, including later arrivals. Applying a
+new level to the same track preserves its position; **Stop music** leaves
+narration running. Music controls remain available during the show. Music level
+is a relative mix weight; the mixer normalizes the sum to leave headroom.
+
+Deploy both the runner/Admin build and the updated audio bridge/Liquidsoap
+service. The bridge exposes authenticated `POST /music` with `{file, volume}`;
+`file: null` stops music. Files must already exist in its audio directory (the
+runner uploads published MP3s automatically). This affects personal Icecast
+streams, not display speakers or the separate synchronized-file audio mode.
+Stream buffering delays audible changes. Selection lives in runner memory and
+is restored when switching backends; restarting the runner or audio stack
+requires the operator to apply the music again. A backend switch does not stop
+music on the previous backend's remaining listeners.
+
+Before a performance, rehearse loop boundaries, narration overlap, volume,
+stop, and a late-joining phone on the deployed Liquidsoap/Icecast rig.

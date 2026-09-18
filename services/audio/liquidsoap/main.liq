@@ -35,6 +35,34 @@ player_ids =
     list.map(string.trim, string.split(separator=",", ids_env))
   end
 
+# One shared loop is mixed into every stream, including newly joined phones.
+music_volume = ref(0.)
+music_uri = ref("")
+music = playlist.list(id="background_music", mode="normal", [])
+def music_play(uri) =
+  if uri != !music_uri then
+    music.reload(empty_queue=true, [uri])
+    music.skip()
+    music_uri := uri
+  end
+  "OK"
+end
+def music_stop(_) =
+  music_volume := 0.
+  music_uri := ""
+  music.reload(empty_queue=true, [])
+  music.skip()
+  "OK"
+end
+def music_gain(value) =
+  music_volume := float_of_string(value)
+  "OK"
+end
+server.register(namespace="music", "play", music_play)
+server.register(namespace="music", "stop", music_stop)
+server.register(namespace="music", "volume", music_gain)
+music = mksafe(music)
+
 def mkplayer(pid) =
   interrupt_q = request.queue(id="int_#{pid}")
   narration_q = request.queue(id="nar_#{pid}")
@@ -70,6 +98,8 @@ def mkplayer(pid) =
   # If the bed dir is missing/empty, mksafe pads with silence rather than
   # letting the mount die. The default bed is intentionally silent.
   s = mksafe(s)
+  # Normalize weights to retain headroom when music and narration overlap.
+  s = add(weights=[1., { !music_volume }], [s, music])
 
   output.icecast(
     %mp3(bitrate=128, samplerate=44100, stereo=false),

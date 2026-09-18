@@ -19,6 +19,7 @@ function setup(options: {
   };
   lifecycle?: "idle" | "active";
   groupControl?: NonNullable<RegisterAdminOptions["groupControl"]>;
+  audioMusic?: NonNullable<RegisterAdminOptions["audioMusic"]>;
   audioSoundcheck?: {
     sources: readonly string[];
     play: (src: string, participantId?: string) => Promise<number>;
@@ -67,6 +68,7 @@ function setup(options: {
     ready: true,
     startedAt: Date.now(),
     data,
+    ...(options.audioMusic === undefined ? {} : { audioMusic: options.audioMusic }),
     ...(options.audioSoundcheck === undefined ? {} : { audioSoundcheck: options.audioSoundcheck }),
     ...options,
   });
@@ -486,4 +488,24 @@ describe("admin API", () => {
     expect((await proxied.app.inject({ url: "/api/admin/status", headers: { ...headers, "x-forwarded-for": "203.0.113.2, 10.0.0.1" } })).statusCode).toBe(200);
     expect((await proxied.app.inject({ url: "/api/admin/status", headers: { ...headers, "x-forwarded-for": "203.0.113.1, 10.0.0.2" } })).statusCode).toBe(429);
   });
+});
+
+
+it("controls music during an active show and rejects unauthenticated or invalid requests", async () => {
+  const set = vi.fn(async () => {});
+  const { app } = setup({ audioMusic: { sources: ["music.mp3"], set } });
+  const headers = { authorization: "Bearer strong-admin-token" };
+  const url = "/api/admin/audio/music";
+  expect((await app.inject({ method: "POST", url, payload: { src: "music.mp3" } })).statusCode).toBe(401);
+  for (const payload of [{ src: "missing.mp3" }, { src: "music.mp3", volume: -1 }, {}]) {
+    expect((await app.inject({ method: "POST", url, headers, payload })).statusCode).toBe(400);
+  }
+  expect(set).not.toHaveBeenCalled();
+  expect((await app.inject({ method: "POST", url, headers, payload: { src: "music.mp3", volume: 0.3 } })).statusCode).toBe(200);
+  expect(set).toHaveBeenLastCalledWith("music.mp3", 0.3);
+  expect((await app.inject({ method: "POST", url, headers, payload: { src: null } })).statusCode).toBe(200);
+  expect(set).toHaveBeenLastCalledWith(null, 0.2);
+  set.mockRejectedValueOnce(new Error("bridge unavailable"));
+  expect((await app.inject({ method: "POST", url, headers, payload: { src: null } })).statusCode).toBe(502);
+  await app.close();
 });

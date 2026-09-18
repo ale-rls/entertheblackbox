@@ -433,3 +433,24 @@ describe("Admin operations UI", () => {
     expect(requests.some(({ url }) => url.includes("/errors") || url.includes("/export"))).toBe(false);
   });
 });
+
+it("plays and stops background music while the show is active", async () => {
+  localStorage.setItem("admin-token", "operator-token");
+  const { requests } = createAdminFetch({ status: { ...activeStatus, audio: {
+    configured: true, players: [], soundcheckSources: ["music.mp3"], backgroundMusic: null,
+  } } });
+  await renderApp();
+  expect(button("Play / apply music").disabled).toBe(true);
+  const select = document.querySelector('[aria-label="Background music"] select') as HTMLSelectElement;
+  await act(async () => {
+    select.value = "music.mp3";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(button("Play / apply music").disabled).toBe(false);
+  await act(async () => button("Play / apply music").click());
+  await flush();
+  expect(JSON.parse(requests.find(r => r.url.endsWith("/audio/music"))!.body!)).toEqual({ src: "music.mp3", volume: 0.2 });
+  await act(async () => button("Stop music").click());
+  await flush();
+  expect(JSON.parse(requests.filter(r => r.url.endsWith("/audio/music")).at(-1)!.body!)).toEqual({ src: null, volume: 0.2 });
+});

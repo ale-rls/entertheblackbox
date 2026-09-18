@@ -347,3 +347,27 @@ it("silences stream injection for synchronized scenes and restores ordinary narr
   expect(vi.mocked(request).mock.calls.some(([url]) => String(url).endsWith("/play"))).toBe(true);
   await audio.stop();
 });
+
+
+it("uploads background music, preserves it across narration and backend changes, and stops it", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "music-"));
+  await writeFile(join(dir, "music.mp3"), "music");
+  const calls: Array<{ url: string; body: any }> = [];
+  const request = vi.fn(async (url, init) => {
+    calls.push({ url: String(url), body: typeof init?.body === "string" ? JSON.parse(init.body) : null });
+    return new Response("{}", { status: 200 });
+  }) as typeof fetch;
+  const audio = new PersonalAudio({ url: "http://bridge", token: "x", publicUrl: "http://audio" }, dir, vi.fn(), request);
+  await audio.setMusic("music.mp3", 0.25);
+  expect(audio.backgroundMusic).toEqual({ src: "music.mp3", volume: 0.25 });
+  await audio.register({ clientId: "late", name: "Late" });
+  audio.transition(phase());
+  await audio.register({ clientId: "late", name: "Late" });
+  expect(calls.filter(c => c.url.endsWith("/music"))).toHaveLength(1);
+  await audio.setBackend({ kind: "local", label: "Local", config: { url: "http://local", token: "x", publicUrl: "http://local" } });
+  expect(calls.find(c => c.url === "http://local/music")?.body).toMatchObject({ volume: 0.25 });
+  await audio.setMusic(null);
+  expect(calls.at(-1)?.body.file).toBeNull();
+  expect(audio.backgroundMusic).toBeNull();
+  await audio.stop();
+});
