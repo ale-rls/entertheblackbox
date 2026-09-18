@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 export type Status = {
-  audio?: { configured: boolean; capacity?: { total: number; assigned: number; available: number }; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; backend?: "remote" | "local"; backendLabel?: string; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; phoneReportAgeMs?: number; reconnects?: number; lastRecoveryMs?: number | null }> };
+  audio?: { backgroundMusic?: { src: string; volume: number } | null; configured: boolean; capacity?: { total: number; assigned: number; available: number }; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; backend?: "remote" | "local"; backendLabel?: string; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; phoneReportAgeMs?: number; reconnects?: number; lastRecoveryMs?: number | null }> };
   healthy: boolean;
   ready: boolean;
   uptimeMs: number;
@@ -228,6 +228,22 @@ export function App() {
   const [localBridgeToken, setLocalBridgeToken] = useState("");
   const [localPublicUrl, setLocalPublicUrl] = useState("");
   const [localNetworkLabel, setLocalNetworkLabel] = useState("");
+  const [musicSource, setMusicSource] = useState("");
+  const [musicVolume, setMusicVolume] = useState(20);
+  const [settingMusic, setSettingMusic] = useState(false);
+  const setBackgroundMusic = async (stop = false) => {
+    setSettingMusic(true);
+    try {
+      const response = await api("audio/music", connectedToken, {
+        method: "POST", body: JSON.stringify({ src: stop ? null : musicSource, volume: musicVolume / 100 }),
+      });
+      if (!response.ok) throw new Error(await response.text());
+      await refresh();
+      setFeedback({ status: "success", message: stop ? "Background music stopped." : "Background music started on all streams." });
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not change music." });
+    } finally { setSettingMusic(false); }
+  };
   const [switchingAudioBackend, setSwitchingAudioBackend] = useState(false);
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -776,6 +792,19 @@ export function App() {
                 {player.lastRecoveryMs != null && ` · last recovery ${(player.lastRecoveryMs / 1000).toFixed(1)}s`}
               </span>}
             </li>)}</ul>
+            <div className="admin-connection-form" aria-label="Background music">
+              <h3>Background music</h3>
+              <p>Loops underneath narration on all phone streams, including phones joining later.</p>
+              <p>{status.audio.backgroundMusic ? `Selected: ${status.audio.backgroundMusic.src} (${Math.round(status.audio.backgroundMusic.volume * 100)}%)` : "Music stopped"}</p>
+              <label>Music track<select className="sc-tool-field" value={musicSource} onChange={(event) => setMusicSource(event.target.value)}>
+                <option value="">Choose published MP3…</option>
+                {(status.audio.soundcheckSources ?? []).map((src) => <option key={src} value={src}>{src}</option>)}
+              </select></label>
+              <label>Music volume: {musicVolume}%<input type="range" min="0" max="100" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} /></label>
+              <button className="sc-tool-button" type="button" disabled={settingMusic || !musicSource} onClick={() => void setBackgroundMusic()}>Play / apply music</button>
+              <button className="sc-tool-button" type="button" disabled={settingMusic} onClick={() => void setBackgroundMusic(true)}>Stop music</button>
+              <p className="sc-tool-help">Publish music as MP3 media in the active show. Stream buffering delays audible changes by a few seconds.</p>
+            </div>
             <div className="admin-connection-form" aria-label="Phone audio soundcheck">
               <label className="sc-tool-label"><span>Test MP3</span><select className="sc-tool-select" value={soundcheckSource} onChange={(event) => setSoundcheckSource(event.target.value)}>
                 <option value="">Choose authored audio…</option>

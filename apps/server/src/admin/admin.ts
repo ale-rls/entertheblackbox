@@ -29,6 +29,10 @@ export type RegisterAdminOptions = {
   engine: () => PhaseEngine | null;
   ready: boolean;
   audioStatus?: () => Promise<unknown>;
+  audioMusic?: {
+    sources: readonly string[];
+    set: (src: string | null, volume: number) => Promise<void>;
+  };
   audioSoundcheck?: {
     sources: readonly string[];
     play: (src: string, participantId?: string) => Promise<number>;
@@ -165,6 +169,21 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
           phaseTitle: flowScenes.get(path.phaseId)?.title ?? path.phaseId,
         })),
       };
+    });
+    admin.post<{ Body: { src?: unknown; volume?: unknown } }>("/audio/music", async (request, reply) => {
+      const music = options.audioMusic;
+      if (!music) return reply.code(503).send({ error: "audio_unavailable" });
+      const { src, volume = 0.2 } = request.body ?? {};
+      if ((src !== null && (typeof src !== "string" || !music.sources.includes(src)))
+        || typeof volume !== "number" || !Number.isFinite(volume) || volume < 0 || volume > 1) {
+        return reply.code(400).send({ error: "invalid_music_request" });
+      }
+      try {
+        await music.set(src as string | null, volume);
+        return { ok: true };
+      } catch (error) {
+        return reply.code(502).send({ error: error instanceof Error ? error.message : "music_failed" });
+      }
     });
     admin.post<{ Body: { action?: unknown; src?: unknown; participantId?: unknown } }>("/audio/soundcheck", async (request, reply) => {
       const soundcheck = options.audioSoundcheck;

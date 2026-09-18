@@ -17,6 +17,20 @@ export class PersonalAudio {
   private readonly players = new Map<string, AudioParticipant>();
   private readonly uploaded = new Map<string, Promise<string>>();
   private generation = 0;
+  private music: { src: string; volume: number } | null = null;
+
+  async setMusic(src: string | null, volume = 0.2): Promise<void> {
+    const task = this.work.then(async () => {
+      const file = src === null ? null : await this.upload(src);
+      await this.call("/music", "POST", { file, volume });
+      this.music = src === null ? null : { src, volume };
+    });
+    this.work = task.catch((error: unknown) => this.failed(error));
+    await task;
+  }
+
+  get backgroundMusic() { return this.music; }
+
   private currentAudioSrc: string | undefined;
   private currentAudioByPlayer = new Map<string, string | undefined>();
   private sourceForPlayer: (participantId: string) => string | undefined = () => undefined;
@@ -81,6 +95,11 @@ export class PersonalAudio {
     }))).then(() => undefined));
     this.work = switched.catch((error: unknown) => this.failed(error));
     await switched;
+    try {
+      await this.setMusic(this.music?.src ?? null, this.music?.volume ?? 0.2);
+    } catch (error) {
+      return { ok: false, error: `Backend switched, but background music failed: ${error instanceof Error ? error.message : String(error)}` };
+    }
     return { ok: true };
   }
 
