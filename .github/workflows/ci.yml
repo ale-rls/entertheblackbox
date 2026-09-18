@@ -24,6 +24,13 @@ concurrency:
 # clients build, and the scenario graph is valid. A build that breaks during
 # a tech rehearsal is the failure mode this catches.
 jobs:
+  audio-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate script with the production Liquidsoap image
+        run: docker build -f services/audio/liquidsoap/Dockerfile services/audio
+
   verify:
     runs-on: ubuntu-latest
     steps:
