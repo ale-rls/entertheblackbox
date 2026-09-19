@@ -184,6 +184,19 @@ function JumpConfirmationDialog({ scene, scope, onCancel, onConfirm }: { scene: 
   </div>;
 }
 
+/**
+ * Join-screen copy is set up once per show and rarely touched live, so it
+ * stays collapsed (and its settings fetch deferred until first opened)
+ * rather than sitting ahead of operational panels every time this page loads.
+ */
+function DisplaySettingsDisclosure({ token }: { token: string }) {
+  const [open, setOpen] = useState(false);
+  return <details className="sc-tool-panel admin-collapsible" onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary className="admin-collapsible-summary"><p className="sc-tool-eyebrow">Show setup</p><span>Display text</span></summary>
+    {open && <DisplaySettingsPanel key={token} token={token} />}
+  </details>;
+}
+
 function sceneKindLabel(kind: FlowScene["kind"]): string {
   return kind === "video" ? "Media"
     : kind === "position-question" ? "Question"
@@ -689,8 +702,6 @@ export function App() {
         <p id="admin-token-help" className="sc-tool-help">Stays signed in on this device for 30 days. Connected sessions refresh every 2 seconds.</p>
         {connectionError && <p className="sc-tool-feedback admin-feedback" data-sc-tool-status={statusStale ? "warning" : "danger"} role="alert"><StatusIcon status={statusStale ? "warning" : "danger"} /><span>{connectionError}{statusStale ? " Showing the last received status." : ""}</span></p>}
       </section>
-      {!audioOnly && status && <DisplaySettingsPanel key={connectedToken} token={connectedToken} />}
-
 
       {feedback && <div className="sc-tool-feedback admin-page-feedback" data-sc-tool-status={feedback.status} role={feedback.status === "danger" ? "alert" : "status"}><StatusIcon status={feedback.status} /><span>{feedback.message}</span></div>}
 
@@ -889,6 +900,8 @@ export function App() {
               </form>}
           <p className="sc-tool-help">Applies automatically; while a show is running, the change waits until that show ends.</p>
         </section>
+
+        <DisplaySettingsDisclosure token={connectedToken} />
 
         <section className="sc-tool-panel" aria-labelledby="admin-ghosts-heading">
           <div className="admin-section-heading">
