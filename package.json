@@ -17,7 +17,8 @@
     "pocketbase:download": "pocketbase/scripts/download.sh",
     "pocketbase:dev": "pocketbase/scripts/dev.sh",
     "publish-scenario": "tsx scripts/publish-scenario-to-pocketbase.ts",
-    "import-show-yaml": "tsx scripts/import-show-yaml.ts"
+    "import-show-yaml": "tsx scripts/import-show-yaml.ts",
+    "import-media": "tsx scripts/import-media-to-pocketbase.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
