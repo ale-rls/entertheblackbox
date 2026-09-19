@@ -1,4 +1,5 @@
 import { DisplaySettingsPanel } from "./DisplaySettingsPanel.js";
+import { RunOfShowPanel } from "./RunOfShowPanel.js";
 import { LiveGraph } from "./LiveGraph.js";
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import { AudioDiagnostics } from "./AudioDiagnostics";
@@ -671,6 +672,8 @@ export function App() {
         <div><p className="sc-tool-eyebrow">Live installation / operator console</p><h1>{audioOnly ? "Audio diagnostics" : "Operations"}</h1></div>
         {audioOnly ? <a href="/admin/">Back to operations</a> : <StatusLabel status={globalStatus}>{globalLabel}</StatusLabel>}
       </header>
+
+      {!audioOnly && <RunOfShowPanel />}
 
       <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
         <div className="admin-section-heading">
