@@ -776,8 +776,10 @@ export function App() {
         </section>
 
         <section className="sc-tool-panel" aria-label="Headphone streams">
-          <h2>Headphone streams</h2>
-          <p><a href="/admin/?view=audio">Open live audio diagnostics →</a></p>
+          <div className="admin-section-heading">
+            <div><p className="sc-tool-eyebrow">Personal audio</p><h2>Headphone streams</h2></div>
+            <a className="admin-audio-manage-link" href="/admin/?view=audio">Manage audio →</a>
+          </div>
           {!status.audio?.configured ? <p>Audio bridge is not configured.</p> : <>
             <p>Active backend: <strong>{status.audio.backend === "local" ? status.audio.backendLabel ?? "Local" : "Remote"}</strong></p>
             {status.audio.error && <p role="alert">{status.audio.error}</p>}
@@ -785,66 +787,70 @@ export function App() {
               Narration delivery failed for {Object.keys(status.audio.deliveryFailures ?? {}).join(", ")}. Retrying automatically; hold the show until resolved.
             </p>}
             {status.audio.poll_age_s == null || status.audio.poll_age_s > 15 ? <p role="alert">Listener status is unavailable or stale.</p> : null}
-            <p>A stream connection does not confirm audible playback. Phone reports can be delayed while the screen is locked.</p>
-            <ul className="admin-participant-list">{status.audio.players.map((player) => <li key={player.player_id}>
-              <strong>{player.name ?? player.player_id}</strong>
-              <span>{player.connected ? `${player.listeners} stream connection(s)` : player.flagged ? "No listener — check headphones" : "Waiting for listener"}</span>
-              {player.reconnects !== undefined && <span>
-                Last phone report: {player.playbackState === "reconnecting" ? "audio interrupted, recovering" : player.playbackState}
-                {" · "}{player.reconnects} interruption{player.reconnects === 1 ? "" : "s"}
-                {player.lastRecoveryMs != null && ` · last recovery ${(player.lastRecoveryMs / 1000).toFixed(1)}s`}
-              </span>}
-            </li>)}</ul>
-            <div className="admin-connection-form" aria-label="Background music">
-              <h3>Background music</h3>
-              <p>Loops underneath narration on all phone streams, including phones joining later.</p>
-              <p>{status.audio.backgroundMusic ? `Selected: ${status.audio.backgroundMusic.src} (${Math.round(status.audio.backgroundMusic.volume * 100)}%)` : "Music stopped"}</p>
-              <label>Music track<select className="sc-tool-field" value={musicSource} onChange={(event) => setMusicSource(event.target.value)}>
-                <option value="">Choose published MP3…</option>
-                {(status.audio.soundcheckSources ?? []).map((src) => <option key={src} value={src}>{src}</option>)}
-              </select></label>
-              <label>Music volume: {musicVolume}%<input type="range" min="0" max="100" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} /></label>
-              <button className="sc-tool-button" type="button" disabled={settingMusic || !musicSource} onClick={() => void setBackgroundMusic()}>Play / apply music</button>
-              <button className="sc-tool-button" type="button" disabled={settingMusic} onClick={() => void setBackgroundMusic(true)}>Stop music</button>
-              <p className="sc-tool-help">Publish music as MP3 media in the active show. Stream buffering delays audible changes by a few seconds.</p>
-            </div>
-            <div className="admin-connection-form" aria-label="Phone audio soundcheck">
-              <label className="sc-tool-label"><span>Test MP3</span><select className="sc-tool-select" value={soundcheckSource} onChange={(event) => setSoundcheckSource(event.target.value)}>
-                <option value="">Choose authored audio…</option>
-                {(status.audio.soundcheckSources ?? []).map((src) => <option key={src} value={src}>{src}</option>)}
-              </select></label>
-              <label className="sc-tool-label"><span>Send to</span><select className="sc-tool-select" value={soundcheckTarget} onChange={(event) => setSoundcheckTarget(event.target.value)}>
-                <option value="">All registered phones</option>
-                {status.audio.players.map((player) => <option key={player.player_id} value={player.player_id}>{player.name ?? player.player_id}</option>)}
-              </select></label>
-              <div className="admin-control-list">
-                <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={soundchecking || !soundcheckSource || isActive} onClick={() => void soundcheck("play")}>Play on phone</button><span>{isActive ? "Disabled while a show is active" : "Interrupts current phone audio"}</span></div>
-                <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={soundchecking || isActive} onClick={() => void soundcheck("stop")}>Stop phone audio</button><span>Resets the selected phone stream</span></div>
+            <p className="admin-audio-roster-summary">
+              {status.audio.players.length} phone{status.audio.players.length === 1 ? "" : "s"} registered
+              {" · "}{status.audio.players.filter((player) => player.connected).length} with a listener
+              {status.audio.players.some((player) => player.flagged) && <> · <strong>{status.audio.players.filter((player) => player.flagged).length} need attention</strong></>}
+            </p>
+            <p className="sc-tool-help">A stream connection does not confirm audible playback. See <a href="/admin/?view=audio">Manage audio →</a> for per-phone detail.</p>
+            <details className="admin-collapsible">
+              <summary>Background music{status.audio.backgroundMusic ? ` — ${status.audio.backgroundMusic.src}` : " — stopped"}</summary>
+              <div className="admin-connection-form" aria-label="Background music">
+                <p>Loops underneath narration on all phone streams, including phones joining later.</p>
+                <p>{status.audio.backgroundMusic ? `Selected: ${status.audio.backgroundMusic.src} (${Math.round(status.audio.backgroundMusic.volume * 100)}%)` : "Music stopped"}</p>
+                <label>Music track<select className="sc-tool-field" value={musicSource} onChange={(event) => setMusicSource(event.target.value)}>
+                  <option value="">Choose published MP3…</option>
+                  {(status.audio.soundcheckSources ?? []).map((src) => <option key={src} value={src}>{src}</option>)}
+                </select></label>
+                <label>Music volume: {musicVolume}%<input type="range" min="0" max="100" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} /></label>
+                <button className="sc-tool-button" type="button" disabled={settingMusic || !musicSource} onClick={() => void setBackgroundMusic()}>Play / apply music</button>
+                <button className="sc-tool-button" type="button" disabled={settingMusic} onClick={() => void setBackgroundMusic(true)}>Stop music</button>
+                <p className="sc-tool-help">Publish music as MP3 media in the active show. Stream buffering delays audible changes by a few seconds.</p>
               </div>
-              {(status.audio.soundcheckSources?.length ?? 0) === 0 && <p className="sc-tool-help">No MP3 files are present in the active show’s published media manifest.</p>}
-            </div>
-            <div className="admin-audio-backend-form" aria-label="Local audio backend">
-              <p className="sc-tool-help">If Icecast/Liquidsoap feels laggy over the network, start the local rig (<code>services/audio</code>, <code>make up</code>) on this or another machine on the venue LAN, then switch to it here. One machine, two addresses below: this server reaches it one way, audience phones reach it another. If this server is remote, those are almost always <em>different</em> URLs, even though both point at the same box.</p>
-              <div className="admin-audio-backend-fields">
-                <label className="sc-tool-label">
-                  <span>Control URL — reached by this server</span>
-                  <input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. http://100.x.y.z:8300 (Tailscale) if this server is remote" value={localBridgeUrl} onChange={(event) => setLocalBridgeUrl(event.target.value)} />
-                  <span className="sc-tool-help">Wherever this process actually runs. A private LAN IP only works here if this server is also on that LAN.</span>
-                </label>
-                <label className="sc-tool-label"><span>Bridge token</span><input className="sc-tool-field sc-tool-mono" type="password" value={localBridgeToken} onChange={(event) => setLocalBridgeToken(event.target.value)} /></label>
-                <label className="sc-tool-label">
-                  <span>Stream URL — reached by audience phones</span>
-                  <input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. http://192.168.1.42:8300 (venue LAN)" value={localPublicUrl} onChange={(event) => setLocalPublicUrl(event.target.value)} />
-                  <span className="sc-tool-help">Usually the bridge machine's plain venue-LAN address — not a VPN/tailnet address, phones aren't on that network.</span>
-                </label>
-                <label className="sc-tool-label"><span>Network label</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. Stage-LAN (5GHz)" value={localNetworkLabel} onChange={(event) => setLocalNetworkLabel(event.target.value)} /></label>
+            </details>
+            <details className="admin-collapsible">
+              <summary>Phone audio soundcheck</summary>
+              <div className="admin-connection-form" aria-label="Phone audio soundcheck">
+                <label className="sc-tool-label"><span>Test MP3</span><select className="sc-tool-select" value={soundcheckSource} onChange={(event) => setSoundcheckSource(event.target.value)}>
+                  <option value="">Choose authored audio…</option>
+                  {(status.audio.soundcheckSources ?? []).map((src) => <option key={src} value={src}>{src}</option>)}
+                </select></label>
+                <label className="sc-tool-label"><span>Send to</span><select className="sc-tool-select" value={soundcheckTarget} onChange={(event) => setSoundcheckTarget(event.target.value)}>
+                  <option value="">All registered phones</option>
+                  {status.audio.players.map((player) => <option key={player.player_id} value={player.player_id}>{player.name ?? player.player_id}</option>)}
+                </select></label>
+                <div className="admin-control-list">
+                  <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={soundchecking || !soundcheckSource || isActive} onClick={() => void soundcheck("play")}>Play on phone</button><span>{isActive ? "Disabled while a show is active" : "Interrupts current phone audio"}</span></div>
+                  <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={soundchecking || isActive} onClick={() => void soundcheck("stop")}>Stop phone audio</button><span>Resets the selected phone stream</span></div>
+                </div>
+                {(status.audio.soundcheckSources?.length ?? 0) === 0 && <p className="sc-tool-help">No MP3 files are present in the active show’s published media manifest.</p>}
               </div>
-              {localBridgeUrl && localPublicUrl && localBridgeUrl === localPublicUrl && <p className="sc-tool-validation" role="alert">Control URL and Stream URL are identical. That's only correct if this server and audience phones are on the exact same network — if this server runs remotely, double-check you haven't pasted the same address into both.</p>}
-              <div className="admin-control-list">
-                <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={switchingAudioBackend || !localBridgeUrl || !localBridgeToken || !localPublicUrl || !localNetworkLabel} onClick={() => void switchAudioBackend("local")}>Test &amp; switch to local</button><span>Health-checks the control URL first; nothing changes if it fails. Does not confirm phones can reach the stream URL.</span></div>
-                {status.audio.backend === "local" && <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={switchingAudioBackend} onClick={() => void switchAudioBackend("remote")}>Switch back to remote</button><span>Returns to the deployment's default backend</span></div>}
+            </details>
+            <details className="admin-collapsible">
+              <summary>Local audio backend{status.audio.backend === "local" ? ` — active (${status.audio.backendLabel ?? "Local"})` : ""}</summary>
+              <div className="admin-audio-backend-form" aria-label="Local audio backend">
+                <p className="sc-tool-help">If Icecast/Liquidsoap feels laggy over the network, start the local rig (<code>services/audio</code>, <code>make up</code>) on this or another machine on the venue LAN, then switch to it here. One machine, two addresses below: this server reaches it one way, audience phones reach it another. If this server is remote, those are almost always <em>different</em> URLs, even though both point at the same box.</p>
+                <div className="admin-audio-backend-fields">
+                  <label className="sc-tool-label">
+                    <span>Control URL — reached by this server</span>
+                    <input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. http://100.x.y.z:8300 (Tailscale) if this server is remote" value={localBridgeUrl} onChange={(event) => setLocalBridgeUrl(event.target.value)} />
+                    <span className="sc-tool-help">Wherever this process actually runs. A private LAN IP only works here if this server is also on that LAN.</span>
+                  </label>
+                  <label className="sc-tool-label"><span>Bridge token</span><input className="sc-tool-field sc-tool-mono" type="password" value={localBridgeToken} onChange={(event) => setLocalBridgeToken(event.target.value)} /></label>
+                  <label className="sc-tool-label">
+                    <span>Stream URL — reached by audience phones</span>
+                    <input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. http://192.168.1.42:8300 (venue LAN)" value={localPublicUrl} onChange={(event) => setLocalPublicUrl(event.target.value)} />
+                    <span className="sc-tool-help">Usually the bridge machine's plain venue-LAN address — not a VPN/tailnet address, phones aren't on that network.</span>
+                  </label>
+                  <label className="sc-tool-label"><span>Network label</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. Stage-LAN (5GHz)" value={localNetworkLabel} onChange={(event) => setLocalNetworkLabel(event.target.value)} /></label>
+                </div>
+                {localBridgeUrl && localPublicUrl && localBridgeUrl === localPublicUrl && <p className="sc-tool-validation" role="alert">Control URL and Stream URL are identical. That's only correct if this server and audience phones are on the exact same network — if this server runs remotely, double-check you haven't pasted the same address into both.</p>}
+                <div className="admin-control-list">
+                  <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={switchingAudioBackend || !localBridgeUrl || !localBridgeToken || !localPublicUrl || !localNetworkLabel} onClick={() => void switchAudioBackend("local")}>Test &amp; switch to local</button><span>Health-checks the control URL first; nothing changes if it fails. Does not confirm phones can reach the stream URL.</span></div>
+                  {status.audio.backend === "local" && <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={switchingAudioBackend} onClick={() => void switchAudioBackend("remote")}>Switch back to remote</button><span>Returns to the deployment's default backend</span></div>}
+                </div>
               </div>
-            </div>
+            </details>
           </>}
         </section>
         <section className="sc-tool-panel" aria-labelledby="admin-participants-heading">
