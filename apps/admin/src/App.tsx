@@ -108,6 +108,28 @@ function OperationRow({ label, status, value, detail }: { label: string; status:
   </div>;
 }
 
+/** A dashboard panel that can be collapsed once it isn't the operator's immediate focus. Keeps the same eyebrow/heading/status-label header used by the always-expanded sections. */
+function CollapsibleSection({ id, eyebrow, title, status, open, onToggle, children }: {
+  id: string;
+  eyebrow: string;
+  title: string;
+  status?: { status: ToolStatus; label: ReactNode };
+  open: boolean;
+  onToggle: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  return <details className="sc-tool-panel admin-collapsible" open={open} onToggle={(event) => onToggle(event.currentTarget.open)}>
+    <summary className="admin-section-heading admin-collapsible-summary">
+      <div><p className="sc-tool-eyebrow">{eyebrow}</p><h2 id={id}>{title}</h2></div>
+      <div className="admin-collapsible-trailing">
+        {status && <StatusLabel status={status.status}>{status.label}</StatusLabel>}
+        <span className="admin-collapsible-chevron" aria-hidden="true" />
+      </div>
+    </summary>
+    <div className="admin-collapsible-body">{children}</div>
+  </details>;
+}
+
 function ConfirmationDialog({ action, onCancel, onConfirm }: { action: ConfirmAction; onCancel: () => void; onConfirm: () => void }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const titleId = `admin-${action}-confirmation-title`;
@@ -246,6 +268,20 @@ export function App() {
     } finally { setSettingMusic(false); }
   };
   const [switchingAudioBackend, setSwitchingAudioBackend] = useState(false);
+  // Collapsible dashboard sections: default open/closed is decided once, the
+  // first time live status arrives, then left entirely to the operator's own
+  // clicks -- re-deciding it on every 2s poll would fight manual toggles.
+  const [lobbySectionOpen, setLobbySectionOpen] = useState(false);
+  const [showSectionOpen, setShowSectionOpen] = useState(false);
+  const [ghostsSectionOpen, setGhostsSectionOpen] = useState(false);
+  const [audioSectionOpen, setAudioSectionOpen] = useState(false);
+  const collapsibleDefaultsSet = useRef(false);
+  useEffect(() => {
+    if (collapsibleDefaultsSet.current || !status) return;
+    collapsibleDefaultsSet.current = true;
+    setLobbySectionOpen(status.lifecycle === "idle");
+    setAudioSectionOpen(Boolean(status.audio?.error) || Object.keys(status.audio?.deliveryFailures ?? {}).length > 0);
+  }, [status]);
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
   const controlsHeadingRef = useRef<HTMLHeadingElement | null>(null);
@@ -742,11 +778,7 @@ export function App() {
           </div>
         </section>
 
-        <section className="sc-tool-panel" aria-labelledby="admin-lobby-heading">
-          <div className="admin-section-heading">
-            <div><p className="sc-tool-eyebrow">Waiting room timing</p><h2 id="admin-lobby-heading">Lobby schedule</h2></div>
-            <StatusLabel status={lobbyInfo?.nextStartAt ? "info" : "warning"}>{lobbyInfo?.nextStartAt ? "Scheduled" : "Manual start"}</StatusLabel>
-          </div>
+        <CollapsibleSection id="admin-lobby-heading" eyebrow="Waiting room timing" title="Lobby schedule" status={{ status: lobbyInfo?.nextStartAt ? "info" : "warning", label: lobbyInfo?.nextStartAt ? "Scheduled" : "Manual start" }} open={lobbySectionOpen} onToggle={setLobbySectionOpen}>
           <div className="admin-next-start">
             <span>Next start</span>
             <strong>{lobbyInfo?.nextStartAt ? new Date(lobbyInfo.nextStartAt).toLocaleString([], { dateStyle: "medium", timeStyle: "medium" }) : "No automatic start"}</strong>
@@ -773,10 +805,12 @@ export function App() {
               <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={savingLobby} onClick={() => void saveLobbyTimes(lobbyInfo!.startTimes.filter((time) => time !== startAt), "Start time removed.")}>Remove</button>
             </li>)}
           </ol> : <p className="sc-tool-copy">The lobby waits until an operator presses Start show.</p>}
-        </section>
+        </CollapsibleSection>
 
-        <section className="sc-tool-panel" aria-label="Headphone streams">
-          <h2>Headphone streams</h2>
+        <CollapsibleSection id="admin-audio-heading" eyebrow="Personal audio" title="Headphone streams" status={{
+          status: !status.audio?.configured ? "info" : (status.audio.error || Object.keys(status.audio.deliveryFailures ?? {}).length > 0) ? "danger" : "success",
+          label: !status.audio?.configured ? "Not configured" : (status.audio.error || Object.keys(status.audio.deliveryFailures ?? {}).length > 0) ? "Needs attention" : "Nominal",
+        }} open={audioSectionOpen} onToggle={setAudioSectionOpen}>
           <p><a href="/admin/?view=audio">Open live audio diagnostics →</a></p>
           {!status.audio?.configured ? <p>Audio bridge is not configured.</p> : <>
             <p>Active backend: <strong>{status.audio.backend === "local" ? status.audio.backendLabel ?? "Local" : "Remote"}</strong></p>
@@ -846,7 +880,7 @@ export function App() {
               </div>
             </div>
           </>}
-        </section>
+        </CollapsibleSection>
         <section className="sc-tool-panel" aria-labelledby="admin-participants-heading">
           <div className="admin-section-heading">
             <div><p className="sc-tool-eyebrow">Who has joined</p><h2 id="admin-participants-heading">Participants</h2></div>
@@ -867,10 +901,7 @@ export function App() {
         </section>
 
 
-        <section className="sc-tool-panel" aria-labelledby="admin-show-heading">
-          <div className="admin-section-heading">
-            <div><p className="sc-tool-eyebrow">Which content is live</p><h2 id="admin-show-heading">Active show</h2></div>
-          </div>
+        <CollapsibleSection id="admin-show-heading" eyebrow="Which content is live" title="Active show" open={showSectionOpen} onToggle={setShowSectionOpen}>
           <dl className="admin-session-facts">
             <div><dt>Currently running</dt><dd className="sc-tool-mono">{showLabel(showsInfo?.active ?? null, showsInfo?.shows ?? [])}</dd></div>
             {showsInfo?.pending && <div><dt>Applying</dt><dd className="sc-tool-mono">{showLabel(showsInfo.pending, showsInfo.shows)}</dd></div>}
@@ -888,12 +919,9 @@ export function App() {
                 <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingShow || !selectedShowId}>{savingShow ? "Saving…" : "Save"}</button>
               </form>}
           <p className="sc-tool-help">Applies automatically; while a show is running, the change waits until that show ends.</p>
-        </section>
+        </CollapsibleSection>
 
-        <section className="sc-tool-panel" aria-labelledby="admin-ghosts-heading">
-          <div className="admin-section-heading">
-            <div><p className="sc-tool-eyebrow">Fill a sparse room</p><h2 id="admin-ghosts-heading">Ghost cursors</h2></div>
-          </div>
+        <CollapsibleSection id="admin-ghosts-heading" eyebrow="Fill a sparse room" title="Ghost cursors" open={ghostsSectionOpen} onToggle={setGhostsSectionOpen}>
           <dl className="admin-session-facts">
             <div><dt>Currently filling up to</dt><dd className="sc-tool-mono">{ghostsInfo?.active ?? "—"}</dd></div>
             {ghostsInfo?.pending !== null && ghostsInfo?.pending !== undefined && ghostsInfo.pending !== ghostsInfo.active
@@ -906,9 +934,7 @@ export function App() {
             <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={savingGhosts || targetAudienceSize === ""}>{savingGhosts ? "Saving…" : "Save"}</button>
           </form>
           <p className="sc-tool-help">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghosts and defers to whatever the published show sets. While a show is running, the change waits until that show ends.</p>
-        </section>
-
-
+        </CollapsibleSection>
 
       </div>}
     </main>
