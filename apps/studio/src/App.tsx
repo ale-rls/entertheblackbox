@@ -177,6 +177,8 @@ export function App() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const homeHeadingRef = useRef<HTMLHeadingElement>(null);
   const editorRef = useRef<HTMLElement>(null);
+  const canvasRef = useRef<HTMLElement>(null);
+  const canvasPointerRef = useRef<{ x: number; y: number } | null>(null);
   type HistoryState = { draft: Draft; edges: Edge[] };
   const history = useRef<SessionHistory<HistoryState>>();
 
@@ -470,6 +472,13 @@ export function App() {
     persistGraph(next);
     setGraphFeedback({ status: "success", message: "Connection updated." });
   };
+  const flowPositionAtPointer = (): { x: number; y: number } => {
+    const pointer = canvasPointerRef.current;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const viewport = draft?.document.viewport ?? { x: 0, y: 0, zoom: 1 };
+    if (!pointer || !rect) return { x: 400, y: 200 };
+    return { x: (pointer.x - rect.left - viewport.x) / viewport.zoom, y: (pointer.y - rect.top - viewport.y) / viewport.zoom };
+  };
   const addPhase = (kind: "idle" | "synchronized-video" | "video" | "image-audio" | "narration" | "position-question" | "video-position-question" | "image-audio-position-question" | "group-branch") => {
     if (!draft) return;
     if (kind === "idle" && draft.project.scenario.phases.some((phase) => phase.kind === "idle")) {
@@ -506,7 +515,7 @@ export function App() {
           ? { kind: "video-position-question" as const, id, ...mediaFields, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, ...defaultVideoVoteTiming(expectedDurationMs, imageAudio ? mediaDurationMs : 0), connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
           : { kind: "video" as const, id, ...mediaFields, next: "idle", ...(kind === "synchronized-video" ? { phoneAudioMode: "synchronized" as const, phoneAudioSrc: "media/new-audio.mp3" } : {}) };
     const phases = [...draft.project.scenario.phases, phase] as Draft["project"]["scenario"]["phases"];
-    const nextNodes = [...nodes, { id, type: "phase", position: { x: 400, y: 200 }, data: nodeDataForPhase(phase as Phase) }];
+    const nextNodes = [...nodes, { id, type: "phase", position: flowPositionAtPointer(), data: nodeDataForPhase(phase as Phase) }];
     const handles = phaseOutputHandles(phase as Phase);
     const nextEdges = [...edges, ...handles.map((handle) => ({ id: `${id}:${handle}`, source: id, sourceHandle: handle, target: END_NODE_ID }))];
     setNodes(nextNodes);
@@ -1084,7 +1093,7 @@ export function App() {
         </> : <><p className="sc-tool-help">Signed in as {operatorEmail}. Replace the open draft with a new fork of the active production show?</p><div className="publish-panel-actions"><button className="sc-tool-button" type="button" onClick={() => setProductionImportOpen(false)}>Cancel</button><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" onClick={() => void importLatestProduction()}>Create production fork</button></div></>}
       </div>}
     </header>
-    <section aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} minZoom={0.15} onPaneClick={() => { setSelectedId(undefined); setShowInspector(true); }} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
+    <section ref={canvasRef} onMouseMove={(event) => { canvasPointerRef.current = { x: event.clientX, y: event.clientY }; }} aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} minZoom={0.15} onPaneClick={() => { setSelectedId(undefined); setShowInspector(true); }} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
     <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onComponentTypeChange={changeSelectedComponentType} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} onGroupsChange={updateGroups} />
     <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} collapsed={!showDiagnostics} onToggle={() => setShowDiagnostics((value) => !value)} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onAcknowledgeAll={(keys) => setAcknowledged((current) => new Set([...current, ...keys]))} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
     {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} showActive={showLifecycle === "active"} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
