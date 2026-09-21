@@ -40,7 +40,7 @@ export function LiveGraph({ flow, status, busy, onJump, onAssign }: Props) {
   const [selected, setSelected] = useState(status.groupPaths.find((path) => !path.done && path.acceptingParticipants !== false)?.phaseId ?? status.phaseId ?? flow.entryPhaseId);
   const [scope, setScope] = useState("");
   const [zoom, setZoom] = useState(1);
-  const [search, setSearch] = useState("");
+  const [participantId, setParticipantId] = useState("");
   const positions = useMemo(() => graphPositions(flow), [flow]);
   const width = Math.max(600, ...[...positions.values()].map((p) => p.x + 265));
   const height = Math.max(280, ...[...positions.values()].map((p) => p.y + 160));
@@ -57,7 +57,7 @@ export function LiveGraph({ flow, status, busy, onJump, onAssign }: Props) {
   const canJump = status.lifecycle === "active" && !busy && scene && (status.groupPathsStarted
     ? selectedScope && !selectedScope.done && selectedScope.phaseId !== scene.id && selectedScope.jumpTargets?.includes(scene.id)
     : status.phaseId !== scene.id);
-  const roster = (people: Status["participants"]) => <ul className="live-roster">{people.filter((p) => `${p.name} ${p.clientId}`.toLowerCase().includes(search.toLowerCase())).map((p) => <li key={p.clientId}>
+  const roster = (people: Status["participants"]) => <ul className="live-roster">{people.map((p) => <li key={p.clientId}>
     <strong title={p.clientId}>{p.name}</strong><span>{p.connected ? "Connected" : "Disconnected"}</span>
     <small>{(() => { const path = paths.find((item) => item.memberIds.includes(p.clientId)); return path ? `${path.label} · ${path.done ? "Waiting at reunion" : path.phaseTitle}` : status.groupPathsStarted ? "Needs assignment" : "Shared timeline"; })()}</small>
     <label>Move {p.name} to group<select className="sc-tool-select" aria-label={`Move ${p.name} to group`} value="" disabled={busy} onChange={(event) => void onAssign(p.clientId, event.target.value)}>
@@ -97,8 +97,8 @@ export function LiveGraph({ flow, status, busy, onJump, onAssign }: Props) {
         {status.groupPathsStarted && <p className="sc-tool-help">Group jumps start the chosen scene from its beginning. Participant transfers join the group’s current playback position.</p>}
         {scene && <p className="sc-tool-help">{scene.routes.map((route) => `${route.outcome} → ${route.target}`).join(" · ")}</p>}
       </div>
-      <div><label className="sc-tool-label">Find participant<input className="sc-tool-field" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name or participant ID" /></label>{roster(search.trim() ? status.participants : members)}
-        {status.groupPathsStarted && !search.trim() && <div><h3>Waiting / needs assignment · {waiting.length}</h3>{roster(waiting)}</div>}
+      <div><label className="sc-tool-label">Participant<select className="sc-tool-field" value={participantId} onChange={(e) => setParticipantId(e.target.value)}><option value="">Participants in this scene</option>{status.participants.map((p) => <option key={p.clientId} value={p.clientId}>{p.name} · {p.clientId}</option>)}</select></label>{roster(participantId ? status.participants.filter((p) => p.clientId === participantId) : members)}
+        {status.groupPathsStarted && !participantId && <div><h3>Waiting / needs assignment · {waiting.length}</h3>{roster(waiting)}</div>}
       </div>
     </div>
   </div>;

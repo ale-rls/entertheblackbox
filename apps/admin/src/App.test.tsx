@@ -171,7 +171,7 @@ describe("Admin operations UI", () => {
     expect(requests).toContainEqual({ url: "/api/admin/status", method: "GET" });
     expect(requests.some(({ url }) => url === "/api/admin/errors")).toBe(false);
     expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 2_000);
-    expect(document.body.textContent).toContain("System ready");
+    expect(document.body.textContent).toContain("Authenticated");
     expect(document.body.textContent).toContain("question-02");
     expect(document.body.textContent).toContain("118");
   });
@@ -209,6 +209,17 @@ describe("Admin operations UI", () => {
     expect(document.activeElement).toBe(restartTrigger);
   });
 
+  it("keeps idle operations focused on session controls and scheduling", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    createAdminFetch({ status: { ...activeStatus, lifecycle: "idle" } });
+    await renderApp();
+    expect(document.querySelector("#admin-connection-heading")).toBeNull();
+    expect(document.querySelector("#admin-flow-heading")).toBeNull();
+    const headings = [...document.querySelectorAll(".admin-grid h2")].map((node) => node.textContent);
+    expect(headings.slice(0, 2)).toEqual(["Session controls", "Run of show"]);
+    expect(document.querySelector("#admin-lobby-heading")?.closest(".sc-tool-panel")).toBe(document.querySelector("#admin-controls-heading")?.closest(".sc-tool-panel"));
+  });
+
   it("shows the published flow and confirms a direct jump to any other scene", async () => {
     localStorage.setItem("admin-token", "operator-secret");
     const { requests } = createAdminFetch();
@@ -237,7 +248,7 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).toContain("Jumped to “Opening film”.");
   });
 
-  it("adds a show start five minutes from now and keeps the live graph first", async () => {
+  it("adds a show start five minutes from now and keeps session controls first", async () => {
     localStorage.setItem("admin-token", "operator-secret");
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     const { requests } = createAdminFetch();
@@ -254,7 +265,7 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).toContain("Show added in 5 minutes.");
 
     const panels = Array.from(document.querySelectorAll(".admin-grid > section"));
-    expect(panels[0]?.querySelector("#admin-flow-heading")).not.toBeNull();
+    expect(panels[0]?.querySelector("#admin-controls-heading")).not.toBeNull();
   });
 
   it("keeps server-refused actions visible as inline failure feedback", async () => {
@@ -340,7 +351,7 @@ describe("Admin operations UI", () => {
 
     await renderApp();
 
-    expect(document.body.textContent).toContain("Playback issue");
+    expect(document.body.textContent).toContain("Video playback");
     expect(document.body.textContent).toContain("AUTOPLAY-BLOCKED");
     expect(document.body.textContent).toContain("media/intro.mp4: NotAllowedError: User gesture required");
   });
@@ -373,7 +384,6 @@ describe("Admin operations UI", () => {
     failStatus = true;
     await act(async () => { poll(); });
     await flush();
-    expect(document.body.textContent).toContain("Status stale");
     expect(document.body.textContent).toContain("Last status received");
     expect(document.body.textContent).toContain("Showing the last received status");
     expect(document.body.textContent).toContain("question-02");
@@ -381,7 +391,7 @@ describe("Admin operations UI", () => {
     failStatus = false;
     await act(async () => { poll(); });
     await flush();
-    expect(document.body.textContent).toContain("System ready");
+    expect(document.body.textContent).toContain("Authenticated");
     expect(document.body.textContent).toContain("Authenticated");
     expect(document.body.textContent).not.toContain("Status stale");
     expect(document.querySelector('[role="alert"]')).toBeNull();

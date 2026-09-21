@@ -509,3 +509,17 @@ it("controls music during an active show and rejects unauthenticated or invalid 
   expect((await app.inject({ method: "POST", url, headers, payload: { src: null } })).statusCode).toBe(502);
   await app.close();
 });
+
+ it("accepts an unpublished music track from the live library and stops without a library lookup", async () => {
+  const set = vi.fn(async () => {});
+  const sources = vi.fn(async () => ["library-only.mp3"]);
+  const { app } = setup({ audioMusic: { sources, set } });
+  const headers = { authorization: "Bearer strong-admin-token" };
+  const response = await app.inject({ method: "POST", url: "/api/admin/audio/music", headers, payload: { src: "library-only.mp3" } });
+  expect(response.statusCode).toBe(200);
+  expect(set).toHaveBeenCalledWith("library-only.mp3", 0.2);
+  sources.mockRejectedValue(new Error("Library offline"));
+  expect((await app.inject({ method: "POST", url: "/api/admin/audio/music", headers, payload: { src: null } })).statusCode).toBe(200);
+  expect(sources).toHaveBeenCalledTimes(1);
+  await app.close();
+});

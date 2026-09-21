@@ -46,6 +46,13 @@ describe("live graph", () => {
     await act(() => button("Move Actors to this scene").click());
     expect(onJump).toHaveBeenCalledWith(expect.objectContaining({ id: "reunion" }), expect.any(HTMLButtonElement), "a");
   });
+  it("selects a participant from another scene before transferring them", async () => {
+    const { onAssign } = await render();
+    await act(() => button("Inspect Scene B").click());
+    await select("Participant", "Alex");
+    await select("Move Alex to group", "b");
+    expect(onAssign).toHaveBeenCalledWith("Alex", "b");
+  });
   it("exposes waiting participants and moves one to a group's live position", async () => {
     const { onAssign } = await render();
     expect(document.body.textContent).toContain("Waiting / needs assignment · 1");

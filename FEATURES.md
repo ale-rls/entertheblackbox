@@ -75,9 +75,9 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Operator authentication (30-day session) — **PocketBase** `operators` collection, `apps/server/src/persistence/operator-auth.ts`
 - Live operational status (server/display/playback/participants/session)
-- Scene navigator / live show graph, jump-to-scene, participant reassignment — `LiveGraph.tsx`
+- Active-show scene navigator / live show graph, jump-to-scene, participant dropdown and reassignment — `LiveGraph.tsx`
 - Session controls: start/skip/restart/idle, group-path start, force-reunion
-- Lobby schedule management
+- Lobby schedule management within the combined session controls panel
 - Active show selection (published/pending, queued-until-show-ends)
 - Ghost-cursor fill-target override
 - Audio diagnostics page (`/admin/?view=audio`) — `AudioDiagnostics.tsx`

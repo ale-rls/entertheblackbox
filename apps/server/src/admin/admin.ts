@@ -33,7 +33,7 @@ export type RegisterAdminOptions = {
   ready: boolean;
   audioStatus?: () => Promise<unknown>;
   audioMusic?: {
-    sources: readonly string[];
+    sources: readonly string[] | (() => Promise<readonly string[]>);
     set: (src: string | null, volume: number) => Promise<void>;
   };
   audioSoundcheck?: {
@@ -196,11 +196,13 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       const music = options.audioMusic;
       if (!music) return reply.code(503).send({ error: "audio_unavailable" });
       const { src, volume = 0.2 } = request.body ?? {};
-      if ((src !== null && (typeof src !== "string" || !music.sources.includes(src)))
+      if ((src !== null && typeof src !== "string")
         || typeof volume !== "number" || !Number.isFinite(volume) || volume < 0 || volume > 1) {
         return reply.code(400).send({ error: "invalid_music_request" });
       }
       try {
+        const sources = src === null ? [] : typeof music.sources === "function" ? await music.sources() : music.sources;
+        if (src !== null && !sources.includes(src as string)) return reply.code(400).send({ error: "invalid_music_request" });
         await music.set(src as string | null, volume);
         return { ok: true };
       } catch (error) {
