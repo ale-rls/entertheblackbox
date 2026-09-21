@@ -48,6 +48,24 @@ it("edits separate group video overrides and submits them with the default", asy
   } finally { await act(async () => root.unmount()); vi.unstubAllGlobals(); }
 });
 
+it("edits the signage kiosk video override and submits it alongside the default", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const request = vi.fn(async (url: unknown) => String(url).endsWith("waiting-videos") ? Response.json({ videos: [{ src: "lobby-qr.mp4", url: "/media/lobby-qr.mp4", available: true }] }) : Response.json({ configured: true, display: { ...DEFAULT_DISPLAY_SETTINGS, waitingVideoUrl: "/media/default.mp4" } }));
+  vi.stubGlobal("fetch", request);
+  const host = document.createElement("div"); const root = createRoot(host);
+  try {
+    await act(async () => { root.render(<DisplaySettingsPanel token="operator" />); });
+    expect(host.textContent).toContain("Signage kiosks");
+    expect(host.textContent).toContain("/display/?signage=");
+    const signageSelect = Array.from(host.querySelectorAll("select")).at(-1)!;
+    await act(async () => { signageSelect.value = "/media/lobby-qr.mp4"; signageSelect.dispatchEvent(new Event("change", { bubbles: true })); });
+    await act(async () => { host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    const calls = request.mock.calls as unknown as [string, RequestInit][];
+    const sent = calls.find(([, init]) => init?.method === "PUT")![1];
+    expect(JSON.parse(String(sent.body))).toMatchObject({ waitingVideoUrl: "/media/default.mp4", signageVideoUrls: { lobby: "/media/lobby-qr.mp4" } });
+  } finally { await act(async () => root.unmount()); vi.unstubAllGlobals(); }
+});
+
 it("keeps saved selections when the library is offline and reloads on refresh", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   let offline = true;

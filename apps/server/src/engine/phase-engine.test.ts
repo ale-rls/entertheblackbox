@@ -229,6 +229,18 @@ function connectDisplay(engine: PhaseEngine, socket: WebSocket): void {
   }, socket);
 }
 
+function connectSignage(engine: PhaseEngine, socket: WebSocket, signageId: string): void {
+  engine.handleClientMessage({
+    t: "display_join",
+    v: 2,
+    clientVersion: "test",
+    installationId: "inst-1",
+    roomId: "room-1",
+    displayToken: "display-secret",
+    signageId,
+  }, socket);
+}
+
 describe("PhaseEngine lifecycle", () => {
   it("waits for an operator or scheduled start when participant-count auto-start is disabled", () => {
     let now = 1_000;
@@ -292,6 +304,41 @@ describe("PhaseEngine lifecycle", () => {
     const stranger = new MockSocket();
     engine.handleClientMessage({ t: "qr_grant_request", v: 2 }, stranger as unknown as WebSocket);
     expect(stranger.sent).toEqual([]);
+  });
+
+  it("pushes QR grants to signage kiosks, and only QR grants", () => {
+    const { engine } = setup({ now: () => 1_000, qr: true });
+    const lobby = new MockSocket();
+    connectSignage(engine, lobby as unknown as WebSocket, "lobby");
+
+    expect(lobby.sent).toEqual([{ t: "qr_grant", v: 2, url: "https://phone.example/join", expiresAt: 121_000, placement: "large", showJoinUrl: true }]);
+
+    engine.handleClientMessage({ t: "qr_grant_request", v: 2 }, lobby as unknown as WebSocket);
+    expect(lobby.sent.filter((message) => message.t === "qr_grant")).toHaveLength(2);
+  });
+
+  it("keeps a signage kiosk independent of the main display and other signage spots", () => {
+    const { engine } = setup({ now: () => 1_000, qr: true });
+    const display = new MockSocket();
+    const lobby = new MockSocket();
+    const entrance = new MockSocket();
+    connectDisplay(engine, display as unknown as WebSocket);
+    display.sent.length = 0;
+    connectSignage(engine, lobby as unknown as WebSocket, "lobby");
+    connectSignage(engine, entrance as unknown as WebSocket, "entrance");
+
+    // A newly connecting signage kiosk pushes a grant to every signage
+    // socket and the main display, matching the shared push-loop behavior.
+    expect(lobby.sent.filter((message) => message.t === "qr_grant")).toHaveLength(2);
+    expect(entrance.sent.filter((message) => message.t === "qr_grant")).toHaveLength(1);
+    expect(display.sent.filter((message) => message.t === "qr_grant").length).toBeGreaterThan(0);
+
+    // Reconnecting the same signage id replaces the old socket, not the other spot.
+    const replacementLobby = new MockSocket();
+    connectSignage(engine, replacementLobby as unknown as WebSocket, "lobby");
+    expect(lobby.closes.length).toBeGreaterThan(0);
+    expect(entrance.closes).toEqual([]);
+    expect(display.closes).toEqual([]);
   });
 
   it("starts the lobby and show without a display", () => {

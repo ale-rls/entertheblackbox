@@ -1,4 +1,4 @@
-import { resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
+import { resolveSignageVideoUrl, resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
 import { currentInstallation } from "./lib/resolveInstallation.js";
 import { useDisplaySettings } from "./lib/useDisplaySettings.js";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -42,14 +42,22 @@ declare const __REALTIME_WS_URL__: string | undefined;
 declare const __DISPLAY_TOKEN__: string | undefined;
 declare const __LOBBY_WIFI_NAME__: string | undefined;
 
+const searchParams = new URLSearchParams(location.search);
+// Two mutually exclusive optional query parameters: ?group=<id> is that
+// audience group's own dedicated kiosk; ?signage=<id> is a QR-only
+// signage kiosk (e.g. a lobby entrance screen), unrelated to audience
+// groups. A display with neither is the main display. signage takes
+// precedence if both were somehow present.
+const signageId: string | undefined = searchParams.get("signage") ?? undefined;
+const groupId: string | undefined = signageId === undefined ? (searchParams.get("group") ?? undefined) : undefined;
+
 const config = {
   url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
   clientVersion:
     typeof __BUILD_VERSION__ === "string" ? __BUILD_VERSION__ : "0.0.0-dev",
   ...currentInstallation(),
-  // The only supported query parameter: a display without ?group= is the
-  // main display; one with it is that group's own dedicated kiosk.
-  ...(new URLSearchParams(location.search).get("group") ? { groupId: new URLSearchParams(location.search).get("group")! } : {}),
+  ...(groupId === undefined ? {} : { groupId }),
+  ...(signageId === undefined ? {} : { signageId }),
   displayToken: typeof __DISPLAY_TOKEN__ === "string" ? __DISPLAY_TOKEN__ : "",
   realtimeWsUrl:
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
@@ -186,6 +194,7 @@ export function App() {
   const phase = state.phase;
   const isIdle = phase === null || phase.kind === "idle";
   const waitingVideoUrl = resolveWaitingVideoUrl(displaySettings, config.groupId);
+  const signageVideoUrl = config.signageId !== undefined ? resolveSignageVideoUrl(displaySettings, config.signageId) : null;
   const displayInactive = phase?.kind === "group-branch" || (config.groupId !== undefined && isIdle);
   const mediaReady = media.status.state === "ready";
 
@@ -262,6 +271,20 @@ export function App() {
   useEffect(() => {
     void media.showMedia(phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc);
   }, [phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc]);
+
+  // A signage kiosk (e.g. a lobby entrance screen) never renders show
+  // content -- just its configured background loop and the live join QR,
+  // independent of session/phase state.
+  if (config.signageId !== undefined) return <main className="display-root" aria-label="Signage kiosk">
+    <IdleAttract
+      key={signageVideoUrl}
+      {...(signageVideoUrl ? { videoUrls: [signageVideoUrl] } : {})}
+      grant={state.qrGrant}
+      qrHidden={state.qrHidden}
+      clock={connection.clock}
+      mediaVisible
+    />
+  </main>;
 
   // Unmount show media and overlays; inactive displays may play a muted waiting loop.
   if (displayInactive) return <main className="display-root" aria-label="Display inactive" style={{ background: "#000" }}>
