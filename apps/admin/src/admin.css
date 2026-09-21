@@ -9,6 +9,14 @@
 .admin-status-bar .admin-operation-row { display: flex; min-height: auto; grid-template-columns: none; align-items: baseline; gap: var(--sc-tool-space-2); border-block-end: 0; padding: 0; }
 .admin-status-bar .admin-operation-label { gap: var(--sc-tool-space-2); }
 .admin-connection { margin-block-start: var(--sc-tool-space-6); }
+.run-of-show { margin-block-start: var(--sc-tool-space-6); }
+.run-of-show-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sc-tool-space-6); margin-block-start: var(--sc-tool-space-5); }
+.run-of-show-group h3 { margin: 0 0 var(--sc-tool-space-3); font-size: var(--sc-tool-font-size-1); color: var(--sc-tool-color-text-muted); }
+.run-of-show-list { display: grid; gap: var(--sc-tool-space-4); padding: 0; margin: 0; list-style: none; }
+.run-of-show-link-main { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-3); }
+.run-of-show-value { overflow-wrap: anywhere; color: var(--sc-tool-color-text-secondary); }
+.run-of-show-copy { flex: 0 0 auto; }
+@media (max-width: 1279px) { .run-of-show-groups { grid-template-columns: 1fr; } }
 .admin-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sc-tool-space-6); margin-block-end: var(--sc-tool-space-6); }
 .admin-section-heading h2, .admin-empty-state h2 { margin-block-end: 0; font-size: var(--sc-tool-font-size-4); }
 .admin-collapsible-summary { cursor: pointer; list-style: none; }

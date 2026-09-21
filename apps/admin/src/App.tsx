@@ -1,4 +1,5 @@
 import { DisplaySettingsPanel } from "./DisplaySettingsPanel.js";
+import { RunOfShowPanel } from "./RunOfShowPanel.js";
 import { LiveGraph } from "./LiveGraph.js";
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import { AudioDiagnostics } from "./AudioDiagnostics";
@@ -751,7 +752,9 @@ export function App() {
         </div>}
       </div>
 
-      {!connectionAuthenticated && <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
+      {!audioOnly && <RunOfShowPanel />}
+
+      <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
         <div className="admin-section-heading">
           <div><p className="sc-tool-eyebrow">Secure access</p><h2 id="admin-connection-heading">Admin connection</h2></div>
           {status && <StatusLabel status={statusStale ? "warning" : "success"}>{statusStale ? "Last status received" : "Authenticated"}</StatusLabel>}
