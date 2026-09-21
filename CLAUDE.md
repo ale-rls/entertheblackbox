@@ -72,6 +72,13 @@ This repo was forked from the smartphonecracy production. The two shows are
 independent and **do not share fixes** — do not propose cherry-picking between
 them.
 
+## Keep FEATURES.md current
+
+[FEATURES.md](FEATURES.md) is a feature-by-feature inventory of what this repo
+does and which app/service/package each feature depends on. When a PR adds,
+removes, or moves a feature across apps, update the relevant entry in that
+file as part of the same PR — don't let it drift into a stale snapshot.
+
 ## Gotchas
 
 - **Attract clips must be named `attract-*.mp4`** in `apps/display/src/assets/`.
