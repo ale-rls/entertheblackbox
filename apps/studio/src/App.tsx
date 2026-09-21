@@ -5,7 +5,7 @@ import "@xyflow/react/dist/style.css";
 import { Autosave, recoverDraft, type SaveStatus as SaveStatusValue } from "./drafts.js";
 import { PocketbaseDraftDatabase } from "./pocketbase-drafts.js";
 import { exportArtifacts, exportBackup, importRuntime, importStudioFiles } from "./io.js";
-import { autoLayout, type Draft } from "./model.js";
+import type { Draft } from "./model.js";
 import { applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, phaseOutputHandles, pruneEdges, reconcilePhaseOutputEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./canvas/graph.js";
 import { nodeDataForPhase, nodeTypes } from "./canvas/nodes.js";
 import { updateGroupCatalogue } from "./inspector/groups.js";
@@ -22,7 +22,6 @@ import { refreshDraftLocalMedia, runtimeMediaManifest, type MediaManifest } from
 import { PocketbaseMediaLibrary } from "./media/pocketbase-media.js";
 import { MediaLibraryDialog, type MediaLibraryRow } from "./media/MediaLibraryDialog.js";
 import { studioMediaKindForSource, type StudioMediaKind } from "./media/library.js";
-import { appendCampaignExtension } from "./templates/campaign.js";
 import { productionDraftFromArtifact, type PublishedProductionArtifact } from "./production.js";
 import { projectPreviewUrl, storeProjectPreview } from "./preview/project-preview.js";
 import "@entertheblackbox/tool-ui/styles.css";
@@ -338,40 +337,6 @@ export function App() {
     if (localManifest) created.localMediaSources = localManifest.files.map((file) => file.src).sort();
     history.current = undefined;
     save(created);
-  };
-  const addCampaignExtension = (trigger: HTMLButtonElement | null = null) => {
-    if (!draft) return;
-    const productionBaseline = draft.document.productionBaseline;
-    if (!productionBaseline) {
-      setGraphFeedback({ status: "danger", message: "Create a draft from active production before applying the campaign extension." });
-      return;
-    }
-    setConfirmation({
-      title: "Append campaign and election sections 3–5?",
-      description: "This changes the production ending from idle to the campaign intro, then adds three spectrum speeches with applause/boo, the three-zone election, winner visions, tie/empty endings, and the final return to idle. New media references must be uploaded before publishing.",
-      confirmLabel: "Append sections 3–5",
-      cancelLabel: "Keep production unchanged",
-      tone: "primary",
-      trigger,
-      onConfirm: () => {
-        try {
-          const project = appendCampaignExtension(draft.project);
-          const document = {
-            ...autoLayout(project, draft.document.showId),
-            productionBaseline,
-          };
-          const nextDraft = { ...draft, project, document, updatedAt: Date.now() };
-          const nextNodes = nodesForDraft(nextDraft);
-          const nextEdges = graphEdges(project);
-          setNodes(nextNodes);
-          setEdges(nextEdges);
-          record(nextDraft, nextEdges);
-          setGraphFeedback({ status: "success", message: "Sections 3–5 appended. Upload or select the new media files, then preview every election outcome." });
-        } catch (error) {
-          setGraphFeedback({ status: "danger", message: error instanceof Error ? error.message : "The campaign extension could not be added." });
-        }
-      },
-    });
   };
   const closeConfirmation = () => {
     const trigger = confirmation?.trigger;
@@ -1013,8 +978,6 @@ export function App() {
         { label: "Paste", onSelect: pasteClipboard, disabled: clipboard.length === 0 },
       ]} />
       <Menu label="Add" items={[
-        { label: "Campaign + election sections 3–5", onSelect: () => addCampaignExtension(), disabled: !draft.document.productionBaseline },
-        { separator: true },
         { label: "Video phase", onSelect: () => addPhase("video") },
         { label: "Video + synchronized phone audio", onSelect: () => addPhase("synchronized-video") },
         { label: "Image + MP3 phase", onSelect: () => addPhase("image-audio") },
