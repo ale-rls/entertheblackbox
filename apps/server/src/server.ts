@@ -1,3 +1,5 @@
+import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
+import { basename } from "node:path";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
 import { PersonalAudio } from "./audio/personal-audio.js";
@@ -325,8 +327,17 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       };
     },
     ...(audio === null || !readiness.ready ? {} : { audioMusic: {
-      sources: readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)),
-      set: (src: string | null, volume: number) => audio.setMusic(src, volume),
+      sources: async () => {
+        const published = readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src));
+        if (!options.pocketbase) return published;
+        await options.pocketbase.ensureAuth();
+        const records = await options.pocketbase.pb.collection<{ src: string }>("media").getFullList();
+        return [...new Set([...published, ...records.map((record) => record.src).filter((src) => src === basename(src) && /\.mp3$/i.test(src))])];
+      },
+      set: async (src: string | null, volume: number) => {
+        if (src && options.pocketbase) await syncMediaFromPocketbase(options.pocketbase, config.mediaDir, src);
+        await audio.setMusic(src, volume);
+      },
     } }),
     ...(audio === null || !readiness.ready ? {} : { audioSoundcheck: {
       sources: readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)),

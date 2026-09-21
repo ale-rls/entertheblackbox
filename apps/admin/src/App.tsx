@@ -842,7 +842,7 @@ export function App() {
           status: !status.audio?.configured ? "info" : (status.audio.error || Object.keys(status.audio.deliveryFailures ?? {}).length > 0) ? "danger" : "success",
           label: !status.audio?.configured ? "Not configured" : (status.audio.error || Object.keys(status.audio.deliveryFailures ?? {}).length > 0) ? "Needs attention" : "Nominal",
         }} open={audioSectionOpen} onToggle={setAudioSectionOpen}>
-          {audioSectionOpen && <AudioMediaLibrary url={POCKETBASE_URL} sources={status.audio?.soundcheckSources ?? []} onSelect={(src) => { setMusicSource(src); const panel = document.getElementById("admin-background-music") as HTMLDetailsElement | null; if (panel) { panel.open = true; panel.scrollIntoView?.({ block: "nearest" }); } }} />}
+          {audioSectionOpen && <AudioMediaLibrary url={POCKETBASE_URL} onSelect={(src) => { setMusicSource(src); const panel = document.getElementById("admin-background-music") as HTMLDetailsElement | null; if (panel) { panel.open = true; panel.scrollIntoView?.({ block: "nearest" }); } }} />}
           <p><a href="/admin/?view=audio">Open live audio diagnostics →</a></p>
           {!status.audio?.configured ? <p>Audio bridge is not configured.</p> : <>
             <p>Active backend: <strong>{status.audio.backend === "local" ? status.audio.backendLabel ?? "Local" : "Remote"}</strong></p>
@@ -863,13 +863,14 @@ export function App() {
                 <p>Loops underneath narration on all phone streams, including phones joining later.</p>
                 <p>{status.audio.backgroundMusic ? `Selected: ${status.audio.backgroundMusic.src} (${Math.round(status.audio.backgroundMusic.volume * 100)}%)` : "Music stopped"}</p>
                 <label>Music track<select className="sc-tool-field" value={musicSource} onChange={(event) => setMusicSource(event.target.value)}>
-                  <option value="">Choose published MP3…</option>
+                  <option value="">Choose MP3…</option>
+                  {musicSource && !(status.audio.soundcheckSources ?? []).includes(musicSource) && <option value={musicSource}>{musicSource}</option>}
                   {(status.audio.soundcheckSources ?? []).map((src) => <option key={src} value={src}>{src}</option>)}
                 </select></label>
                 <label>Music volume: {musicVolume}%<input type="range" min="0" max="100" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} /></label>
                 <button className="sc-tool-button" type="button" disabled={settingMusic || !musicSource} onClick={() => void setBackgroundMusic()}>Play / apply music</button>
                 <button className="sc-tool-button" type="button" disabled={settingMusic} onClick={() => void setBackgroundMusic(true)}>Stop music</button>
-                <p className="sc-tool-help">Publish music as MP3 media in the active show. Stream buffering delays audible changes by a few seconds.</p>
+                <p className="sc-tool-help">Choose any MP3 from the media library above. Stream buffering delays audible changes by a few seconds.</p>
               </div>
             </details>
             <details className="admin-collapsible">
