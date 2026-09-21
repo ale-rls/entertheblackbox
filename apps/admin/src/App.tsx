@@ -975,6 +975,8 @@ export function App() {
           <p className="sc-tool-help">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghosts and defers to whatever the published show sets. While a show is running, the change waits until that show ends.</p>
         </CollapsibleSection>
 
+        {connectedToken && <DisplaySettingsDisclosure token={connectedToken} />}
+
       </div>}
     </main>
     {confirmAction && <ConfirmationDialog action={confirmAction} onCancel={closeConfirmation} onConfirm={confirmControl} />}
