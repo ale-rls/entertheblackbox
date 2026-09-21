@@ -1,8 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings } from "@entertheblackbox/protocol";
 
+type LibraryVideo = { src: string; url: string; available: boolean };
+
 export function DisplaySettingsPanel({ token }: { token: string }) {
   const [value, setValue] = useState<DisplaySettings>({ ...DEFAULT_DISPLAY_SETTINGS });
+  const [videos, setVideos] = useState<LibraryVideo[]>([]);
+  const [libraryError, setLibraryError] = useState("");
+  const [libraryLoading, setLibraryLoading] = useState(true);
+  const [libraryRetry, setLibraryRetry] = useState(0);
+  const [groups, setGroups] = useState<{ id: string; label: string }[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [configured, setConfigured] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -21,10 +28,28 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
         if (!parsed.success) throw new Error("The server returned invalid display settings. Retry or check the server version.");
         const display = parsed.data;
         if (abort.signal.aborted) return;
+        setGroups(Array.isArray(result.groups) ? result.groups : []);
         setValue(display); setConfigured(result.configured === true); setLoaded(true);
       }).catch((error: unknown) => { if (!abort.signal.aborted) setError(error instanceof Error ? error.message : "Could not load settings."); });
     return () => abort.abort();
   }, [token, retry]);
+  useEffect(() => {
+    const abort = new AbortController();
+    setLibraryLoading(true); setLibraryError("");
+    void fetch("/api/admin/settings/waiting-videos", { headers: { Authorization: `Bearer ${token}` }, signal: abort.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Could not load the media library. Retry to choose a video.");
+        const result = await response.json();
+        if (!Array.isArray(result.videos)) throw new Error("The server returned an invalid media library.");
+        if (!abort.signal.aborted) setVideos(result.videos);
+      }).catch((error: unknown) => { if (!abort.signal.aborted) setLibraryError(error instanceof Error ? error.message : "Could not load the media library."); })
+      .finally(() => { if (!abort.signal.aborted) setLibraryLoading(false); });
+    return () => abort.abort();
+  }, [token, libraryRetry]);
+  const videoOptions = (current: string) => <>
+    {current && !videos.some((video) => video.url === current) && <option value={current}>Saved video (not in library): {current}</option>}
+    {videos.map((video) => <option key={video.url} value={video.url} disabled={!video.available}>{video.src}{video.available ? "" : " — syncing to server"}</option>)}
+  </>;
   const edit = (patch: Partial<DisplaySettings>) => { setValue((current) => ({ ...current, ...patch })); setNotice(""); };
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -41,7 +66,7 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
     finally { setBusy(false); }
   };
   return <section className="sc-tool-panel" aria-labelledby="display-settings-heading">
-    <h2 id="display-settings-heading">Display text</h2>
+    <h2 id="display-settings-heading">Display text and waiting video</h2>
     <p className="sc-tool-help">Join-screen text for this platform, stored in PocketBase. These changes apply live to open displays.</p>
     {!loaded ? <><p>Loading display settings…</p>{error && <button type="button" className="sc-tool-button" onClick={() => setRetry((n) => n + 1)}>Retry loading settings</button>}</> : <form onSubmit={(event) => void save(event)}>
       <fieldset disabled={busy || !configured} style={{ border: 0, padding: 0, margin: 0 }}>
@@ -52,7 +77,33 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
         <p className="sc-tool-help">Use {"{wifi}"} for the configured Wi-Fi name, or write the network name directly. Leave blank to hide this line.</p>
         <label className="sc-tool-label">Joining instructions<textarea className="sc-tool-field" rows={3} value={value.joinInstructions} maxLength={600} onChange={(e) => edit({ joinInstructions: e.target.value })} /></label>
         <label className="sc-tool-checkbox"><input type="checkbox" checked={value.showJoinUrl} onChange={(e) => edit({ showJoinUrl: e.target.checked })} />Show the phone join URL</label>
-        <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit">{busy ? "Saving…" : "Save display text"}</button>
+        <h3>Lobby and waiting video</h3>
+        <p className="sc-tool-help">Choose a video from the shared media library. It loops muted while a display waits in the lobby or between group paths. Add videos in Studio → Media library.</p>
+        {libraryLoading && <p role="status">Loading media library…</p>}
+        {libraryError && <p role="alert">{libraryError}</p>}
+        <button className="sc-tool-button" type="button" disabled={libraryLoading} onClick={() => setLibraryRetry((n) => n + 1)}>Refresh media library</button>
+        {!libraryLoading && !libraryError && videos.length === 0 && <p>No videos in the media library yet.</p>}
+        <label className="sc-tool-label">Default waiting video<select className="sc-tool-field" value={value.waitingVideoUrl} onChange={(e) => edit({ waitingVideoUrl: e.target.value })}>
+          <option value="">Use bundled lobby clips / black group displays</option>
+          {videoOptions(value.waitingVideoUrl)}
+        </select></label>
+        {groups.map((group) => {
+          const override = value.groupWaitingVideoUrls[group.id];
+          const setOverride = (url: string | undefined) => {
+            const overrides = { ...value.groupWaitingVideoUrls };
+            if (url === undefined) delete overrides[group.id]; else overrides[group.id] = url;
+            edit({ groupWaitingVideoUrls: overrides });
+          };
+          return <fieldset key={group.id}>
+            <legend>{group.label} ({group.id})</legend>
+            <label className="sc-tool-label">{group.label} waiting video<select className="sc-tool-field" value={override === undefined ? "inherit" : override} onChange={(e) => setOverride(e.target.value === "inherit" ? undefined : e.target.value)}>
+              <option value="inherit">Use default</option><option value="">Black screen</option>
+              {videoOptions(override ?? "")}
+            </select></label>
+          </fieldset>;
+        })}
+        {groups.length === 0 && <p className="sc-tool-help">Per-group settings appear when the active show defines groups.</p>}
+        <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit">{busy ? "Saving…" : "Save display settings"}</button>
       </fieldset>
       {!configured && <p role="status">PocketBase persistence is not configured. Display text cannot be saved.</p>}
     </form>}

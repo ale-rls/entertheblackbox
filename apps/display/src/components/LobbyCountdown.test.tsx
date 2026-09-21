@@ -1,3 +1,4 @@
+import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { PhaseSnapshotMessage } from "@entertheblackbox/protocol";
@@ -57,7 +58,7 @@ describe("LobbyCountdown", () => {
 });
 
 it("renders configured copy as text, substitutes countdown/Wi-Fi and hides optional lines", () => {
-  const settings = { heading: "<b>Willkommen</b>", countdownTemplate: "Beginn: {time}", networkInstructions: "Netz: {wifi}", joinInstructions: "", showJoinUrl: false };
+  const settings = { ...DEFAULT_DISPLAY_SETTINGS, heading: "<b>Willkommen</b>", countdownTemplate: "Beginn: {time}", networkInstructions: "Netz: {wifi}", joinInstructions: "", showJoinUrl: false };
   const props = { sessionId: "lobby", clock: new ServerClock(), joinUrl: "https://join.example/phone/", networkName: "Venue", settings };
   const manual = renderToStaticMarkup(<LobbyCountdown {...props} phase={idlePhase(null)} />);
   expect(manual).toContain("&lt;b&gt;Willkommen&lt;/b&gt;");

@@ -81,7 +81,8 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Active show selection (published/pending, queued-until-show-ends)
 - Ghost-cursor fill-target override
 - Audio diagnostics page (`/admin/?view=audio`) — `AudioDiagnostics.tsx`
-- Headphone stream ops: shared PocketBase media browser with direct MP3 selection without show publication, roster, background music, soundcheck, local↔remote backend switch → **services/audio**
+- Headphone stream ops: roster, background music, soundcheck, local↔remote backend switch → **services/audio**
+- Shared media-library picker for default and per-group lobby/waiting videos (MP4/WebM, sync readiness, muted loop, live updates, group black-screen override) — protocol platform settings, display `IdleAttract`, Admin `DisplaySettingsPanel`, PocketBase platform config
 - Display text editor — `DisplaySettingsPanel.tsx`
 - Participant roster + group (re)assignment
 - Session export (JSON/CSV) — `apps/server/src/persistence/admin-data.ts`

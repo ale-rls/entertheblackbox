@@ -215,7 +215,7 @@ function JumpConfirmationDialog({ scene, scope, onCancel, onConfirm }: { scene: 
 function DisplaySettingsDisclosure({ token }: { token: string }) {
   const [open, setOpen] = useState(false);
   return <details className="sc-tool-panel admin-collapsible" onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary className="admin-collapsible-summary"><div><p className="sc-tool-eyebrow">Show setup</p><h2>Display text</h2></div></summary>
+    <summary className="admin-collapsible-summary"><p className="sc-tool-eyebrow">Show setup</p><span>Display text and waiting video</span></summary>
     {open && <DisplaySettingsPanel key={token} token={token} />}
   </details>;
 }
