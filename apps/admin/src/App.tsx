@@ -728,7 +728,7 @@ export function App() {
         <p className="sc-tool-eyebrow">Operational data</p>
         <h2>{refreshing ? "Loading live status…" : "Connect to load live status"}</h2>
         <p className="sc-tool-copy">No operational values are shown until the admin API authenticates this browser session.</p>
-      </section> : <div className="admin-grid">
+      </section> : audioOnly ? <AudioDiagnostics status={status} receivedAt={statusReceivedAt} failed={Boolean(connectionError)} /> : <div className="admin-grid">
         <section className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
           <div className="admin-section-heading">
             <div><p className="sc-tool-eyebrow">Live show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Scene navigator</h2></div>
