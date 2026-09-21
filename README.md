@@ -17,6 +17,8 @@ The server is authoritative: it manages admission, room state, timed vote snapsh
 
 Shared runtime contracts live in `packages/protocol`, `packages/scenario`, `packages/shared`, and `packages/studio-adapter`.
 
+See [FEATURES.md](FEATURES.md) for a full feature-by-feature breakdown of what exists and which app/service/package each one depends on.
+
 ## Services
 
 Vendored as git subtrees. They are not pnpm workspace members (`pnpm-workspace.yaml`
