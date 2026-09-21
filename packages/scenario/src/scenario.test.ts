@@ -698,6 +698,22 @@ describe("validateScenario graph checks", () => {
     });
     expect(validateScenario(parsed).errors.map((error) => error.code)).toEqual(expect.arrayContaining(["unknown-group", "unknown-question"]));
   });
+
+  it("accepts a narration phase and validates its per-group text overrides", () => {
+    const parsed = scenarioSchema.parse({
+      version: "narration", entryPhaseId: "brief", cyclesAllowed: false,
+      groups: [{ id: "workers", label: "Workers" }, { id: "machines", label: "Machines" }],
+      phases: [idle, {
+        kind: "narration", id: "brief", text: "Shared narration text", durationMs: 5_000,
+        textByGroup: { workers: "Workers-only text" }, next: "idle",
+      }],
+    });
+    expect(validateScenario(parsed).ok).toBe(true);
+
+    const withUnknownGroup = structuredClone(parsed);
+    (withUnknownGroup.phases[1] as Extract<typeof withUnknownGroup.phases[number], { kind: "narration" }>).textByGroup = { ghosts: "nope" };
+    expect(validateScenario(withUnknownGroup).errors.map((error) => error.code)).toContain("unknown-group");
+  });
 });
 
 describe("validateMediaManifest", () => {
@@ -746,6 +762,17 @@ describe("validateMediaManifest", () => {
   });
 });
 
+it("rejects malformed narration phases", () => {
+  const make = (fields: Record<string, unknown>) => ({
+    ...baseScenario,
+    phases: [...baseScenario.phases, { kind: "narration" as const, id: "narration-1", text: "Hello", durationMs: 5_000, next: "idle", ...fields }],
+  });
+  expect(scenarioSchema.safeParse(make({})).success).toBe(true);
+  expect(scenarioSchema.safeParse(make({ text: "" })).success).toBe(false);
+  expect(scenarioSchema.safeParse(make({ durationMs: 0 })).success).toBe(false);
+  expect(scenarioSchema.safeParse(make({ next: undefined })).success).toBe(false);
+  expect(scenarioSchema.safeParse(make({ textByGroup: { "bad id!": "x" } })).success).toBe(false);
+});
 
 it("validates opt-in synchronized video without changing ordinary videos", () => {
   const make = (fields: Record<string, unknown>) => ({ ...baseScenario, phases: baseScenario.phases.map((p) => p.id === "intro" ? { ...p, ...fields } : p) });

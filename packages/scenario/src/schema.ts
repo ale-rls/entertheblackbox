@@ -306,6 +306,27 @@ export const videoPhaseSchema = z.object({
   });
 });
 
+/**
+ * A media-free scripting stand-in: plain text on the display (and, once
+ * recorded, the same phoneAudioFields every other phase carries) so a show
+ * can be drafted and validated end-to-end before real video/audio assets
+ * exist. Authors migrate to `video` once a recording is ready.
+ */
+export const narrationPhaseSchema = z.object({
+  kind: z.literal("narration"),
+  ...phoneAudioFields,
+  id: phaseIdSchema,
+  title: z.string().min(1, "title must be non-empty").optional(),
+  text: z.string().min(1, "narration text must be non-empty"),
+  /** Per-group text overrides, keyed by stable authored group id. */
+  textByGroup: z.record(groupIdSchema, z.string().min(1)).optional(),
+  durationMs: z.number().int().positive(),
+  next: phaseIdSchema,
+  allowSkip: z.boolean().optional(),
+  /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
+  showCursors: z.boolean().optional(),
+});
+
 const positionQuestionBaseSchema = z.object({
   kind: z.literal("position-question"),
   ...phoneAudioFields,
@@ -515,6 +536,7 @@ export const positionQuestionPhaseSchema = z.preprocess(
 export const phaseSchema = z.union([
   idlePhaseSchema,
   videoPhaseSchema,
+  narrationPhaseSchema,
   positionQuestionPhaseSchema,
   videoPositionQuestionPhaseSchema,
   groupBranchPhaseSchema,
@@ -592,6 +614,7 @@ export type GroupAssignment = z.infer<typeof groupAssignmentSchema>;
 export type GroupBranchPhase = z.infer<typeof groupBranchPhaseSchema>;
 export type IdlePhase = z.infer<typeof idlePhaseSchema>;
 export type VideoPhase = z.infer<typeof videoPhaseSchema>;
+export type NarrationPhase = z.infer<typeof narrationPhaseSchema>;
 export type PositionQuestionPhase = z.infer<typeof positionQuestionPhaseSchema>;
 export type VideoPositionQuestionPhase = z.infer<typeof videoPositionQuestionPhaseSchema>;
 export type PositionVotePhase = PositionQuestionPhase | VideoPositionQuestionPhase;

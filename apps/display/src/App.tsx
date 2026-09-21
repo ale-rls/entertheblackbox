@@ -377,6 +377,14 @@ export function App() {
             )}
           </div>
         )}
+        {phase?.kind === "narration" && (
+          <div className="narration">
+            <div className="narration-copy">
+              {phase.title && <p className="narration-title">{phase.title}</p>}
+              <p className="narration-text">{(config.groupId !== undefined ? phase.textByGroup?.[config.groupId] : undefined) ?? phase.text}</p>
+            </div>
+          </div>
+        )}
         {phase?.kind === "video" && phase.title && (
           <VideoTitle title={phase.title} layout={phase.titleLayout} />
         )}

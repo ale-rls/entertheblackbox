@@ -35,6 +35,7 @@ function targetsOf(phase: Phase): Array<{ label: string; target: string }> {
     case "idle":
       return [];
     case "video":
+    case "narration":
       return [{ label: "next", target: phase.next }];
     case "group-branch":
       return [{ label: "next", target: phase.next }, ...phase.branches.flatMap((branch) =>
@@ -140,6 +141,12 @@ export function validateScenario(
         message: `phase "${phase.id}" targets unknown group "${groupId}"`,
       });
     }
+    if (phase.kind === "narration" && phase.textByGroup) {
+      for (const groupId of Object.keys(phase.textByGroup)) if (!groupIds.has(groupId)) errors.push({
+        severity: "error", code: "unknown-group", phaseId: phase.id,
+        message: `phase "${phase.id}" targets unknown group "${groupId}"`,
+      });
+    }
   }
   for (const groupId of scenario.initialGroupIds ?? []) if (!groupIds.has(groupId)) errors.push({
     severity: "error", code: "unknown-group", message: `initialGroupIds references unknown group "${groupId}"`,
@@ -155,7 +162,7 @@ export function validateScenario(
           : [
               ...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []),
               ...Object.values(phase.phoneAudioByGroup ?? {}),
-              ...(phase.kind === "position-question" ? [] : [phase.src, ...(phase.audioSrc ? [phase.audioSrc] : []), ...(phase.extraAudioSrc ? [phase.extraAudioSrc] : [])]),
+              ...(phase.kind === "position-question" || phase.kind === "narration" ? [] : [phase.src, ...(phase.audioSrc ? [phase.audioSrc] : []), ...(phase.extraAudioSrc ? [phase.extraAudioSrc] : [])]),
             ]),
       ];
       for (const src of sources) {
