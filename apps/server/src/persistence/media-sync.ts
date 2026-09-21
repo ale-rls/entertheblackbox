@@ -17,11 +17,12 @@ type MediaRecord = { id: string; src: string; bytes: number; file: string };
  * PocketBase doesn't know about, so dropping a file into that directory by
  * hand keeps working exactly as before if this sync is ever turned off.
  */
-export async function syncMediaFromPocketbase(client: PocketBaseClient, mediaDir: string): Promise<void> {
+export async function syncMediaFromPocketbase(client: PocketBaseClient, mediaDir: string, selectedSrc?: string): Promise<void> {
   await client.ensureAuth();
   const records = await client.pb.collection<MediaRecord>("media").getFullList();
   await mkdir(mediaDir, { recursive: true });
   for (const record of records) {
+    if (selectedSrc !== undefined && record.src !== selectedSrc) continue;
     // Defense in depth: src is meant to be a bare filename (it's also what
     // scenario phases reference directly), never a path that could escape
     // mediaDir.

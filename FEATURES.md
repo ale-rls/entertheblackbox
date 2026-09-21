@@ -81,7 +81,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Active show selection (published/pending, queued-until-show-ends)
 - Ghost-cursor fill-target override
 - Audio diagnostics page (`/admin/?view=audio`) — `AudioDiagnostics.tsx`
-- Headphone stream ops: shared PocketBase media browser with published-MP3 selection, roster, background music, soundcheck, local↔remote backend switch → **services/audio**
+- Headphone stream ops: shared PocketBase media browser with direct MP3 selection without show publication, roster, background music, soundcheck, local↔remote backend switch → **services/audio**
 - Display text editor — `DisplaySettingsPanel.tsx`
 - Participant roster + group (re)assignment
 - Session export (JSON/CSV) — `apps/server/src/persistence/admin-data.ts`
