@@ -247,3 +247,25 @@ describe("continuous phone audio", () => {
     expect(media.play).toHaveBeenCalledTimes(2);
   });
 });
+
+it("suspends streams for a synchronized scene and reloads fresh audio on return", async () => {
+  const { media, player } = setup();
+  player.play(); media.emit("playing");
+  player.setSuspended(true);
+  const plays = media.play.mock.calls.length;
+  await vi.advanceTimersByTimeAsync(20_000);
+  player.foreground(); player.online();
+  expect(media.play).toHaveBeenCalledTimes(plays);
+  expect(media.removeAttribute).toHaveBeenCalledWith("src");
+  player.setSuspended(false);
+  expect(media.play).toHaveBeenCalledTimes(plays + 1);
+  expect(media.load).toHaveBeenCalledTimes(3);
+  player.dispose();
+});
+it("does not start a deliberately paused stream after a synchronized scene", () => {
+  const { media, player } = setup();
+  player.play(); player.pause();
+  player.setSuspended(true); player.setSuspended(false);
+  expect(media.play).toHaveBeenCalledTimes(1);
+  player.dispose();
+});

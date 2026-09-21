@@ -46,6 +46,7 @@ function LiveShowWarning({ compact = false }: { compact?: boolean }) {
 
 const componentTypeLabel: Record<AuthorableComponentType, string> = {
   video: "video",
+  "synchronized-video": "video + synchronized phone audio",
   "image-audio": "still image + MP3",
   "position-question": "position question",
   "video-position-question": "video + position vote",
@@ -468,7 +469,7 @@ export function App() {
     persistGraph(next);
     setGraphFeedback({ status: "success", message: "Connection updated." });
   };
-  const addPhase = (kind: "idle" | "video" | "image-audio" | "position-question" | "video-position-question" | "image-audio-position-question" | "group-branch") => {
+  const addPhase = (kind: "idle" | "synchronized-video" | "video" | "image-audio" | "position-question" | "video-position-question" | "image-audio-position-question" | "group-branch") => {
     if (!draft) return;
     if (kind === "idle" && draft.project.scenario.phases.some((phase) => phase.kind === "idle")) {
       setGraphFeedback({ status: "danger", message: "Idle phase not added: this show already has its idle phase. Select the existing idle phase to edit it." });
@@ -500,7 +501,7 @@ export function App() {
         ? { kind, id, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, durationMs: 60000, freezeMs: 5000, connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
         : mediaVote
           ? { kind: "video-position-question" as const, id, ...mediaFields, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, ...defaultVideoVoteTiming(expectedDurationMs, imageAudio ? mediaDurationMs : 0), connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
-          : { kind: "video" as const, id, ...mediaFields, next: "idle" };
+          : { kind: "video" as const, id, ...mediaFields, next: "idle", ...(kind === "synchronized-video" ? { phoneAudioMode: "synchronized" as const, phoneAudioSrc: "media/new-audio.mp3" } : {}) };
     const phases = [...draft.project.scenario.phases, phase] as Draft["project"]["scenario"]["phases"];
     const nextNodes = [...nodes, { id, type: "phase", position: { x: 400, y: 200 }, data: nodeDataForPhase(phase as Phase) }];
     const handles = phaseOutputHandles(phase as Phase);
@@ -653,7 +654,7 @@ export function App() {
           ?? Math.max(1, mediaPhase.expectedDurationMs - tailDurationMs);
         const expectedDurationMs = detectedVideoDurationMs + tailDurationMs;
         if (mediaPhase.kind === "video") {
-          return { ...mediaPhase, src: video, audioSrc: undefined, tailDurationMs, expectedDurationMs };
+          return { ...mediaPhase, src: video, audioSrc: undefined, tailDurationMs, expectedDurationMs, phoneAudioMode: componentType === "synchronized-video" ? "synchronized" as const : undefined, ...(componentType === "synchronized-video" ? { phoneAudioSrc: mediaPhase.phoneAudioSrc ?? "media/new-audio.mp3" } : {}) };
         }
         return {
           ...mediaPhase,
@@ -675,7 +676,7 @@ export function App() {
         ?? Math.max(1, mediaPhase.expectedDurationMs - (mediaPhase.tailDurationMs ?? 0));
       const expectedDurationMs = mediaDurationMs + tailDurationMs;
       if (mediaPhase.kind === "video") {
-          return { ...mediaPhase, src: image, audioSrc: audio, extraAudioSrc: undefined, tailDurationMs, expectedDurationMs };
+          return { ...mediaPhase, src: image, audioSrc: audio, extraAudioSrc: undefined, tailDurationMs, expectedDurationMs, phoneAudioMode: undefined };
       }
       return {
         ...mediaPhase,
@@ -1003,6 +1004,7 @@ export function App() {
         { label: "Campaign + election sections 3–5", onSelect: () => addCampaignExtension(), disabled: !draft.document.productionBaseline },
         { separator: true },
         { label: "Video phase", onSelect: () => addPhase("video") },
+        { label: "Video + synchronized phone audio", onSelect: () => addPhase("synchronized-video") },
         { label: "Image + MP3 phase", onSelect: () => addPhase("image-audio") },
         { label: "Position question", onSelect: () => addPhase("position-question") },
         { label: "Video + position vote", onSelect: () => addPhase("video-position-question") },

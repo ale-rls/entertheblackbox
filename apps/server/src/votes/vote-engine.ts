@@ -232,6 +232,14 @@ export class VoteEngine {
     });
   }
 
+  /** A transfer removes an open vote, but never changes a finalized result. */
+  removeParticipant(participantId: string, now: number): void {
+    const question = this.question;
+    if (!question || question.finalized !== null || now >= question.phaseDeadline) return;
+    question.votes.delete(participantId);
+    this.heartbeatTimes.delete(participantId);
+  }
+
   recordHeartbeat(participantId: string, now: number): boolean {
     this.pruneHeartbeatTimes(now);
     this.rememberHeartbeat(participantId, now);

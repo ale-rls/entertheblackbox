@@ -63,7 +63,11 @@ All phone audio references must be local MP3 files present in the show's media m
 
 ## Live operation
 
-The protected admin dashboard shows every connected participant's current group. Selecting another group updates membership immediately. If the active component has targeted phone audio, that phone is reset and starts the newly selected group's current cue immediately.
+The protected admin dashboard opens with the published show graph and live group locations. Select a scene to inspect its participant roster; use **Group to move** to jump one timeline to a scene on its own route. A jump starts that scene from the beginning and requires confirmation showing the affected group. The participant list also shows each phone's actual path and scene, independently of its membership label.
+
+**Move to group** transfers a late arrival or existing participant into that group's current scene and playback position. It does not restart the destination or replay its external cues. Transfers update membership, socket routing, cursor/vote roster and personal audio together, and survive reconnects. Open votes are removed from the source; finalized results remain unchanged. A destination vote that has closed stays closed. An emptied source path stops and no longer holds up reunion. Moving into a completed group joins its silent reunion wait.
+
+Groups that never started have no current playback position and are unavailable as transfer destinations. A parent group with running subgroups is also unavailable: choose the actual subgroup. A subgroup may retain its parent’s group ID; controls resolve to that descendant. If two concurrent sibling timelines reuse the same group ID, scoped controls are disabled rather than guessing a destination. The graph includes **Waiting / needs assignment** for phones outside any active roster. Search finds participants across the show.
 
 Assignments are process-local session state and contain participant IDs only; they are cleared when the session ends. Vote-derived membership uses the finalized individual outcome from the referenced question. Balanced assignment is deterministic and weighted, so reconnects do not randomly reshuffle the room.
 
@@ -71,6 +75,10 @@ Assignments are process-local session state and contain participant IDs only; th
 
 Open the usual display URL with `group=<group-id>` added to its query string, for example `/display/?group=red`. Keep the same installation, room and display credentials. A display without `group` is the main display. Each group has one authenticated display slot; reconnecting or replacing a group display does not replace main or another group display. Group displays stay black outside their active paths and use only their own roster's cursor feed. Media duration fallback still advances a path when its group display is unavailable.
 
-Membership is frozen into path rosters at selection close. An operator assignment during a path changes the membership/audio override, not the phone's active path; use a later group scene to route it again. Late visitors without a path wait for the shared reunion. A new split must be at or after the reunion; nested splits inside a running group path are rejected on validation. The outcome preview can follow one selected group path at a time.
+Path rosters are created at selection close and can then be changed by an operator transfer. Late visitors wait silently until assigned or until the shared reunion. Nested splits run within their parent path; transfers into or out of a subgroup update all ancestor rosters. The outcome preview can follow one selected group path at a time.
+
+Personal audio is cued at the elapsed time on the destination scene's authoritative clock, including time spent uploading/resetting the stream. Recovery and late audio registration retain that clock. This is a live-stream alignment, not a guarantee of sample-accurate synchronization between different phones: encoder, network and browser buffers still contribute latency. Rehearse transfers with the actual venue audio backend and locked phones.
+
+Deploy the server, admin, phone and audio bridge changes together. The bridge now accepts `offsetSeconds` on `/players/{id}/play`; an older bridge ignores that field and would restart the file. Snapshot/phase messages include a participant `routingEpoch`, allowing phones to accept a transfer to an older destination scene epoch while rejecting frames from their previous route.
 
 Rebuild and deploy Studio, display, phone, and server together, then hard-refresh displays to replace their service-worker bundle. Rehearse with two phones and a display per group: pick different groups, finish one first, check that main remains black, then finish the other and check the shared reunion. Automated tests cover this routing but do not replace a venue rehearsal.

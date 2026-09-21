@@ -1,3 +1,4 @@
+import { SynchronizedPhoneAudio } from "./SynchronizedPhoneAudio";
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
 import { PhoneAudio } from "./PhoneAudio.js";
 import { PROTOCOL_VERSION } from "@entertheblackbox/protocol";
@@ -390,6 +391,7 @@ export function App() {
                   <button
                     key={option.id}
                     type="button"
+                    disabled={state.voting?.closed}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
                       event.stopPropagation();
@@ -412,7 +414,7 @@ export function App() {
               }}
             /></div>}
           {!state.inputOpen && (
-            <p className="watch-screen">{state.join.kind === "accepted" ? `${submittedName}, watch the screen` : "Joining…"}</p>
+            <p className="watch-screen">{state.voting?.closed ? "Abstimmung beendet" : state.join.kind === "accepted" ? `${submittedName}, watch the screen` : "Joining…"}</p>
           )}
           {state.groupSelection !== null && (
             <section className="group-selection" aria-labelledby="group-selection-title">
@@ -465,7 +467,13 @@ export function App() {
         </div>
       )}
 
-      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} />}
+      {audioIdentity && connection && <SynchronizedPhoneAudio key={audioIdentity.clientId} clock={connection.clock} cue={state.synchronizedPhase?.phoneAudioSrc ? {
+        key: `${state.sessionId}:${state.routingEpoch}:${state.phaseEpoch}`,
+        src: state.synchronizedPhase.phoneAudioSrc,
+        startedAt: state.synchronizedPhase.startedAt,
+        endsAt: state.synchronizedPhase.startedAt + state.synchronizedPhase.expectedDurationMs,
+      } : null} />}
+      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} suspended={state.synchronizedPhase !== null} />}
       <footer className="hud">
         {identity && (
           <span

@@ -331,3 +331,5 @@ export function quadrantsOfField(field: PositionField): typeof FOUR_QUADRANTS | 
 }
 
 export * from "./resolution.js";
+
+export { ServerClock } from "./serverClock.js";

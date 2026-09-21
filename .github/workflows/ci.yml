@@ -24,6 +24,26 @@ concurrency:
 # clients build, and the scenario graph is valid. A build that breaks during
 # a tech rehearsal is the failure mode this catches.
 jobs:
+  audio-script:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PLAYERS: "2"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate script with the production Liquidsoap image
+        run: docker build -f services/audio/liquidsoap/Dockerfile services/audio
+      - name: Start the production audio stack and verify music controls
+        run: |
+          docker compose --project-directory . --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml -p audio-ci up --build --wait --wait-timeout 120 icecast liquidsoap bridge
+          docker compose --project-directory . --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml -p audio-ci exec -T bridge python < services/audio/scripts/smoke_music.py
+      - name: Audio startup logs
+        if: failure()
+        run: docker compose --project-directory . --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml -p audio-ci logs --no-color --tail 150 icecast liquidsoap bridge
+      - name: Stop the test audio stack
+        if: always()
+        run: docker compose --project-directory . --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml -p audio-ci down --volumes
+
   verify:
     runs-on: ubuntu-latest
     steps:

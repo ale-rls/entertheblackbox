@@ -66,7 +66,10 @@ Every video, question, video-question, or group branch can declare one-shot exte
 TouchDesigner can subscribe to `GET /api/cues` as a Server-Sent Events stream. Send the same secret used by a display as `Authorization: Bearer <DISPLAY_TOKEN>`. Each JSON event has `version`, `bootId`, `sequence`, `type`, `timelineId`, `sessionId`, `phaseId`, `phaseEpoch`, `timestamp`, and `payload`. The stream sends a `snapshot` first so a reconnecting receiver can restore every active timeline. Later events are `phase`, `cue`, `result`, or `reset`.
 
 ```sh
-curl -N -H "Authorization: Bearer $DISPLAY_TOKEN" http://studio-host:3000/api/cues
+curl -N -H "Authorization: Bearer $DISPLAY_TOKEN" -H 'Accept-Encoding: identity' https://bb-frontend.enabler.space/api/cues
 ```
 
 Use `bootId` plus `sequence` for deduplication. Treat `cue` as a one-shot trigger. Treat `snapshot` and `phase` as current state, so reconnecting TouchDesigner does not replay an old one-shot cue.
+
+See [Production monitor labels](touchdesigner-production.md) for the ready-to-use
+Python receiver and Text TOP expressions.

@@ -35,6 +35,7 @@ afterEach(async () => {
   if (root) await act(async () => root?.unmount());
   root = null;
   document.body.replaceChildren();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -135,4 +136,32 @@ describe("PhaseVideoHandoff", () => {
     });
     expect(document.querySelector("audio")?.getAttribute("src")).toBe("blob:question-2");
   });
+});
+
+
+it("reveals a decoded playing video when the compositor callback never arrives", async () => {
+  vi.useFakeTimers();
+  Object.defineProperty(HTMLVideoElement.prototype, "requestVideoFrameCallback", { configurable: true, value: vi.fn(() => 1) });
+  Object.defineProperty(HTMLVideoElement.prototype, "cancelVideoFrameCallback", { configurable: true, value: vi.fn() });
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  const value = candidate("hidden", 3);
+  document.body.innerHTML = '<div id="root"></div>';
+  root = createRoot(document.querySelector("#root")!);
+  await act(async () => { root!.render(<PhaseVideoHandoff desiredKey={value.key} candidate={value} soundEnabled={false} send={vi.fn()} />); });
+  const video = document.querySelector("video")!;
+  Object.defineProperties(video, {
+    readyState: { configurable: true, value: 1 },
+    videoWidth: { configurable: true, value: 640 },
+    videoHeight: { configurable: true, value: 360 },
+    paused: { configurable: true, value: false },
+  });
+  await act(async () => { video.dispatchEvent(new Event("playing")); });
+  expect(document.querySelector(".phase-video-slot-active")).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+  expect(document.querySelector(".phase-video-slot-active")).toBeNull();
+  Object.defineProperty(video, "readyState", { configurable: true, value: 2 });
+  await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+  expect(document.querySelector(".phase-video-slot-active")?.getAttribute("data-phase-key")).toBe(value.key);
+  expect(video.cancelVideoFrameCallback).toHaveBeenCalledWith(1);
 });

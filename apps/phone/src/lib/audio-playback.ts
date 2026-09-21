@@ -90,6 +90,7 @@ export class AudioPlayback {
 
   play = (): void => {
     if (this.disposed) return;
+    if (this.suspended) { this.wanted = true; return; }
     const deliberateResume = this.state === "paused";
     if (this.wanted && !this.needsRecovery()) return;
     this.wanted = true;
@@ -99,6 +100,7 @@ export class AudioPlayback {
 
   /** Only replace a dead transport; an OS pause can resume the existing stream. */
   private start(reload: boolean): void {
+    if (this.suspended) return;
     this.clearRetry();
     this.setState(this.everPlayed ? "reconnecting" : "connecting");
     const generation = ++this.generation;
@@ -151,11 +153,24 @@ export class AudioPlayback {
   }
 
   private recover = (): void => {
-    if (!this.wanted || this.disposed) return;
+    if (!this.wanted || this.disposed || this.suspended) return;
     // A delayed timer must recheck: native playback may have healed while JS slept.
     if (!this.needsRecovery()) return;
     this.start(!this.loaded || !!this.audio.error || this.audio.ended || !this.audio.paused || this.resuming);
   };
+
+  setSuspended(suspended: boolean): void {
+    if (this.suspended === suspended) return;
+    this.suspended = suspended;
+    if (suspended) {
+      ++this.generation;
+      this.clearRetry();
+      this.loaded = false;
+      this.audio.pause();
+      this.audio.removeAttribute("src");
+      this.audio.load();
+    } else if (this.wanted) this.start(true);
+  }
 
   pause = (): void => {
     this.wanted = false;
@@ -175,7 +190,7 @@ export class AudioPlayback {
   }
 
   check = (): void => {
-    if (!this.wanted || this.disposed) return;
+    if (!this.wanted || this.disposed || this.suspended) return;
     if (this.needsRecovery()) {
       this.scheduleRetry();
     }
@@ -183,7 +198,7 @@ export class AudioPlayback {
 
   /** Give the native pipeline a chance to update its clock after page suspension. */
   foreground = (): void => {
-    if (!this.wanted || this.disposed) return;
+    if (!this.wanted || this.disposed || this.suspended) return;
     this.progress.reset(this.audio.currentTime);
     this.clearRetry();
     this.recover();
@@ -191,7 +206,7 @@ export class AudioPlayback {
 
   /** The network coming back is a strong signal; don't sit out a queued backoff. */
   online = (): void => {
-    if (!this.wanted || this.disposed) return;
+    if (!this.wanted || this.disposed || this.suspended) return;
     if (this.retry !== undefined) { this.clearRetry(); this.recover(); return; }
     this.check();
   };

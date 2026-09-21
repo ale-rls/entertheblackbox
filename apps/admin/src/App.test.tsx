@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -57,6 +58,7 @@ afterEach(async () => {
   if (root) await act(async () => root?.unmount());
   root = null;
   document.body.replaceChildren();
+  window.history.replaceState({}, "", "/");
   localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -93,6 +95,7 @@ function createAdminFetch(options?: { status?: Status; rejectAction?: string; fl
     const url = String(input);
     const method = init?.method ?? "GET";
     requests.push({ url, method, ...(typeof init?.body === "string" ? { body: init.body } : {}) });
+    if (url.endsWith("/settings/display")) return jsonResponse({ configured: true, display: DEFAULT_DISPLAY_SETTINGS });
     if (url.endsWith("/status")) return jsonResponse(options?.status ?? activeStatus);
     if (url.endsWith("/flow")) return jsonResponse(options?.flow ?? sceneFlow);
     if (url.endsWith("/shows") && method === "GET") {
@@ -106,6 +109,30 @@ function createAdminFetch(options?: { status?: Status; rejectAction?: string; fl
 }
 
 describe("Admin operations UI", () => {
+  it("provides an authenticated read-only audio page that polls only status", async () => {
+    window.history.replaceState({}, "", "/admin/?view=audio");
+    localStorage.setItem("admin-token", "operator-token");
+    const { requests } = createAdminFetch();
+    await renderApp();
+    expect(document.querySelector("h1")?.textContent).toBe("Audio diagnostics");
+    expect(document.body.textContent).toContain("Per-phone connectivity");
+    expect(document.body.textContent).not.toContain("Start show");
+    expect(requests.map(request => request.url)).toEqual(["/api/admin/status"]);
+  });
+
+  it("allows starting a show without a connected display", async () => {
+    localStorage.setItem("admin-token", "operator-token");
+    const { requests } = createAdminFetch({
+      status: { ...activeStatus, lifecycle: "lobby", displayConnected: false },
+    });
+    await renderApp();
+    expect(button("Start show").disabled).toBe(false);
+    await act(async () => { button("Start show").click(); });
+    await flush();
+    expect(requests.some(request => request.method === "POST" && request.url.endsWith("/start"))).toBe(true);
+    expect(document.body.textContent).not.toContain("Display must be connected");
+  });
+
   it("shows an honest unauthenticated state without requesting or fabricating operational data", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -158,7 +185,7 @@ describe("Admin operations UI", () => {
     expect(button("Skip current phase").disabled).toBe(false);
     await act(async () => { button("Skip current phase").click(); });
     await flush();
-    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST", body: "{}" });
+    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST", body: JSON.stringify({ expectedPhaseId: "question-02" }) });
 
     const restartTrigger = button("Restart show");
     await act(async () => { restartTrigger.click(); });
@@ -189,13 +216,15 @@ describe("Admin operations UI", () => {
 
     expect(document.body.textContent).toContain("Scene navigator");
     expect(document.body.textContent).toContain("Opening film");
-    expect(document.body.textContent).toContain("next → question-02");
-    const current = document.querySelector<HTMLButtonElement>('[aria-current="step"]')!;
-    expect(current.disabled).toBe(true);
+    expect(document.body.textContent).toContain("next → idle");
+    const current = document.querySelector<HTMLButtonElement>('[aria-label="Inspect Choose a position"]')!;
+    expect(current.disabled).toBe(false);
     expect(current.textContent).toContain("Choose a position");
 
-    const opening = document.querySelector<HTMLButtonElement>('[aria-label="Opening film, jump to this scene"]')!;
+    const opening = document.querySelector<HTMLButtonElement>('[aria-label="Inspect Opening film"]')!;
     await act(async () => { opening.click(); });
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    await act(async () => { button("Jump whole show to this scene").click(); });
     expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Jump to “Opening film”?");
     await act(async () => { button("Jump to scene").click(); });
     await flush();
@@ -203,12 +232,12 @@ describe("Admin operations UI", () => {
     expect(requests).toContainEqual({
       url: "/api/admin/jump",
       method: "POST",
-      body: JSON.stringify({ phaseId: "intro" }),
+      body: JSON.stringify({ phaseId: "intro", expectedPhaseId: "question-02", expectedEpoch: 7, sessionId: "5H7D-A2" }),
     });
     expect(document.body.textContent).toContain("Jumped to “Opening film”.");
   });
 
-  it("adds a show start five minutes from now and keeps the scene navigator last", async () => {
+  it("adds a show start five minutes from now and keeps the live graph first", async () => {
     localStorage.setItem("admin-token", "operator-secret");
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     const { requests } = createAdminFetch();
@@ -225,7 +254,7 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).toContain("Show added in 5 minutes.");
 
     const panels = Array.from(document.querySelectorAll(".admin-grid > section"));
-    expect(panels.at(-1)?.querySelector("#admin-flow-heading")).not.toBeNull();
+    expect(panels[0]?.querySelector("#admin-flow-heading")).not.toBeNull();
   });
 
   it("keeps server-refused actions visible as inline failure feedback", async () => {
@@ -284,7 +313,7 @@ describe("Admin operations UI", () => {
     const groupButton = button("Next scene for Actors — 2 people");
     await act(async () => { groupButton.click(); });
     await flush();
-    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST", body: JSON.stringify({ groupId: "a" }) });
+    expect(requests).toContainEqual({ url: "/api/admin/skip", method: "POST", body: JSON.stringify({ groupId: "a", expectedPhaseId: "vote" }) });
 
     const reunionTrigger = button("Bring all groups to reunion");
     await act(async () => { reunionTrigger.click(); });
@@ -331,6 +360,7 @@ describe("Admin operations UI", () => {
     let failStatus = false;
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = String(input);
+      if (url.endsWith("/settings/display")) return jsonResponse({ configured: true, display: DEFAULT_DISPLAY_SETTINGS });
       if (url.endsWith("/status")) return failStatus ? jsonResponse({ error: "unavailable" }, 503) : jsonResponse(activeStatus);
       if (url.endsWith("/installation")) return jsonResponse({ active: { installationId: "dev-installation", roomId: "main" }, pending: null });
       return jsonResponse({ ok: true });
@@ -405,4 +435,25 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).not.toContain("Session export");
     expect(requests.some(({ url }) => url.includes("/errors") || url.includes("/export"))).toBe(false);
   });
+});
+
+it("plays and stops background music while the show is active", async () => {
+  localStorage.setItem("admin-token", "operator-token");
+  const { requests } = createAdminFetch({ status: { ...activeStatus, audio: {
+    configured: true, players: [], soundcheckSources: ["music.mp3"], backgroundMusic: null,
+  } } });
+  await renderApp();
+  expect(button("Play / apply music").disabled).toBe(true);
+  const select = document.querySelector('[aria-label="Background music"] select') as HTMLSelectElement;
+  await act(async () => {
+    select.value = "music.mp3";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(button("Play / apply music").disabled).toBe(false);
+  await act(async () => button("Play / apply music").click());
+  await flush();
+  expect(JSON.parse(requests.find(r => r.url.endsWith("/audio/music"))!.body!)).toEqual({ src: "music.mp3", volume: 0.2 });
+  await act(async () => button("Stop music").click());
+  await flush();
+  expect(JSON.parse(requests.filter(r => r.url.endsWith("/audio/music")).at(-1)!.body!)).toEqual({ src: null, volume: 0.2 });
 });

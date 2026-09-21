@@ -1,7 +1,13 @@
 .admin-app { min-height: 100vh; padding: var(--sc-tool-space-9); }
 .admin-app .sc-tool-eyebrow { margin-block-end: var(--sc-tool-space-3); }
-.admin-header { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sc-tool-space-8); padding-block-end: var(--sc-tool-space-8); border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); }
+.admin-topbar { position: sticky; top: 0; z-index: 20; background: var(--sc-tool-color-canvas); }
+.admin-header { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sc-tool-space-8); padding-block-end: var(--sc-tool-space-6); }
 .admin-header h1 { margin-block-end: 0; font-size: var(--sc-tool-font-size-5); }
+.admin-header-chrome { display: flex; align-items: center; gap: var(--sc-tool-space-5); }
+.admin-connection-chip { display: flex; align-items: center; gap: var(--sc-tool-space-3); }
+.admin-status-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-6); padding-block: var(--sc-tool-space-4); border-block: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); }
+.admin-status-bar .admin-operation-row { display: flex; min-height: auto; grid-template-columns: none; align-items: baseline; gap: var(--sc-tool-space-2); border-block-end: 0; padding: 0; }
+.admin-status-bar .admin-operation-label { gap: var(--sc-tool-space-2); }
 .admin-connection { margin-block-start: var(--sc-tool-space-6); }
 .admin-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sc-tool-space-6); margin-block-end: var(--sc-tool-space-6); }
 .admin-section-heading h2, .admin-empty-state h2 { margin-block-end: 0; font-size: var(--sc-tool-font-size-4); }
@@ -56,10 +62,22 @@
 .admin-schedule-list li > div, .admin-participant-list li > div { display: grid; flex: 1; gap: var(--sc-tool-space-1); min-width: 0; }
 .admin-schedule-list li span, .admin-participant-list li span { color: var(--sc-tool-color-text-muted); font-size: var(--sc-tool-font-size-0); }
 .admin-participant-color { flex: 0 0 auto; width: .8rem; height: .8rem; border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-radius: 50%; }
+.admin-audio-manage-link { flex: 0 0 auto; color: var(--sc-tool-color-action); font-size: var(--sc-tool-font-size-0); font-weight: var(--sc-tool-font-weight-medium); white-space: nowrap; }
+.admin-audio-roster-summary { color: var(--sc-tool-color-text-secondary); }
+.admin-collapsible { margin-block-start: var(--sc-tool-space-5); border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); border-radius: var(--sc-tool-radius-2); }
+.admin-collapsible > summary { padding: var(--sc-tool-space-4) var(--sc-tool-space-5); color: var(--sc-tool-color-text-secondary); font-size: var(--sc-tool-font-size-1); font-weight: var(--sc-tool-font-weight-medium); cursor: pointer; list-style: none; }
+.admin-collapsible > summary::-webkit-details-marker { display: none; }
+.admin-collapsible > summary::before { display: inline-block; margin-inline-end: var(--sc-tool-space-3); content: "▸"; }
+.admin-collapsible[open] > summary::before { content: "▾"; }
+.admin-collapsible[open] > summary { border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); }
+.admin-collapsible > summary:focus-visible { outline: var(--sc-tool-border-emphasis) solid var(--sc-tool-color-action); outline-offset: -2px; }
+.admin-collapsible > .admin-connection-form, .admin-collapsible > .admin-audio-backend-form { padding: var(--sc-tool-space-5); }
 @media (max-width: 1279px) { .admin-app { padding: var(--sc-tool-space-7); } .admin-grid { grid-template-columns: 1fr; } .admin-flow-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 767px) {
   .admin-app { padding: var(--sc-tool-space-5); }
   .admin-header, .admin-section-heading { align-items: flex-start; flex-direction: column; }
+  .admin-header-chrome { flex-wrap: wrap; gap: var(--sc-tool-space-3); }
+  .admin-status-bar { gap: var(--sc-tool-space-4); }
   .admin-connection-form { grid-template-columns: minmax(0, 1fr); }
   .admin-connection-form .sc-tool-button { width: 100%; }
   .admin-grid { grid-template-columns: minmax(0, 1fr); }
@@ -74,3 +92,24 @@
   .admin-time-adjustments { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (forced-colors: active) { .admin-page-feedback { border-color: CanvasText; } }
+
+.live-graph-toolbar { display: flex; align-items: center; gap: 24px; margin: 16px 0; }
+.live-graph-toolbar label { display: flex; align-items: center; gap: 10px; }
+.live-graph-scroll { overflow: auto; max-height: 560px; border: 1px solid var(--sc-tool-color-rule); background: radial-gradient(var(--sc-tool-color-rule) 1px, transparent 1px) 0 0 / 18px 18px; }
+.live-graph-canvas { position: relative; transform-origin: top left; }
+.live-graph-edges { position: absolute; inset: 0; color: var(--sc-tool-color-text-muted); pointer-events: none; }
+.live-graph-edges path { fill: none; stroke: currentColor; stroke-width: 1.5; }
+.live-graph-edges text { fill: currentColor; font: 9px monospace; }
+.live-graph-node { position: absolute; width: 240px; min-height: 130px; text-align: left; display: flex; flex-direction: column; gap: 5px; padding: 12px; cursor: pointer; background: var(--sc-tool-color-surface-2); color: inherit; border-radius: var(--sc-tool-radius-1); }
+.live-graph-node strong { font-size: 15px; overflow-wrap: anywhere; }
+.live-graph-node span, .live-graph-node small { font-size: 10px; opacity: .75; }
+.live-graph-node b { font-size: 11px; }
+.live-graph-node[data-live="true"] { border-color: var(--sc-tool-color-success); }
+.live-graph-node[data-selected="true"] { outline: 2px solid var(--sc-tool-color-action); outline-offset: 3px; }
+.live-inspector { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(240px, 1.5fr); gap: 24px; margin-top: 20px; }
+.live-inspector h3 { margin: 12px 0; }
+.live-inspector button { margin-top: 12px; }
+.live-roster { list-style: none; padding: 0; display: grid; gap: 12px; }
+.live-roster li { display: grid; grid-template-columns: 1fr auto; gap: 8px; border-bottom: 1px solid var(--sc-tool-color-rule); padding-bottom: 12px; }
+.live-roster label { grid-column: 1 / -1; display: grid; gap: 5px; }
+@media (max-width: 700px) { .live-inspector { grid-template-columns: 1fr; } }

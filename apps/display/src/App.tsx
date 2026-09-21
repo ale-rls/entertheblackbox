@@ -1,3 +1,4 @@
+import { useDisplaySettings } from "./lib/useDisplaySettings.js";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { DisplayToServerMessage } from "@entertheblackbox/protocol";
 import { CursorField } from "./cursors/cursorField.js";
@@ -55,6 +56,7 @@ const config = {
 };
 
 export function App() {
+  const displaySettings = useDisplaySettings();
   const [state, dispatch] = useReducer(displayReducer, initialDisplayState);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [presentedVideoKey, setPresentedVideoKey] = useState<string | null>(null);
@@ -207,6 +209,8 @@ export function App() {
     activeExtraAudioRef.current = audioElement;
   }, []);
   const enableSound = useCallback(() => {
+    const current = stateRef.current.phase;
+    if (current?.kind === "video" && current.phoneAudioMode === "synchronized") { setSoundEnabled(true); return; }
     for (const mediaElement of [activeMediaRef.current, activeExtraAudioRef.current]) {
       if (mediaElement === null) continue;
       // Keep this play() call inside the click handler: browsers require an
@@ -272,6 +276,7 @@ export function App() {
           mediaVisible={idleMediaVisible}
         />
         <PhaseVideoHandoff
+          clock={connection.clock}
           desiredKey={phaseVideoKey}
           candidate={phaseVideoCandidate}
           soundEnabled={soundEnabled}
@@ -343,6 +348,7 @@ export function App() {
           <QrBadge grant={state.qrGrant} qrHidden={state.qrHidden} clock={connection.clock} />
         )}
         <LobbyCountdown
+          settings={displaySettings}
           sessionId={state.sessionId}
           phase={phase}
           clock={connection.clock}

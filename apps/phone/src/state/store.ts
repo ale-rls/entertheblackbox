@@ -1,4 +1,5 @@
 import type {
+  PhaseSnapshotMessage,
   IdentityMessage,
   JoinRejectedMessage,
   ReloadMessage,
@@ -24,6 +25,9 @@ export type PhoneState = {
   join: JoinState;
   sessionId: string | null;
   phaseEpoch: number;
+  synchronizedPhase: Extract<PhaseSnapshotMessage, { kind: "video" }> | null;
+  /** Advances on an operator transfer even when the destination scene epoch is older. */
+  routingEpoch: number;
   /** Cursor input is accepted in the lobby, videos, and position questions. */
   inputOpen: boolean;
   currentPhaseId: string | null;
@@ -48,6 +52,8 @@ export const initialPhoneState: PhoneState = {
   join: { kind: "ready" },
   sessionId: null,
   phaseEpoch: -1,
+  synchronizedPhase: null,
+  routingEpoch: 0,
   inputOpen: false,
   currentPhaseId: null,
   statusMessage: null,
@@ -93,7 +99,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
   const m = action.message;
   switch (m.t) {
     case "identity":
-      return { ...state, join: { kind: "accepted", identity: m }, sessionId: m.sessionId };
+      return { ...state, ...(m.sessionId !== state.sessionId ? { phaseEpoch: -1, routingEpoch: 0 } : {}), join: { kind: "accepted", identity: m }, sessionId: m.sessionId };
     case "join_rejected":
       return {
         ...state,
@@ -105,7 +111,8 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
       };
     case "snapshot":
     case "phase": {
-      if (m.sessionId === state.sessionId && m.phaseEpoch < state.phaseEpoch) return state;
+      const routingEpoch = m.routingEpoch ?? 0;
+      if (m.sessionId === state.sessionId && (routingEpoch < state.routingEpoch || (routingEpoch === state.routingEpoch && m.phaseEpoch < state.phaseEpoch))) return state;
       const timedMedia = m.phase.kind === "video" || m.phase.kind === "video-position-question" ? m.phase : null;
       const receivedAtMs = action.receivedAtMs ?? m.serverTime;
       const phaseTiming: NonNullable<PhoneState["phaseTiming"]> = {
@@ -119,7 +126,9 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         ...state,
         sessionId: m.sessionId,
         phaseEpoch: m.phaseEpoch,
+        routingEpoch,
         currentPhaseId: m.phase.id,
+        synchronizedPhase: m.phase.kind === "video" && m.phase.phoneAudioMode === "synchronized" ? m.phase : null,
         inputOpen:
           m.phase.kind === "idle" ||
           m.phase.kind === "video" ||
@@ -136,7 +145,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
       return { ...state, groupSelection: m };
     case "voting_options":
       if (m.sessionId !== state.sessionId || m.phaseEpoch !== state.phaseEpoch) return state;
-      return { ...state, voting: m, inputOpen: m.method === "phone-cursor" };
+      return { ...state, voting: m, inputOpen: !m.closed && m.method === "phone-cursor" };
     case "status":
       return { ...state, statusMessage: m.message };
     case "reload":

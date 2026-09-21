@@ -19,7 +19,7 @@ import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import icecast
 from .config import BED_NAME_RE, PLAYER_ID_RE, Settings
@@ -34,6 +34,12 @@ log = logging.getLogger("bridge")
 class PlayRequest(BaseModel):
     file: str
     mode: Literal["interrupt", "queue"] = "interrupt"
+    offsetSeconds: float = Field(default=0, ge=0, allow_inf_nan=False)
+
+
+class MusicRequest(BaseModel):
+    file: str | None = None
+    volume: float = Field(default=0.2, ge=0, le=1, allow_inf_nan=False)
 
 
 class BedRequest(BaseModel):
@@ -115,6 +121,29 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     # -- control ------------------------------------------------------------
 
+    music_lock = asyncio.Lock()
+
+    @app.post("/music", dependencies=[Depends(require_token)])
+    async def set_music(body: MusicRequest) -> dict:
+        if body.file is not None:
+            resolve_audio_file(settings.audio_dir, body.file)
+            if not all(c.isalnum() or c in "._-" for c in body.file):
+                raise HTTPException(400, "invalid music filename")
+        async with music_lock:
+            try:
+                if body.file is None:
+                    commands = ["music.stop"]
+                else:
+                    commands = [f"music.play {settings.liq_audio_dir}/{body.file}",
+                                f"music.volume {body.volume}"]
+                for command in commands:
+                    if (await liq.command(command)).strip() != "OK":
+                        raise LiquidsoapError("background music command rejected")
+            except LiquidsoapError as exc:
+                raise HTTPException(502, str(exc)) from exc
+        return {"file": body.file, "volume": body.volume if body.file else 0}
+
+
     @app.post("/players/{player_id}/play", dependencies=[Depends(require_token)])
     async def play(player_id: str, body: PlayRequest) -> dict:
         resolve_audio_file(settings.audio_dir, body.file)
@@ -126,6 +155,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             else f"nar_{player.stream_id}"
         )
         uri = f"{settings.liq_audio_dir}/{body.file}"
+        # Liquidsoap 2.2 resolves cue-in metadata before decoding the request.
+        if body.offsetSeconds > 0:
+            uri = f'annotate:liq_cue_in="{body.offsetSeconds:.3f}":{uri}'
         try:
             rid = await liq.push(queue, uri)
         except LiquidsoapError as exc:

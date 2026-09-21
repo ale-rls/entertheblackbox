@@ -175,3 +175,39 @@ async def test_metrics_plaintext(env):
     assert (
         await client.get("/metrics", headers={"Authorization": ""})
     ).status_code == 401
+
+
+async def test_play_at_current_group_position(env):
+    client, fake = env
+    command = 'int_1.push annotate:liq_cue_in="12.375":/audio/intro.mp3'
+    fake.responses[command] = "8"
+    r = await client.post("/players/1/play", json={"file": "intro.mp3", "offsetSeconds": 12.375})
+    assert r.status_code == 200
+    assert command in fake.commands
+
+
+@pytest.mark.parametrize("offset", [-1, "not-a-number", "inf", "nan"])
+async def test_play_rejects_invalid_offset(env, offset):
+    client, fake = env
+    r = await client.post("/players/1/play", json={"file": "intro.mp3", "offsetSeconds": offset})
+    assert r.status_code == 422
+    assert not any(".push" in command for command in fake.commands)
+
+
+async def test_background_music_play_volume_stop(env):
+    client, fake = env
+    fake.responses.update({"music.play /audio/intro.mp3": "OK", "music.volume 0.25": "OK", "music.stop": "OK"})
+    response = await client.post("/music", json={"file": "intro.mp3", "volume": 0.25})
+    assert response.status_code == 200
+    assert fake.commands[-2:] == ["music.play /audio/intro.mp3", "music.volume 0.25"]
+    assert (await client.post("/music", json={"file": None})).status_code == 200
+    assert fake.commands[-1] == "music.stop"
+
+
+async def test_background_music_rejects_invalid_input_and_bridge_failure(env):
+    client, fake = env
+    for body in [{"file": "../intro.mp3"}, {"file": "missing.mp3"}, {"file": "intro.mp3", "volume": 2}]:
+        assert (await client.post("/music", json=body)).status_code >= 400
+    assert fake.commands == []
+    assert (await client.post("/music", json={"file": "intro.mp3"})).status_code == 502
+    assert (await client.post("/music", json={"file": None}, headers={"Authorization": ""})).status_code == 401

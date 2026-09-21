@@ -342,6 +342,7 @@ describe("Studio feedback and keyboard entry", () => {
     expect(componentType.value).toBe("image-audio");
     expect(Array.from(componentType.options).map((option) => option.value)).toEqual([
       "video",
+      "synchronized-video",
       "image-audio",
       "position-question",
       "video-position-question",
@@ -361,6 +362,15 @@ describe("Studio feedback and keyboard entry", () => {
     expect(componentType.value).toBe("video");
     expect(document.body.textContent).toContain("opening.mp4");
     expect(document.body.textContent).not.toContain("Tail after audio (ms)");
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(componentType, "synchronized-video");
+      componentType.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(componentType.value).toBe("synchronized-video");
+    expect(document.body.textContent).toContain("Synchronized phone soundtrack (MP3)");
+    expect(document.body.textContent).toContain("The display page plays muted video");
     expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 
     await act(async () => {

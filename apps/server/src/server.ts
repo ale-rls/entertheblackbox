@@ -1,3 +1,5 @@
+import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
+import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
 import { PersonalAudio } from "./audio/personal-audio.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
@@ -136,8 +138,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       displayToken: config.displayToken,
       participantLeaseTtlMs: admission.participantLeaseTtlMs,
       autoStartOnFirstParticipant: false,
-      onParticipantPhase: (ids, phase) => audio?.transitionParticipants(ids, phase),
-      onPhase: (phase) => audio?.transition(phase, (id) => groups?.groupFor(id) ?? null),
+      onParticipantPhase: (ids, phase, startedAt) => audio?.transitionParticipants(ids, phase, startedAt),
+      onPhase: (phase, startedAt) => audio?.transition(phase, (id) => groups?.groupFor(id) ?? null, startedAt),
       onCueEvent: (event) => { cueFeed.publish(event); },
       groupSelection: {
         current: (participantId) => groups?.groupFor(participantId) ?? null,
@@ -149,7 +151,6 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         },
         select: (participantId, groupId) => {
           groups?.assign(participantId, groupId);
-          void audio?.refreshParticipant(participantId);
         },
       },
       qr: {
@@ -219,6 +220,16 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     startedAt,
     uptimeMs: Date.now() - startedAt,
   }));
+  app.get("/api/synchronized-audio", async (_request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!readiness.ready) return reply.code(503).send({ error: "scenario_unavailable" });
+    return [...new Set(readiness.scenario.phases.flatMap((phase) =>
+      phase.kind === "video" && phase.phoneAudioMode === "synchronized" && phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []))];
+  });
+  app.get("/api/display-settings", async (_request, reply) => {
+    reply.header("cache-control", "no-store");
+    return options.pocketbase ? readDisplaySettings(options.pocketbase) : DEFAULT_DISPLAY_SETTINGS;
+  });
   app.get("/api/join-config", async () => ({
     installationId: config.installationId,
     roomId: config.roomId,
@@ -309,9 +320,14 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       const status = audio ? await audio.status() : { configured: false, players: [] };
       return {
         ...(status as Record<string, unknown>),
+        backgroundMusic: audio?.backgroundMusic ?? null,
         soundcheckSources: readiness.ready ? readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)) : [],
       };
     },
+    ...(audio === null || !readiness.ready ? {} : { audioMusic: {
+      sources: readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)),
+      set: (src: string | null, volume: number) => audio.setMusic(src, volume),
+    } }),
     ...(audio === null || !readiness.ready ? {} : { audioSoundcheck: {
       sources: readiness.mediaManifest.files.map((file) => file.src).filter((src) => /\.mp3$/i.test(src)),
       play: (src: string, participantId?: string) => audio.soundcheck(src, participantId),
@@ -327,13 +343,17 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     ...(groups === null ? {} : { groupControl: {
       catalogue: readiness.ready ? readiness.scenario.groups ?? [] : [],
       memberships: () => groups.snapshot(admission.registry.values().map((participant) => participant.clientId)),
-      assign: (participantId: string, groupId: string) => {
-        groups.assign(participantId, groupId);
-        void audio?.refreshParticipant(participantId);
+      assign: (participantId: string, groupId: string, expectedEpoch?: number) => {
+        const result = engine?.adminAssignGroup(participantId, groupId, expectedEpoch);
+        if (!result?.ok) throw new Error(result?.reason ?? "engine_unavailable");
       },
     } }),
     ...(adminData === undefined ? {} : { data: adminData }),
     ...(options.pocketbase === undefined ? {} : {
+      displaySettings: {
+        read: () => readDisplaySettings(options.pocketbase!),
+        write: (value) => writeDisplaySettings(options.pocketbase!, value),
+      },
       showConfig: {
         activeShowId: readiness.ready ? readiness.showId : null,
         list: () => listPublishedShows(options.pocketbase!),
