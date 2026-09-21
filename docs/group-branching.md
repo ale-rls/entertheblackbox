@@ -73,7 +73,7 @@ Assignments are process-local session state and contain participant IDs only; th
 
 ## Multiple displays and rehearsal
 
-Open the usual display URL with `group=<group-id>` added to its query string, for example `/display/?group=red`. Keep the same installation, room and display credentials. A display without `group` is the main display. Each group has one authenticated display slot; reconnecting or replacing a group display does not replace main or another group display. Group displays stay black outside their active paths and use only their own roster's cursor feed. Media duration fallback still advances a path when its group display is unavailable.
+Open the usual display URL with `group=<group-id>` added to its query string, for example `/display/?group=red`. A display without `group` is the main display. Each group has one authenticated display slot; reconnecting or replacing a group display does not replace main or another group display. Group displays stay black outside their active paths and use only their own roster's cursor feed. Media duration fallback still advances a path when its group display is unavailable.
 
 Path rosters are created at selection close and can then be changed by an operator transfer. Late visitors wait silently until assigned or until the shared reunion. Nested splits run within their parent path; transfers into or out of a subgroup update all ancestor rosters. The outcome preview can follow one selected group path at a time.
 

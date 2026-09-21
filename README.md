@@ -101,10 +101,10 @@ Sign in at `/admin/` with that email/password. See [pocketbase/README.md](pocket
 
 ## Run locally
 
-Build the three installation clients once (and rebuild them after frontend changes):
+Build the three installation clients once (and rebuild them after frontend changes). The display's authentication token is baked into its bundle at build time, so pass the same `DISPLAY_TOKEN` the server will use (it defaults to `dev-display-token` if unset):
 
 ```bash
-pnpm --filter @entertheblackbox/display build
+env DISPLAY_TOKEN=dev-display-token pnpm --filter @entertheblackbox/display build
 pnpm --filter @entertheblackbox/phone build
 pnpm --filter @entertheblackbox/admin build
 ```
@@ -115,11 +115,11 @@ Then start the installation server and leave it running:
 env HOST=127.0.0.1 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=development node --import tsx apps/server/src/index.ts
 ```
 
-Open the authenticated installation display:
+Open the installation display:
 
-<http://127.0.0.1:3000/display/?installation=dev-installation&room=main&token=dev-display-token>
+<http://127.0.0.1:3000/display/>
 
-The query parameters identify the installation and room and authenticate this browser as the official display. The server allows only one authenticated display connection. The root page (`http://127.0.0.1:3000/`) redirects to `/phone/` instead, since most root-page visitors are participants, not the venue's one display kiosk.
+No query parameters are needed: the display authenticates with its build-time token and resolves its installation/room live from the server's own `/api/status`, so the venue's one kiosk never needs to remember or type a full URL. The only supported query parameter is `?group=<group-id>`, which opens that group's own dedicated kiosk display instead of the main one (see [docs/group-branching.md](docs/group-branching.md)). The server allows only one authenticated main display connection. The root page (`http://127.0.0.1:3000/`) redirects to `/phone/` instead, since most root-page visitors are participants, not the venue's one display kiosk.
 
 Participants use the stable public URL `http://127.0.0.1:3000/phone/` (or just the server root). It has no query parameters: visitors enter their name and press **Join**. The operator dashboard shows the named live roster. Joining opens a waiting lobby but never starts a show based on headcount; operators can start manually or configure one or more date-and-time starts in `/admin/`, with quick ±10 second and ±1 minute adjustments for the next start.
 
