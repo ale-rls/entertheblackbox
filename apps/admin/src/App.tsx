@@ -57,7 +57,7 @@ type Feedback = { status: "success" | "danger"; message: string };
 type ConfirmAction = "idle" | "restart" | "reunion";
 export type FlowScene = {
   id: string;
-  kind: "video" | "position-question" | "video-position-question" | "group-branch";
+  kind: "video" | "narration" | "position-question" | "video-position-question" | "group-branch";
   title: string;
   routes: Array<{ outcome: string; target: string }>;
 };
@@ -222,9 +222,10 @@ function DisplaySettingsDisclosure({ token }: { token: string }) {
 
 function sceneKindLabel(kind: FlowScene["kind"]): string {
   return kind === "video" ? "Media"
-    : kind === "position-question" ? "Question"
-      : kind === "group-branch" ? "Group branch"
-        : "Media + vote";
+    : kind === "narration" ? "Narration"
+      : kind === "position-question" ? "Question"
+        : kind === "group-branch" ? "Group branch"
+          : "Media + vote";
 }
 
 export function App() {

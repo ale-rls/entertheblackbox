@@ -1418,6 +1418,44 @@ describe("PhaseEngine lifecycle", () => {
 });
 
 
+const narrationScenario = scenarioSchema.parse({
+  version: "engine-test-narration",
+  entryPhaseId: "brief",
+  cyclesAllowed: false,
+  phases: [
+    { kind: "idle", id: "idle" },
+    { kind: "narration", id: "brief", text: "Listen carefully", durationMs: 100, next: "idle", allowSkip: true },
+  ],
+});
+
+it("auto-advances a narration phase once its duration elapses", () => {
+  let now = 1000;
+  const { engine, registry } = setup({ now: () => now, testScenario: narrationScenario });
+  const phone = new MockSocket();
+  addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+  engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+  engine.adminStart(now);
+  expect(engine.currentPhaseId).toBe("brief");
+  now = 1050;
+  engine.tick(now);
+  expect(engine.currentPhaseId).toBe("brief");
+  now = 1100;
+  engine.tick(now);
+  expect(engine.currentPhaseId).toBe("idle");
+});
+
+it("lets an operator skip a narration phase before its duration elapses", () => {
+  let now = 1000;
+  const { engine, registry } = setup({ now: () => now, testScenario: narrationScenario });
+  const phone = new MockSocket();
+  addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+  engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+  engine.adminStart(now);
+  expect(engine.currentPhaseId).toBe("brief");
+  expect(engine.adminSkip(now)).toEqual({ ok: true });
+  expect(engine.currentPhaseId).toBe("idle");
+});
+
 it("announces a future synchronized start and moves the fallback deadline with it", () => {
   let now = 1000;
   const testScenario = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map((p) => p.id === "intro" ? {

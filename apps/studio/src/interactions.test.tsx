@@ -344,6 +344,7 @@ describe("Studio feedback and keyboard entry", () => {
       "video",
       "synchronized-video",
       "image-audio",
+      "narration",
       "position-question",
       "video-position-question",
       "image-audio-position-question",

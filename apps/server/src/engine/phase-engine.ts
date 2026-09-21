@@ -181,7 +181,7 @@ export type AdminGroupPathStatus = {
 
 function adminRoutesForPhase(phase: Exclude<Phase, { kind: "idle" }>): AdminFlowRoute[] {
   if (phase.kind === "group-branch") return [...phase.branches.map((branch) => ({ outcome: branch.groupId, target: branch.next ?? phase.next })), { outcome: "rejoin", target: phase.next }];
-  if (phase.kind === "video") return [{ outcome: "next", target: phase.next }];
+  if (phase.kind === "video" || phase.kind === "narration") return [{ outcome: "next", target: phase.next }];
   if (phase.next.type === "fixed") return [{ outcome: "next", target: phase.next.target }];
   return [
     ...Object.entries(phase.next.map).map(([outcome, target]) => ({ outcome, target })),
@@ -414,7 +414,7 @@ export class PhaseEngine {
     // must either skip one group's own scene (adminSkipGroup) or explicitly
     // force everyone to the reunion point (adminForceReunion).
     if (phase.kind === "group-branch") return { ok: false, reason: "wrong-phase" };
-    if (phase.kind === "video") return this.advanceTo(phase.next, now, "admin-skip");
+    if (phase.kind === "video" || phase.kind === "narration") return this.advanceTo(phase.next, now, "admin-skip");
     if (phase.kind === "video-position-question") {
       if (this.questionResolutionTarget !== null) {
         return this.advanceTo(this.questionResolutionTarget, now, "admin-skip");
@@ -673,6 +673,11 @@ export class PhaseEngine {
         for (const { engine } of this.paths.values()) engine.tick(now);
         if ([...this.paths.values()].every(({ engine }) => engine.pathDone)) this.advanceTo(phase.next, now, "group-branch-complete");
       }
+      return;
+    }
+
+    if (phase.kind === "narration") {
+      if (this.deadlineAt !== null && now >= this.deadlineAt) this.advanceTo(phase.next, now, "narration-complete");
       return;
     }
 
@@ -1247,7 +1252,7 @@ export class PhaseEngine {
     this.video.cancel();
     this.deadlineAt = phase.kind === "video" || phase.kind === "video-position-question"
       ? this.video.begin({ sessionId: this.sessionId, phaseId: target, phaseEpoch: this.phaseEpoch }, phase.expectedDurationMs + (phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? Math.max(0, phase.syncVideoOffsetMs ?? 0) : 0), this.phaseStartedAt)
-      : phase.kind === "group-branch"
+      : phase.kind === "group-branch" || phase.kind === "narration"
         ? now + phase.durationMs
       : phase.kind === "position-question"
         ? now + phase.durationMs

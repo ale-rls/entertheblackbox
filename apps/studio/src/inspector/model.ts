@@ -7,13 +7,14 @@ export type AuthorableComponentType =
   | "synchronized-video"
   | "video"
   | "image-audio"
+  | "narration"
   | "position-question"
   | "video-position-question"
   | "image-audio-position-question"
   | "group-branch";
 
 export function componentTypeForPhase(phase: Phase): AuthorableComponentType | "idle" {
-  if (phase.kind === "idle" || phase.kind === "position-question" || phase.kind === "group-branch") return phase.kind;
+  if (phase.kind === "idle" || phase.kind === "position-question" || phase.kind === "group-branch" || phase.kind === "narration") return phase.kind;
   if (phase.kind === "video" && phase.phoneAudioMode === "synchronized") return "synchronized-video";
   if (phase.kind === "video-position-question") {
     return phase.audioSrc === undefined ? "video-position-question" : "image-audio-position-question";
@@ -56,7 +57,7 @@ export function renamePhase(project: StudioProject, currentId: string, nextId: s
     const id = remap(phase.id);
     if (phase.kind === "idle") return { ...phase, id };
     if (phase.kind === "group-branch") return { ...phase, id, next: remap(phase.next), branches: phase.branches.map((branch) => ({ ...branch, ...(branch.next === undefined ? {} : { next: remap(branch.next) }) })) };
-    if (phase.kind === "video") return { ...phase, id, next: remap(phase.next) };
+    if (phase.kind === "video" || phase.kind === "narration") return { ...phase, id, next: remap(phase.next) };
     if (phase.next.type === "fixed") return { ...phase, id, next: { ...phase.next, target: remap(phase.next.target) } };
     return { ...phase, id, next: { ...phase.next, map: Object.fromEntries(Object.entries(phase.next.map).map(([key, value]) => [key, remap(value)])) as typeof phase.next.map, tie: remap(phase.next.tie), empty: remap(phase.next.empty) } };
   }) as StudioProject["scenario"]["phases"];
@@ -99,6 +100,7 @@ export function changePhaseKind(phase: Phase, kind: PhaseKind): Phase {
     branches: [{ groupId: "group-a", weight: 1 }, { groupId: "group-b", weight: 1 }],
     next: "idle",
   };
+  if (kind === "narration") return { id: phase.id, kind, text: "New narration text", durationMs: 5_000, next: "idle" };
   return {
     id: phase.id, kind, text: "New position question",
     field: {

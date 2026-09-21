@@ -48,6 +48,7 @@ const componentTypeLabel: Record<AuthorableComponentType, string> = {
   video: "video",
   "synchronized-video": "video + synchronized phone audio",
   "image-audio": "still image + MP3",
+  narration: "narration (text only)",
   "position-question": "position question",
   "video-position-question": "video + position vote",
   "image-audio-position-question": "still image + MP3 + position vote",
@@ -469,7 +470,7 @@ export function App() {
     persistGraph(next);
     setGraphFeedback({ status: "success", message: "Connection updated." });
   };
-  const addPhase = (kind: "idle" | "synchronized-video" | "video" | "image-audio" | "position-question" | "video-position-question" | "image-audio-position-question" | "group-branch") => {
+  const addPhase = (kind: "idle" | "synchronized-video" | "video" | "image-audio" | "narration" | "position-question" | "video-position-question" | "image-audio-position-question" | "group-branch") => {
     if (!draft) return;
     if (kind === "idle" && draft.project.scenario.phases.some((phase) => phase.kind === "idle")) {
       setGraphFeedback({ status: "danger", message: "Idle phase not added: this show already has its idle phase. Select the existing idle phase to edit it." });
@@ -497,6 +498,8 @@ export function App() {
     const phase = kind === "idle" ? { kind, id: "idle" as const }
       : kind === "group-branch"
         ? { kind, id, title: "Divide audience", durationMs: 5_000, assignment: { type: "balanced" as const }, branches: groupCatalogue.slice(0, 2).map((group) => ({ groupId: group.id, weight: 1 })), next: "idle" }
+      : kind === "narration"
+        ? { kind, id, text: "New narration text", durationMs: 5_000, next: "idle" }
       : kind === "position-question"
         ? { kind, id, text: "New position question", field: { type: "four-quadrant" as const, xAxis: { minLabel: "Left", maxLabel: "Right" }, yAxis: { minLabel: "Top", maxLabel: "Bottom" } }, durationMs: 60000, freezeMs: 5000, connectionStaleAfterMs: 10000, showLiveCounts: true, next: { type: "quadrant-plurality" as const, map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: ["valid", "stale", "disconnected"] as const } }
         : mediaVote
@@ -1006,6 +1009,7 @@ export function App() {
         { label: "Video phase", onSelect: () => addPhase("video") },
         { label: "Video + synchronized phone audio", onSelect: () => addPhase("synchronized-video") },
         { label: "Image + MP3 phase", onSelect: () => addPhase("image-audio") },
+        { label: "Narration (text only, no media)", onSelect: () => addPhase("narration") },
         { label: "Position question", onSelect: () => addPhase("position-question") },
         { label: "Video + position vote", onSelect: () => addPhase("video-position-question") },
         { label: "Image + MP3 + position vote", onSelect: () => addPhase("image-audio-position-question") },

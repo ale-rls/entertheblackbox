@@ -95,6 +95,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       <option value="video">Video</option>
       <option value="synchronized-video">Video + synchronized phone audio</option>
       <option value="image-audio">Still image + MP3</option>
+      <option value="narration">Narration (text only, no media)</option>
       <option value="position-question">Position question</option>
       <option value="video-position-question">Video + position vote</option>
       <option value="image-audio-position-question">Still image + MP3 + position vote</option>
@@ -188,6 +189,22 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, subtitles: [...(phase.subtitles ?? []), { text: "New subtitle", startAtMs: 0, endAtMs: Math.min(phase.expectedDurationMs, 5_000) }] })}>Add subtitle</button>
       </fieldset>
     </>}
+    {phase.kind === "narration" && <fieldset><legend>Narration text</legend>
+      <p className="sc-tool-copy field-hint">Plain text shown on the display. Use this while a scene has no recorded video or MP3 yet; add a real soundtrack under Phone headphones below whenever it's ready, or convert this to a Video component once you have footage.</p>
+      {text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
+      <label className="sc-tool-label">{label("Display text", "text")}<textarea className="sc-tool-field" rows={4} value={phase.text} onChange={(event) => onChange({ ...phase, text: event.target.value })} /></label>
+      {number("Duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs: Math.max(1, durationMs) }))}
+      <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.allowSkip ?? false} onChange={(event) => onChange({ ...phase, allowSkip: event.target.checked || undefined })} />{label("Operator can skip early", "allowSkip")}</label>
+      <fieldset><legend>Per-group text overrides <small>textByGroup</small></legend>
+        {(project.scenario.groups ?? []).map((group) => <label className="sc-tool-label" key={group.id}>{label(`${group.label} text`, `textByGroup.${group.id}`)}<textarea className="sc-tool-field" rows={3} value={phase.textByGroup?.[group.id] ?? ""} onChange={(event) => {
+          const value = event.target.value;
+          const textByGroup = { ...phase.textByGroup };
+          if (value.trim()) textByGroup[group.id] = value; else delete textByGroup[group.id];
+          onChange({ ...phase, textByGroup: Object.keys(textByGroup).length ? textByGroup : undefined });
+        }} /></label>)}
+        <p className="sc-tool-copy field-hint">Leave blank to fall back to the shared display text above for that group.</p>
+      </fieldset>
+    </fieldset>}
     {phase.kind !== "idle" && <fieldset><legend>External show cues</legend>
       {text("Cue names (comma separated)", "outgoingCues", (phase.outgoingCues ?? []).join(", "), (value) => onChange({ ...phase, outgoingCues: value.split(",").map((cue) => cue.trim()).filter(Boolean) }))}
       <p className="sc-tool-copy field-hint">Sent once to TouchDesigner or another show-control receiver when this scene starts.</p>

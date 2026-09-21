@@ -2,7 +2,7 @@
  * Scenario types, validation, and graph utilities (plan §5).
  */
 
-export const SCENARIO_SCHEMA_VERSION = 6;
+export const SCENARIO_SCHEMA_VERSION = 7;
 
 export {
   arenaEllipseSchema,
@@ -18,6 +18,7 @@ export {
   groupBranchPhaseSchema,
   idlePhaseSchema,
   mediaManifestSchema,
+  narrationPhaseSchema,
   phaseSchema,
   polygonPointSchema,
   polygonZoneSchema,
@@ -53,6 +54,7 @@ export type {
   GroupBranchPhase,
   IdlePhase,
   MediaManifest,
+  NarrationPhase,
   Phase,
   PhaseSnapshot,
   PolygonPoint,
