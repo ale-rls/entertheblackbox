@@ -1,12 +1,12 @@
 import { createRoot } from "react-dom/client";
-import { resolveInstallationParamsFromWindow } from "./lib/resolveInstallation.js";
+import { resolveInstallationFromWindow } from "./lib/resolveInstallation.js";
 import "./style.css";
 
 async function bootstrap(): Promise<void> {
   // App.js is imported dynamically, after this resolves, so its
-  // module-level config reads location.search only once it may already
-  // carry the resolved installation/room -- see resolveInstallation.ts.
-  await resolveInstallationParamsFromWindow();
+  // module-level config sees the resolved installation/room -- see
+  // resolveInstallation.ts.
+  await resolveInstallationFromWindow();
   const { App } = await import("./App.js");
 
   // App-shell-only service worker (plan §9); media stays app-controlled.

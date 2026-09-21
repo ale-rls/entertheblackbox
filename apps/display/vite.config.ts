@@ -14,8 +14,7 @@ export default defineConfig({
     __BUILD_VERSION__: JSON.stringify(process.env.BUILD_VERSION ?? "0.0.0-dev"),
     __REALTIME_WS_URL__: JSON.stringify(process.env.REALTIME_WS_URL ?? "ws://localhost:9001"),
     // Baked in so the venue's one kiosk can load bare /display/ with no
-    // query params at all -- ?token= in the URL still overrides this
-    // when present (e.g. testing against a different token). Unlike
+    // query params at all -- there is no URL-based override. Unlike
     // installationId/roomId (resolved live from /api/status, so an
     // admin-saved change only needs a restart), this is build-time only:
     // a changed DISPLAY_TOKEN in Coolify needs apps/display rebuilt, not

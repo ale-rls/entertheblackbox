@@ -1,4 +1,5 @@
 import { resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
+import { currentInstallation } from "./lib/resolveInstallation.js";
 import { useDisplaySettings } from "./lib/useDisplaySettings.js";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { DisplayToServerMessage } from "@entertheblackbox/protocol";
@@ -45,13 +46,11 @@ const config = {
   url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
   clientVersion:
     typeof __BUILD_VERSION__ === "string" ? __BUILD_VERSION__ : "0.0.0-dev",
-  installationId:
-    new URLSearchParams(location.search).get("installation") ?? "inst-1",
-  roomId: new URLSearchParams(location.search).get("room") ?? "room-1",
+  ...currentInstallation(),
+  // The only supported query parameter: a display without ?group= is the
+  // main display; one with it is that group's own dedicated kiosk.
   ...(new URLSearchParams(location.search).get("group") ? { groupId: new URLSearchParams(location.search).get("group")! } : {}),
-  displayToken:
-    new URLSearchParams(location.search).get("token")
-      ?? (typeof __DISPLAY_TOKEN__ === "string" ? __DISPLAY_TOKEN__ : ""),
+  displayToken: typeof __DISPLAY_TOKEN__ === "string" ? __DISPLAY_TOKEN__ : "",
   realtimeWsUrl:
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };

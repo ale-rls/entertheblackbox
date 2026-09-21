@@ -1,46 +1,39 @@
 /**
- * When the display is opened without ?installation=/&room= (the venue's
- * one kiosk shouldn't need to remember/type the full URL every time,
- * since a server only ever runs one show at a time), fetch them from the
- * server's own public /api/status and patch them into the URL so
- * App.tsx's module-level config -- which reads location.search directly
- * -- picks them up. The caller (main.tsx) must do this before importing
- * App.js: a static import would evaluate that module-level config too
- * early to see the patch.
+ * A server only ever runs one show, so the venue's one kiosk shouldn't need
+ * a query string at all: it fetches its installationId/roomId from the
+ * server's own public /api/status and stores them here for App.tsx's
+ * module-level config to read. The caller (main.tsx) must await this
+ * before importing App.js: a static import would evaluate that
+ * module-level config too early to see the resolved values.
  */
 
 export type StatusSnapshot = { installationId?: string; roomId?: string } | null;
 
-export type InstallationParamsSource = {
-  location: Pick<Location, "search" | "pathname" | "hash">;
-  fetchStatus: () => Promise<StatusSnapshot>;
-  replaceUrl: (url: string) => void;
-};
+export type Installation = { installationId: string; roomId: string };
 
-export async function resolveInstallationParams(source: InstallationParamsSource): Promise<void> {
-  const params = new URLSearchParams(source.location.search);
-  if (params.has("installation") && params.has("room")) return;
+const DEFAULT_INSTALLATION: Installation = { installationId: "inst-1", roomId: "room-1" };
 
-  const status = await source.fetchStatus();
-  if (!status?.installationId || !status.roomId) return;
+let resolved: Installation = DEFAULT_INSTALLATION;
 
-  if (!params.has("installation")) params.set("installation", status.installationId);
-  if (!params.has("room")) params.set("room", status.roomId);
-  source.replaceUrl(`${source.location.pathname}?${params.toString()}${source.location.hash}`);
+/** Read by App.tsx's module-level config; reflects the last successful resolve() call, or the default. */
+export function currentInstallation(): Installation {
+  return resolved;
 }
 
-export async function resolveInstallationParamsFromWindow(): Promise<void> {
-  await resolveInstallationParams({
-    location,
-    fetchStatus: async () => {
-      try {
-        const response = await fetch("/api/status");
-        if (!response.ok) return null;
-        return await response.json() as StatusSnapshot;
-      } catch {
-        return null;
-      }
-    },
-    replaceUrl: (url) => history.replaceState(null, "", url),
+export async function resolveInstallation(fetchStatus: () => Promise<StatusSnapshot>): Promise<void> {
+  const status = await fetchStatus();
+  if (!status?.installationId || !status.roomId) return;
+  resolved = { installationId: status.installationId, roomId: status.roomId };
+}
+
+export async function resolveInstallationFromWindow(): Promise<void> {
+  await resolveInstallation(async () => {
+    try {
+      const response = await fetch("/api/status");
+      if (!response.ok) return null;
+      return await response.json() as StatusSnapshot;
+    } catch {
+      return null;
+    }
   });
 }
