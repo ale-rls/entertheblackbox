@@ -181,3 +181,43 @@ measurements on Android remain necessary.
 Liquidsoap 2.2.5 configuration validation, workspace typecheck, and all 720 tests
 passed. The load-test harness passed with live streams and correctly failed for
 an unavailable endpoint and clean premature EOF.
+
+### Native pause/resume compatibility
+
+The phone preserves its media element, stream URL, metadata and Media Session
+play handler when deliberately paused. Resume rejoins the live stream rather
+than replaying narration buffered during the pause.
+
+If registering the Media Session pause handler fails or the API is absent,
+native pause events are treated as pause intent once playback has started.
+Native play events resume the controller even without a Media Session callback.
+In this compatibility mode, a browser interruption that only emits `pause`
+requires explicit resume too: the event does not identify whether the listener
+pressed Pause. Failed transports and stalled playback still trigger recovery.
+Browsers with working pause action registration retain automatic recovery from
+unexpected native pauses.
+
+Automated coverage verifies both missing and throwing APIs, paused session
+retention across identity renewal, native resume, and recovery of source errors.
+These tests do not emulate an operating system's media card or page suspension.
+WebKit report https://bugs.webkit.org/show_bug.cgi?id=243258 describes an
+unresolved background resume failure for installed home-screen apps on iOS 15.6;
+it does not establish that every Safari tab or later iOS version is affected.
+WebKit report https://bugs.webkit.org/show_bug.cgi?id=243256 separately
+describes disappearing controls after a two-minute pause and headphone resume
+in a Safari tab on iOS 15.6. These reports are compatibility evidence, not a
+confirmed diagnosis of the reported phone. A website cannot ensure that the OS
+keeps its paused media controls visible.
+
+Before claiming device support, record the phone model, OS version, browser and
+whether the site is a browser tab or installed home-screen app. Test Safari on
+the reported older iOS version and a current iOS version, and Chrome on Android:
+
+- Play, background or lock, pause from system controls, and resume after 5, 30
+  and 120 seconds. Record whether controls disappear or Play becomes inert.
+- Repeat with headphone controls and with the browser in the foreground.
+- While paused, reopen the page: it must remain paused and offer Resume
+  headphones. Resuming should return to current narration.
+- Check a network interruption separately from a deliberate pause.
+
+No physical iOS or Android device validation has been performed for this patch.
