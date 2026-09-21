@@ -1,7 +1,13 @@
 .admin-app { min-height: 100vh; padding: var(--sc-tool-space-9); }
 .admin-app .sc-tool-eyebrow { margin-block-end: var(--sc-tool-space-3); }
-.admin-header { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sc-tool-space-8); padding-block-end: var(--sc-tool-space-8); border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); }
+.admin-topbar { position: sticky; top: 0; z-index: 20; background: var(--sc-tool-color-canvas); }
+.admin-header { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sc-tool-space-8); padding-block-end: var(--sc-tool-space-6); }
 .admin-header h1 { margin-block-end: 0; font-size: var(--sc-tool-font-size-5); }
+.admin-header-chrome { display: flex; align-items: center; gap: var(--sc-tool-space-5); }
+.admin-connection-chip { display: flex; align-items: center; gap: var(--sc-tool-space-3); }
+.admin-status-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-6); padding-block: var(--sc-tool-space-4); border-block: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); }
+.admin-status-bar .admin-operation-row { display: flex; min-height: auto; grid-template-columns: none; align-items: baseline; gap: var(--sc-tool-space-2); border-block-end: 0; padding: 0; }
+.admin-status-bar .admin-operation-label { gap: var(--sc-tool-space-2); }
 .admin-connection { margin-block-start: var(--sc-tool-space-6); }
 .admin-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sc-tool-space-6); margin-block-end: var(--sc-tool-space-6); }
 .admin-section-heading h2, .admin-empty-state h2 { margin-block-end: 0; font-size: var(--sc-tool-font-size-4); }
@@ -60,6 +66,8 @@
 @media (max-width: 767px) {
   .admin-app { padding: var(--sc-tool-space-5); }
   .admin-header, .admin-section-heading { align-items: flex-start; flex-direction: column; }
+  .admin-header-chrome { flex-wrap: wrap; gap: var(--sc-tool-space-3); }
+  .admin-status-bar { gap: var(--sc-tool-space-4); }
   .admin-connection-form { grid-template-columns: minmax(0, 1fr); }
   .admin-connection-form .sc-tool-button { width: 100%; }
   .admin-grid { grid-template-columns: minmax(0, 1fr); }

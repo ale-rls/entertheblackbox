@@ -492,6 +492,15 @@ export function App() {
     }
   };
 
+  const signOut = () => {
+    localStorage.removeItem("admin-token");
+    statusRef.current = null;
+    setStatus(null);
+    setStatusStale(false);
+    setConnectionError("");
+    setConnectedToken("");
+  };
+
   const connect = async (event: FormEvent) => {
     event.preventDefault();
     if (!email || !password) {
@@ -664,20 +673,41 @@ export function App() {
   const playbackStatus: ToolStatus = status?.displayPlaybackIssue?.status === "stalled" ? "warning" : status?.displayPlaybackIssue ? "danger" : "success";
   const globalStatus: ToolStatus = status ? (statusStale || !status.healthy || !status.ready ? "warning" : status.displayPlaybackIssue ? playbackStatus : "success") : connectionError ? "danger" : "info";
   const globalLabel = status ? (statusStale ? "Status stale" : !status.healthy || !status.ready ? "System not ready" : status.displayPlaybackIssue ? "Playback issue" : "System ready") : refreshing ? "Connecting" : connectionError ? "Connection failed" : "Not connected";
+  // Once a session has authenticated cleanly, the connection form collapses
+  // to a corner chip -- it reappears automatically on connectionError (token
+  // expiry, a failed request) so re-authenticating is never more than one
+  // glance away, without permanently occupying primary dashboard space.
+  const connectionAuthenticated = Boolean(status) && !connectionError;
 
   return <div data-sc-tool-density="standard" data-sc-tool-root>
     <main className="admin-app">
-      <header className="admin-header">
-        <div><p className="sc-tool-eyebrow">Live installation / operator console</p><h1>{audioOnly ? "Audio diagnostics" : "Operations"}</h1></div>
-        {audioOnly ? <a href="/admin/">Back to operations</a> : <StatusLabel status={globalStatus}>{globalLabel}</StatusLabel>}
-      </header>
+      <div className="admin-topbar">
+        <header className="admin-header">
+          <div><p className="sc-tool-eyebrow">Live installation / operator console</p><h1>{audioOnly ? "Audio diagnostics" : "Operations"}</h1></div>
+          <div className="admin-header-chrome">
+            {audioOnly && <a className="admin-back-link" href="/admin/">Back to operations</a>}
+            {connectionAuthenticated && <span className="admin-connection-chip">
+              <StatusLabel status={statusStale ? "warning" : "success"}>{statusStale ? "Last status received" : "Authenticated"}</StatusLabel>
+              <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={signOut}>Sign out</button>
+            </span>}
+            <StatusLabel status={globalStatus}>{globalLabel}</StatusLabel>
+          </div>
+        </header>
+        {status && <div className="admin-status-bar" aria-label="Operational status">
+          <OperationRow label="Server" status={status.healthy && status.ready ? "success" : status.healthy ? "warning" : "danger"} value={status.healthy && status.ready ? "READY" : "NOT READY"} detail={`uptime ${formatDuration(status.uptimeMs)}`} />
+          <OperationRow label="Display" status={status.displayConnected ? "success" : "danger"} value={status.displayConnected ? "CONNECTED" : "DISCONNECTED"} detail={status.displayConnected && status.displayHeartbeatAgeMs !== null ? `heartbeat ${status.displayHeartbeatAgeMs} ms ago` : "no heartbeat available"} />
+          <OperationRow label="Video playback" status={playbackStatus} value={status.displayPlaybackIssue ? status.displayPlaybackIssue.status.toUpperCase() : "CLEAR"} detail={status.displayPlaybackIssue ? `${status.displayPlaybackIssue.mediaId}: ${status.displayPlaybackIssue.detail ?? "no browser detail"}` : "no active playback issue"} />
+          <OperationRow label="Participants" status={status.connectedParticipants > 0 ? "info" : "warning"} value={String(status.connectedParticipants)} detail="currently connected" />
+          <OperationRow label="Session" status={isActive ? "success" : "info"} value={(status.lifecycle ?? "unavailable").toUpperCase()} detail={status.sessionId ? `session ${status.sessionId}` : "no session ID"} />
+        </div>}
+      </div>
 
-      <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
+      {!connectionAuthenticated && <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
         <div className="admin-section-heading">
           <div><p className="sc-tool-eyebrow">Secure access</p><h2 id="admin-connection-heading">Admin connection</h2></div>
           {status && <StatusLabel status={statusStale ? "warning" : "success"}>{statusStale ? "Last status received" : "Authenticated"}</StatusLabel>}
         </div>
-        {(!audioOnly || !status || connectionError) && <form className="admin-connection-form" onSubmit={(event) => void connect(event)}>
+        <form className="admin-connection-form" onSubmit={(event) => void connect(event)}>
           <label className="sc-tool-label" htmlFor="admin-email">Operator email
             <input id="admin-email" className="sc-tool-field" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} />
           </label>
@@ -685,10 +715,10 @@ export function App() {
             <input id="admin-password" className="sc-tool-field sc-tool-mono" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} aria-describedby="admin-token-help" />
           </label>
           <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={refreshing || signingIn}>{status ? "Reconnect" : signingIn ? "Signing in…" : refreshing ? "Connecting…" : "Sign in"}</button>
-        </form>}
+        </form>
         <p id="admin-token-help" className="sc-tool-help">Stays signed in on this device for 30 days. Connected sessions refresh every 2 seconds.</p>
         {connectionError && <p className="sc-tool-feedback admin-feedback" data-sc-tool-status={statusStale ? "warning" : "danger"} role="alert"><StatusIcon status={statusStale ? "warning" : "danger"} /><span>{connectionError}{statusStale ? " Showing the last received status." : ""}</span></p>}
-      </section>
+      </section>}
       {!audioOnly && status && <DisplaySettingsPanel key={connectedToken} token={connectedToken} />}
 
 
@@ -707,17 +737,6 @@ export function App() {
           <p className="sc-tool-copy admin-flow-intro">The published show graph with live group locations. Select a scene to inspect its participants or move a group.</p>
           {flow?.scenes.length ? <LiveGraph flow={flow} status={status} busy={busy} onJump={requestJump} onAssign={assignGroup} /> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}
         </section>
-        <section className="sc-tool-panel" aria-labelledby="admin-status-heading">
-          <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">Live topology</p><h2 id="admin-status-heading">Operational status</h2></div><span className="sc-tool-mono admin-section-count">Live</span></div>
-          <div className="admin-operation-list">
-            <OperationRow label="Server" status={status.healthy && status.ready ? "success" : status.healthy ? "warning" : "danger"} value={status.healthy && status.ready ? "READY" : "NOT READY"} detail={`uptime ${formatDuration(status.uptimeMs)}`} />
-            <OperationRow label="Display" status={status.displayConnected ? "success" : "danger"} value={status.displayConnected ? "CONNECTED" : "DISCONNECTED"} detail={status.displayConnected && status.displayHeartbeatAgeMs !== null ? `heartbeat ${status.displayHeartbeatAgeMs} ms ago` : "no heartbeat available"} />
-            <OperationRow label="Video playback" status={playbackStatus} value={status.displayPlaybackIssue ? status.displayPlaybackIssue.status.toUpperCase() : "CLEAR"} detail={status.displayPlaybackIssue ? `${status.displayPlaybackIssue.mediaId}: ${status.displayPlaybackIssue.detail ?? "no browser detail"}` : "no active playback issue"} />
-            <OperationRow label="Participants" status={status.connectedParticipants > 0 ? "info" : "warning"} value={String(status.connectedParticipants)} detail="currently connected" />
-            <OperationRow label="Session" status={isActive ? "success" : "info"} value={(status.lifecycle ?? "unavailable").toUpperCase()} detail={status.sessionId ? `session ${status.sessionId}` : "no session ID"} />
-          </div>
-        </section>
-
         <section className="sc-tool-panel" aria-labelledby="admin-controls-heading">
           <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">{status.sessionId ? `Session ${status.sessionId}` : "No active session"}</p><h2 ref={controlsHeadingRef} id="admin-controls-heading" tabIndex={-1}>Session controls</h2></div><StatusLabel status={isActive ? "success" : "info"}>{status.lifecycle ?? "Unavailable"}</StatusLabel></div>
           <dl className="admin-session-facts">
