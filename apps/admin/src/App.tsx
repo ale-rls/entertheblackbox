@@ -1,4 +1,5 @@
 import { DisplaySettingsPanel } from "./DisplaySettingsPanel.js";
+import { AudioMediaLibrary } from "./AudioMediaLibrary.js";
 import { RunOfShowPanel } from "./RunOfShowPanel.js";
 import { LiveGraph } from "./LiveGraph.js";
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
@@ -124,7 +125,6 @@ function CollapsibleSection({ id, eyebrow, title, status, open, onToggle, childr
       <div><p className="sc-tool-eyebrow">{eyebrow}</p><h2 id={id}>{title}</h2></div>
       <div className="admin-collapsible-trailing">
         {status && <StatusLabel status={status.status}>{status.label}</StatusLabel>}
-        <span className="admin-collapsible-chevron" aria-hidden="true" />
       </div>
     </summary>
     <div className="admin-collapsible-body">{children}</div>
@@ -215,7 +215,7 @@ function JumpConfirmationDialog({ scene, scope, onCancel, onConfirm }: { scene: 
 function DisplaySettingsDisclosure({ token }: { token: string }) {
   const [open, setOpen] = useState(false);
   return <details className="sc-tool-panel admin-collapsible" onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary className="admin-collapsible-summary"><p className="sc-tool-eyebrow">Show setup</p><span>Display text</span></summary>
+    <summary className="admin-collapsible-summary"><div><p className="sc-tool-eyebrow">Show setup</p><h2>Display text</h2></div></summary>
     {open && <DisplaySettingsPanel key={token} token={token} />}
   </details>;
 }
@@ -721,8 +721,6 @@ export function App() {
   const sceneTitle = (id: string): string => id === "idle" ? "End" : flow?.scenes.find((scene) => scene.id === id)?.title ?? id;
   const skipLabel = currentScene?.kind === "video" && currentScene.routes[0] ? `Next scene → ${sceneTitle(currentScene.routes[0].target)}` : "Skip current phase";
   const playbackStatus: ToolStatus = status?.displayPlaybackIssue?.status === "stalled" ? "warning" : status?.displayPlaybackIssue ? "danger" : "success";
-  const globalStatus: ToolStatus = status ? (statusStale || !status.healthy || !status.ready ? "warning" : status.displayPlaybackIssue ? playbackStatus : "success") : connectionError ? "danger" : "info";
-  const globalLabel = status ? (statusStale ? "Status stale" : !status.healthy || !status.ready ? "System not ready" : status.displayPlaybackIssue ? "Playback issue" : "System ready") : refreshing ? "Connecting" : connectionError ? "Connection failed" : "Not connected";
   // Once a session has authenticated cleanly, the connection form collapses
   // to a corner chip -- it reappears automatically on connectionError (token
   // expiry, a failed request) so re-authenticating is never more than one
@@ -740,7 +738,6 @@ export function App() {
               <StatusLabel status={statusStale ? "warning" : "success"}>{statusStale ? "Last status received" : "Authenticated"}</StatusLabel>
               <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={signOut}>Sign out</button>
             </span>}
-            <StatusLabel status={globalStatus}>{globalLabel}</StatusLabel>
           </div>
         </header>
         {status && <div className="admin-status-bar" aria-label="Operational status">
@@ -752,9 +749,7 @@ export function App() {
         </div>}
       </div>
 
-      {!audioOnly && <RunOfShowPanel />}
-
-      <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
+      {!connectionAuthenticated && <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
         <div className="admin-section-heading">
           <div><p className="sc-tool-eyebrow">Secure access</p><h2 id="admin-connection-heading">Admin connection</h2></div>
           {status && <StatusLabel status={statusStale ? "warning" : "success"}>{statusStale ? "Last status received" : "Authenticated"}</StatusLabel>}
@@ -770,7 +765,7 @@ export function App() {
         </form>
         <p id="admin-token-help" className="sc-tool-help">Stays signed in on this device for 30 days. Connected sessions refresh every 2 seconds.</p>
         {connectionError && <p className="sc-tool-feedback admin-feedback" data-sc-tool-status={statusStale ? "warning" : "danger"} role="alert"><StatusIcon status={statusStale ? "warning" : "danger"} /><span>{connectionError}{statusStale ? " Showing the last received status." : ""}</span></p>}
-      </section>
+      </section>}
 
       {feedback && <div className="sc-tool-feedback admin-page-feedback" data-sc-tool-status={feedback.status} role={feedback.status === "danger" ? "alert" : "status"}><StatusIcon status={feedback.status} /><span>{feedback.message}</span></div>}
 
@@ -779,14 +774,6 @@ export function App() {
         <h2>{refreshing ? "Loading live status…" : "Connect to load live status"}</h2>
         <p className="sc-tool-copy">No operational values are shown until the admin API authenticates this browser session.</p>
       </section> : audioOnly ? <AudioDiagnostics status={status} receivedAt={statusReceivedAt} failed={Boolean(connectionError)} /> : <div className="admin-grid">
-        <section className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
-          <div className="admin-section-heading">
-            <div><p className="sc-tool-eyebrow">Live show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Scene navigator</h2></div>
-            <StatusLabel status={isActive && !status.groupPathsStarted ? "success" : "info"}>{status.groupPathsStarted ? "Groups running" : isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
-          </div>
-          <p className="sc-tool-copy admin-flow-intro">The published show graph with live group locations. Select a scene to inspect its participants or move a group.</p>
-          {flow?.scenes.length ? <LiveGraph flow={flow} status={status} busy={busy} onJump={requestJump} onAssign={assignGroup} /> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}
-        </section>
         <section className="sc-tool-panel" aria-labelledby="admin-controls-heading">
           <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">{status.sessionId ? `Session ${status.sessionId}` : "No active session"}</p><h2 ref={controlsHeadingRef} id="admin-controls-heading" tabIndex={-1}>Session controls</h2></div><StatusLabel status={isActive ? "success" : "info"}>{status.lifecycle ?? "Unavailable"}</StatusLabel></div>
           <dl className="admin-session-facts">
@@ -840,10 +827,22 @@ export function App() {
           </ol> : <p className="sc-tool-copy">The lobby waits until an operator presses Start show.</p>}
         </CollapsibleSection>
 
+        <RunOfShowPanel />
+
+        {isActive && <section className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
+          <div className="admin-section-heading">
+            <div><p className="sc-tool-eyebrow">Live show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Scene navigator</h2></div>
+            <StatusLabel status={isActive && !status.groupPathsStarted ? "success" : "info"}>{status.groupPathsStarted ? "Groups running" : isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
+          </div>
+          <p className="sc-tool-copy admin-flow-intro">The published show graph with live group locations. Select a scene to inspect its participants or move a group.</p>
+          {flow?.scenes.length ? <LiveGraph flow={flow} status={status} busy={busy} onJump={requestJump} onAssign={assignGroup} /> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}
+        </section>}
+
         <CollapsibleSection id="admin-audio-heading" eyebrow="Personal audio" title="Headphone streams" status={{
           status: !status.audio?.configured ? "info" : (status.audio.error || Object.keys(status.audio.deliveryFailures ?? {}).length > 0) ? "danger" : "success",
           label: !status.audio?.configured ? "Not configured" : (status.audio.error || Object.keys(status.audio.deliveryFailures ?? {}).length > 0) ? "Needs attention" : "Nominal",
         }} open={audioSectionOpen} onToggle={setAudioSectionOpen}>
+          {audioSectionOpen && <AudioMediaLibrary url={POCKETBASE_URL} sources={status.audio?.soundcheckSources ?? []} onSelect={(src) => { setMusicSource(src); const panel = document.getElementById("admin-background-music") as HTMLDetailsElement | null; if (panel) { panel.open = true; panel.scrollIntoView?.({ block: "nearest" }); } }} />}
           <p><a href="/admin/?view=audio">Open live audio diagnostics →</a></p>
           {!status.audio?.configured ? <p>Audio bridge is not configured.</p> : <>
             <p>Active backend: <strong>{status.audio.backend === "local" ? status.audio.backendLabel ?? "Local" : "Remote"}</strong></p>
@@ -858,7 +857,7 @@ export function App() {
               {status.audio.players.some((player) => player.flagged) && <> · <strong>{status.audio.players.filter((player) => player.flagged).length} need attention</strong></>}
             </p>
             <p className="sc-tool-help">A stream connection does not confirm audible playback. See <a href="/admin/?view=audio">Manage audio →</a> for per-phone detail.</p>
-            <details className="admin-collapsible">
+            <details id="admin-background-music" className="admin-collapsible">
               <summary>Background music{status.audio.backgroundMusic ? ` — ${status.audio.backgroundMusic.src}` : " — stopped"}</summary>
               <div className="admin-connection-form" aria-label="Background music">
                 <p>Loops underneath narration on all phone streams, including phones joining later.</p>

@@ -75,13 +75,13 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Operator authentication (30-day session) — **PocketBase** `operators` collection, `apps/server/src/persistence/operator-auth.ts`
 - Live operational status (server/display/playback/participants/session)
-- Scene navigator / live show graph, jump-to-scene, participant reassignment — `LiveGraph.tsx`
+- Active-show scene navigator / live show graph, jump-to-scene, participant dropdown and reassignment — `LiveGraph.tsx`
 - Session controls: start/skip/restart/idle, group-path start, force-reunion
 - Lobby schedule management
 - Active show selection (published/pending, queued-until-show-ends)
 - Ghost-cursor fill-target override
 - Audio diagnostics page (`/admin/?view=audio`) — `AudioDiagnostics.tsx`
-- Headphone stream ops: roster, background music, soundcheck, local↔remote backend switch → **services/audio**
+- Headphone stream ops: shared PocketBase media browser with published-MP3 selection, roster, background music, soundcheck, local↔remote backend switch → **services/audio**
 - Display text editor — `DisplaySettingsPanel.tsx`
 - Participant roster + group (re)assignment
 - Session export (JSON/CSV) — `apps/server/src/persistence/admin-data.ts`
