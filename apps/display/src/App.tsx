@@ -1,3 +1,4 @@
+import { resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
 import { useDisplaySettings } from "./lib/useDisplaySettings.js";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { DisplayToServerMessage } from "@entertheblackbox/protocol";
@@ -185,6 +186,7 @@ export function App() {
   const media = useMedia();
   const phase = state.phase;
   const isIdle = phase === null || phase.kind === "idle";
+  const waitingVideoUrl = resolveWaitingVideoUrl(displaySettings, config.groupId);
   const displayInactive = phase?.kind === "group-branch" || (config.groupId !== undefined && isIdle);
   const mediaReady = media.status.state === "ready";
 
@@ -262,14 +264,18 @@ export function App() {
     void media.showMedia(phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc);
   }, [phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc]);
 
-  // Unmount all media and overlays, rather than covering still-playing audio.
-  if (displayInactive) return <main className="display-root" aria-label="Display inactive" style={{ background: "#000" }} />;
+  // Unmount show media and overlays; inactive displays may play a muted waiting loop.
+  if (displayInactive) return <main className="display-root" aria-label="Display inactive" style={{ background: "#000" }}>
+    {waitingVideoUrl && <IdleAttract key={waitingVideoUrl} grant={null} qrHidden clock={connection.clock} videoUrls={[waitingVideoUrl]} />}
+  </main>;
 
   return (
     <main className="display-root">
       {/* Layer 1: video */}
       <section className="layer layer-video">
         <IdleAttract
+          key={waitingVideoUrl}
+          {...(waitingVideoUrl ? { videoUrls: [waitingVideoUrl] } : {})}
           grant={state.qrGrant}
           qrHidden={state.qrHidden}
           clock={connection.clock}

@@ -139,7 +139,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
 
     admin.get("/settings/display", async (_request, reply) => {
       reply.header("cache-control", "no-store");
-      return { configured: Boolean(options.displaySettings), display: await options.displaySettings?.read() ?? DEFAULT_DISPLAY_SETTINGS };
+      return { groups: options.groupControl?.catalogue ?? [], configured: Boolean(options.displaySettings), display: await options.displaySettings?.read() ?? DEFAULT_DISPLAY_SETTINGS };
     });
     admin.put<{ Body: unknown }>("/settings/display", async (request, reply) => {
       reply.header("cache-control", "no-store");

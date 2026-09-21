@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { PROTOCOL_VERSION, type ServerToClientMessage } from "@entertheblackbox/protocol";
+import { DEFAULT_DISPLAY_SETTINGS, PROTOCOL_VERSION, type ServerToClientMessage } from "@entertheblackbox/protocol";
 import type { PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
 import { App } from "./App.js";
 
@@ -15,6 +15,7 @@ const harness = vi.hoisted(() => {
     clock: { now: () => Date.now() },
   };
   return {
+    waitingVideoUrl: "",
     connection,
     mediaStatus: { state: "idle" } as
       | { state: "idle" }
@@ -38,6 +39,10 @@ const harness = vi.hoisted(() => {
     cursorField: null as null | { size: number },
   };
 });
+
+vi.mock("./lib/useDisplaySettings.js", () => ({
+  useDisplaySettings: () => ({ ...DEFAULT_DISPLAY_SETTINGS, waitingVideoUrl: harness.waitingVideoUrl }),
+}));
 
 vi.mock("./lib/connection.js", () => ({
   DisplayConnection: vi.fn((options: NonNullable<typeof harness.connectionOptions>) => {
@@ -85,7 +90,7 @@ vi.mock("./lib/heartbeat.js", () => ({
 }));
 
 vi.mock("./components/IdleAttract.js", () => ({
-  IdleAttract: () => <div data-testid="idle-attract">idle attract</div>,
+  IdleAttract: ({ videoUrls, mediaVisible }: { videoUrls?: string[]; mediaVisible?: boolean }) => <div data-testid="idle-attract" data-url={videoUrls?.[0]} data-visible={mediaVisible}>idle attract</div>,
 }));
 vi.mock("./components/LobbyCountdown.js", () => ({ LobbyCountdown: () => null }));
 vi.mock("./cursors/CursorCanvas.js", () => ({
@@ -123,6 +128,7 @@ afterEach(async () => {
   harness.extraAudioUrl = null;
   harness.connectionOptions = null;
   harness.videoCandidate = null;
+  harness.waitingVideoUrl = "";
 });
 
 describe("App media-readiness gate", () => {
@@ -146,6 +152,24 @@ describe("App media-readiness gate", () => {
     }));
     expect(document.querySelector('[aria-label="Display inactive"]')).toBeNull();
     expect(document.querySelector('[data-testid="idle-attract"]')).not.toBeNull();
+  });
+  it("updates the lobby URL live and shows it while group paths own the show", async () => {
+    harness.waitingVideoUrl = "/media/lobby.mp4";
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+    expect(document.querySelector('[data-testid="idle-attract"]')?.getAttribute("data-url")).toBe("/media/lobby.mp4");
+    harness.waitingVideoUrl = "/media/replacement.mp4";
+    await act(async () => root?.render(<App />));
+    expect(document.querySelector('[data-testid="idle-attract"]')?.getAttribute("data-url")).toBe("/media/replacement.mp4");
+    await act(async () => harness.connectionOptions!.onMessage({
+      t: "phase", v: PROTOCOL_VERSION, sessionId: "session", phaseEpoch: 10, serverTime: 0,
+      phase: { kind: "group-branch", id: "split", durationMs: 1000,
+        assignment: { type: "self-select" }, branches: [{ groupId: "a", weight: 1 }], next: "idle",
+        scenarioVersion: "test", startedAt: 0, deadlineAt: 1000 },
+    }));
+    expect(document.querySelector('[aria-label="Display inactive"] [data-testid="idle-attract"]')?.getAttribute("data-url")).toBe("/media/replacement.mp4");
+    expect(document.querySelector(".sound-control")).toBeNull();
   });
   it("keeps the idle preparation UI offline, then connects once media is ready", async () => {
     document.body.innerHTML = '<div id="root"></div>';

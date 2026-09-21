@@ -3,6 +3,7 @@ import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings }
 
 export function DisplaySettingsPanel({ token }: { token: string }) {
   const [value, setValue] = useState<DisplaySettings>({ ...DEFAULT_DISPLAY_SETTINGS });
+  const [groups, setGroups] = useState<{ id: string; label: string }[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [configured, setConfigured] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -21,6 +22,7 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
         if (!parsed.success) throw new Error("The server returned invalid display settings. Retry or check the server version.");
         const display = parsed.data;
         if (abort.signal.aborted) return;
+        setGroups(Array.isArray(result.groups) ? result.groups : []);
         setValue(display); setConfigured(result.configured === true); setLoaded(true);
       }).catch((error: unknown) => { if (!abort.signal.aborted) setError(error instanceof Error ? error.message : "Could not load settings."); });
     return () => abort.abort();
@@ -41,7 +43,7 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
     finally { setBusy(false); }
   };
   return <section className="sc-tool-panel" aria-labelledby="display-settings-heading">
-    <h2 id="display-settings-heading">Display text</h2>
+    <h2 id="display-settings-heading">Display text and waiting video</h2>
     <p className="sc-tool-help">Join-screen text for this platform, stored in PocketBase. These changes apply live to open displays.</p>
     {!loaded ? <><p>Loading display settings…</p>{error && <button type="button" className="sc-tool-button" onClick={() => setRetry((n) => n + 1)}>Retry loading settings</button>}</> : <form onSubmit={(event) => void save(event)}>
       <fieldset disabled={busy || !configured} style={{ border: 0, padding: 0, margin: 0 }}>
@@ -52,7 +54,28 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
         <p className="sc-tool-help">Use {"{wifi}"} for the configured Wi-Fi name, or write the network name directly. Leave blank to hide this line.</p>
         <label className="sc-tool-label">Joining instructions<textarea className="sc-tool-field" rows={3} value={value.joinInstructions} maxLength={600} onChange={(e) => edit({ joinInstructions: e.target.value })} /></label>
         <label className="sc-tool-checkbox"><input type="checkbox" checked={value.showJoinUrl} onChange={(e) => edit({ showJoinUrl: e.target.checked })} />Show the phone join URL</label>
-        <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit">{busy ? "Saving…" : "Save display text"}</button>
+        <h3>Lobby and waiting video</h3>
+        <p className="sc-tool-help">Muted, looping video while a display waits in the lobby or between group paths. Active scenes keep their own media. Use a direct browser-playable video URL (for example /media/waiting.mp4), not a YouTube page. Files must already be hosted and reachable by the displays.</p>
+        <label className="sc-tool-label">Default waiting video URL<input className="sc-tool-field" value={value.waitingVideoUrl} onChange={(e) => edit({ waitingVideoUrl: e.target.value })} /></label>
+        <p className="sc-tool-help">Leave blank to keep the bundled lobby clips on the main display and black on waiting group displays.</p>
+        {groups.map((group) => {
+          const override = value.groupWaitingVideoUrls[group.id];
+          const mode = override === undefined ? "inherit" : override === "" ? "black" : "video";
+          const setOverride = (url: string | undefined) => {
+            const overrides = { ...value.groupWaitingVideoUrls };
+            if (url === undefined) delete overrides[group.id]; else overrides[group.id] = url;
+            edit({ groupWaitingVideoUrls: overrides });
+          };
+          return <fieldset key={group.id}>
+            <legend>{group.label} ({group.id})</legend>
+            <label className="sc-tool-label">Waiting display<select className="sc-tool-field" value={mode} onChange={(e) => setOverride(e.target.value === "inherit" ? undefined : e.target.value === "black" ? "" : value.waitingVideoUrl || "/media/waiting.mp4")}>
+              <option value="inherit">Use default</option><option value="black">Black screen</option><option value="video">Custom video</option>
+            </select></label>
+            {mode === "video" && <label className="sc-tool-label">{group.label} video URL<input className="sc-tool-field" value={override} onChange={(e) => setOverride(e.target.value)} /></label>}
+          </fieldset>;
+        })}
+        {groups.length === 0 && <p className="sc-tool-help">Per-group settings appear when the active show defines groups.</p>}
+        <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit">{busy ? "Saving…" : "Save display settings"}</button>
       </fieldset>
       {!configured && <p role="status">PocketBase persistence is not configured. Display text cannot be saved.</p>}
     </form>}

@@ -10,8 +10,8 @@ it("requires operator auth, validates text and only reports saved after persiste
   try {
     expect((await app.inject({ method: "PUT", url: "/api/admin/settings/display", payload: DEFAULT_DISPLAY_SETTINGS })).statusCode).toBe(401);
     const headers = { authorization: "Bearer operator" };
-    expect((await app.inject({ url: "/api/admin/settings/display", headers })).json()).toEqual({ configured: true, display: DEFAULT_DISPLAY_SETTINGS });
-    for (const payload of [{ ...DEFAULT_DISPLAY_SETTINGS, countdownTemplate: "no time" }, { ...DEFAULT_DISPLAY_SETTINGS, heading: "x".repeat(161) }, { ...DEFAULT_DISPLAY_SETTINGS, secret: "no" }]) {
+    expect((await app.inject({ url: "/api/admin/settings/display", headers })).json()).toEqual({ groups: [], configured: true, display: DEFAULT_DISPLAY_SETTINGS });
+    for (const payload of [{ ...DEFAULT_DISPLAY_SETTINGS, countdownTemplate: "no time" }, { ...DEFAULT_DISPLAY_SETTINGS, heading: "x".repeat(161) }, { ...DEFAULT_DISPLAY_SETTINGS, secret: "no" }, { ...DEFAULT_DISPLAY_SETTINGS, waitingVideoUrl: "javascript:alert(1)" }, { ...DEFAULT_DISPLAY_SETTINGS, groupWaitingVideoUrls: { red: "file:///movie.mp4" } }]) {
       expect((await app.inject({ method: "PUT", url: "/api/admin/settings/display", headers, payload })).statusCode).toBe(400);
     }
     expect(write).not.toHaveBeenCalled();

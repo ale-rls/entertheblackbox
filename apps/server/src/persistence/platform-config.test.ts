@@ -17,7 +17,7 @@ describe("platform display persistence", () => {
   });
   it("creates and updates just the display namespace, including intentionally blank text", async () => {
     const first = setup();
-    const value = { ...DEFAULT_DISPLAY_SETTINGS, heading: "Welcome", networkInstructions: "", showJoinUrl: false };
+    const value = { ...DEFAULT_DISPLAY_SETTINGS, heading: "Welcome", waitingVideoUrl: "/media/lobby.mp4", groupWaitingVideoUrls: { red: "/media/red.mp4", blue: "" }, networkInstructions: "", showJoinUrl: false };
     await writeDisplaySettings(first.client, value);
     expect(first.collection.create).toHaveBeenCalledWith({ key: "display", value }, { requestKey: null });
     const next = setup([{ id: "display-record", value }]);

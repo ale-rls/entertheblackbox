@@ -176,6 +176,11 @@ The display prints `PHONE_JOIN_BASE_URL` at the bottom of the lobby by default a
 
 The onboarding attract playlist bundles every MP4 named `attract-*.mp4` in `apps/display/src/assets/`. The prefix matters: that directory also holds the rendered credits video and other non-lobby media, which must stay out of the playlist. Clips play in filename order, and the **first one is the A/hold clip** — it returns on every other beat, so three clips run A-B-A-C-A-B-A-C. With one clip, that file loops normally. With none, the lobby shows a static centred join QR on black.
 
+Admin → **Display text and waiting video** can override the bundled playlist with a direct video URL. The default applies to the main display and any group that inherits it; each group can instead select its own video or a black waiting screen. Videos loop muted in idle/lobby states and on inactive displays while group paths run. Active scenes retain their normal media. Settings are stored in PocketBase and open displays refresh within five seconds. Blank defaults preserve the existing bundled main-display playlist and black group displays. Existing saved text settings need no migration.
+
+Use a browser-playable HTTP(S) URL or a same-origin path such as `/media/waiting.mp4`, hosted before saving the setting. This control does not upload files or add them to the show's offline media cache; playback requires that URL to remain reachable. Show footage stays out of git. After deploying new client bundles, hard-refresh displays to replace the service-worker-cached app.
+
+
 Attract clips are show content and are gitignored, so a fresh clone has an empty playlist. Drop the files in locally; the glob picks them up with no code change.
 
 Each clip can have a generated perspective QR track, which makes the join code appear fixed to a surface in the shot. Without one it falls back to a static centred square. After adding or replacing an attract MP4, run `pnpm generate-idle-marker-tracks` (requires Python, OpenCV, and NumPy) and commit the updated `apps/display/src/idle/markerTracks.generated.ts` — that file is generated code, not media, so it is tracked.
