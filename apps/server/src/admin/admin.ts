@@ -25,6 +25,7 @@ export interface AdminDataSource {
 }
 
 export type RegisterAdminOptions = {
+  waitingVideos?: () => Promise<readonly { src: string; url: string; available: boolean }[]>;
   displaySettings?: { read: () => Promise<DisplaySettings>; write: (value: DisplaySettings) => Promise<DisplaySettings> };
   /** Validates a bearer token against the operators auth collection. */
   verifyToken: (token: string) => Promise<boolean>;
@@ -137,6 +138,11 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       if (!isAuthorized) return reply.code(401).send({ error: "unauthorized" });
     });
 
+    admin.get("/settings/waiting-videos", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.waitingVideos) return reply.code(503).send({ error: "media_library_unavailable" });
+      return { videos: await options.waitingVideos() };
+    });
     admin.get("/settings/display", async (_request, reply) => {
       reply.header("cache-control", "no-store");
       return { groups: options.groupControl?.catalogue ?? [], configured: Boolean(options.displaySettings), display: await options.displaySettings?.read() ?? DEFAULT_DISPLAY_SETTINGS };

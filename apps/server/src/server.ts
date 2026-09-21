@@ -1,3 +1,4 @@
+import { listWaitingVideos } from "./persistence/waiting-videos.js";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
 import { PersonalAudio } from "./audio/personal-audio.js";
@@ -350,6 +351,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     } }),
     ...(adminData === undefined ? {} : { data: adminData }),
     ...(options.pocketbase === undefined ? {} : {
+      waitingVideos: () => listWaitingVideos(options.pocketbase!, config.mediaDir),
       displaySettings: {
         read: () => readDisplaySettings(options.pocketbase!),
         write: (value) => writeDisplaySettings(options.pocketbase!, value),

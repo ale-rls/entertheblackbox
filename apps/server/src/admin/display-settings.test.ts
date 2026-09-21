@@ -20,3 +20,19 @@ it("requires operator auth, validates text and only reports saved after persiste
     expect((await app.inject({ method: "PUT", url: "/api/admin/settings/display", headers, payload: DEFAULT_DISPLAY_SETTINGS })).statusCode).toBe(500);
   } finally { await app.close(); }
 });
+
+it("authenticates library listing and reports unavailable persistence", async () => {
+  const app = Fastify();
+  const videos = [{ src: "waiting.mp4", url: "/media/waiting.mp4", available: true }];
+  const list = vi.fn(async () => videos);
+  registerAdminRoutes(app, { verifyToken: async (token) => token === "operator", engine: () => null, ready: true, startedAt: 0, waitingVideos: list });
+  try {
+    expect((await app.inject({ url: "/api/admin/settings/waiting-videos" })).statusCode).toBe(401);
+    expect(list).not.toHaveBeenCalled();
+    const response = await app.inject({ url: "/api/admin/settings/waiting-videos", headers: { authorization: "Bearer operator" } });
+    expect(response.json()).toEqual({ videos });
+    expect(response.headers["cache-control"]).toBe("no-store");
+    list.mockRejectedValueOnce(new Error("offline"));
+    expect((await app.inject({ url: "/api/admin/settings/waiting-videos", headers: { authorization: "Bearer operator" } })).statusCode).toBe(500);
+  } finally { await app.close(); }
+});
