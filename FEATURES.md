@@ -77,7 +77,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Live operational status (server/display/playback/participants/session)
 - Active-show scene navigator / live show graph, jump-to-scene, participant dropdown and reassignment — `LiveGraph.tsx`
 - Session controls: start/skip/restart/idle, group-path start, force-reunion
-- Lobby schedule management
+- Lobby schedule management within the combined session controls panel
 - Active show selection (published/pending, queued-until-show-ends)
 - Ghost-cursor fill-target override
 - Audio diagnostics page (`/admin/?view=audio`) — `AudioDiagnostics.tsx`

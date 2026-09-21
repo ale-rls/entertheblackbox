@@ -285,7 +285,6 @@ export function App() {
   // Collapsible dashboard sections: default open/closed is decided once, the
   // first time live status arrives, then left entirely to the operator's own
   // clicks -- re-deciding it on every 2s poll would fight manual toggles.
-  const [lobbySectionOpen, setLobbySectionOpen] = useState(false);
   const [showSectionOpen, setShowSectionOpen] = useState(false);
   const [ghostsSectionOpen, setGhostsSectionOpen] = useState(false);
   const [audioSectionOpen, setAudioSectionOpen] = useState(false);
@@ -293,7 +292,6 @@ export function App() {
   useEffect(() => {
     if (collapsibleDefaultsSet.current || !status) return;
     collapsibleDefaultsSet.current = true;
-    setLobbySectionOpen(status.lifecycle === "idle");
     setAudioSectionOpen(Boolean(status.audio?.error) || Object.keys(status.audio?.deliveryFailures ?? {}).length > 0);
   }, [status]);
   const statusRef = useRef<Status | null>(null);
@@ -774,8 +772,10 @@ export function App() {
         <h2>{refreshing ? "Loading live status…" : "Connect to load live status"}</h2>
         <p className="sc-tool-copy">No operational values are shown until the admin API authenticates this browser session.</p>
       </section> : audioOnly ? <AudioDiagnostics status={status} receivedAt={statusReceivedAt} failed={Boolean(connectionError)} /> : <div className="admin-grid">
-        <section className="sc-tool-panel" aria-labelledby="admin-controls-heading">
+        <section className="sc-tool-panel admin-session-panel" aria-labelledby="admin-controls-heading">
           <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">{status.sessionId ? `Session ${status.sessionId}` : "No active session"}</p><h2 ref={controlsHeadingRef} id="admin-controls-heading" tabIndex={-1}>Session controls</h2></div><StatusLabel status={isActive ? "success" : "info"}>{status.lifecycle ?? "Unavailable"}</StatusLabel></div>
+          <div className="admin-session-layout">
+          <div>
           <dl className="admin-session-facts">
             <div><dt>Current phase</dt><dd className="sc-tool-mono">{status.phaseId ?? "—"}</dd></div>
             <div><dt>Epoch</dt><dd className="sc-tool-mono">{status.phaseEpoch ?? "—"}</dd></div>
@@ -796,9 +796,9 @@ export function App() {
             <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
             <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={!canReturnToIdle || busy} onClick={(event) => requestConfirmation("idle", event.currentTarget)}>Return to idle</button><span>Stop the current show</span></div>
           </div>
-        </section>
-
-        <CollapsibleSection id="admin-lobby-heading" eyebrow="Waiting room timing" title="Lobby schedule" status={{ status: lobbyInfo?.nextStartAt ? "info" : "warning", label: lobbyInfo?.nextStartAt ? "Scheduled" : "Manual start" }} open={lobbySectionOpen} onToggle={setLobbySectionOpen}>
+          </div>
+          <section className="admin-session-schedule" aria-labelledby="admin-lobby-heading">
+            <div className="admin-section-heading"><h3 id="admin-lobby-heading">Lobby schedule</h3><StatusLabel status={lobbyInfo?.nextStartAt ? "info" : "warning"}>{lobbyInfo?.nextStartAt ? "Scheduled" : "Manual start"}</StatusLabel></div>
           <div className="admin-next-start">
             <span>Next start</span>
             <strong>{lobbyInfo?.nextStartAt ? new Date(lobbyInfo.nextStartAt).toLocaleString([], { dateStyle: "medium", timeStyle: "medium" }) : "No automatic start"}</strong>
@@ -825,7 +825,9 @@ export function App() {
               <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={savingLobby} onClick={() => void saveLobbyTimes(lobbyInfo!.startTimes.filter((time) => time !== startAt), "Start time removed.")}>Remove</button>
             </li>)}
           </ol> : <p className="sc-tool-copy">The lobby waits until an operator presses Start show.</p>}
-        </CollapsibleSection>
+          </section>
+          </div>
+        </section>
 
         <RunOfShowPanel />
 

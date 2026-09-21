@@ -135,3 +135,14 @@
 .admin-media-list a { overflow-wrap: anywhere; }
 @media (max-width: 1000px) { .admin-status-bar { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .admin-status-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); } .admin-header { gap: var(--sc-tool-space-3); } }
+
+.admin-session-panel { grid-column: 1 / -1; }
+.admin-session-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: var(--sc-tool-space-7); }
+.admin-session-schedule { min-width: 0; border-inline-start: 1px solid var(--sc-tool-color-rule); padding-inline-start: var(--sc-tool-space-7); }
+.admin-session-schedule h3 { margin: 0; font-size: var(--sc-tool-font-size-3); }
+.admin-session-schedule .admin-section-heading { align-items: center; }
+.admin-session-schedule .admin-connection-form { grid-template-columns: minmax(0, 1fr) auto; }
+@media (max-width: 1000px) {
+  .admin-session-layout { grid-template-columns: minmax(0, 1fr); }
+  .admin-session-schedule { border-inline-start: 0; padding-inline-start: 0; border-block-start: 1px solid var(--sc-tool-color-rule); padding-block-start: var(--sc-tool-space-6); }
+}

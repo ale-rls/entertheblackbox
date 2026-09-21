@@ -216,7 +216,8 @@ describe("Admin operations UI", () => {
     expect(document.querySelector("#admin-connection-heading")).toBeNull();
     expect(document.querySelector("#admin-flow-heading")).toBeNull();
     const headings = [...document.querySelectorAll(".admin-grid h2")].map((node) => node.textContent);
-    expect(headings.slice(0, 3)).toEqual(["Session controls", "Lobby schedule", "Run of show"]);
+    expect(headings.slice(0, 2)).toEqual(["Session controls", "Run of show"]);
+    expect(document.querySelector("#admin-lobby-heading")?.closest(".sc-tool-panel")).toBe(document.querySelector("#admin-controls-heading")?.closest(".sc-tool-panel"));
   });
 
   it("shows the published flow and confirms a direct jump to any other scene", async () => {
