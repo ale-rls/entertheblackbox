@@ -320,6 +320,26 @@ describe("Studio feedback and keyboard entry", () => {
     expect(document.querySelector('.media-row[data-selected="true"]')?.textContent).toContain("conclusion.webm");
   });
 
+  it("places a newly added phase at the current pointer position on the canvas", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+
+    const canvas = document.querySelector<HTMLElement>('[aria-label="Scenario graph"]')!;
+    vi.spyOn(canvas, "getBoundingClientRect").mockReturnValue({
+      x: 0, y: 0, left: 0, top: 0, right: 1200, bottom: 900, width: 1200, height: 900, toJSON: () => ({}),
+    } as DOMRect);
+    const move = new Event("mousemove", { bubbles: true });
+    Object.defineProperties(move, { clientX: { value: 650 }, clientY: { value: 320 } });
+    await act(async () => { canvas.dispatchEvent(move); });
+
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Narration (text only, no media)").click(); });
+    await flush();
+
+    const node = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="narration-"]')).at(-1)!;
+    expect(node.style.transform).toContain("translate(650px,320px)");
+  });
+
   it("authors a still image + MP3 phase with type-filtered library pickers", async () => {
     media.load.mockResolvedValue({ files: [
       { src: "opening.mp4", bytes: 1_000, hash: "video", durationMs: 1_000 },
