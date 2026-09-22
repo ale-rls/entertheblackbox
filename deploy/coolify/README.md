@@ -196,6 +196,27 @@ If deployment fails, keep the old containers and volume, correct the reported
 missing variable or health check, and redeploy. Do not create a fresh
 PocketBase volume as a recovery step.
 
+## Auto-redeploy on merge to `main`
+
+Coolify can redeploy `frontend` automatically whenever a PR is merged to
+`main`, with no CI changes and no webhook secret to manage. This only works
+when the resource's Git source is connected through Coolify's **GitHub App**
+integration rather than a plain Git URL, since the App is what lets Coolify
+receive push events for the repository. Check the resource's Git Source
+setting first; if it's a manual URL, switch it to the GitHub App connection
+before the toggle below will fire.
+
+With the GitHub App connected:
+
+1. Open the `frontend` resource in Coolify.
+2. Go to **Configuration → General**.
+3. Enable **Automatic Deployment**.
+4. Confirm the tracked branch is `main`.
+
+Every push to `main` — i.e. every merge — then triggers a build and deploy
+with no manual "Deploy" click. This does not change anything about `verify`
+in CI: that job still only builds and tests, and does not itself deploy.
+
 ## Personal audio too slow over the deployed bridge
 
 `frontend` stays on this Coolify deployment; only the Icecast/Liquidsoap
