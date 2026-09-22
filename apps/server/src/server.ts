@@ -1,5 +1,7 @@
 import { Rehearsals } from "./rehearsal/rehearsal.js";
 import { listWaitingVideos } from "./persistence/waiting-videos.js";
+import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
+import { basename } from "node:path";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
 import { PersonalAudio } from "./audio/personal-audio.js";
