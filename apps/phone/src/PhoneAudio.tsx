@@ -99,9 +99,10 @@ export function PhoneAudio({ participantLease, streamUrlOverride, suspended = fa
   useEffect(() => { player.current?.setSuspended(suspended); }, [suspended, hasUrl]);
 
   const action = url ? playbackAction(state) : null;
-  return <section style={suspended || !active ? { display: "none" } : undefined} className="phone-audio" aria-label="Headphone audio" onPointerDown={(event) => event.stopPropagation()}>
+  const message = url ? playbackMessage[state] : registration;
+  return <section style={suspended || !active || message === null ? { display: "none" } : undefined} className="phone-audio" aria-label="Headphone audio" onPointerDown={(event) => event.stopPropagation()}>
     <audio ref={element} preload="none" />
-    <p role="status">{url ? playbackMessage[state] : registration}</p>
+    {message && <p role="status">{message}</p>}
     {action && <button type="button" onClick={() => player.current?.play()}>{action}</button>}
   </section>;
 }

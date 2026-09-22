@@ -160,5 +160,5 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 ### Current group on phones and admin
 
-- Participant snapshots include current group metadata and whether the local scene has phone audio, for initial and nested selections, transfers, and reconnects (`packages/protocol`, `apps/server`). Phones show the current group, respect hidden scene cursors, and display only the applicable audio controls. The native stream remains mounted across silent stages; its connected status does not assert audible content (`apps/phone`).
+- Participant snapshots include current group metadata and whether the local scene has phone audio, for initial and nested selections, transfers, and reconnects (`packages/protocol`, `apps/server`). Phones show the current group, respect hidden scene cursors, and display only the applicable audio controls. The native stream remains mounted across silent stages; normal playback displays no success banner, since playback state does not confirm audible output (`apps/phone`).
 - Admin participant labels and selectors use current membership even while a nested selection is still running on its parent timeline (`apps/admin`).

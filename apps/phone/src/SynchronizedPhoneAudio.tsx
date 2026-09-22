@@ -3,12 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import type { ServerClock } from "@entertheblackbox/shared";
 import { SynchronizedAudio, type AudioCue, type SyncStatus } from "./lib/synchronized-audio";
 
-const messages: Record<SyncStatus, string> = {
+const messages: Record<SyncStatus, string | null> = {
   disabled: "Enable synchronized audio and keep this page open.",
   loading: "Preparing synchronized soundtrack…",
   ready: "Synchronized audio enabled. Keep this page open.",
   waiting: "Waiting for the synchronized scene…",
-  playing: "Synchronized scene audio is playing.",
+  playing: null,
   error: "Soundtrack unavailable. Check your connection and retry.",
 };
 export function SynchronizedPhoneAudio({ clock, cue }: { clock: ServerClock; cue: AudioCue | null }) {
@@ -36,7 +36,7 @@ export function SynchronizedPhoneAudio({ clock, cue }: { clock: ServerClock; cue
     return () => { cancelled = true; clearTimeout(retry); audio.dispose(); player.current = undefined; };
   }, [clock]);
   useEffect(() => { player.current?.setCue(cue); }, [cue?.key, cue?.src, cue?.startedAt, cue?.endsAt, clock]);
-  if (!cue) return null;
+  if (!cue || messages[status] === null) return null;
   return <section className="phone-audio" aria-label="Synchronized audio" onPointerDown={(event) => event.stopPropagation()}>
     <p role="status">{messages[status]}</p>
     {(status === "disabled" || status === "error") && <button type="button" onClick={() => void player.current?.enable()}>Enable synchronized audio</button>}

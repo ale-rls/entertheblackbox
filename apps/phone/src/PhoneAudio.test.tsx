@@ -86,7 +86,8 @@ describe("phone audio lifecycle", () => {
     } });
     try {
       await render(); await start();
-      expect(host.textContent).toContain("Headphone stream connected");
+      expect(host.querySelector("[role=status]")).toBeNull();
+      expect(host.querySelector("section")!.style.display).toBe("none");
       await act(async () => root.render(null));
       expect(load).toHaveBeenCalledTimes(2);
     } finally { Reflect.deleteProperty(navigator, "mediaSession"); }
@@ -100,6 +101,7 @@ it("hides silent-stage controls without replacing the stream element", async () 
   expect(host.querySelector("section")!.style.display).toBe("none");
   expect(host.querySelector("audio")).toBe(audio);
   await render();
-  expect(host.querySelector("section")!.style.display).toBe("");
+  expect(host.querySelector("section")!.style.display).toBe("none");
+  expect(host.querySelector("[role=status]")).toBeNull();
   expect(play).toHaveBeenCalledTimes(1);
 });

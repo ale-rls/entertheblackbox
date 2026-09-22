@@ -1,10 +1,10 @@
 import { AudioProgress } from "./audio-progress";
 
 export type PlaybackState = "ready" | "connecting" | "playing" | "reconnecting" | "blocked" | "paused";
-export const playbackMessage: Record<PlaybackState, string> = {
+export const playbackMessage: Record<PlaybackState, string | null> = {
   ready: "Put on your headphones, then start the audio.",
   connecting: "Connecting headphones… Keep this page open until you hear audio.",
-  playing: "Headphone stream connected.",
+  playing: null,
   reconnecting: "Audio interrupted. Reconnecting…",
   blocked: "Tap Resume headphones to allow playback.",
   paused: "Headphones paused.",
