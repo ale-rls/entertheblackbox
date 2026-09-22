@@ -273,7 +273,8 @@ export function App() {
     setSettingMusic(true);
     try {
       const response = await api("audio/music", connectedToken, {
-        method: "POST", body: JSON.stringify({ src: stop ? null : musicSource, volume: musicVolume / 100 }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ src: stop ? null : musicSource, volume: musicVolume / 100 }),
       });
       if (!response.ok) throw new Error(await response.text());
       await refresh();
