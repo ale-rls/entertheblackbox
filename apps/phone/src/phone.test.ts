@@ -457,3 +457,17 @@ describe("phoneReducer", () => {
     });
   });
 });
+
+it("replaces membership and audio on scene changes and respects hidden cursors", () => {
+  const snapshot = { t: "phase" as const, v: 2 as const, sessionId: "s", phaseEpoch: 1, serverTime: 0,
+    currentGroup: { id: "trade", label: "Trade" }, phoneAudioActive: true,
+    phase: { kind: "video" as const, id: "film", src: "film.mp4", expectedDurationMs: 1000, next: "idle", showCursors: false,
+      scenarioVersion: "test", startedAt: 0, deadlineAt: 1000 } };
+  const state = phoneReducer(initialPhoneState, { type: "server-message", message: snapshot });
+  expect(state.currentGroup?.label).toBe("Trade");
+  expect(state.phoneAudioActive).toBe(true);
+  expect(state.inputOpen).toBe(false);
+  const waiting = phoneReducer(state, { type: "server-message", message: { ...snapshot, phaseEpoch: 2, phoneAudioActive: false } });
+  expect(waiting.phoneAudioActive).toBe(false);
+  expect(waiting.currentGroup?.id).toBe("trade");
+});

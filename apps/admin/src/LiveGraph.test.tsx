@@ -60,3 +60,14 @@ describe("live graph", () => {
     expect(onAssign).toHaveBeenCalledWith("Late", "b");
   });
 });
+
+it("shows selected subgroup membership while its parent selection is still running", async () => {
+  const element = document.createElement("div"); document.body.append(element); root = createRoot(element);
+  const choosing: Status = { ...status,
+    groups: [{ id: "a", label: "Actors" }, { id: "trade", label: "Chosen trade" }],
+    participants: status.participants.map(p => ({ ...p, groupId: "trade" })),
+    groupPaths: [{ ...status.groupPaths[0]!, phaseTitle: "Choose a trade" }],
+  };
+  await act(() => root.render(<LiveGraph flow={flow} status={choosing} busy={false} onJump={vi.fn()} onAssign={vi.fn()} />));
+  expect(element.querySelector(".live-roster")?.textContent).toContain("Chosen trade · Choose a trade");
+});

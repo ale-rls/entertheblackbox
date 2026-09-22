@@ -379,7 +379,7 @@ export function App() {
           onPointerUp={onPointerEnd}
           onPointerCancel={onPointerEnd}
         >
-          {(state.voting === null || state.voting.method === "phone-cursor") && (
+          {state.inputOpen && (state.voting === null || state.voting.method === "phone-cursor") && (
             <p className="trackpad-instruction">Wische um deinen Cursor zu bewegen</p>
           )}
           {state.voting?.method === "physical" && (
@@ -407,7 +407,7 @@ export function App() {
             </section>
           )}
           {state.phoneDisplayText !== null && <p className="phone-phase-text" aria-live="polite">{state.phoneDisplayText}</p>}
-          {identity && <div className="live-cursor-field" aria-hidden="true"><span
+          {identity && state.inputOpen && <div className="live-cursor-field" aria-hidden="true"><span
               ref={cursorMarker}
               className="live-cursor-dot"
               style={{
@@ -415,7 +415,7 @@ export function App() {
                 transform: cursorTransform(position.current, cursorSurfaceSize.current),
               }}
             /></div>}
-          {!state.inputOpen && (
+          {!state.inputOpen && !state.groupSelection && !state.phoneDisplayText && (
             <p className="watch-screen">{state.voting?.closed ? "Abstimmung beendet" : state.join.kind === "accepted" ? `${submittedName}, watch the screen` : "Joining…"}</p>
           )}
           {state.groupSelection !== null && (
@@ -475,8 +475,9 @@ export function App() {
         startedAt: state.synchronizedPhase.startedAt,
         endsAt: state.synchronizedPhase.startedAt + state.synchronizedPhase.expectedDurationMs,
       } : null} />}
-      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} suspended={state.synchronizedPhase !== null} />}
+      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} suspended={state.synchronizedPhase !== null} active={state.phoneAudioActive} />}
       <footer className="hud">
+        {state.currentGroup && <span className="phone-current-group" aria-label="Deine Gruppe" style={{ color: state.currentGroup.color }}>{state.currentGroup.label}</span>}
         {identity && (
           <span
             className="identity-marker"

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  audienceGroupSchema,
   fourQuadrantFieldSchema,
   phaseSchema,
   polygonZonesFieldSchema,
@@ -237,6 +238,8 @@ export const snapshotSchema = z.object({
   v,
   sessionId: nonEmpty,
   routingEpoch: z.number().int().nonnegative().optional(),
+  currentGroup: audienceGroupSchema.nullable().optional(),
+  phoneAudioActive: z.boolean().optional(),
   phaseEpoch: z.number().int().nonnegative(),
   phase: phaseSnapshotSchema,
   serverTime: timestamp,
@@ -247,6 +250,8 @@ export const phaseMessageSchema = z.object({
   v,
   sessionId: nonEmpty,
   routingEpoch: z.number().int().nonnegative().optional(),
+  currentGroup: audienceGroupSchema.nullable().optional(),
+  phoneAudioActive: z.boolean().optional(),
   phaseEpoch: z.number().int().nonnegative(),
   phase: phaseSnapshotSchema,
   serverTime: timestamp,

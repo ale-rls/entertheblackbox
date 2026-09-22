@@ -59,7 +59,7 @@ export function LiveGraph({ flow, status, busy, onJump, onAssign }: Props) {
     : status.phaseId !== scene.id);
   const roster = (people: Status["participants"]) => <ul className="live-roster">{people.map((p) => <li key={p.clientId}>
     <strong title={p.clientId}>{p.name}</strong><span>{p.connected ? "Connected" : "Disconnected"}</span>
-    <small>{(() => { const path = paths.find((item) => item.memberIds.includes(p.clientId)); return path ? `${path.label} · ${path.done ? "Waiting at reunion" : path.phaseTitle}` : status.groupPathsStarted ? "Needs assignment" : "Shared timeline"; })()}</small>
+    <small>{(() => { const path = paths.find((item) => item.memberIds.includes(p.clientId)); return path ? `${status.groups?.find((g) => g.id === p.groupId)?.label ?? path.label} · ${path.done ? "Waiting at reunion" : path.phaseTitle}` : status.groupPathsStarted ? "Needs assignment" : `${status.groups?.find((g) => g.id === p.groupId)?.label ?? "Unassigned"} · Shared timeline`; })()}</small>
     <label>Move {p.name} to group<select className="sc-tool-select" aria-label={`Move ${p.name} to group`} value="" disabled={busy} onChange={(event) => void onAssign(p.clientId, event.target.value)}>
       <option value="">Choose destination…</option>
       {paths.filter((path) => path.acceptingParticipants !== false).map((path) => <option key={path.groupId} value={path.groupId} disabled={path.memberIds.includes(p.clientId)}>{path.label} · {path.done ? "Waiting at reunion" : path.phaseTitle}</option>)}

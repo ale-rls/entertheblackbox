@@ -30,6 +30,8 @@ export type PhoneState = {
   routingEpoch: number;
   /** Cursor input is accepted in the lobby, videos, and position questions. */
   inputOpen: boolean;
+  currentGroup: NonNullable<Extract<ServerToClientMessage, { t: "snapshot" }>["currentGroup"]> | null;
+  phoneAudioActive: boolean;
   currentPhaseId: string | null;
   statusMessage: string | null;
   reloadRequired: ReloadMessage | null;
@@ -55,6 +57,8 @@ export const initialPhoneState: PhoneState = {
   synchronizedPhase: null,
   routingEpoch: 0,
   inputOpen: false,
+  currentGroup: null,
+  phoneAudioActive: false,
   currentPhaseId: null,
   statusMessage: null,
   reloadRequired: null,
@@ -128,12 +132,11 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         phaseEpoch: m.phaseEpoch,
         routingEpoch,
         currentPhaseId: m.phase.id,
+        currentGroup: m.currentGroup ?? null,
+        phoneAudioActive: m.phoneAudioActive ?? false,
         synchronizedPhase: m.phase.kind === "video" && m.phase.phoneAudioMode === "synchronized" ? m.phase : null,
-        inputOpen:
-          m.phase.kind === "idle" ||
-          m.phase.kind === "video" ||
-          m.phase.kind === "position-question" ||
-          m.phase.kind === "video-position-question",
+        inputOpen: m.phase.kind === "idle" ||
+          ((m.phase.kind === "video" || m.phase.kind === "position-question" || m.phase.kind === "video-position-question") && m.phase.showCursors !== false),
         phaseTiming,
         voting: null,
         groupSelection: null,
@@ -145,7 +148,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
       return { ...state, groupSelection: m };
     case "voting_options":
       if (m.sessionId !== state.sessionId || m.phaseEpoch !== state.phaseEpoch) return state;
-      return { ...state, voting: m, inputOpen: !m.closed && m.method === "phone-cursor" };
+      return { ...state, voting: m, inputOpen: state.inputOpen && !m.closed && m.method === "phone-cursor" };
     case "status":
       return { ...state, statusMessage: m.message };
     case "reload":
