@@ -449,9 +449,16 @@ describe("Admin operations UI", () => {
 
 it("plays and stops background music while the show is active", async () => {
   localStorage.setItem("admin-token", "operator-token");
-  const { requests } = createAdminFetch({ status: { ...activeStatus, audio: {
+  const { mock, requests } = createAdminFetch({ status: { ...activeStatus, audio: {
     configured: true, players: [], soundcheckSources: ["music.mp3"], backgroundMusic: null,
   } } });
+  // Real fetch() defaults a plain string body's Content-Type to text/plain,
+  // which Fastify then leaves unparsed instead of JSON -- so every music
+  // request must set this header explicitly. See #133.
+  const musicContentType = () => {
+    const calls = mock.mock.calls.filter(([input]) => String(input).endsWith("/audio/music"));
+    return new Headers(calls.at(-1)?.[1]?.headers).get("content-type");
+  };
   await renderApp();
   expect(button("Play / apply music").disabled).toBe(true);
   const select = document.querySelector('[aria-label="Background music"] select') as HTMLSelectElement;
@@ -463,7 +470,9 @@ it("plays and stops background music while the show is active", async () => {
   await act(async () => button("Play / apply music").click());
   await flush();
   expect(JSON.parse(requests.find(r => r.url.endsWith("/audio/music"))!.body!)).toEqual({ src: "music.mp3", volume: 0.2 });
+  expect(musicContentType()).toBe("application/json");
   await act(async () => button("Stop music").click());
   await flush();
   expect(JSON.parse(requests.filter(r => r.url.endsWith("/audio/music")).at(-1)!.body!)).toEqual({ src: null, volume: 0.2 });
+  expect(musicContentType()).toBe("application/json");
 });
