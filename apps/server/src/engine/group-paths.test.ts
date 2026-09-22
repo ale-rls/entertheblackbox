@@ -352,7 +352,10 @@ describe("independent group paths", () => {
     expect(ki.snapshot.phase.id).toBe("roles");
     expect(theater.snapshot.phase.id).toBe("film");
     expect(ki.sent.at(-1).groups.map((group: { label: string }) => group.label)).toEqual(["Actors", "Direction", "Decision"]);
-    h.choose(ki, "e"); h.tick(200);
+    h.choose(ki, "e");
+    expect(ki.snapshot.currentGroup).toMatchObject({ id: "e", label: "Decision" });
+    expect(theater.snapshot.currentGroup).toMatchObject({ id: "b", label: "Builders" });
+    h.tick(200);
     expect(h.groups.groupFor("one")).toBe("e");
     expect(ki.snapshot.phase.id).toBe("role-vote");
     expect(ki.sent.at(-1)).toMatchObject({ t: "voting_options", method: "phone-buttons" });
@@ -360,6 +363,7 @@ describe("independent group paths", () => {
     const late = h.phone("late");
     expect(h.engine.adminAssignGroup("late", "e")).toEqual({ ok: true });
     expect(late.snapshot.phase.id).toBe("role-vote");
+    expect(late.snapshot.currentGroup).toMatchObject({ id: "e", label: "Decision" });
     expect(h.audio.at(-1)).toEqual({ ids: ["late"], phase: "role-vote" });
     expect(h.engine.groupPaths.find((p) => p.groupId === "e")?.memberIds).toEqual(["one", "late"]);
     expect(h.engine.groupPaths.find((p) => p.groupId === "a")?.memberIds).toEqual([]);
@@ -498,4 +502,22 @@ describe("independent group paths", () => {
     expect(h.engine.adminSkipGroup("a", undefined, "wrong-id")).toEqual({ ok: false, reason: "stale" });
     h.engine.stop();
   });
+});
+
+it("sends each phone its own selected group and audio state, including waiting and reconnect", () => {
+  const configured = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map((phase) =>
+    phase.kind === "group-branch" ? { ...phase, branches: phase.branches.map((branch) => ({ ...branch, phoneAudioSrc: "intro.mp3" })) }
+    : phase.id === "film" ? { ...phase, phoneAudioSrc: "film.mp3" } : phase) });
+  const h = setup(configured); h.display();
+  const a = h.phone("one"), b = h.phone("two"); h.engine.adminStart();
+  h.choose(a, "a"); h.choose(b, "b");
+  expect(a.snapshot).toMatchObject({ currentGroup: { id: "a", label: "Actors" }, phoneAudioActive: true });
+  expect(b.snapshot).toMatchObject({ currentGroup: { id: "b", label: "Builders" }, phoneAudioActive: true });
+  h.tick(100);
+  expect(a.snapshot).toMatchObject({ currentGroup: { id: "a" }, phoneAudioActive: false, phase: { id: "vote" } });
+  expect(b.snapshot).toMatchObject({ currentGroup: { id: "b" }, phoneAudioActive: true, phase: { id: "film" } });
+  h.engine.adminSkipGroup("b");
+  expect(b.snapshot).toMatchObject({ currentGroup: { id: "b" }, phoneAudioActive: false });
+  expect(h.phone("two").snapshot).toMatchObject({ currentGroup: { id: "b" }, phoneAudioActive: false });
+  h.engine.stop();
 });

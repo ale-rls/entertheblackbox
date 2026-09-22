@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { AudioPlayback, playbackAction, playbackMessage, type PlaybackState } from "./lib/audio-playback";
 
 /** One native media element stays mounted across scene and WebSocket changes. */
-export function PhoneAudio({ participantLease, streamUrlOverride, suspended = false }: { participantLease: string; streamUrlOverride?: string | null; suspended?: boolean }) {
+export function PhoneAudio({ participantLease, streamUrlOverride, suspended = false, active = true }: { participantLease: string; streamUrlOverride?: string | null; suspended?: boolean; active?: boolean }) {
   const element = useRef<HTMLAudioElement>(null);
   const player = useRef<AudioPlayback>();
   const [url, setUrl] = useState<string | null>(null);
@@ -99,7 +99,7 @@ export function PhoneAudio({ participantLease, streamUrlOverride, suspended = fa
   useEffect(() => { player.current?.setSuspended(suspended); }, [suspended, hasUrl]);
 
   const action = url ? playbackAction(state) : null;
-  return <section style={suspended ? { display: "none" } : undefined} className="phone-audio" aria-label="Headphone audio" onPointerDown={(event) => event.stopPropagation()}>
+  return <section style={suspended || !active ? { display: "none" } : undefined} className="phone-audio" aria-label="Headphone audio" onPointerDown={(event) => event.stopPropagation()}>
     <audio ref={element} preload="none" />
     <p role="status">{url ? playbackMessage[state] : registration}</p>
     {action && <button type="button" onClick={() => player.current?.play()}>{action}</button>}

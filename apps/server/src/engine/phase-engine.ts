@@ -518,6 +518,7 @@ export class PhaseEngine {
       if (this.currentPhase().kind === "group-branch") this.selectionCohort.add(participantId);
       this.options.onParticipantPhase?.([participantId], this.currentPhase(), this.phaseStartedAt);
       for (const [socket, id] of this.participantIds) if (id === participantId) {
+        this.send(socket, this.getSnapshotMessage());
         this.sendGroupSelectionOptions(socket);
         this.sendVotingOptions(socket);
       }
@@ -919,7 +920,8 @@ export class PhaseEngine {
           phase.branches.some((branch) => branch.groupId === message.groupId)
         ) {
           this.groupSelection?.select(participantId, message.groupId);
-          this.options.onParticipantPhase?.([participantId], phase, this.phaseStartedAt);
+          this.options.onParticipantPhase?.([participantId], phase, this.now());
+          this.send(socket, this.getSnapshotMessage());
           this.sendGroupSelectionOptions(socket);
         }
         return;
@@ -1724,17 +1726,11 @@ export class PhaseEngine {
     const openSockets = [...this.clients].filter((socket) => isOpen(socket) &&
       !(this.pathsStarted && this.participantIds.has(socket) && this.pathForParticipant(this.participantIds.get(socket)!)));
     if (openSockets.length === 0) return;
-    const encodedByRoute = new Map<number | undefined, string>();
-    for (const socket of openSockets) {
-      const id = this.participantIds.get(socket);
-      const routingEpoch = id !== undefined && (message.t === "snapshot" || message.t === "phase")
-        ? this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0 : undefined;
-      let encoded = encodedByRoute.get(routingEpoch);
-      if (encoded === undefined) {
-        encoded = encodeMessage(routingEpoch !== undefined && (message.t === "snapshot" || message.t === "phase") ? { ...message, routingEpoch } : message);
-        encodedByRoute.set(routingEpoch, encoded);
-      }
-      socket.send(encoded);
+    if (message.t === "snapshot" || message.t === "phase") {
+      for (const socket of openSockets) this.send(socket, message);
+    } else {
+      const encoded = encodeMessage(message);
+      for (const socket of openSockets) socket.send(encoded);
     }
   }
 
@@ -1787,7 +1783,14 @@ export class PhaseEngine {
     if (!isOpen(socket)) return;
     const id = this.participantIds.get(socket);
     if (id !== undefined && (message.t === "snapshot" || message.t === "phase")) {
-      socket.send(encodeMessage({ ...message, routingEpoch: this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0 }));
+      const groupId = this.groupSelection?.current(id) ?? null;
+      const currentGroup = this.scenario.groups?.find((group) => group.id === groupId) ?? null;
+      const phase = message.phase;
+      const phoneAudioActive = !this.pathDone && (phase.kind === "idle" ? false
+        : phase.kind === "group-branch" ? !!phase.branches.find((branch) => branch.groupId === groupId)?.phoneAudioSrc
+        : !!((groupId === null ? undefined : phase.phoneAudioByGroup?.[groupId]) ?? phase.phoneAudioSrc));
+      socket.send(encodeMessage({ ...message, currentGroup, phoneAudioActive,
+        routingEpoch: this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0 }));
     } else socket.send(encodeMessage(message));
   }
 

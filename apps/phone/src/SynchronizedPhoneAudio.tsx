@@ -13,7 +13,6 @@ const messages: Record<SyncStatus, string> = {
 };
 export function SynchronizedPhoneAudio({ clock, cue }: { clock: ServerClock; cue: AudioCue | null }) {
   const player = useRef<SynchronizedAudio>();
-  const [available, setAvailable] = useState(false);
   const [status, setStatus] = useState<SyncStatus>("disabled");
   useEffect(() => {
     const audio = new SynchronizedAudio(clock, setStatus);
@@ -27,7 +26,6 @@ export function SynchronizedPhoneAudio({ clock, cue }: { clock: ServerClock; cue
         const sources: unknown = await response.json();
         if (!Array.isArray(sources) || sources.some((s) => typeof s !== "string")) throw new Error("invalid catalogue");
         if (cancelled) return;
-        setAvailable(sources.length > 0);
         for (const src of sources as string[]) {
           if (cancelled) return;
           await audio.preload(src).catch(() => { /* Active scene reports failures and allows retry. */ });
@@ -38,7 +36,7 @@ export function SynchronizedPhoneAudio({ clock, cue }: { clock: ServerClock; cue
     return () => { cancelled = true; clearTimeout(retry); audio.dispose(); player.current = undefined; };
   }, [clock]);
   useEffect(() => { player.current?.setCue(cue); }, [cue?.key, cue?.src, cue?.startedAt, cue?.endsAt, clock]);
-  if (!available && !cue) return null;
+  if (!cue) return null;
   return <section className="phone-audio" aria-label="Synchronized audio" onPointerDown={(event) => event.stopPropagation()}>
     <p role="status">{messages[status]}</p>
     {(status === "disabled" || status === "error") && <button type="button" onClick={() => void player.current?.enable()}>Enable synchronized audio</button>}

@@ -4,7 +4,7 @@ export type PlaybackState = "ready" | "connecting" | "playing" | "reconnecting" 
 export const playbackMessage: Record<PlaybackState, string> = {
   ready: "Put on your headphones, then start the audio.",
   connecting: "Connecting headphones… Keep this page open until you hear audio.",
-  playing: "Headphone audio is playing.",
+  playing: "Headphone stream connected.",
   reconnecting: "Audio interrupted. Reconnecting…",
   blocked: "Tap Resume headphones to allow playback.",
   paused: "Headphones paused.",
