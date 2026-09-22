@@ -14,6 +14,7 @@ import {
   type ServerRuntime,
 } from "./index.js";
 import type { AdminDataSource } from "./admin/index.js";
+import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 
 const runtimes: ServerRuntime[] = [];
 
@@ -251,6 +252,47 @@ describe("HTTP readiness and bundles", () => {
     expect(registered.json()).toEqual({ streamUrl: `https://audio.example/stream/${identity.clientId}` });
     expect(bridgeCalls).toContain(`http://bridge:8090/players/${identity.clientId}/active`);
     phone.close();
+  });
+
+  // Regression for #111: a merge conflict resolution dropped the `basename`/
+  // `syncMediaFromPocketbase` imports that this code path needs, so it only
+  // failed once something actually called sources()/set() with a track that
+  // isn't in the published manifest -- admin.test.ts's audioMusic mocks
+  // never touch these real closures, so this has to go through buildServer.
+  it("plays an unpublished music track selected from the shared media library", async () => {
+    const bridgeCalls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      bridgeCalls.push(url);
+      if (url === "https://pocketbase.example/files/library-only.mp3") return new Response("mp3-bytes");
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const config = {
+      ...await fixture(),
+      audio: { url: "http://bridge:8090", token: "secret", publicUrl: "https://audio.example" },
+    };
+    const pocketbase = {
+      ensureAuth: vi.fn(async () => {}),
+      pb: {
+        collection: vi.fn(() => ({
+          getFullList: vi.fn(async () => [{ id: "rec1", src: "library-only.mp3", file: "library-only.mp3", bytes: 9 }]),
+        })),
+        files: { getURL: vi.fn(() => "https://pocketbase.example/files/library-only.mp3") },
+      },
+    };
+    const runtime = await buildServer({
+      config, pocketbase: pocketbase as unknown as PocketBaseClient, verifyOperatorToken: async () => true,
+    });
+    runtimes.push(runtime);
+
+    const response = await runtime.app.inject({
+      method: "POST", url: "/api/admin/audio/music",
+      headers: { authorization: "Bearer any-token" },
+      payload: { src: "library-only.mp3", volume: 0.4 },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(pocketbase.ensureAuth).toHaveBeenCalled();
+    expect(bridgeCalls).toContain("http://bridge:8090/music");
   });
 
   it("accepts signed end-of-show movement consent and rejects another lease", async () => {
