@@ -27,6 +27,7 @@ export type DisplayConnectionOptions = {
   roomId: string;
   displayToken: string;
   groupId?: string;
+  signageId?: string;
   onMessage: (message: ServerToClientMessage) => void;
   onStatusChange?: (status: ConnectionStatus) => void;
   webSocketFactory?: (url: string) => WebSocket;
@@ -97,6 +98,7 @@ export class DisplayConnection {
         roomId: this.options.roomId,
         displayToken: this.options.displayToken,
         ...(this.options.groupId === undefined ? {} : { groupId: this.options.groupId }),
+        ...(this.options.signageId === undefined ? {} : { signageId: this.options.signageId }),
       });
       this.sendPing();
       this.pingTimer = setInterval(() => this.sendPing(), this.pingIntervalMs);

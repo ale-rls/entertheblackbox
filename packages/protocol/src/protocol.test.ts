@@ -32,6 +32,15 @@ const clientMessages: ClientToServerMessage[] = [
     roomId: "room-1",
     displayToken: "secret",
   },
+  {
+    t: "display_join",
+    v: 2,
+    clientVersion: "1.0.0",
+    installationId: "inst-1",
+    roomId: "room-1",
+    displayToken: "secret",
+    signageId: "lobby",
+  },
   { t: "video_ended", v: 2, sessionId: "s1", phaseId: "intro", phaseEpoch: 1, mediaId: "intro.mp4" },
   { t: "display_heartbeat", v: 2, sessionId: "s1", phaseId: "intro", phaseEpoch: 1, clientTime: 5 },
   {

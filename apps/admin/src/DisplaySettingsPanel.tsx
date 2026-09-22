@@ -3,6 +3,9 @@ import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings }
 
 type LibraryVideo = { src: string; url: string; available: boolean };
 
+/** Signage kiosks aren't part of the running show, so this list is fixed here rather than fetched. */
+const SIGNAGE_SPOTS = [{ id: "lobby", label: "Lobby entrance" }];
+
 export function DisplaySettingsPanel({ token }: { token: string }) {
   const [value, setValue] = useState<DisplaySettings>({ ...DEFAULT_DISPLAY_SETTINGS });
   const [videos, setVideos] = useState<LibraryVideo[]>([]);
@@ -103,6 +106,23 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
           </fieldset>;
         })}
         {groups.length === 0 && <p className="sc-tool-help">Per-group settings appear when the active show defines groups.</p>}
+        <h3>Signage kiosks</h3>
+        <p className="sc-tool-help">A signage kiosk always shows its video and the live join QR code, independent of the show's state — for a screen near the entrance, for example. Open it at <span className="sc-tool-mono">/display/?signage=&lt;id&gt;</span>.</p>
+        {SIGNAGE_SPOTS.map((spot) => {
+          const override = value.signageVideoUrls[spot.id];
+          const setOverride = (url: string | undefined) => {
+            const overrides = { ...value.signageVideoUrls };
+            if (url === undefined) delete overrides[spot.id]; else overrides[spot.id] = url;
+            edit({ signageVideoUrls: overrides });
+          };
+          return <fieldset key={spot.id}>
+            <legend>{spot.label} (?signage={spot.id})</legend>
+            <label className="sc-tool-label">{spot.label} video<select className="sc-tool-field" value={override === undefined ? "inherit" : override} onChange={(e) => setOverride(e.target.value === "inherit" ? undefined : e.target.value)}>
+              <option value="inherit">Use default</option><option value="">Black screen (QR only)</option>
+              {videoOptions(override ?? "")}
+            </select></label>
+          </fieldset>;
+        })}
         <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit">{busy ? "Saving…" : "Save display settings"}</button>
       </fieldset>
       {!configured && <p role="status">PocketBase persistence is not configured. Display text cannot be saved.</p>}

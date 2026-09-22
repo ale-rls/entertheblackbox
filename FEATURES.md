@@ -64,7 +64,8 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Idle attract loop (`attract-*.mp4` playlist, perspective-calibrated QR marker tracking) — `IdleAttract.tsx`, `idle/*`
 - Join QR code / corner QR for late joiners — `QrBadge.tsx`, `qr/*`, `apps/server/src/admission/qr.ts`
 - Lobby countdown + printed join URL — `LobbyCountdown.tsx`
-- Display authentication (single authenticated display via installation/room/token) — `lib/resolveInstallation.ts`
+- Display authentication (build-time token, installation/room resolved live from `/api/status`; one authenticated main display, plus one per active group and one per signage kiosk) — `lib/resolveInstallation.ts`, `apps/server/src/engine/phase-engine.ts`
+- Signage kiosks (e.g. a lobby entrance screen): always show a looping video and the live join QR, independent of show state — `?signage=<id>`, `apps/server/src/engine/phase-engine.ts` (`signageDisplays`), Admin `DisplaySettingsPanel`
 - Heartbeat / reconnect resilience (surfaced in Admin) — `lib/heartbeat.ts`, `lib/connection.ts`, `lib/backoff.ts`
 - Service-worker app shell (known stale-bundle gotcha — see README) — `apps/display` build
 - Kiosk mode / fullscreen control — `lib/kiosk.ts`, `FullscreenControl.tsx`
@@ -83,7 +84,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Ghost-cursor fill-target override
 - Audio diagnostics page (`/admin/?view=audio`) — `AudioDiagnostics.tsx`
 - Headphone stream ops: roster, background music, soundcheck, local↔remote backend switch → **services/audio**
-- Shared media-library picker for default and per-group lobby/waiting videos (MP4/WebM, sync readiness, muted loop, live updates, group black-screen override) — protocol platform settings, display `IdleAttract`, Admin `DisplaySettingsPanel`, PocketBase platform config
+- Shared media-library picker for default, per-group, and per-signage-kiosk lobby/waiting videos (MP4/WebM, sync readiness, muted loop, live updates, black-screen override) — protocol platform settings, display `IdleAttract`, Admin `DisplaySettingsPanel`, PocketBase platform config
 - Display text editor — `DisplaySettingsPanel.tsx`
 - Participant roster + group (re)assignment
 - Session export (JSON/CSV) — `apps/server/src/persistence/admin-data.ts`

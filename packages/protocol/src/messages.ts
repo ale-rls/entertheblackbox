@@ -159,6 +159,13 @@ export const displayJoinSchema = z.object({
   t: z.literal("display_join"),
   /** Omit for the main display. Group displays only render that group's path. */
   groupId: z.string().min(1).optional(),
+  /**
+   * A signage kiosk (e.g. a lobby entrance screen): QR grant only, no
+   * phase/cursor data. Only one client (this connection) ever sets this,
+   * never alongside groupId; the server treats signageId as taking
+   * precedence if both were somehow present.
+   */
+  signageId: z.string().min(1).optional(),
   v,
   clientVersion: nonEmpty,
   installationId: nonEmpty,

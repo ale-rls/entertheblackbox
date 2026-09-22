@@ -199,6 +199,8 @@ export class PhaseEngine {
   private epochSequence = 0;
   private readonly paths = new Map<string, { engine: PhaseEngine; members: Set<string> }>();
   private readonly groupDisplays = new Map<string, WebSocket>();
+  /** Signage kiosks (e.g. lobby entrance screens): QR-grant-only, no phase/cursor awareness. */
+  private readonly signageDisplays = new Map<string, WebSocket>();
   private readonly routingEpochs = new Map<string, number>();
   private selectionCohort = new Set<string>();
   private pathsStarted = false;
@@ -303,9 +305,9 @@ export class PhaseEngine {
     });
     this.qr = options.qr === undefined ? null : new QrGrantPushLoop({
       ...options.qr,
-      send: (message) => this.sendToDisplay(message),
+      send: (message) => { this.sendToDisplay(message); for (const socket of this.signageDisplays.values()) this.send(socket, message); },
       lifecycle: () => this.lifecycle,
-      hasDisplay: () => this.displaySocket !== undefined,
+      hasDisplay: () => this.displaySocket !== undefined || this.signageDisplays.size > 0,
       now: this.now,
     });
     this.phaseStartedAt = this.now();
@@ -793,6 +795,7 @@ export class PhaseEngine {
   socketClosed(socket: WebSocket): void {
     for (const { engine } of this.paths.values()) engine.socketClosed(socket);
     for (const [groupId, display] of this.groupDisplays) if (display === socket) this.groupDisplays.delete(groupId);
+    for (const [signageId, display] of this.signageDisplays) if (display === socket) this.signageDisplays.delete(signageId);
     this.clients.delete(socket);
     this.participantSockets.delete(socket);
     const participantId = this.participantIds.get(socket);
@@ -836,7 +839,9 @@ export class PhaseEngine {
           this.close(socket, 1008, "invalid display credentials");
           return;
         }
-        if (message.groupId !== undefined) {
+        if (message.signageId !== undefined) {
+          this.connectSignageDisplay(socket, message.signageId);
+        } else if (message.groupId !== undefined) {
           if (!this.scenario.groups?.some((group) => group.id === message.groupId)) {
             this.close(socket, 1008, "unknown display group");
             return;
@@ -861,7 +866,7 @@ export class PhaseEngine {
         if (socket === this.displaySocket) this.recordDisplayPlaybackStatus(message);
         return;
       case "qr_grant_request":
-        if (socket === this.displaySocket) this.qr?.push();
+        if (socket === this.displaySocket || [...this.signageDisplays.values()].includes(socket)) this.qr?.push();
         return;
       case "ping": {
         const participantId = this.participantIds.get(socket);
@@ -1152,6 +1157,19 @@ export class PhaseEngine {
     } else {
       this.qr?.push();
     }
+  }
+
+  /**
+   * A signage kiosk (e.g. a lobby entrance screen) only ever wants the join
+   * QR grant. Unlike connectDisplay/group displays it never receives phase,
+   * cursor, or presence data, and never starts the lobby.
+   */
+  private connectSignageDisplay(socket: WebSocket, signageId: string): void {
+    const previous = this.signageDisplays.get(signageId);
+    if (previous && previous !== socket) this.close(previous, DISPLAY_REPLACED_CLOSE_CODE, "display replaced");
+    this.signageDisplays.set(signageId, socket);
+    this.clients.add(socket);
+    this.qr?.push();
   }
 
   private expireStaleDisplay(now: number): void {
