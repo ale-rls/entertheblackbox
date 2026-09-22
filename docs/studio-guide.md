@@ -24,6 +24,38 @@ The Validation and media panel lists blocking errors, warnings, media references
 
 Preview starts at the configured entry phase. Advance video and question timers manually, force each fixed/quadrant/tie/empty outcome, and exercise stale, disconnected, and abandoned-solo cases. Four-quadrant questions expose q1–q4; two-quadrant questions expose min/max. The frozen result shows counted and excluded votes, quadrant totals, winner, and resolved target.
 
+### Preview on devices
+
+Select a phase and click **Preview on devices**. Sign in as an operator if
+needed. Studio loads the current draft into a separate in-memory runtime and
+starts that phase immediately, without publishing. Scan the panel’s phone QR,
+open its display link, and use the TouchDesigner cue URL and bearer token in
+your cue receiver. Group display links are available under **Group displays**.
+Devices must reach the same server URL as Studio; use a network-accessible
+hostname rather than localhost when joining from another device.
+
+Click **Preview on devices** again after selecting a phase or editing content.
+The server validates the draft before replacing the preview, keeps phones and
+displays connected, and restarts the chosen phase with the latest changes.
+Normal timers, votes, group branches, personal audio (when the audio bridge is
+configured), and outgoing cues use the actual show engine. Trigger again after
+connecting TouchDesigner to receive the phase’s outgoing cues; attaching to the
+feed supplies a current-state snapshot, not a replay of earlier cues.
+
+Preview uses the media already available on the server. Missing media produces
+an error and leaves the previous preview running. Upload/sync media first;
+preview does not publish or change production’s scenario. The ordinary
+`/phone/`, `/display/`, and `/api/cues` URLs continue to address production.
+Preview links grant access to that rehearsal: share them only with testers.
+Movement and vote recordings from preview are not saved to production history.
+
+**Hide** closes the panel while devices keep running. **End device preview**
+closes its device connections and cue feed. Previews expire two hours after the
+last phase trigger, or on a server restart; click again to recreate one. The
+server allows four simultaneous previews. Jumping directly into a phase starts
+with fresh group membership and answer history; start at an earlier branch or
+question when testing decisions that depend on those earlier answers.
+
 ## Export and hand off
 
 **Export for deployment** is enabled only after validation and warning acknowledgement. It emits a versioned set containing `scenario.json`, `media-manifest.json`, `.studio.json`, `validation-report.json`, and `README.txt`. Keep all five files together. The complete set can be selected in **Import** to resume editing with its saved layout. The report records the runtime schema, Studio build, media total, warnings, and branch-smoke results. An authenticated operator may instead use **Publish** to upload the validated scenario and referenced media to PocketBase; the server syncs those media files locally before activating the published show.

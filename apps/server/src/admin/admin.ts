@@ -25,6 +25,7 @@ export interface AdminDataSource {
 }
 
 export type RegisterAdminOptions = {
+  registerRehearsals?: (app: FastifyInstance) => void;
   waitingVideos?: () => Promise<readonly { src: string; url: string; available: boolean }[]>;
   displaySettings?: { read: () => Promise<DisplaySettings>; write: (value: DisplaySettings) => Promise<DisplaySettings> };
   /** Validates a bearer token against the operators auth collection. */
@@ -137,6 +138,8 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       }
       if (!isAuthorized) return reply.code(401).send({ error: "unauthorized" });
     });
+
+    options.registerRehearsals?.(admin);
 
     admin.get("/settings/waiting-videos", async (_request, reply) => {
       reply.header("cache-control", "no-store");

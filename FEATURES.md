@@ -35,6 +35,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Typed inspector per phase kind (arena ellipse/quad editors, polygon zones, timing timeline) — `apps/studio/src/inspector/*`
 - Media library (PocketBase-backed) with usage-reference tracking — `apps/studio/src/media/MediaLibraryDialog.tsx`, `pocketbase-media.ts` → **PocketBase**
 - Local media fallback/import reconciliation — `apps/studio/src/media/local.ts`
+- Device preview of the current Studio draft, stable phone/display links and QR, isolated runtime and TouchDesigner SSE cues — `apps/studio/src/preview/DevicePreview.tsx`, `apps/server/src/rehearsal/rehearsal.ts`, phone/display runtime routing
 - Runtime validation + branch/display preview — `apps/studio/src/preview/*`
 - Diagnostics panel — `apps/studio/src/diagnostics/DiagnosticsPanel.tsx`
 - Local draft autosave/recovery — `apps/studio/src/io.ts`, `model.ts`

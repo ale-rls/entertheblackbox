@@ -1,3 +1,4 @@
+import { rehearsalId, runtimeApi } from "@entertheblackbox/protocol";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { mediaManifestSchema } from "@entertheblackbox/scenario";
 import { MediaStore, type MediaSyncStatus } from "./mediaStore.js";
@@ -8,7 +9,7 @@ import { MediaStore, type MediaSyncStatus } from "./mediaStore.js";
  * Blob URLs for the active video. The display is not "ready" until the
  * sync completes; failures surface as a visible retry state.
  */
-export function useMedia(manifestUrl = "/media-manifest.json") {
+export function useMedia(manifestUrl = runtimeApi("/media-manifest.json"), revision = "") {
   const [status, setStatus] = useState<MediaSyncStatus>({ state: "idle" });
   const [resolvedMedia, setResolvedMedia] = useState<{
     visualSrc: string;
@@ -23,10 +24,22 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
     audioSrc: string | null;
     extraAudioSrc: string | null;
   } | null>(null);
-  const store = useMemo(() => new MediaStore({ onStatus: setStatus }), []);
+  const generation = useRef(0);
+  const currentStore = useRef<MediaStore | null>(null);
+  const store = useMemo(() => {
+    const next = new MediaStore({
+      onStatus: (value) => { if (currentStore.current === next) setStatus(value); },
+      ...(rehearsalId() ? { cacheName: `rehearsal-media-${rehearsalId()}` } : {}),
+    });
+    return next;
+  }, [revision]);
 
   useEffect(() => {
     let cancelled = false;
+    generation.current += 1;
+    currentStore.current = store;
+    setStatus({ state: "idle" });
+    setResolvedMedia(null);
     void (async () => {
       // Manifest fetch shares the same retry loop semantics as media
       // downloads: keep trying, never declare ready without it.
@@ -35,9 +48,11 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
           const response = await fetch(manifestUrl, { cache: "no-cache" });
           if (!response.ok) throw new Error(`manifest http ${response.status}`);
           const manifest = mediaManifestSchema.parse(await response.json());
+          if (cancelled) return;
           await store.sync(manifest);
           return;
         } catch (error) {
+          if (cancelled) return;
           const message = error instanceof Error ? error.message : String(error);
           const delayMs = Math.min(30_000, 1000 * 2 ** attempt);
           setStatus({ state: "retrying", attempt: attempt + 1, delayMs, lastError: message });
@@ -47,6 +62,7 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
     })();
     return () => {
       cancelled = true;
+      if (currentStore.current === store) currentStore.current = null;
       store.stop();
     };
   }, [store, manifestUrl]);
@@ -57,6 +73,7 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
     audioSrc: string | null = null,
     extraAudioSrc: string | null = null,
   ) => {
+    const requestGeneration = generation.current;
     activeSources.current = visualSrc === null ? null : { visualSrc, audioSrc, extraAudioSrc };
     if (visualSrc === null) {
       store.retainOnly(new Set());
@@ -68,6 +85,7 @@ export function useMedia(manifestUrl = "/media-manifest.json") {
       audioSrc === null ? Promise.resolve(null) : store.getBlobUrl(audioSrc),
       extraAudioSrc === null ? Promise.resolve(null) : store.getBlobUrl(extraAudioSrc),
     ]);
+    if (requestGeneration !== generation.current) return;
     const active = activeSources.current;
     if (
       active?.visualSrc !== visualSrc

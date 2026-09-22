@@ -1,6 +1,6 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { ServerResponse } from "node:http";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import type { ShowCueEvent } from "../engine/phase-engine.js";
 
 type CueEnvelope = ShowCueEvent & { version: 1; bootId: string; sequence: number };
@@ -48,30 +48,39 @@ export class CueFeed {
       if (!credentialsMatch(request.headers.authorization ?? "", `Bearer ${token}`)) {
         return reply.code(401).send({ error: "unauthorized" });
       }
-      if (this.listeners.size >= 16) return reply.code(503).send({ error: "cue_listener_capacity" });
-
-      reply.hijack();
-      const response = reply.raw;
-      response.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-        "X-Accel-Buffering": "no",
-      });
-      this.listeners.add(response);
-      this.write(response, this.snapshot());
-      const keepalive = setInterval(() => {
-        if (!response.write(": heartbeat\n\n")) response.destroy();
-      }, 15_000);
-      keepalive.unref();
-      response.on("close", () => {
-        clearInterval(keepalive);
-        this.listeners.delete(response);
-      });
+      return this.connect(reply);
     });
     app.addHook("preClose", async () => {
-      for (const listener of this.listeners) listener.destroy();
-      this.listeners.clear();
+      this.close();
+    });
+  }
+
+  close(): void {
+    for (const listener of this.listeners) listener.destroy();
+    this.listeners.clear();
+  }
+
+  /** Caller authenticates and selects the rehearsal before attaching. */
+  connect(reply: FastifyReply): void {
+    if (this.listeners.size >= 16) { void reply.code(503).send({ error: "cue_listener_capacity" }); return; }
+
+    reply.hijack();
+    const response = reply.raw;
+    response.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    this.listeners.add(response);
+    this.write(response, this.snapshot());
+    const keepalive = setInterval(() => {
+      if (!response.write(": heartbeat\n\n")) response.destroy();
+    }, 15_000);
+    keepalive.unref();
+    response.on("close", () => {
+      clearInterval(keepalive);
+      this.listeners.delete(response);
     });
   }
 

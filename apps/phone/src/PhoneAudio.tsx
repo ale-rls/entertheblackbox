@@ -1,3 +1,4 @@
+import { runtimeApi } from "@entertheblackbox/protocol";
 import { useEffect, useRef, useState } from "react";
 import { AudioPlayback, playbackAction, playbackMessage, type PlaybackState } from "./lib/audio-playback";
 
@@ -23,7 +24,7 @@ export function PhoneAudio({ participantLease, streamUrlOverride, suspended = fa
       abort.signal.addEventListener("abort", cancel);
       const deadline = setTimeout(cancel, 15_000);
       try {
-        const response = await fetch("/api/audio/register", { method: "POST",
+        const response = await fetch(runtimeApi("/api/audio/register"), { method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ participantLease }),
           signal: requestAbort.signal });
@@ -59,7 +60,7 @@ export function PhoneAudio({ participantLease, streamUrlOverride, suspended = fa
         if (mediaSession) mediaSession.playbackState = next === "paused" || next === "blocked" ? "paused"
           : next === "ready" ? "none" : "playing";
       } catch { /* Optional OS integration must not interrupt the stream. */ }
-      void fetch("/api/audio/event", { method: "POST", keepalive: true,
+      void fetch(runtimeApi("/api/audio/event"), { method: "POST", keepalive: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ participantLease: lease.current, state: next, at: Date.now() }) })
         .catch(() => { /* Best-effort diagnostics; must never affect playback. */ });

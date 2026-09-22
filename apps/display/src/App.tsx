@@ -1,3 +1,4 @@
+import { rehearsalId, runtimeWebSocket } from "@entertheblackbox/protocol";
 import { resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
 import { currentInstallation } from "./lib/resolveInstallation.js";
 import { useDisplaySettings } from "./lib/useDisplaySettings.js";
@@ -43,14 +44,13 @@ declare const __DISPLAY_TOKEN__: string | undefined;
 declare const __LOBBY_WIFI_NAME__: string | undefined;
 
 const config = {
-  url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
+  url: runtimeWebSocket(location),
   clientVersion:
     typeof __BUILD_VERSION__ === "string" ? __BUILD_VERSION__ : "0.0.0-dev",
   ...currentInstallation(),
-  // The only supported query parameter: a display without ?group= is the
-  // main display; one with it is that group's own dedicated kiosk.
+  // group selects a dedicated group display; rehearsal selects a draft runtime.
   ...(new URLSearchParams(location.search).get("group") ? { groupId: new URLSearchParams(location.search).get("group")! } : {}),
-  displayToken: typeof __DISPLAY_TOKEN__ === "string" ? __DISPLAY_TOKEN__ : "",
+  displayToken: rehearsalId() ?? (typeof __DISPLAY_TOKEN__ === "string" ? __DISPLAY_TOKEN__ : ""),
   realtimeWsUrl:
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };
@@ -182,7 +182,7 @@ export function App() {
     };
   }, [connection.clock, cursorField, state.resolution]);
 
-  const media = useMedia();
+  const media = useMedia(undefined, rehearsalId() ? state.sessionId ?? "" : "");
   const phase = state.phase;
   const isIdle = phase === null || phase.kind === "idle";
   const waitingVideoUrl = resolveWaitingVideoUrl(displaySettings, config.groupId);
@@ -192,12 +192,14 @@ export function App() {
   // Do not authenticate the installation display until every manifest
   // entry is available and verified. Until then the local idle attract
   // loop and preparation status remain usable, but the server cannot
-  // expose a join grant or admit visitors into an unprepared show.
+  // expose a join grant or admit visitors into an unprepared show. Rehearsal
+  // stays connected while media refreshes after each Studio draft trigger.
+  const canConnect = rehearsalId() !== null || mediaReady;
   useEffect(() => {
-    if (!mediaReady) return;
+    if (!canConnect) return;
     connection.start();
     return () => connection.stop();
-  }, [connection, mediaReady]);
+  }, [connection, canConnect]);
 
   const sendDisplayMessage = useCallback(
     (message: DisplayToServerMessage) => connection.send(message),
@@ -261,7 +263,7 @@ export function App() {
     || (phaseVideoKey !== null && presentedVideoKey !== phaseVideoKey);
   useEffect(() => {
     void media.showMedia(phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc);
-  }, [phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc]);
+  }, [phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc, media.store]);
 
   // Unmount show media and overlays; inactive displays may play a muted waiting loop.
   if (displayInactive) return <main className="display-root" aria-label="Display inactive" style={{ background: "#000" }}>

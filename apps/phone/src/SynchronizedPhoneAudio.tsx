@@ -1,3 +1,4 @@
+import { runtimeApi } from "@entertheblackbox/protocol";
 import { useEffect, useRef, useState } from "react";
 import type { ServerClock } from "@entertheblackbox/shared";
 import { SynchronizedAudio, type AudioCue, type SyncStatus } from "./lib/synchronized-audio";
@@ -21,7 +22,7 @@ export function SynchronizedPhoneAudio({ clock, cue }: { clock: ServerClock; cue
     let retry: ReturnType<typeof setTimeout>;
     const load = async () => {
       try {
-        const response = await fetch("/api/synchronized-audio", { cache: "no-store" });
+        const response = await fetch(runtimeApi("/api/synchronized-audio"), { cache: "no-store" });
         if (!response.ok) throw new Error("catalogue unavailable");
         const sources: unknown = await response.json();
         if (!Array.isArray(sources) || sources.some((s) => typeof s !== "string")) throw new Error("invalid catalogue");
