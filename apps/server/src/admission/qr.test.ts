@@ -29,6 +29,11 @@ function setup(overrides: Partial<ConstructorParameters<typeof QrGrantPushLoop>[
 }
 
 describe("QR grant push loop", () => {
+  it("keeps the rehearsal QR in its isolated session", () => {
+    const { loop, sent } = setup({ rehearsalId: "test-preview" });
+    loop.push();
+    expect(sent[0]).toMatchObject({ url: "https://phone.example/join?rehearsal=test-preview" });
+  });
   it("issues large idle/lobby grants and hides the QR during active play", () => {
     const { loop, sent, setLifecycle } = setup();
     loop.push();

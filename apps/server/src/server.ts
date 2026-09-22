@@ -1,3 +1,4 @@
+import { Rehearsals } from "./rehearsal/rehearsal.js";
 import { listWaitingVideos } from "./persistence/waiting-videos.js";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
@@ -55,6 +56,7 @@ export type ServerRuntime = {
   webSockets: WebSocketServer;
   admission: AdmissionController;
   engine: PhaseEngine | null;
+  rehearsals: Rehearsals;
   tracking: TrackingClient | undefined;
   startedAt: number;
 };
@@ -64,6 +66,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   const readiness = options.readiness ?? (await loadScenarioReadiness(config));
   const startedAt = Date.now();
   const app = Fastify({ logger: config.nodeEnv !== "test" });
+  const rehearsals = new Rehearsals(config, (error) => app.log.error({ error }, "rehearsal failed"));
+  rehearsals.registerPublic(app);
   const cueFeed = new CueFeed();
   cueFeed.register(app, config.displayToken);
   const webSockets = new WebSocketServer({
@@ -311,6 +315,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     adminData?.recordError?.({ message: error.message, at: new Date().toISOString(), path: request.url });
   });
   registerAdminRoutes(app, {
+    registerRehearsals: (admin) => rehearsals.registerAdmin(admin),
     verifyToken: options.verifyOperatorToken ?? createOperatorTokenVerifier(config.pocketbase.url),
     engine: () => engine,
     ready: readiness.ready,
@@ -414,7 +419,12 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     heartbeatSocket.on("pong", () => {
       heartbeatSocket.isAlive = true;
     });
-    admission.handleConnection(socket, request as IncomingMessage);
+    const rehearsalId = new URL(request.url ?? "/", "http://localhost").searchParams.get("rehearsal");
+    if (rehearsalId !== null) {
+      const rehearsal = rehearsals.get(rehearsalId);
+      if (!rehearsal) { socket.close(1008, "Preview ended"); return; }
+      rehearsal.connect(socket, request as IncomingMessage);
+    } else admission.handleConnection(socket, request as IncomingMessage);
     options.onWebSocketConnection?.(socket);
   });
 
@@ -459,5 +469,5 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     await new Promise<void>((resolve) => webSockets.close(() => resolve()));
   });
 
-  return { app, config, readiness, webSockets, admission, engine, tracking, startedAt };
+  return { app, config, readiness, webSockets, admission, engine, rehearsals, tracking, startedAt };
 }

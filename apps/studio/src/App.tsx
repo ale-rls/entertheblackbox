@@ -1,3 +1,4 @@
+import { DevicePreview } from "./preview/DevicePreview.js";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import PocketBase from "pocketbase";
 import { addEdge, Background, ReactFlow, type Connection, type Edge, type Node, useEdgesState, useNodesState } from "@xyflow/react";
@@ -128,6 +129,8 @@ export function App() {
   const [importFeedback, setImportFeedback] = useState<InlineFeedback>();
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
   const [exportFeedback, setExportFeedback] = useState<InlineFeedback>();
+  const [devicePreviewDraftId, setDevicePreviewDraftId] = useState<string | null>(null);
+  const [devicePreviewRequest, setDevicePreviewRequest] = useState(0);
   const [publishOpen, setPublishOpen] = useState(false);
   const [productionImportOpen, setProductionImportOpen] = useState(false);
   const [publishForm, setPublishForm] = useState({ showId: "", name: "" });
@@ -999,6 +1002,7 @@ export function App() {
       <input aria-label="Show name" className="sc-tool-field show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
       <SaveStatus status={status} />
       {showLifecycle === "active" && <LiveShowWarning compact />}
+      {selectedPhase && <button className="sc-tool-button" data-sc-tool-variant="primary" onClick={() => { setDevicePreviewDraftId(draft.id); setDevicePreviewRequest((value) => value + 1); }}>Preview on devices</button>}
       {selectedPhase && <a className="sc-tool-button" data-sc-tool-variant="primary" href="preview.html" target="_blank" rel="noreferrer" onClick={preparePreviewFromSelected}>Preview from here</a>}
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/display/" target="_blank" rel="noreferrer">Display</a>
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/admin/" target="_blank" rel="noreferrer">Admin</a>
@@ -1008,6 +1012,7 @@ export function App() {
       }} />
       {importFeedback && <Feedback id="studio-import-feedback" className="menubar-feedback" feedback={importFeedback} />}
       {exportFeedback && <Feedback id="studio-export-feedback" className="menubar-feedback" feedback={exportFeedback} />}
+      <DevicePreview key={draft.id} draft={draft} phaseId={selectedPhase?.id} request={devicePreviewDraftId === draft.id ? devicePreviewRequest : 0} operator={operatorPb} onClose={() => setDevicePreviewRequest(0)} />
       {publishOpen && <div className="sc-tool-panel publish-panel" role="dialog" aria-labelledby="publish-heading">
         <p className="sc-tool-eyebrow" id="publish-heading">Publish to PocketBase</p>
         {showLifecycle === "active" && <LiveShowWarning />}

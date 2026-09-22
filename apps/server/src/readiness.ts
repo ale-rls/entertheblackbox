@@ -20,7 +20,7 @@ async function readJson(path: string): Promise<unknown> {
 }
 
 /** Validate scenario + media manifest content already loaded from any source. */
-async function validateScenarioContent(
+export async function validateScenarioContent(
   scenarioRaw: unknown,
   manifestRaw: unknown,
   loadErrors: string[],

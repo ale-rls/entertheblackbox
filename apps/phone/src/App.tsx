@@ -1,3 +1,4 @@
+import { rehearsalId, runtimeApi, runtimeWebSocket } from "@entertheblackbox/protocol";
 import { SynchronizedPhoneAudio } from "./SynchronizedPhoneAudio";
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
 import { PhoneAudio } from "./PhoneAudio.js";
@@ -25,7 +26,7 @@ declare const __BUILD_VERSION__: string | undefined;
 declare const __REALTIME_WS_URL__: string | undefined;
 
 const baseConfig = {
-  url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
+  url: runtimeWebSocket(location),
   clientVersion:
     typeof __BUILD_VERSION__ === "string" ? __BUILD_VERSION__ : "0.0.0-dev",
   realtimeWsUrl:
@@ -84,7 +85,7 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/join-config")
+    void fetch(runtimeApi("/api/join-config"))
       .then(async (response) => {
         if (!response.ok) throw new Error(`Join service unavailable (${response.status})`);
         const value = await response.json() as JoinConfig;
@@ -117,6 +118,7 @@ export function App() {
         onSocketOpen: () => dispatch({ type: "socket-open" }),
         onSocketLost: () => dispatch({ type: "socket-lost" }),
         onSessionEnded: (session) => {
+          if (rehearsalId()) return;
           setAudioIdentity(null);
           setAudioBridgeUrl(null);
           if (session !== null && session.sessionId !== "idle" && session.sessionId !== "lobby") {

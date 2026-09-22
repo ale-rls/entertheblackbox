@@ -71,3 +71,12 @@ incorrect. Reconnect after redeploy should produce a new boot ID.
 
 For a monitor that displays the question title and switches to a final
 five-second countdown, see [Question title and countdown monitor](touchdesigner-question-monitor.md).
+
+## Studio device preview
+
+Studio’s **Preview on devices** panel provides a separate SSE URL and bearer
+token for a draft rehearsal. Point the receiver to both values from that panel,
+then trigger the phase again. The event format is identical to production;
+preview has its own boot ID, sequence, and timeline snapshots. Keep the normal
+production receiver on `/api/cues` with the production display token. Preview
+ends explicitly, after two hours without a Studio phase trigger, or on restart.

@@ -1,3 +1,4 @@
+import { runtimeApi } from "@entertheblackbox/protocol";
 /**
  * A server only ever runs one show, so the venue's one kiosk shouldn't need
  * a query string at all: it fetches its installationId/roomId from the
@@ -29,7 +30,7 @@ export async function resolveInstallation(fetchStatus: () => Promise<StatusSnaps
 export async function resolveInstallationFromWindow(): Promise<void> {
   await resolveInstallation(async () => {
     try {
-      const response = await fetch("/api/status");
+      const response = await fetch(runtimeApi("/api/status"));
       if (!response.ok) return null;
       return await response.json() as StatusSnapshot;
     } catch {

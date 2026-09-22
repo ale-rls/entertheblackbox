@@ -5,3 +5,5 @@
 export * from "./messages.js";
 export * from "./parse.js";
 export * from "./platform-settings.js";
+
+export * from "./rehearsal.js";

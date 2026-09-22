@@ -394,6 +394,20 @@ export class PhaseEngine {
     return { ok: true };
   }
 
+  /** Start an isolated rehearsal directly at a phase, even before devices join.
+   * Production admin routes deliberately do not expose this operation. */
+  startRehearsalAt(target: string, now = this.now()): TransitionResult {
+    if (!this.scenario.phases.some((phase) => phase.id === target)) return { ok: false, reason: "invalid-target" };
+    this.lifecycle = "active";
+    this.routingEpochs.clear();
+    this.sessionId = this.sessionIdFactory();
+    this.sessionStartedAt = now;
+    this.lastInputAt = now;
+    this.joinMovementRecordingForConnectedParticipants();
+    this.enterPhase(target, now, "rehearsal-start");
+    return { ok: true };
+  }
+
   adminStart(now = this.now()): TransitionResult {
     if (this.lifecycle === "active" || this.registry.connectedCount < 1) {
       return { ok: false, reason: "wrong-phase" };

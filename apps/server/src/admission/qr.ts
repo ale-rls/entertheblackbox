@@ -6,6 +6,7 @@ export type QrPushMessage = QrGrantMessage | QrHiddenMessage;
 
 export type QrGrantPushLoopOptions = {
   phoneJoinBaseUrl: string;
+  rehearsalId?: string;
   issueGrant: (now: number) => {
     token: string;
     claims: Pick<JoinGrantClaims, "installationId" | "roomId" | "expiresAt">;
@@ -56,6 +57,7 @@ export class QrGrantPushLoop {
     const grant = this.options.issueGrant(now);
     const url = new URL(this.options.phoneJoinBaseUrl);
     url.search = "";
+    if (this.options.rehearsalId) url.searchParams.set("rehearsal", this.options.rehearsalId);
     url.hash = "";
     this.options.send({
       t: "qr_grant",
