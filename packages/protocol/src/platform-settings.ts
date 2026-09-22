@@ -17,6 +17,8 @@ export const displaySettingsSchema = z.object({
   showJoinUrl: z.boolean(),
   waitingVideoUrl: waitingVideoUrlSchema.default(""),
   groupWaitingVideoUrls: z.record(z.string().min(1).max(160), waitingVideoUrlSchema).default({}),
+  /** Background video for signage kiosks (e.g. a lobby entrance screen showing the join QR), keyed by a fixed signage spot id such as "lobby". */
+  signageVideoUrls: z.record(z.string().min(1).max(160), waitingVideoUrlSchema).default({}),
 }).strict();
 export type DisplaySettings = z.infer<typeof displaySettingsSchema>;
 export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
@@ -27,11 +29,19 @@ export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   showJoinUrl: true,
   waitingVideoUrl: "",
   groupWaitingVideoUrls: {},
+  signageVideoUrls: {},
 };
 
 /** Missing group overrides inherit; an explicit empty override keeps that display black. */
 export function resolveWaitingVideoUrl(settings: DisplaySettings, groupId?: string): string {
   return groupId !== undefined && Object.hasOwn(settings.groupWaitingVideoUrls, groupId)
     ? settings.groupWaitingVideoUrls[groupId]!
+    : settings.waitingVideoUrl;
+}
+
+/** Missing signage overrides inherit the shared default waiting video; an explicit empty override keeps that kiosk black. */
+export function resolveSignageVideoUrl(settings: DisplaySettings, signageId: string): string {
+  return Object.hasOwn(settings.signageVideoUrls, signageId)
+    ? settings.signageVideoUrls[signageId]!
     : settings.waitingVideoUrl;
 }
