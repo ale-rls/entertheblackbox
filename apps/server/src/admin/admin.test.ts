@@ -464,6 +464,69 @@ describe("admin API", () => {
     expect(publish).toHaveBeenCalledOnce();
   });
 
+  it("lets an operator force-publish over a stale baseline", async () => {
+    const artifact = {
+      recordId: "record-current",
+      showId: "show-a",
+      name: "Main v4",
+      version: "1.0.0",
+      publishedAt: 5_000,
+      scenario: { version: "1.0.0", phases: [] },
+      mediaManifest: { files: [] },
+    };
+    const publish = vi.fn(async () => ({ showId: "show-a", name: "Main v5", version: "1.1.0", publishedAt: 6_000 }));
+    const { app, audit } = setup({
+      showConfig: {
+        activeShowId: "show-a",
+        list: async () => [],
+        readPending: async () => null,
+        write: vi.fn(),
+        latest: async () => artifact,
+        publish,
+      },
+    });
+    const headers = { authorization: "Bearer strong-admin-token" };
+
+    const forced = await app.inject({
+      method: "POST",
+      url: "/api/admin/publish",
+      headers,
+      payload: {
+        showId: "show-a",
+        name: "Main v5",
+        scenario: { version: "1.1.0" },
+        mediaManifest: { files: [] },
+        baseRecordId: "record-old",
+        force: true,
+      },
+    });
+    expect(forced.statusCode).toBe(200);
+    expect(publish).toHaveBeenCalledOnce();
+    expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "publish-show", detail: expect.objectContaining({ forced: true }) }));
+  });
+
+  it("rejects a non-boolean force flag", async () => {
+    const { app } = setup({
+      showConfig: {
+        activeShowId: "show-a",
+        list: async () => [],
+        readPending: async () => null,
+        write: vi.fn(),
+        latest: async () => null,
+        publish: vi.fn(),
+      },
+    });
+    const headers = { authorization: "Bearer strong-admin-token" };
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/admin/publish",
+      headers,
+      payload: { showId: "show-a", name: "Main v5", scenario: {}, mediaManifest: {}, force: "yes" },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: "invalid_publish_request" });
+  });
+
   it("returns 503 for publish when no show store is configured", async () => {
     const { app } = setup();
     const headers = { authorization: "Bearer strong-admin-token" };

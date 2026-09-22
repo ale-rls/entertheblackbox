@@ -136,6 +136,7 @@ export function App() {
   const [publishForm, setPublishForm] = useState({ showId: "", name: "" });
   const [publishing, setPublishing] = useState(false);
   const [publishFeedback, setPublishFeedback] = useState<InlineFeedback>();
+  const [staleConflict, setStaleConflict] = useState<{ latest: { recordId: string; version: string; publishedAt: number } | null }>();
   const [showLifecycle, setShowLifecycle] = useState<ShowLifecycle | null>(null);
   const [signInForm, setSignInForm] = useState({ email: "", password: "" });
   const [signingIn, setSigningIn] = useState(false);
@@ -874,17 +875,19 @@ export function App() {
   const openPublish = () => {
     setPublishFeedback(undefined);
     setSignInFeedback(undefined);
+    setStaleConflict(undefined);
     setPublishForm({
       showId: draft.document.productionBaseline?.showId ?? draft.id,
       name: draft.document.productionBaseline?.name ?? draft.name,
     });
     setPublishOpen(true);
   };
-  const publishDraft = async (event: FormEvent) => {
-    event.preventDefault();
+  const publishDraft = async (event: FormEvent | undefined, force = false) => {
+    event?.preventDefault();
     if (!operatorPb.authStore.isValid) return;
     setPublishing(true);
     setPublishFeedback(undefined);
+    if (!force) setStaleConflict(undefined);
     try {
       const artifacts = exportArtifacts(draft);
       // Relative fetch: only resolves when Studio is served from apps/server
@@ -901,16 +904,21 @@ export function App() {
           ...(draft.document.productionBaseline === undefined
             ? {}
             : { baseRecordId: draft.document.productionBaseline.recordId }),
+          ...(force ? { force: true } : {}),
         }),
       });
       if (!response.ok) {
-        const body = await response.json().catch(() => null) as { error?: string } | null;
-        throw new Error(body?.error === "stale_production_baseline"
-          ? "Production changed after this draft was created. Import the latest production show and reapply the campaign changes before publishing."
-          : body?.error === "invalid_publish_request"
+        const body = await response.json().catch(() => null) as
+          { error?: string; latest?: { recordId: string; version: string; publishedAt: number } | null } | null;
+        if (body?.error === "stale_production_baseline") {
+          setStaleConflict({ latest: body.latest ?? null });
+          throw new Error("Production changed after this draft was created. Review what's currently live below, then publish anyway to overwrite it, or import the latest production show and reapply your changes instead.");
+        }
+        throw new Error(body?.error === "invalid_publish_request"
           ? "Show ID must be letters, numbers, - or _ only, and Name can't be empty."
           : `Publish failed (${response.status}).`);
       }
+      setStaleConflict(undefined);
       setPublishFeedback({
         status: "success",
         message: showLifecycle === "active"
@@ -1046,6 +1054,19 @@ export function App() {
             </div>
           </form>
           {publishFeedback && <Feedback id="studio-publish-feedback" className="menubar-feedback" feedback={publishFeedback} />}
+          {staleConflict && <>
+            <Feedback id="studio-stale-conflict-feedback" className="menubar-feedback" feedback={{
+              status: "danger",
+              message: staleConflict.latest
+                ? `Currently live: "${staleConflict.latest.recordId}" v${staleConflict.latest.version}, published ${new Date(staleConflict.latest.publishedAt).toLocaleString()}. Publishing anyway replaces it entirely -- whatever changed there since this draft was created will be lost.`
+                : "No matching production record was found for this show ID -- publishing anyway will create it fresh.",
+            }} />
+            <div className="publish-panel-actions">
+              <button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={publishing} onClick={() => void publishDraft(undefined, true)}>
+                {publishing ? "Publishing…" : "Publish anyway, overwrite production"}
+              </button>
+            </div>
+          </>}
         </>}
       </div>}
       {productionImportOpen && <div className="sc-tool-panel publish-panel" role="dialog" aria-labelledby="editor-production-import-heading">
