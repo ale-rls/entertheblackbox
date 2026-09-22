@@ -353,19 +353,24 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       options.data?.audit({ action: "set-target-audience-size", at: new Date().toISOString(), detail: { targetAudienceSize } });
       return { ok: true, pending: targetAudienceSize };
     });
-    admin.post<{ Body: { showId?: unknown; name?: unknown; scenario?: unknown; mediaManifest?: unknown; baseRecordId?: unknown } }>("/publish", async (request, reply) => {
+    admin.post<{ Body: { showId?: unknown; name?: unknown; scenario?: unknown; mediaManifest?: unknown; baseRecordId?: unknown; force?: unknown } }>("/publish", async (request, reply) => {
       if (!options.showConfig) return reply.code(503).send({ error: "show_config_unavailable" });
-      const { showId, name, scenario, mediaManifest, baseRecordId } = request.body ?? {};
+      const { showId, name, scenario, mediaManifest, baseRecordId, force } = request.body ?? {};
       if (
         typeof showId !== "string" || !INSTALLATION_ID_PATTERN.test(showId)
         || typeof name !== "string" || name.trim() === ""
         || typeof scenario !== "object" || scenario === null
         || typeof mediaManifest !== "object" || mediaManifest === null
         || (baseRecordId !== undefined && (typeof baseRecordId !== "string" || baseRecordId === ""))
+        || (force !== undefined && typeof force !== "boolean")
       ) {
         return reply.code(400).send({ error: "invalid_publish_request" });
       }
-      if (typeof baseRecordId === "string") {
+      // force lets an operator explicitly overwrite production despite a
+      // stale baseline (Studio surfaces what it would overwrite first --
+      // see the stale_production_baseline branch below and App.tsx's
+      // "Publish anyway" flow). It never bypasses operator auth.
+      if (typeof baseRecordId === "string" && force !== true) {
         if (!options.showConfig.latest) return reply.code(503).send({ error: "show_config_unavailable" });
         const latest = await options.showConfig.latest(showId);
         if (!latest || latest.recordId !== baseRecordId) {
@@ -380,7 +385,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         }
       }
       const published = await options.showConfig.publish({ showId, name, scenario, mediaManifest });
-      options.data?.audit({ action: "publish-show", at: new Date().toISOString(), detail: { showId, name } });
+      options.data?.audit({ action: "publish-show", at: new Date().toISOString(), detail: { showId, name, ...(force === true ? { forced: true } : {}) } });
       return { ok: true, show: published };
     });
     admin.get<{ Params: { sessionId: string }; Querystring: { format?: string } }>("/sessions/:sessionId/export", async (request, reply) => {
