@@ -1,5 +1,5 @@
 import { rehearsalId, runtimeWebSocket } from "@entertheblackbox/protocol";
-import { resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
+import { resolveSignageVideoUrl, resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
 import { currentInstallation } from "./lib/resolveInstallation.js";
 import { useDisplaySettings } from "./lib/useDisplaySettings.js";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -62,6 +62,7 @@ const config = {
   displayToken: rehearsalId() ?? (typeof __DISPLAY_TOKEN__ === "string" ? __DISPLAY_TOKEN__ : ""),
   realtimeWsUrl:
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
+  ...(signageId !== undefined ? { signageId } : {}),
 };
 
 export function App() {
