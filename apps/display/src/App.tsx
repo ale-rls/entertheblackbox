@@ -52,6 +52,8 @@ const searchParams = new URLSearchParams(location.search);
 // precedence if both were somehow present.
 const signageId: string | undefined = searchParams.get("signage") ?? undefined;
 const groupId: string | undefined = signageId === undefined ? (searchParams.get("group") ?? undefined) : undefined;
+// Rehearsal diagnostics; combinable with group/signage.
+const showClock = searchParams.get("clock") === "1";
 
 const config = {
   url: runtimeWebSocket(location),
@@ -280,7 +282,9 @@ export function App() {
   // A signage kiosk (e.g. a lobby entrance screen) never renders show
   // content -- just its configured background loop and the live join QR,
   // independent of session/phase state.
+  const clockOverlay = showClock && <ShowClockOverlay clock={connection.clock} phase={phase} />;
   if (config.signageId !== undefined) return <main className="display-root" aria-label="Signage kiosk">
+    {clockOverlay}
     <IdleAttract
       key={signageVideoUrl}
       {...(signageVideoUrl ? { videoUrls: [signageVideoUrl] } : {})}
@@ -293,12 +297,13 @@ export function App() {
 
   // Unmount show media and overlays; inactive displays may play a muted waiting loop.
   if (displayInactive) return <main className="display-root" aria-label="Display inactive" style={{ background: "#000" }}>
+    {clockOverlay}
     {waitingVideoUrl && <IdleAttract key={waitingVideoUrl} grant={null} qrHidden clock={connection.clock} videoUrls={[waitingVideoUrl]} />}
   </main>;
 
   return (
     <main className="display-root">
-      {new URLSearchParams(location.search).get("clock") === "1" && <ShowClockOverlay clock={connection.clock} phase={phase} />}
+      {clockOverlay}
       {/* Layer 1: video */}
       <section className="layer layer-video">
         <IdleAttract

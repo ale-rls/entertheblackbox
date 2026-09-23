@@ -12,7 +12,7 @@ const harness = vi.hoisted(() => {
     stop: vi.fn(),
     send: vi.fn(),
     currentStatus: "closed",
-    clock: { now: () => Date.now() },
+    clock: { now: () => Date.now(), sampleAgeMs: () => null },
   };
   return {
     waitingVideoUrl: "",
@@ -152,6 +152,21 @@ describe("App media-readiness gate", () => {
     }));
     expect(document.querySelector('[aria-label="Display inactive"]')).toBeNull();
     expect(document.querySelector('[data-testid="idle-attract"]')).not.toBeNull();
+  });
+  it("keeps the ?clock=1 overlay on an inactive group display", async () => {
+    history.replaceState(null, "", "/display/?clock=1&group=theater");
+    try {
+      vi.resetModules();
+      const { App: GroupApp } = await import("./App.js");
+      document.body.innerHTML = '<div id="root"></div>';
+      root = createRoot(document.querySelector("#root")!);
+      await act(async () => root?.render(<GroupApp />));
+      expect(document.querySelector('[aria-label="Display inactive"]')).not.toBeNull();
+      expect(document.body.textContent).toContain("No cue");
+    } finally {
+      history.replaceState(null, "", "/");
+      vi.resetModules();
+    }
   });
   it("updates the lobby URL live and shows it while group paths own the show", async () => {
     harness.waitingVideoUrl = "/media/lobby.mp4";
