@@ -172,6 +172,7 @@ export type AdminFlow = {
 export type AdminGroupPathStatus = {
   state: "choosing" | "active" | "finished" | "split" | "empty";
   pendingAssignments: number;
+  pendingDisconnectedAssignments: number;
   acceptingParticipants: boolean;
   groupId: string;
   memberIds: readonly string[];
@@ -489,14 +490,14 @@ export class PhaseEngine {
 
   /** Starts a group-branch phase's branches immediately instead of waiting
    * for its selection deadline -- "finish assignment, begin the branches." */
-  adminStartGroupPaths(now = this.now(), expectedPhaseId?: string, groupId?: string, expectedEpoch?: number): TransitionResult {
-    if (groupId !== undefined) return this.controlPath(groupId, expectedPhaseId)?.adminStartGroupPaths(now, expectedPhaseId, undefined, expectedEpoch) ?? { ok: false, reason: "invalid-target" };
+  adminStartGroupPaths(now = this.now(), expectedPhaseId?: string, groupId?: string, expectedEpoch?: number, skipDisconnected = false): TransitionResult {
+    if (groupId !== undefined) return this.controlPath(groupId, expectedPhaseId)?.adminStartGroupPaths(now, expectedPhaseId, undefined, expectedEpoch, skipDisconnected) ?? { ok: false, reason: "invalid-target" };
     if (expectedEpoch !== undefined && expectedEpoch !== this.phaseEpoch) return { ok: false, reason: "stale" };
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
     if (expectedPhaseId !== undefined && expectedPhaseId !== this.phaseId) return { ok: false, reason: "stale" };
     const phase = this.currentPhase();
     if (phase.kind !== "group-branch" || this.pathsStarted) return { ok: false, reason: "wrong-phase" };
-    if (!this.startGroupPaths(phase, now)) return { ok: false, reason: "unassigned-participants" };
+    if (!this.startGroupPaths(phase, now, skipDisconnected)) return { ok: false, reason: "unassigned-participants" };
     return { ok: true };
   }
 
@@ -638,6 +639,11 @@ export class PhaseEngine {
     return phase.kind === "group-branch" && !this.pathsStarted ? [...this.selectionCohort].filter((id) => !phase.branches.some((branch) => branch.groupId === this.groupSelection?.current(id))) : [];
   }
 
+  get pendingDisconnectedGroupAssignments(): string[] {
+    const connected = new Set(this.participantPresence.filter(p => p.connected).map(p => p.clientId));
+    return this.pendingGroupAssignments.filter(id => !connected.has(id));
+  }
+
   get groupDestinations(): string[] {
     const phase = this.currentPhase();
     if (this.pathDone) return [];
@@ -655,6 +661,7 @@ export class PhaseEngine {
     const rows = [...this.paths.entries()].flatMap(([groupId, { engine, members }]) => [{
       groupId,
       pendingAssignments: engine.pendingGroupAssignments.length,
+      pendingDisconnectedAssignments: engine.pendingDisconnectedGroupAssignments.length,
       state: engine.pathDone ? "finished" as const : engine.pathsStarted ? "split" as const : engine.currentPhase().kind === "group-branch" ? "choosing" as const : "active" as const,
       memberIds: [...members].filter((id) => !engine.pathForParticipant(id)),
       jumpTargets: engine.pathsStarted ? [] : this.groupJumpTargets(groupId),
@@ -1717,8 +1724,11 @@ export class PhaseEngine {
   }
 
   /** The same vote/media engine runs against a scoped roster for each group. */
-  private startGroupPaths(phase: Extract<Phase, { kind: "group-branch" }>, now: number): boolean {
-    if ([...this.selectionCohort].some((id) => !phase.branches.some((branch) => branch.groupId === this.groupSelection?.current(id)))) return false;
+  private startGroupPaths(phase: Extract<Phase, { kind: "group-branch" }>, now: number, skipDisconnected = false): boolean {
+    // Explicit operator recovery only: automatic starts still wait for the full cohort.
+    // Keep excluded IDs in the cohort so reconnecting phones can choose a live branch.
+    const excluded = new Set(skipDisconnected ? this.pendingDisconnectedGroupAssignments : []);
+    if (this.pendingGroupAssignments.some(id => !excluded.has(id))) return false;
     this.pathsStarted = true;
     this.deadlineAt = null;
     this.phaseEpoch = this.nextEpoch();

@@ -1,3 +1,4 @@
+import { GroupSelectionStart } from "./GroupSelectionStart.js";
 import type { TimingMonitor } from "@entertheblackbox/protocol";
 import { ServerClock } from "@entertheblackbox/shared";
 import { ShowClockPanel } from "./ShowClockPanel.js";
@@ -46,6 +47,7 @@ export type Status = {
   phaseEpoch: number | null;
   groupDestinations?: string[];
   pendingGroupAssignments?: string[];
+  pendingDisconnectedGroupAssignments?: string[];
   groupPathsStarted: boolean;
   groupPaths: Array<{
     groupId: string;
@@ -55,6 +57,7 @@ export type Status = {
     acceptingParticipants?: boolean;
     state?: "choosing" | "active" | "finished" | "split" | "empty";
     pendingAssignments?: number;
+    pendingDisconnectedAssignments?: number;
     reunionPhaseId?: string;
     phaseId: string;
     phaseEpoch: number;
@@ -631,11 +634,11 @@ export function App() {
       setWorkingAction(null);
     }
   };
-  const startGroupPaths = async (groupId?: string, expectedPhaseId = status?.phaseId ?? undefined, expectedEpoch = status?.phaseEpoch ?? undefined) => {
+  const startGroupPaths = async (groupId?: string, expectedPhaseId = status?.phaseId ?? undefined, expectedEpoch = status?.phaseEpoch ?? undefined, skipDisconnected = false) => {
     setWorkingAction("start-group-paths");
     setFeedback(null);
     try {
-      await api("groups/start-paths", connectedToken, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId, expectedPhaseId, expectedEpoch }) });
+      await api("groups/start-paths", connectedToken, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId, expectedPhaseId, expectedEpoch, ...(skipDisconnected ? { skipDisconnected: true } : {}) }) });
       setFeedback({ status: "success", message: "Group assignment finished; branches started." });
       await refresh();
     } catch (error) {
@@ -809,15 +812,15 @@ export function App() {
             <div><button className="sc-tool-button" data-sc-tool-variant={isActive ? "secondary" : "primary"} type="button" disabled={!canStart || busy} onClick={() => void control("start")}>Start show</button><span>{isActive ? "Unavailable while active" : "Begin a new live session"}</span></div>
             {inGroupBranch ? (status.groupPathsStarted ? <>
               {status.groupPaths.map((path) => <div key={`${path.groupId}:${path.phaseEpoch}`}>
-                {path.state === "choosing" ? <button className="sc-tool-button" type="button" disabled={busy || (path.pendingAssignments ?? 0) > 0} onClick={() => void startGroupPaths(path.groupId, path.phaseId, path.phaseEpoch)}>Start groups for {path.label}</button>
+                {path.state === "choosing" ? <GroupSelectionStart label={`Start groups for ${path.label}`} pending={path.pendingAssignments ?? 0} disconnected={path.pendingDisconnectedAssignments ?? 0} disabled={busy} onStart={(skip) => void startGroupPaths(path.groupId, path.phaseId, path.phaseEpoch, skip)} />
                   : path.state === "split" ? <button className="sc-tool-button" type="button" disabled={busy} onClick={(event) => requestConfirmation("reunion", event.currentTarget, path)}>Finish subgroups of {path.label}</button>
                   : <button className="sc-tool-button" data-sc-tool-variant={path.done ? "secondary" : "primary"} type="button" disabled={path.done || path.state === "empty" || path.acceptingParticipants === false || busy} onClick={() => void skipPhase(path.groupId, path.label)}>
                   {path.state === "empty" ? `${path.label} — empty, available to join` : path.done ? `${path.label} — finished` : `Next scene for ${path.label} — ${path.memberIds.length} ${path.memberIds.length === 1 ? "person" : "people"}`}
                 </button>}
-                <span>{path.state === "choosing" ? `${path.pendingAssignments ?? 0} people still need to choose` : path.done ? "At the reunion point, waiting on the other groups" : `Currently on “${path.phaseTitle}”`}</span>
+                <span>{path.state === "choosing" ? "" : path.done ? "At the reunion point, waiting on the other groups" : `Currently on “${path.phaseTitle}”`}</span>
               </div>)}
               <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={busy} onClick={(event) => requestConfirmation("reunion", event.currentTarget)}>Bring all groups to reunion</button><span>Explicitly ends unfinished branches, with confirmation</span></div>
-            </> : <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={!isActive || busy || (status.pendingGroupAssignments?.length ?? 0) > 0} onClick={() => void startGroupPaths()}>Start group paths</button><span>{status.pendingGroupAssignments?.length ? `${status.pendingGroupAssignments.length} people still need to choose; selection remains open` : "Finishes assignment and begins the branches"}</span></div>)
+            </> : <div><GroupSelectionStart label="Start group paths" pending={status.pendingGroupAssignments?.length ?? 0} disconnected={status.pendingDisconnectedGroupAssignments?.length ?? 0} disabled={!isActive || busy} onStart={(skip) => void startGroupPaths(undefined, undefined, undefined, skip)} /></div>)
               : <div><button className="sc-tool-button" data-sc-tool-variant={isActive ? "primary" : "secondary"} type="button" disabled={!isActive || busy} onClick={() => void skipPhase()}>{skipLabel}</button><span>{isActive ? "Server validates phase support" : "Available during an active show"}</span></div>}
             <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
             <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={!canReturnToIdle || busy} onClick={(event) => requestConfirmation("idle", event.currentTarget)}>Return to idle</button><span>Stop the current show</span></div>
