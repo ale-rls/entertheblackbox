@@ -170,4 +170,6 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Scoped Start and Reunion controls identify the parent group and selection scene, including a nested split that reuses a parent group ID. Phones and admin distinguish choosing, unassigned, active, and finished participants. Revisited nested selections retain the parent's cohort despite changed trade membership.
 - Legacy branch-preview audio receives a full authored selection window after a changed choice; repeated clicks on the same group do not restart it. Dedicated narration phases support phone-only group instructions after selection. Studio warns when an explicit group entry equals its reunion.
 
+- Silent phone scenes suspend native streaming and clear buffered audio while keeping the media element and listener playback intent. Scene and group changes wait for queued bridge reset/play work via registration before reconnecting, including when the stream URL is unchanged; an explicit listener pause remains paused (`apps/phone/src/PhoneAudio.tsx`).
+
 Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenario`, `apps/admin`, `apps/phone`.

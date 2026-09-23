@@ -371,3 +371,39 @@ it("uploads background music, preserves it across narration and backend changes,
   expect(audio.backgroundMusic).toBeNull();
   await audio.stop();
 });
+
+it("holds registration until a participant's delayed reset and play finish without resetting other groups", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "phone-audio-"));
+  await writeFile(join(dir, "voice.mp3"), "voice");
+  let hold = false;
+  const pending = new Map<string, () => void>();
+  const calls: string[] = [];
+  const request = vi.fn(async (url: string | URL | Request) => {
+    const path = String(url);
+    calls.push(path);
+    if (hold && (path.endsWith("/one/reset") || path.endsWith("/one/play"))) {
+      await new Promise<void>(resolve => pending.set(path.endsWith("/reset") ? "reset" : "play", resolve));
+    }
+    return new Response("{}", { status: 200 });
+  }) as unknown as typeof fetch;
+  const audio = new PersonalAudio({ url: "http://bridge", token: "x", publicUrl: "http://audio" }, dir, vi.fn(), request);
+  await audio.register({ clientId: "one", name: "One" });
+  await audio.register({ clientId: "two", name: "Two" });
+  audio.transition(phase());
+  await audio.register({ clientId: "one", name: "One" });
+  calls.length = 0;
+  hold = true;
+  audio.transitionParticipants(["one"], phase("voice.mp3"));
+  let ready = false;
+  const registration = audio.register({ clientId: "one", name: "One" }).then(url => { ready = true; return url; });
+  await vi.waitFor(() => expect(pending.has("reset")).toBe(true));
+  expect(ready).toBe(false);
+  pending.get("reset")!();
+  await vi.waitFor(() => expect(pending.has("play")).toBe(true));
+  expect(ready).toBe(false);
+  pending.get("play")!();
+  expect(await registration).toBe("http://audio/stream/one");
+  expect(calls.some(path => path.includes("/two/"))).toBe(false);
+  expect(calls.filter(path => path.endsWith("/one/play"))).toHaveLength(1);
+  await audio.stop();
+});

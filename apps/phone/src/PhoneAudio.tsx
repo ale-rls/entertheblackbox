@@ -3,7 +3,12 @@ import { useEffect, useRef, useState } from "react";
 import { AudioPlayback, playbackAction, playbackMessage, type PlaybackState } from "./lib/audio-playback";
 
 /** One native media element stays mounted across scene and WebSocket changes. */
-export function PhoneAudio({ participantLease, streamUrlOverride, suspended = false, active = true }: { participantLease: string; streamUrlOverride?: string | null; suspended?: boolean; active?: boolean }) {
+export function PhoneAudio({ participantLease, streamUrlOverride, suspended = false, active = true, sceneKey = "" }: { participantLease: string; streamUrlOverride?: string | null; suspended?: boolean; active?: boolean; sceneKey?: string }) {
+  const cue = JSON.stringify([sceneKey, active, suspended]);
+  const [readiness, setReadiness] = useState({ cue, ready: false });
+  if (readiness.cue !== cue) setReadiness({ cue, ready: false });
+  const awaitingCue = readiness.cue !== cue || !readiness.ready;
+  const pauseForScene = suspended || !active || awaitingCue;
   const element = useRef<HTMLAudioElement>(null);
   const player = useRef<AudioPlayback>();
   const [url, setUrl] = useState<string | null>(null);
@@ -31,7 +36,10 @@ export function PhoneAudio({ participantLease, streamUrlOverride, suspended = fa
         if (!response.ok) throw new Error("Headphone audio unavailable. Retrying… Please keep this page open.");
         const data = await response.json() as { streamUrl?: unknown };
         if (typeof data.streamUrl !== "string" || !data.streamUrl) throw new Error("Headphone audio unavailable. Please ask the staff.");
-        if (!abort.signal.aborted) setUrl(override.current || data.streamUrl);
+        if (!abort.signal.aborted) {
+          setUrl(override.current || data.streamUrl);
+          setReadiness({ cue, ready: true });
+        }
       } catch (error) {
         if (abort.signal.aborted) return;
         setRegistration(error instanceof Error ? error.message : "Headphone audio unavailable. Retrying…");
@@ -43,7 +51,9 @@ export function PhoneAudio({ participantLease, streamUrlOverride, suspended = fa
     }
     void register();
     return () => { abort.abort(); clearTimeout(timer); };
-  }, [participantLease]);
+    // Registration waits for queued bridge reset/play work before returning.
+    // Re-check each scene/group cue even if its stream URL stays the same.
+  }, [participantLease, cue]);
 
   // Clearing the override during identity renewal must not switch back to an
   // old registration URL while the new registration request is pending.
@@ -65,7 +75,7 @@ export function PhoneAudio({ participantLease, streamUrlOverride, suspended = fa
         body: JSON.stringify({ participantLease: lease.current, state: next, at: Date.now() }) })
         .catch(() => { /* Best-effort diagnostics; must never affect playback. */ });
     });
-    playback.setSuspended(suspended);
+    playback.setSuspended(pauseForScene);
     player.current = playback;
     setState("ready");
     const visible = () => { if (!document.hidden) playback.foreground(); };
@@ -96,10 +106,10 @@ export function PhoneAudio({ participantLease, streamUrlOverride, suspended = fa
     if (url) player.current?.setUrl(url);
   }, [url]);
 
-  useEffect(() => { player.current?.setSuspended(suspended); }, [suspended, hasUrl]);
+  useEffect(() => { player.current?.setSuspended(pauseForScene); }, [pauseForScene, hasUrl]);
 
-  const action = url ? playbackAction(state) : null;
-  const message = url ? playbackMessage[state] : registration;
+  const action = url && !awaitingCue ? playbackAction(state) : null;
+  const message = url && !awaitingCue ? playbackMessage[state] : registration;
   return <section style={suspended || !active || message === null ? { display: "none" } : undefined} className="phone-audio" aria-label="Headphone audio" onPointerDown={(event) => event.stopPropagation()}>
     <audio ref={element} preload="none" />
     {message && <p role="status">{message}</p>}
