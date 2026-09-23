@@ -83,6 +83,12 @@ async function flush() {
   });
 }
 
+function displaysRow(): Element {
+  const row = [...document.querySelectorAll(".admin-operation-row")].find((element) => element.textContent?.includes("Displays"));
+  if (!row) throw new Error("Displays row not found");
+  return row;
+}
+
 function button(label: string): HTMLButtonElement {
   const match = Array.from(document.querySelectorAll("button")).find((candidate) => candidate.textContent === label);
   if (!(match instanceof HTMLButtonElement)) throw new Error(`Button not found: ${label}`);
@@ -118,6 +124,32 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).toContain("Per-phone connectivity");
     expect(document.body.textContent).not.toContain("Start show");
     expect(requests.map(request => request.url)).toEqual(["/api/admin/status"]);
+  });
+
+  it("lists every connected display without warning while group paths own the show", async () => {
+    localStorage.setItem("admin-token", "operator-token");
+    createAdminFetch({
+      status: {
+        ...activeStatus,
+        displays: [
+          { kind: "group", id: "theater", label: "Theater-Blackbox", heartbeatAgeMs: 120 },
+          { kind: "signage", id: "entrance", label: "entrance", heartbeatAgeMs: null },
+        ],
+        mainDisplayNeeded: false,
+      },
+    });
+    await renderApp();
+    expect(displaysRow().textContent).toContain("2 CONNECTED");
+    expect(displaysRow().textContent).toContain("Theater-Blackbox 120 ms · entrance (signage) joined");
+    expect(displaysRow().textContent).not.toContain("main display missing");
+  });
+
+  it("warns when the main display is missing during a shared scene", async () => {
+    localStorage.setItem("admin-token", "operator-token");
+    createAdminFetch({ status: { ...activeStatus, displays: [], mainDisplayNeeded: true } });
+    await renderApp();
+    expect(displaysRow().textContent).toContain("0 CONNECTED");
+    expect(displaysRow().textContent).toContain("main display missing");
   });
 
   it("allows starting a show without connected participants or a display", async () => {

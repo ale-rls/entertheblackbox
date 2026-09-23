@@ -138,6 +138,15 @@ export type DisplayPlaybackIssue = {
   reportedAt: number;
 };
 
+/** One authenticated display socket, as listed for operators. */
+export type ConnectedDisplay = {
+  kind: "main" | "group" | "signage";
+  /** Group or signage id; null for the main display. */
+  id: string | null;
+  /** Time since this socket's last heartbeat, whatever phase it reported. */
+  heartbeatAgeMs: number | null;
+};
+
 export type ParticipantPresence = {
   clientId: string;
   name: string;
@@ -204,6 +213,7 @@ export class PhaseEngine {
   private readonly groupDisplays = new Map<string, WebSocket>();
   /** Signage kiosks (e.g. lobby entrance screens): QR-grant-only, no phase/cursor awareness. */
   private readonly signageDisplays = new Map<string, WebSocket>();
+  private readonly displayHeartbeats = new WeakMap<WebSocket, number>();
   private readonly routingEpochs = new Map<string, number>();
   private selectionCohort = new Set<string>();
   private pathsStarted = false;
@@ -354,6 +364,24 @@ export class PhaseEngine {
     return this.displaySocket === undefined || this.displayHeartbeatAt === null
       ? null
       : Math.max(0, this.now() - this.displayHeartbeatAt);
+  }
+
+  get connectedDisplays(): ConnectedDisplay[] {
+    const now = this.now();
+    const age = (socket: WebSocket) => {
+      const at = this.displayHeartbeats.get(socket);
+      return at === undefined ? null : Math.max(0, now - at);
+    };
+    return [
+      ...(this.displaySocket ? [{ kind: "main" as const, id: null, heartbeatAgeMs: age(this.displaySocket) }] : []),
+      ...[...this.groupDisplays].map(([id, socket]) => ({ kind: "group" as const, id, heartbeatAgeMs: age(socket) })),
+      ...[...this.signageDisplays].map(([id, socket]) => ({ kind: "signage" as const, id, heartbeatAgeMs: age(socket) })),
+    ];
+  }
+
+  /** The room screen carries every scene except while group paths own the show. */
+  get mainDisplayNeeded(): boolean {
+    return this.currentPhase().kind !== "group-branch";
   }
 
   get currentDisplayPlaybackIssue(): DisplayPlaybackIssue | null {
@@ -879,6 +907,8 @@ export class PhaseEngine {
   }
 
   handleClientMessage(message: ClientToServerMessage, socket: WebSocket, _request?: IncomingMessage): void {
+    // Recorded before group routing, so group and signage displays count too.
+    if (message.t === "display_heartbeat") this.displayHeartbeats.set(socket, this.now());
     if (message.t !== "display_join") {
       const id = this.participantIds.get(socket);
       const localPath = id === undefined ? this.pathForDisplay(socket) : this.pathForParticipant(id);
