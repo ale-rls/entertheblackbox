@@ -162,3 +162,12 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Participant snapshots include current group metadata and whether the local scene has phone audio, for initial and nested selections, transfers, and reconnects (`packages/protocol`, `apps/server`). Phones show the current group, respect hidden scene cursors, and display only the applicable audio controls. The native stream remains mounted across silent stages; normal playback displays no success banner, since playback state does not confirm audible output (`apps/phone`).
 - Admin participant labels and selectors use current membership even while a nested selection is still running on its parent timeline (`apps/admin`).
+
+### Recoverable group selection and nested controls
+
+- Selection timers never close an incomplete cohort; choices remain available after the nominal deadline and admin start reports missing assignments. Operator assignment works in nested selections. Late arrivals can choose a running or empty branch on their phones.
+- Empty branches are dormant destinations: their first participant starts the branch at its beginning; they neither emit scene cues nor delay reunion while empty. Existing branches retain their current playback position when someone joins.
+- Scoped Start and Reunion controls identify the parent group and selection scene, including a nested split that reuses a parent group ID. Phones and admin distinguish choosing, unassigned, active, and finished participants. Revisited nested selections retain the parent's cohort despite changed trade membership.
+- Legacy branch-preview audio receives a full authored selection window after a changed choice; repeated clicks on the same group do not restart it. Dedicated narration phases support phone-only group instructions after selection. Studio warns when an explicit group entry equals its reunion.
+
+Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenario`, `apps/admin`, `apps/phone`.

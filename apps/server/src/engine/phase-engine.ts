@@ -128,7 +128,7 @@ export type PhaseEngineOptions = {
   qr?: Omit<QrGrantPushLoopOptions, "send" | "lifecycle" | "hasDisplay" | "now">;
 };
 
-export type TransitionResult = { ok: true } | { ok: false; reason: "stale" | "invalid-target" | "wrong-phase" };
+export type TransitionResult = { ok: true } | { ok: false; reason: "stale" | "invalid-target" | "wrong-phase" | "unassigned-participants" };
 
 export type DisplayPlaybackIssue = {
   status: Exclude<DisplayPlaybackStatusMessage["status"], "playing">;
@@ -167,6 +167,8 @@ export type AdminFlow = {
  * phaseId stays pinned to the group-branch scene for the whole time these
  * run, so this is the only way an operator can see where each group is. */
 export type AdminGroupPathStatus = {
+  state: "choosing" | "active" | "finished" | "split" | "empty";
+  pendingAssignments: number;
   acceptingParticipants: boolean;
   groupId: string;
   memberIds: readonly string[];
@@ -205,6 +207,7 @@ export class PhaseEngine {
   private selectionCohort = new Set<string>();
   private pathsStarted = false;
   private pathDone = false;
+  private pathDormant = false;
   private readonly scenario: Scenario;
   private readonly registry: ParticipantRegistry;
   private readonly installationId: string;
@@ -256,7 +259,7 @@ export class PhaseEngine {
   private readonly onLobbyScheduleChanged: ((startTimes: readonly number[]) => void) | undefined;
   private readonly groupSelection: PhaseEngineOptions["groupSelection"];
 
-  constructor(options: PhaseEngineOptions, private readonly path?: { timelineId: string; stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; routingEpochFor: (id: string) => number; onPhase: (phase: Phase, startedAt: number) => void; displayForGroup: (groupId: string) => WebSocket | undefined }) {
+  constructor(options: PhaseEngineOptions, private readonly path?: { timelineId: string; stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; routingEpochFor: (id: string) => number; assignParticipant: (id: string, groupId: string) => TransitionResult; onPhase: (phase: Phase, startedAt: number) => void; displayForGroup: (groupId: string) => WebSocket | undefined }) {
     this.options = options;
     this.scenario = options.scenario;
     this.registry = options.registry;
@@ -358,6 +361,14 @@ export class PhaseEngine {
     return this.displayPlaybackIssue;
   }
 
+  participantState(id: string): "choosing" | "unassigned" | "active" | "finished" {
+    const child = this.pathForParticipant(id);
+    if (child) return child.participantState(id);
+    if (this.pathDone) return "finished";
+    if (this.currentPhase().kind === "group-branch") return this.pathsStarted ? "unassigned" : "choosing";
+    return "active";
+  }
+
   get participantPresence(): ParticipantPresence[] {
     return this.registry.values().map((participant) => ({
       clientId: participant.clientId,
@@ -453,25 +464,29 @@ export class PhaseEngine {
    * running group path untouched. */
   adminSkipGroup(groupId: string, now = this.now(), expectedPhaseId?: string): TransitionResult {
     const child = this.pathForGroup(groupId);
-    if (!child) return { ok: false, reason: "wrong-phase" };
+    if (!child || child.pathDormant) return { ok: false, reason: "wrong-phase" };
     return child.adminSkip(now, expectedPhaseId);
   }
 
   /** Starts a group-branch phase's branches immediately instead of waiting
    * for its selection deadline -- "finish assignment, begin the branches." */
-  adminStartGroupPaths(now = this.now(), expectedPhaseId?: string): TransitionResult {
+  adminStartGroupPaths(now = this.now(), expectedPhaseId?: string, groupId?: string, expectedEpoch?: number): TransitionResult {
+    if (groupId !== undefined) return this.controlPath(groupId, expectedPhaseId)?.adminStartGroupPaths(now, expectedPhaseId, undefined, expectedEpoch) ?? { ok: false, reason: "invalid-target" };
+    if (expectedEpoch !== undefined && expectedEpoch !== this.phaseEpoch) return { ok: false, reason: "stale" };
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
     if (expectedPhaseId !== undefined && expectedPhaseId !== this.phaseId) return { ok: false, reason: "stale" };
     const phase = this.currentPhase();
     if (phase.kind !== "group-branch" || this.pathsStarted) return { ok: false, reason: "wrong-phase" };
-    this.startGroupPaths(phase, now);
+    if (!this.startGroupPaths(phase, now)) return { ok: false, reason: "unassigned-participants" };
     return { ok: true };
   }
 
   /** Explicitly ends every still-running group path and advances to the
    * shared reunion scene -- the deliberate, confirmed counterpart to the
    * generic skip this replaces for group-branch phases. */
-  adminForceReunion(now = this.now(), expectedPhaseId?: string): TransitionResult {
+  adminForceReunion(now = this.now(), expectedPhaseId?: string, groupId?: string, expectedEpoch?: number): TransitionResult {
+    if (groupId !== undefined) return this.controlPath(groupId, expectedPhaseId)?.adminForceReunion(now, expectedPhaseId, undefined, expectedEpoch) ?? { ok: false, reason: "invalid-target" };
+    if (expectedEpoch !== undefined && expectedEpoch !== this.phaseEpoch) return { ok: false, reason: "stale" };
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
     if (expectedPhaseId !== undefined && expectedPhaseId !== this.phaseId) return { ok: false, reason: "stale" };
     const phase = this.currentPhase();
@@ -497,16 +512,47 @@ export class PhaseEngine {
     const chain = this.pathChainForGroup(groupId);
     const child = chain.at(-1)?.engine;
     const parent = chain.length > 1 ? chain[chain.length - 2]!.engine : this;
-    if (!child || child.pathDone) return { ok: false, reason: "wrong-phase" };
+    if (!child || child.pathDone || child.pathDormant) return { ok: false, reason: "wrong-phase" };
     if (!parent.groupJumpTargets(groupId).includes(target)) return { ok: false, reason: "invalid-target" };
     return child.adminJump(target, now, expectedPhaseId);
   }
 
   /** Move membership and routing together; joining never restarts the destination clock. */
   adminAssignGroup(participantId: string, groupId: string, expectedEpoch?: number): TransitionResult {
+    return this.assignParticipantGroup(participantId, groupId, expectedEpoch);
+  }
+
+  private assignParticipantGroup(participantId: string, groupId: string, expectedEpoch?: number, parentOnly = false): TransitionResult {
     if (expectedEpoch !== undefined && expectedEpoch !== this.phaseEpoch) return { ok: false, reason: "stale" };
     const participant = this.registry.values().find((row) => row.clientId === participantId);
     if (!participant || !this.groupSelection || !this.scenario.groups?.some((group) => group.id === groupId)) return { ok: false, reason: "invalid-target" };
+    const selectionOwners: PhaseEngine[] = [];
+    const collectSelections = (engine: PhaseEngine) => {
+      const phase = engine.currentPhase();
+      if (!engine.pathDone && !engine.pathDormant && !engine.pathsStarted && phase.kind === "group-branch" && phase.branches.some((branch) => branch.groupId === groupId)) selectionOwners.push(engine);
+      for (const path of engine.paths.values()) collectSelections(path.engine);
+    };
+    if (!parentOnly) collectSelections(this);
+    if (selectionOwners.length > 1) return { ok: false, reason: "invalid-target" };
+    const selection = selectionOwners[0];
+    if (selection) {
+      // Move to the parent selection first when admitting someone from another path.
+      if (selection !== this && !selection.registry.values().some((p) => p.clientId === participantId)) {
+        const moved = this.assignParticipantGroup(participantId, selection.path!.timelineId, expectedEpoch, true);
+        if (!moved.ok) return moved;
+      }
+      selection.selectionCohort.add(participantId);
+      if (this.groupSelection.current(participantId) === groupId) return { ok: true };
+      this.groupSelection.select(participantId, groupId);
+      const selectionPhase = selection.currentPhase();
+      if (selectionPhase.kind === "group-branch" && selectionPhase.branches.find((branch) => branch.groupId === groupId)?.phoneAudioSrc) selection.deadlineAt = this.now() + selectionPhase.durationMs;
+      selection.options.onParticipantPhase?.([participantId], selection.currentPhase(), this.now());
+      for (const [socket, id] of selection.participantIds) if (id === participantId) {
+        selection.send(socket, selection.getSnapshotMessage());
+        selection.sendGroupSelectionOptions(socket);
+      }
+      return { ok: true };
+    }
     const destinationChain = this.pathChainForGroup(groupId);
     const destination = destinationChain.at(-1);
     // Containers with running subgroups have no single playback clock to join.
@@ -541,6 +587,12 @@ export class PhaseEngine {
     this.routingEpochs.set(participantId, (this.routingEpochs.get(participantId) ?? 0) + 1);
     for (const target of destinationChain) target.members.add(participantId);
     const child = destination.engine;
+    if (child.pathDormant) {
+      child.pathDormant = false;
+      child.enterPhase(child.phaseId, this.now(), "first-group-member");
+      const display = child.path?.displayForGroup(groupId);
+      if (display) child.connectDisplay(display);
+    }
     // Operator admission to a selection also works for a source-restricted cohort.
     if (!child.pathDone && child.currentPhase().kind === "group-branch") child.selectionCohort.add(participantId);
     for (const [socket, id] of this.participantIds) if (id === participantId && isOpen(socket)) destinationChain[0]!.engine.participantJoined(socket, participant);
@@ -570,6 +622,19 @@ export class PhaseEngine {
     return [...visited];
   }
 
+  get pendingGroupAssignments(): string[] {
+    const phase = this.currentPhase();
+    return phase.kind === "group-branch" && !this.pathsStarted ? [...this.selectionCohort].filter((id) => !phase.branches.some((branch) => branch.groupId === this.groupSelection?.current(id))) : [];
+  }
+
+  get groupDestinations(): string[] {
+    const phase = this.currentPhase();
+    if (this.pathDone || this.pathDormant) return [];
+    if (!this.path && phase.kind !== "group-branch") return (this.scenario.groups ?? []).map((group) => group.id);
+    const local = phase.kind === "group-branch" ? phase.branches.filter((branch) => !this.paths.get(branch.groupId)?.engine.pathsStarted).map((branch) => branch.groupId) : [];
+    return [...new Set([...local, ...[...this.paths.values()].flatMap(({ engine }) => engine.groupDestinations)])];
+  }
+
   get groupPathsStarted(): boolean {
     return this.pathsStarted;
   }
@@ -578,8 +643,10 @@ export class PhaseEngine {
   get groupPaths(): AdminGroupPathStatus[] {
     const rows = [...this.paths.entries()].flatMap(([groupId, { engine, members }]) => [{
       groupId,
+      pendingAssignments: engine.pendingGroupAssignments.length,
+      state: engine.pathDormant ? "empty" as const : engine.pathDone ? "finished" as const : engine.pathsStarted ? "split" as const : engine.currentPhase().kind === "group-branch" ? "choosing" as const : "active" as const,
       memberIds: [...members].filter((id) => !engine.pathForParticipant(id)),
-      jumpTargets: engine.pathsStarted ? [] : this.groupJumpTargets(groupId),
+      jumpTargets: engine.pathsStarted || engine.pathDormant ? [] : this.groupJumpTargets(groupId),
       reunionPhaseId: engine.path!.stopAt,
       startedAt: engine.phaseStartedAt,
       acceptingParticipants: !engine.pathsStarted,
@@ -587,8 +654,10 @@ export class PhaseEngine {
       phaseEpoch: engine.phaseEpoch,
       done: engine.pathDone,
     }, ...engine.groupPaths]);
-    return rows.filter((row) => row.acceptingParticipants || !rows.some((other) => other !== row && other.groupId === row.groupId && other.acceptingParticipants))
-      .map((row) => rows.filter((other) => other.groupId === row.groupId && other.acceptingParticipants).length > 1
+    // An unused sibling with the same catalogue ID must not hide a running destination.
+    const visible = rows.filter((row) => row.state !== "empty" || !rows.some((other) => other.groupId === row.groupId && other.state !== "empty" && other.state !== "split"));
+    return visible.filter((row) => row.state === "split" || row.acceptingParticipants || !visible.some((other) => other !== row && other.groupId === row.groupId && other.acceptingParticipants))
+      .map((row) => visible.filter((other) => other.groupId === row.groupId && other.acceptingParticipants).length > 1
         ? { ...row, acceptingParticipants: false, jumpTargets: [] } : row);
   }
 
@@ -653,7 +722,7 @@ export class PhaseEngine {
   }
 
   tick(now = this.now()): void {
-    if (this.pathDone) return;
+    if (this.pathDone || this.pathDormant) return;
     this.bindings.tick(now);
     this.expireStaleDisplay(now);
     if (this.lifecycle === "idle") {
@@ -688,7 +757,7 @@ export class PhaseEngine {
       if (!this.pathsStarted && this.deadlineAt !== null && now >= this.deadlineAt) this.startGroupPaths(phase, now);
       if (this.pathsStarted) {
         for (const { engine } of this.paths.values()) engine.tick(now);
-        if ([...this.paths.values()].every(({ engine }) => engine.pathDone)) this.advanceTo(phase.next, now, "group-branch-complete");
+        if ([...this.paths.values()].every(({ engine }) => engine.pathDone || engine.pathDormant)) this.advanceTo(phase.next, now, "group-branch-complete");
       }
       return;
     }
@@ -796,7 +865,7 @@ export class PhaseEngine {
     }
     if (_participant && this.pathsStarted) this.options.onParticipantPhase?.([_participant.clientId], { kind: "idle", id: "idle" }, this.now());
     // Late arrivals may choose while an unrestricted selection is still open.
-    if (_participant && !this.pathsStarted && this.currentPhase().kind === "group-branch" &&
+    if (_participant && this.currentPhase().kind === "group-branch" &&
       !(this.currentPhase() as Extract<Phase, { kind: "group-branch" }>).sourceGroupIds) this.selectionCohort.add(_participant.clientId);
     this.send(socket, this.getSnapshotMessage());
     this.sendGroupSelectionOptions(socket);
@@ -868,7 +937,7 @@ export class PhaseEngine {
           }
           this.groupDisplays.set(message.groupId, socket);
           const localPath = this.pathForGroup(message.groupId);
-          if (localPath) localPath.connectDisplay(socket);
+          if (localPath && !localPath.pathDormant) localPath.connectDisplay(socket);
           else this.sendBlankDisplay(socket);
         } else this.connectDisplay(socket);
         return;
@@ -914,12 +983,20 @@ export class PhaseEngine {
           participantId !== undefined &&
           phase.kind === "group-branch" &&
           phase.assignment.type === "self-select" &&
-          !this.pathsStarted && this.deadlineAt !== null && this.now() < this.deadlineAt &&
+          !this.pathDone &&
           this.selectionCohort.has(participantId) &&
           this.matches(message.sessionId, phase.id, message.phaseEpoch) &&
           phase.branches.some((branch) => branch.groupId === message.groupId)
         ) {
+          if (this.pathsStarted) {
+            if (this.path) this.path.assignParticipant(participantId, message.groupId);
+            else this.adminAssignGroup(participantId, message.groupId);
+            return;
+          }
+          if (this.groupSelection?.current(participantId) === message.groupId) return;
           this.groupSelection?.select(participantId, message.groupId);
+          // Legacy branch previews get a complete authored listening window.
+          if (phase.branches.find((branch) => branch.groupId === message.groupId)?.phoneAudioSrc) this.deadlineAt = this.now() + phase.durationMs;
           this.options.onParticipantPhase?.([participantId], phase, this.now());
           this.send(socket, this.getSnapshotMessage());
           this.sendGroupSelectionOptions(socket);
@@ -1358,7 +1435,10 @@ export class PhaseEngine {
     }
     this.emitOutgoingPhase(reason);
     if (phase.kind === "group-branch" && this.groupSelection?.begin) {
-      this.selectionCohort = new Set(this.groupSelection.begin(phase, this.registry.values().map((participant) => participant.clientId)));
+      // A scoped parent still owns its people after membership changes to a trade.
+      const { sourceGroupIds, ...unrestricted } = phase;
+      const selectionPhase = this.path && sourceGroupIds?.includes(this.path.timelineId) ? unrestricted : phase;
+      this.selectionCohort = new Set(this.groupSelection.begin(selectionPhase, this.registry.values().map((participant) => participant.clientId)));
     }
     this.options.onPhase?.(phase, this.phaseStartedAt);
     // Hide the join QR before the active phase frame reaches the display,
@@ -1617,7 +1697,9 @@ export class PhaseEngine {
     collect(this, []);
     // A group ID cannot identify two concurrent sibling timelines safely.
     const deepest = matches.filter((chain) => !matches.some((other) => other.length > chain.length && chain.every((path, index) => other[index] === path)));
-    return deepest.length === 1 ? deepest[0]! : [];
+    const running = deepest.filter((chain) => !chain.at(-1)!.engine.pathDormant);
+    const candidates = running.length ? running : deepest;
+    return candidates.length === 1 ? candidates[0]! : [];
   }
 
   private pathChainForParticipant(id: string): GroupPath[] {
@@ -1627,6 +1709,19 @@ export class PhaseEngine {
 
   private pathForParticipant(id: string): PhaseEngine | undefined {
     return [...this.paths.values()].find(({ members }) => members.has(id))?.engine;
+  }
+
+  private controlPath(groupId: string, phaseId?: string): PhaseEngine | undefined {
+    if (phaseId === undefined) return this.pathForGroup(groupId);
+    const matches: PhaseEngine[] = [];
+    const visit = (engine: PhaseEngine) => {
+      for (const [id, path] of engine.paths) {
+        if (id === groupId && path.engine.phaseId === phaseId && !path.engine.pathDormant) matches.push(path.engine);
+        visit(path.engine);
+      }
+    };
+    visit(this);
+    return matches.length === 1 ? matches[0] : matches.length === 0 ? this.pathForGroup(groupId) : undefined;
   }
 
   private pathForGroup(groupId: string): PhaseEngine | undefined {
@@ -1643,7 +1738,8 @@ export class PhaseEngine {
   }
 
   /** The same vote/media engine runs against a scoped roster for each group. */
-  private startGroupPaths(phase: Extract<Phase, { kind: "group-branch" }>, now: number): void {
+  private startGroupPaths(phase: Extract<Phase, { kind: "group-branch" }>, now: number): boolean {
+    if ([...this.selectionCohort].some((id) => !phase.branches.some((branch) => branch.groupId === this.groupSelection?.current(id)))) return false;
     this.pathsStarted = true;
     this.deadlineAt = null;
     this.phaseEpoch = this.nextEpoch();
@@ -1653,7 +1749,7 @@ export class PhaseEngine {
       const members = new Set(this.registry.values().filter((participant) =>
         this.selectionCohort.has(participant.clientId) && this.groupSelection?.current(participant.clientId) === branch.groupId
       ).map((participant) => participant.clientId));
-      if (members.size === 0) continue;
+
       const child = new PhaseEngine({
         scenario: this.scenario, registry: this.registry.scoped(members),
         installationId: this.installationId, roomId: this.roomId, showId: this.showId,
@@ -1667,6 +1763,7 @@ export class PhaseEngine {
       }, {
         timelineId: branch.groupId, stopAt: phase.next, waitingPhase: phase, nextEpoch: () => this.nextEpoch(),
         routingEpochFor: (id) => this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0,
+        assignParticipant: (id, groupId) => this.path?.assignParticipant(id, groupId) ?? this.adminAssignGroup(id, groupId),
         onPhase: (localPhase, startedAt) => this.options.onParticipantPhase?.([...members], localPhase, startedAt),
         displayForGroup: (groupId) => this.path?.displayForGroup(groupId) ?? this.groupDisplays.get(groupId),
       });
@@ -1683,14 +1780,19 @@ export class PhaseEngine {
         if (participant) child.cursors.join(id, participant.color);
       }
       const display = this.path?.displayForGroup(branch.groupId) ?? this.groupDisplays.get(branch.groupId);
-      if (display) {
+      if (display && members.size > 0) {
         child.displaySocket = display;
         child.clients.add(display);
         child.displayHeartbeatAt = now;
       }
-      child.enterPhase(branch.next ?? phase.next, now, "group-path-start");
+      if (members.size === 0) {
+        child.pathDormant = true;
+        child.phaseId = branch.next ?? phase.next;
+        child.phaseEpoch = this.nextEpoch();
+      } else child.enterPhase(branch.next ?? phase.next, now, "group-path-start");
       if (this.timer !== null) child.cursors.start();
     }
+    return true;
   }
 
   private clearPaths(): void {
@@ -1740,7 +1842,7 @@ export class PhaseEngine {
 
   private sendGroupSelectionOptions(socket: WebSocket): void {
     const phase = this.currentPhase();
-    if (phase.kind !== "group-branch" || phase.assignment.type !== "self-select" || this.pathsStarted || this.pathDone) return;
+    if (phase.kind !== "group-branch" || phase.assignment.type !== "self-select" || this.pathDone) return;
     const participantId = this.participantIds.get(socket);
     if (participantId === undefined || !this.selectionCohort.has(participantId)) return;
     const catalogue = new Map((this.scenario.groups ?? []).map((group) => [group.id, group]));
@@ -1756,7 +1858,7 @@ export class PhaseEngine {
       phaseEpoch: this.phaseEpoch,
       ...(phase.title === undefined ? {} : { title: phase.title }),
       groups,
-      selectedGroupId: this.groupSelection?.current(participantId) ?? null,
+      selectedGroupId: this.pathsStarted ? null : this.groupSelection?.current(participantId) ?? null,
     });
   }
 
@@ -1784,12 +1886,13 @@ export class PhaseEngine {
     const id = this.participantIds.get(socket);
     if (id !== undefined && (message.t === "snapshot" || message.t === "phase")) {
       const groupId = this.groupSelection?.current(id) ?? null;
-      const currentGroup = this.scenario.groups?.find((group) => group.id === groupId) ?? null;
+      const participantState = this.participantState(id);
+      const currentGroup = participantState === "unassigned" ? null : this.scenario.groups?.find((group) => group.id === groupId) ?? null;
       const phase = message.phase;
-      const phoneAudioActive = !this.pathDone && (phase.kind === "idle" ? false
+      const phoneAudioActive = participantState !== "unassigned" && !this.pathDone && (phase.kind === "idle" ? false
         : phase.kind === "group-branch" ? !!phase.branches.find((branch) => branch.groupId === groupId)?.phoneAudioSrc
         : !!((groupId === null ? undefined : phase.phoneAudioByGroup?.[groupId]) ?? phase.phoneAudioSrc));
-      socket.send(encodeMessage({ ...message, currentGroup, phoneAudioActive,
+      socket.send(encodeMessage({ ...message, currentGroup, participantState, phoneAudioActive,
         routingEpoch: this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0 }));
     } else socket.send(encodeMessage(message));
   }

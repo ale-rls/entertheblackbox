@@ -32,6 +32,7 @@ export type PhoneState = {
   inputOpen: boolean;
   currentGroup: NonNullable<Extract<ServerToClientMessage, { t: "snapshot" }>["currentGroup"]> | null;
   phoneAudioActive: boolean;
+  participantState: "choosing" | "unassigned" | "active" | "finished";
   currentPhaseId: string | null;
   statusMessage: string | null;
   reloadRequired: ReloadMessage | null;
@@ -59,6 +60,7 @@ export const initialPhoneState: PhoneState = {
   inputOpen: false,
   currentGroup: null,
   phoneAudioActive: false,
+  participantState: "active",
   currentPhaseId: null,
   statusMessage: null,
   reloadRequired: null,
@@ -122,7 +124,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
       const phaseTiming: NonNullable<PhoneState["phaseTiming"]> = {
         startedAt: m.phase.startedAt,
         serverOffsetMs: m.serverTime - receivedAtMs,
-        title: "title" in m.phase ? m.phase.title ?? null : null,
+        title: "title" in m.phase ? m.phase.title ?? (m.phase.kind === "narration" ? m.phase.text : null) : null,
         subtitles: timedMedia?.subtitles ?? [],
         rating: timedMedia?.rating ?? null,
       };
@@ -134,6 +136,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         currentPhaseId: m.phase.id,
         currentGroup: m.currentGroup ?? null,
         phoneAudioActive: m.phoneAudioActive ?? false,
+        participantState: m.participantState ?? "active",
         synchronizedPhase: m.phase.kind === "video" && m.phase.phoneAudioMode === "synchronized" ? m.phase : null,
         inputOpen: m.phase.kind === "idle" ||
           ((m.phase.kind === "video" || m.phase.kind === "position-question" || m.phase.kind === "video-position-question") && m.phase.showCursors !== false),

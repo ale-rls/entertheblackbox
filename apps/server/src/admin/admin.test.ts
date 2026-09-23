@@ -266,11 +266,11 @@ describe("admin API", () => {
 
     const started = await app.inject({ method: "POST", url: "/api/admin/groups/start-paths", headers, payload: {} });
     expect(started.statusCode).toBe(200);
-    expect(engine.adminStartGroupPaths).toHaveBeenCalledWith(undefined, undefined);
+    expect(engine.adminStartGroupPaths).toHaveBeenCalledWith(undefined, undefined, undefined, undefined);
 
     const reunited = await app.inject({ method: "POST", url: "/api/admin/groups/reunion", headers, payload: { expectedPhaseId: "split" } });
     expect(reunited.statusCode).toBe(200);
-    expect(engine.adminForceReunion).toHaveBeenCalledWith(undefined, "split");
+    expect(engine.adminForceReunion).toHaveBeenCalledWith(undefined, "split", undefined, undefined);
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "start-group-paths" }));
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "force-reunion" }));
 
@@ -584,5 +584,17 @@ it("controls music during an active show and rejects unauthenticated or invalid 
   sources.mockRejectedValue(new Error("Library offline"));
   expect((await app.inject({ method: "POST", url: "/api/admin/audio/music", headers, payload: { src: null } })).statusCode).toBe(200);
   expect(sources).toHaveBeenCalledTimes(1);
+  await app.close();
+});
+
+it("passes nested start and reunion scope and rejects malformed group IDs", async () => {
+  const { app, engine } = setup();
+  const headers = { authorization: "Bearer strong-admin-token" };
+  for (const route of ["start-paths", "reunion"]) {
+    expect((await app.inject({ method: "POST", url: `/api/admin/groups/${route}`, headers, payload: { groupId: 12 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: `/api/admin/groups/${route}`, headers, payload: { groupId: "ki", expectedPhaseId: "roles" } })).statusCode).toBe(200);
+  }
+  expect(engine.adminStartGroupPaths).toHaveBeenCalledWith(undefined, "roles", "ki", undefined);
+  expect(engine.adminForceReunion).toHaveBeenCalledWith(undefined, "roles", "ki", undefined);
   await app.close();
 });

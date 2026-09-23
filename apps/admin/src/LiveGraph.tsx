@@ -37,7 +37,7 @@ export function graphPositions(flow: SceneFlow): Map<string, { x: number; y: num
 }
 
 export function LiveGraph({ flow, status, busy, onJump, onAssign }: Props) {
-  const [selected, setSelected] = useState(status.groupPaths.find((path) => !path.done && path.acceptingParticipants !== false)?.phaseId ?? status.phaseId ?? flow.entryPhaseId);
+  const [selected, setSelected] = useState(status.groupPaths.find((path) => !path.done && path.state !== "empty" && path.acceptingParticipants !== false)?.phaseId ?? status.phaseId ?? flow.entryPhaseId);
   const [scope, setScope] = useState("");
   const [zoom, setZoom] = useState(1);
   const [participantId, setParticipantId] = useState("");
@@ -53,16 +53,19 @@ export function LiveGraph({ flow, status, busy, onJump, onAssign }: Props) {
     ? selectedPaths.some((path) => path.memberIds.includes(p.clientId))
     : selected === status.phaseId);
   const scene = flow.scenes.find((item) => item.id === selected);
-  const selectedScope = paths.find((path) => path.groupId === scope);
+  const selectedScope = paths.find((path) => path.groupId === scope && path.state !== "split");
   const canJump = status.lifecycle === "active" && !busy && scene && (status.groupPathsStarted
     ? selectedScope && !selectedScope.done && selectedScope.phaseId !== scene.id && selectedScope.jumpTargets?.includes(scene.id)
     : status.phaseId !== scene.id);
+  const destinations = status.groupDestinations && status.groups
+    ? status.groups.filter((group) => status.groupDestinations!.includes(group.id)).map((group) => ({ id: group.id, label: group.label }))
+    : paths.filter((path) => path.acceptingParticipants !== false).map((path) => ({ id: path.groupId, label: path.label }));
   const roster = (people: Status["participants"]) => <ul className="live-roster">{people.map((p) => <li key={p.clientId}>
-    <strong title={p.clientId}>{p.name}</strong><span>{p.connected ? "Connected" : "Disconnected"}</span>
+    <strong title={p.clientId}>{p.name}</strong>{p.state && <small>{({ choosing: "Choosing a group", unassigned: "Needs assignment", active: "Active", finished: "Finished" })[p.state]}</small>}<span>{p.connected ? "Connected" : "Disconnected"}</span>
     <small>{(() => { const path = paths.find((item) => item.memberIds.includes(p.clientId)); return path ? `${status.groups?.find((g) => g.id === p.groupId)?.label ?? path.label} · ${path.done ? "Waiting at reunion" : path.phaseTitle}` : status.groupPathsStarted ? "Needs assignment" : `${status.groups?.find((g) => g.id === p.groupId)?.label ?? "Unassigned"} · Shared timeline`; })()}</small>
     <label>Move {p.name} to group<select className="sc-tool-select" aria-label={`Move ${p.name} to group`} value="" disabled={busy} onChange={(event) => void onAssign(p.clientId, event.target.value)}>
       <option value="">Choose destination…</option>
-      {paths.filter((path) => path.acceptingParticipants !== false).map((path) => <option key={path.groupId} value={path.groupId} disabled={path.memberIds.includes(p.clientId)}>{path.label} · {path.done ? "Waiting at reunion" : path.phaseTitle}</option>)}
+      {destinations.map((group) => <option key={group.id} value={group.id} disabled={p.groupId === group.id}>{group.label}</option>)}
     </select></label>
   </li>)}</ul>;
   return <div className="live-show">
@@ -80,19 +83,19 @@ export function LiveGraph({ flow, status, busy, onJump, onAssign }: Props) {
         </svg>
         {[...flow.scenes, ...(positions.has("idle") ? [{ id: "idle", title: "End", kind: "idle", routes: [] }] : [])].map((node) => {
           const pos = positions.get(node.id)!;
-          const here = paths.filter((path) => nodeFor(path) === node.id);
+          const here = paths.filter((path) => path.state !== "empty" && nodeFor(path) === node.id);
           const shared = !status.groupPathsStarted && node.id === status.phaseId;
           return <button key={node.id} type="button" className="live-graph-node sc-tool-graph-node" style={{ left: pos.x, top: pos.y }} data-selected={selected === node.id} data-live={shared || here.length > 0} data-sc-tool-domain={node.kind === "group-branch" ? "branch" : node.kind === "video" ? "video" : node.kind === "idle" ? "idle" : "question"} onClick={() => setSelected(node.id)} aria-label={`Inspect ${node.title}`} aria-pressed={selected === node.id}>
             <span>{node.kind === "group-branch" ? "Group branch" : node.kind === "video" ? "Media" : node.kind === "idle" ? "End" : "Question"}{node.id === flow.entryPhaseId ? " · Entry" : ""}</span><strong>{node.title}</strong><small>{node.id}</small>
             {shared && <b>Now · {status.participants.length} participants</b>}
-            {here.map((path) => <b key={path.groupId} style={{ borderLeft: `3px solid ${path.color ?? "currentColor"}`, paddingLeft: 5 }}>{path.label} · {path.memberIds.length}{path.done ? " · waiting" : " · live"}</b>)}
+            {here.map((path) => <b key={`${path.groupId}:${path.phaseEpoch}`} style={{ borderLeft: `3px solid ${path.color ?? "currentColor"}`, paddingLeft: 5 }}>{path.label} · {path.memberIds.length}{path.done ? " · waiting" : " · live"}</b>)}
           </button>;
         })}
       </div></div>
     </div>
     <div className="live-inspector">
       <div><h3>{scene?.title ?? "End"}</h3><p>{members.length} participants here{selectedPaths.some((path) => path.done) ? " · waiting for the other groups" : ""}</p>
-        {status.groupPathsStarted && <label className="sc-tool-label">Group to move<select className="sc-tool-select" value={scope} onChange={(e) => setScope(e.target.value)}><option value="">Choose a group…</option>{paths.filter((p) => !p.done && p.acceptingParticipants !== false).map((p) => <option key={p.groupId} value={p.groupId}>{p.label} · {p.memberIds.length} participants</option>)}</select></label>}
+        {status.groupPathsStarted && <label className="sc-tool-label">Group to move<select className="sc-tool-select" value={scope} onChange={(e) => setScope(e.target.value)}><option value="">Choose a group…</option>{paths.filter((p) => !p.done && p.state !== "empty" && p.acceptingParticipants !== false).map((p) => <option key={p.groupId} value={p.groupId}>{p.label} · {p.memberIds.length} participants</option>)}</select></label>}
         <button className="sc-tool-button" type="button" disabled={!canJump} onClick={(e) => scene && onJump(scene, e.currentTarget, status.groupPathsStarted ? scope : undefined)}>{status.groupPathsStarted ? `Move ${selectedScope?.label ?? "group"} to this scene` : "Jump whole show to this scene"}</button>
         {status.groupPathsStarted && <p className="sc-tool-help">Group jumps start the chosen scene from its beginning. Participant transfers join the group’s current playback position.</p>}
         {scene && <p className="sc-tool-help">{scene.routes.map((route) => `${route.outcome} → ${route.target}`).join(" · ")}</p>}

@@ -31,18 +31,23 @@ export type Status = {
     joinedAt: number;
     lastSeenAt: number;
     groupId?: string | null;
+    state?: "choosing" | "unassigned" | "active" | "finished";
   }>;
   groups?: Array<{ id: string; label: string; color?: string }>;
   sessionId: string | null;
   lifecycle: string | null;
   phaseId: string | null;
   phaseEpoch: number | null;
+  groupDestinations?: string[];
+  pendingGroupAssignments?: string[];
   groupPathsStarted: boolean;
   groupPaths: Array<{
     groupId: string;
     memberIds: string[];
     jumpTargets?: string[];
     acceptingParticipants?: boolean;
+    state?: "choosing" | "active" | "finished" | "split" | "empty";
+    pendingAssignments?: number;
     reunionPhaseId?: string;
     phaseId: string;
     phaseEpoch: number;
@@ -74,7 +79,10 @@ async function api(path: string, token: string, init?: RequestInit): Promise<Res
   });
   if (!response.ok) {
     if (response.status === 401) throw new Error("Your session has expired. Sign in again.");
-    if (response.status === 409) throw new Error("The server refused this action in the current show state.");
+    if (response.status === 409) {
+      const body = await response.json().catch(() => null) as { reason?: string } | null;
+      throw new Error(body?.reason === "unassigned-participants" ? "Some people still need a group. Keep selection open or assign them before starting." : "The server refused this action in the current show state.");
+    }
     if (response.status === 502) {
       const body = await response.json().catch(() => null) as { error?: string } | null;
       throw new Error(body?.error ?? `Request failed (${response.status})`);
@@ -131,7 +139,7 @@ function CollapsibleSection({ id, eyebrow, title, status, open, onToggle, childr
   </details>;
 }
 
-function ConfirmationDialog({ action, onCancel, onConfirm }: { action: ConfirmAction; onCancel: () => void; onConfirm: () => void }) {
+function ConfirmationDialog({ action, scopeLabel, onCancel, onConfirm }: { scopeLabel?: string | undefined; action: ConfirmAction; onCancel: () => void; onConfirm: () => void }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const titleId = `admin-${action}-confirmation-title`;
   const descriptionId = `admin-${action}-confirmation-description`;
@@ -158,11 +166,11 @@ function ConfirmationDialog({ action, onCancel, onConfirm }: { action: ConfirmAc
   return <div className="sc-tool-dialog-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
     <div className="sc-tool-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} onKeyDown={handleKeyDown}>
       <p className="sc-tool-eyebrow">Operator confirmation</p>
-      <h2 id={titleId}>{isRestart ? "Restart the show?" : isReunion ? "Bring all groups to reunion?" : "Return the show to idle?"}</h2>
+      <h2 id={titleId}>{isRestart ? "Restart the show?" : isReunion ? scopeLabel ? `Finish subgroups of ${scopeLabel}?` : "Bring all groups to reunion?" : "Return the show to idle?"}</h2>
       <p id={descriptionId}>{isRestart
         ? "This creates a new session and returns the running show to its entry phase."
         : isReunion
-          ? "This ends every still-running group's current scene early and moves everyone to the shared reunion scene, even groups that aren't ready."
+          ? scopeLabel ? `This ends only the subgroups of ${scopeLabel} and advances their parent to its reunion. Other groups continue.` : "This ends every still-running group's current scene early and moves everyone to the shared reunion scene, even groups that aren't ready."
           : "This stops the current show and returns connected installation screens to idle."}</p>
       <div className="sc-tool-dialog-actions">
         <button ref={cancelRef} className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={onCancel}>{isReunion ? "Let groups keep running" : "Keep current show"}</button>
@@ -246,6 +254,7 @@ export function App() {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [workingAction, setWorkingAction] = useState<string | null>(null);
+  const [reunionScope, setReunionScope] = useState<{ groupId: string; phaseId: string; phaseEpoch: number; label: string } | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [flow, setFlow] = useState<SceneFlow | null>(null);
   const [jumpScope, setJumpScope] = useState<{ groupId?: string; label: string; epoch: number | null; sessionId: string | null; phaseId: string | null }>({ label: "Whole show", epoch: null, sessionId: null, phaseId: null });
@@ -612,11 +621,11 @@ export function App() {
       setWorkingAction(null);
     }
   };
-  const startGroupPaths = async () => {
+  const startGroupPaths = async (groupId?: string, expectedPhaseId = status?.phaseId ?? undefined, expectedEpoch = status?.phaseEpoch ?? undefined) => {
     setWorkingAction("start-group-paths");
     setFeedback(null);
     try {
-      await api("groups/start-paths", connectedToken, { method: "POST" });
+      await api("groups/start-paths", connectedToken, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId, expectedPhaseId, expectedEpoch }) });
       setFeedback({ status: "success", message: "Group assignment finished; branches started." });
       await refresh();
     } catch (error) {
@@ -629,8 +638,8 @@ export function App() {
     setWorkingAction("reunion");
     setFeedback(null);
     try {
-      await api("groups/reunion", connectedToken, { method: "POST" });
-      setFeedback({ status: "success", message: "All groups brought to reunion." });
+      await api("groups/reunion", connectedToken, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId: reunionScope?.groupId, expectedPhaseId: reunionScope?.phaseId ?? status?.phaseId, expectedEpoch: reunionScope?.phaseEpoch ?? status?.phaseEpoch }) });
+      setFeedback({ status: "success", message: reunionScope ? `${reunionScope.label} subgroups finished.` : "All groups brought to reunion." });
       await refresh();
     } catch (error) {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not bring groups to reunion." });
@@ -671,7 +680,8 @@ export function App() {
     }
   };
 
-  const requestConfirmation = (action: ConfirmAction, trigger: HTMLButtonElement) => {
+  const requestConfirmation = (action: ConfirmAction, trigger: HTMLButtonElement, scope?: { groupId: string; phaseId: string; phaseEpoch: number; label: string }) => {
+    setReunionScope(scope ?? null);
     confirmTriggerRef.current = trigger;
     setConfirmAction(action);
   };
@@ -691,7 +701,7 @@ export function App() {
     });
   };
   const requestJump = (scene: FlowScene, trigger: HTMLButtonElement, groupId?: string) => {
-    const path = status?.groupPaths.find((p) => p.groupId === groupId);
+    const path = status?.groupPaths.find((p) => p.groupId === groupId && p.state !== "split");
     setJumpScope({ ...(groupId ? { groupId } : {}), label: path ? `${path.label} · ${path.memberIds.length} participants` : "Whole show", epoch: path?.phaseEpoch ?? status?.phaseEpoch ?? null, sessionId: status?.sessionId ?? null, phaseId: path?.phaseId ?? status?.phaseId ?? null });
     confirmTriggerRef.current = trigger;
     setJumpScene(scene);
@@ -786,14 +796,16 @@ export function App() {
           <div className="admin-control-list">
             <div><button className="sc-tool-button" data-sc-tool-variant={isActive ? "secondary" : "primary"} type="button" disabled={!canStart || busy} onClick={() => void control("start")}>Start show</button><span>{isActive ? "Unavailable while active" : status.connectedParticipants < 1 ? "A participant must be connected" : "Begin a new live session"}</span></div>
             {inGroupBranch ? (status.groupPathsStarted ? <>
-              {status.groupPaths.map((path) => <div key={path.groupId}>
-                <button className="sc-tool-button" data-sc-tool-variant={path.done ? "secondary" : "primary"} type="button" disabled={path.done || path.acceptingParticipants === false || busy} onClick={() => void skipPhase(path.groupId, path.label)}>
-                  {path.done ? `${path.label} — waiting` : `Next scene for ${path.label} — ${path.memberIds.length} ${path.memberIds.length === 1 ? "person" : "people"}`}
-                </button>
-                <span>{path.done ? "At the reunion point, waiting on the other groups" : `Currently on “${path.phaseTitle}”`}</span>
+              {status.groupPaths.map((path) => <div key={`${path.groupId}:${path.phaseEpoch}`}>
+                {path.state === "choosing" ? <button className="sc-tool-button" type="button" disabled={busy || (path.pendingAssignments ?? 0) > 0} onClick={() => void startGroupPaths(path.groupId, path.phaseId, path.phaseEpoch)}>Start groups for {path.label}</button>
+                  : path.state === "split" ? <button className="sc-tool-button" type="button" disabled={busy} onClick={(event) => requestConfirmation("reunion", event.currentTarget, path)}>Finish subgroups of {path.label}</button>
+                  : <button className="sc-tool-button" data-sc-tool-variant={path.done ? "secondary" : "primary"} type="button" disabled={path.done || path.state === "empty" || path.acceptingParticipants === false || busy} onClick={() => void skipPhase(path.groupId, path.label)}>
+                  {path.state === "empty" ? `${path.label} — empty, available to join` : path.done ? `${path.label} — finished` : `Next scene for ${path.label} — ${path.memberIds.length} ${path.memberIds.length === 1 ? "person" : "people"}`}
+                </button>}
+                <span>{path.state === "choosing" ? `${path.pendingAssignments ?? 0} people still need to choose` : path.done ? "At the reunion point, waiting on the other groups" : `Currently on “${path.phaseTitle}”`}</span>
               </div>)}
               <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={busy} onClick={(event) => requestConfirmation("reunion", event.currentTarget)}>Bring all groups to reunion</button><span>Explicitly ends unfinished branches, with confirmation</span></div>
-            </> : <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={!isActive || busy} onClick={() => void startGroupPaths()}>Start group paths</button><span>Finishes assignment and begins the branches</span></div>)
+            </> : <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={!isActive || busy || (status.pendingGroupAssignments?.length ?? 0) > 0} onClick={() => void startGroupPaths()}>Start group paths</button><span>{status.pendingGroupAssignments?.length ? `${status.pendingGroupAssignments.length} people still need to choose; selection remains open` : "Finishes assignment and begins the branches"}</span></div>)
               : <div><button className="sc-tool-button" data-sc-tool-variant={isActive ? "primary" : "secondary"} type="button" disabled={!isActive || busy} onClick={() => void skipPhase()}>{skipLabel}</button><span>{isActive ? "Server validates phase support" : "Available during an active show"}</span></div>}
             <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
             <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={!canReturnToIdle || busy} onClick={(event) => requestConfirmation("idle", event.currentTarget)}>Return to idle</button><span>Stop the current show</span></div>
@@ -930,10 +942,10 @@ export function App() {
           {status.participants.length === 0 ? <p className="sc-tool-copy">Nobody has joined this session yet.</p> : <ul className="admin-participant-list">
             {status.participants.map((participant) => <li key={participant.clientId}>
               <span className="admin-participant-color" style={{ backgroundColor: participant.color }} />
-              <div><strong>{participant.name}</strong><span>{(() => { const path = status.groupPaths.find((p) => p.memberIds.includes(participant.clientId)); return path ? `${status.groups?.find((g) => g.id === participant.groupId)?.label ?? path.label} · ${path.done ? "Waiting at reunion" : path.phaseTitle}` : status.groupPathsStarted ? "Waiting / needs assignment" : `${status.groups?.find((g) => g.id === participant.groupId)?.label ?? "Unassigned"} · ${sceneTitle(status.phaseId ?? "idle")}`; })()}</span><span>joined {new Date(participant.joinedAt).toLocaleTimeString([], { timeStyle: "short" })}</span>
+              <div><strong>{participant.name}</strong>{participant.state && <span>{({ choosing: "Choosing a group", unassigned: "Needs a group — choose on phone or assign here", active: "Active", finished: "Finished — other groups continue" })[participant.state]}</span>}<span>{(() => { const path = status.groupPaths.find((p) => p.memberIds.includes(participant.clientId)); return path ? `${status.groups?.find((g) => g.id === participant.groupId)?.label ?? path.label} · ${path.done ? "Waiting at reunion" : path.phaseTitle}` : status.groupPathsStarted ? "Waiting / needs assignment" : `${status.groups?.find((g) => g.id === participant.groupId)?.label ?? "Unassigned"} · ${sceneTitle(status.phaseId ?? "idle")}`; })()}</span><span>joined {new Date(participant.joinedAt).toLocaleTimeString([], { timeStyle: "short" })}</span>
                 {(status.groups?.length ?? 0) > 0 && <label className="sc-tool-label"><span>{status.groupPathsStarted ? "Move to group · current playback position" : "Audience group"}</span><select disabled={busy} className="sc-tool-select" value={participant.groupId ?? ""} onChange={(event) => void assignGroup(participant.clientId, event.target.value)}>
                   <option value="" disabled>Unassigned</option>
-                  {status.groups!.map((group) => <option key={group.id} value={group.id} disabled={status.groupPathsStarted && !status.groupPaths.some((path) => path.groupId === group.id && path.acceptingParticipants !== false)}>{group.label}{status.groupPathsStarted && !status.groupPaths.some((path) => path.groupId === group.id && path.acceptingParticipants !== false) ? " · not running" : ""}</option>)}
+                  {status.groups!.map((group) => <option key={group.id} value={group.id} disabled={status.groupDestinations ? !status.groupDestinations.includes(group.id) : status.groupPathsStarted && !status.groupPaths.some((path) => path.groupId === group.id && path.acceptingParticipants !== false)}>{group.label}{(status.groupDestinations ? !status.groupDestinations.includes(group.id) : status.groupPathsStarted && !status.groupPaths.some((path) => path.groupId === group.id && path.acceptingParticipants !== false)) ? " · unavailable" : ""}</option>)}
                 </select></label>}
               </div>
               <StatusLabel status={participant.connected ? "success" : "warning"}>{participant.connected ? "Connected" : "Disconnected"}</StatusLabel>
@@ -981,7 +993,7 @@ export function App() {
 
       </div>}
     </main>
-    {confirmAction && <ConfirmationDialog action={confirmAction} onCancel={closeConfirmation} onConfirm={confirmControl} />}
+    {confirmAction && <ConfirmationDialog scopeLabel={reunionScope?.label} action={confirmAction} onCancel={closeConfirmation} onConfirm={confirmControl} />}
     {jumpScene && <JumpConfirmationDialog scene={jumpScene} scope={jumpScope.label} onCancel={closeJumpConfirmation} onConfirm={confirmJump} />}
   </div>;
 }

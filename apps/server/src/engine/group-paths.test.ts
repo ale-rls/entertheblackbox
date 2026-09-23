@@ -99,7 +99,7 @@ describe("independent group paths", () => {
     expect(late.snapshot.phaseEpoch).toBe(b.snapshot.phaseEpoch);
     expect(late.snapshot.routingEpoch).toBe(1);
     expect(h.cues).toHaveLength(before);
-    expect(h.engine.groupPaths[0]?.memberIds).toEqual(["two", "late"]);
+    expect(h.engine.groupPaths.find(p => p.groupId === "b")?.memberIds).toEqual(["two", "late"]);
     h.engine.socketClosed(late.ws); h.registry.releaseSocket(late.ws, 450);
     const restored = h.phone("late");
     expect(restored.snapshot.phase.id).toBe("film");
@@ -144,11 +144,11 @@ describe("independent group paths", () => {
     h.engine.stop();
   });
 
-  it("rejects stale transfers, absent paths, and jumps outside a group's route", () => {
+  it("rejects stale transfers, unknown groups, and jumps outside a group's route", () => {
     const h = setup(); h.display(); const a = h.phone("one");
     h.engine.adminStart(); h.choose(a, "a"); h.tick(100);
     expect(h.engine.adminAssignGroup("one", "a", -1)).toEqual({ ok: false, reason: "stale" });
-    expect(h.engine.adminAssignGroup("one", "b")).toEqual({ ok: false, reason: "invalid-target" });
+    expect(h.engine.adminAssignGroup("one", "unknown")).toEqual({ ok: false, reason: "invalid-target" });
     expect(h.engine.adminJumpGroup("a", "film")).toEqual({ ok: false, reason: "invalid-target" });
     expect(h.engine.adminJumpGroup("a", "split")).toEqual({ ok: false, reason: "invalid-target" });
     expect(h.groups.groupFor("one")).toBe("a");
@@ -215,7 +215,7 @@ describe("independent group paths", () => {
     h.engine.stop();
   });
 
-  it("closes selection at its deadline, even before the next tick, and keeps unchosen phones unassigned on reconnect", () => {
+  it("keeps selection open past the deadline until everyone chooses, including reconnects", () => {
     const h = setup();
     h.display();
     const a = h.phone("one");
@@ -227,8 +227,11 @@ describe("independent group paths", () => {
     const reconnected = h.phone("two");
     expect(h.groups.groupFor("two")).toBeNull();
     h.setNow(100);
+    h.tick(100);
+    expect(h.engine.groupPathsStarted).toBe(false);
+    expect(h.engine.adminStartGroupPaths()).toEqual({ ok: false, reason: "unassigned-participants" });
     h.choose(reconnected, "b");
-    expect(h.groups.groupFor("two")).toBeNull();
+    expect(h.groups.groupFor("two")).toBe("b");
     h.tick(100);
     expect(reconnected.sent.at(-1).t).toBe("phase");
     h.choose(a, "b");
@@ -387,7 +390,7 @@ describe("independent group paths", () => {
     const newcomer = reused.phone("newcomer");
     expect(reused.engine.adminAssignGroup("newcomer", "a")).toEqual({ ok: true });
     expect(newcomer.snapshot.phase.id).toBe("role-vote");
-    expect(reused.engine.groupPaths.filter((p) => p.groupId === "a")).toHaveLength(1);
+    expect(reused.engine.groupPaths.filter((p) => p.groupId === "a" && p.state !== "split")).toHaveLength(1);
     expect(reused.engine.adminJumpGroup("a", "ki-after")).toEqual({ ok: true });
     reused.tick(201);
     expect(original.snapshot.phase.id).toBe("ki-after");
@@ -520,4 +523,81 @@ it("sends each phone its own selected group and audio state, including waiting a
   expect(b.snapshot).toMatchObject({ currentGroup: { id: "b" }, phoneAudioActive: false });
   expect(h.phone("two").snapshot).toMatchObject({ currentGroup: { id: "b" }, phoneAudioActive: false });
   h.engine.stop();
+});
+
+const nestedRecovery = () => scenarioSchema.parse({ ...scenario, phases: [
+  ...scenario.phases.map(p => p.id === "split" && p.kind === "group-branch" ? { ...p, branches: p.branches.map(b => b.groupId === "a" ? { ...b, next: "roles" } : b) } : p),
+  { id: "roles", kind: "group-branch", title: "Choose a trade", sourceGroupIds: ["a"], durationMs: 100,
+    assignment: { type: "self-select" }, branches: [{ groupId: "a", next: "vote" }, { groupId: "c", next: "film" }], next: "together" },
+] });
+
+it("admin assigns and starts a nested selection and reunites only its children", () => {
+  const h = setup(nestedRecovery()); h.display();
+  const a = h.phone("one"), b = h.phone("two"); h.engine.adminStart(); h.choose(a, "a"); h.choose(b, "b"); h.tick(100);
+  const selectionEpoch = a.snapshot.phaseEpoch;
+  expect(a.snapshot.participantState).toBe("choosing");
+  expect(h.engine.groupDestinations).toContain("c");
+  expect(h.engine.adminAssignGroup("one", "c")).toEqual({ ok: true });
+  expect(a.snapshot.currentGroup.id).toBe("c");
+  expect(h.engine.adminStartGroupPaths(undefined, "wrong", "a")).toEqual({ ok: false, reason: "stale" });
+  expect(h.engine.adminStartGroupPaths(undefined, "roles", "a", -1)).toEqual({ ok: false, reason: "stale" });
+  expect(h.engine.adminStartGroupPaths(undefined, "roles", "a")).toEqual({ ok: true });
+  expect(a.snapshot.phaseEpoch).toBeGreaterThan(selectionEpoch);
+  expect(h.engine.groupPaths.filter(p => p.groupId === "c")).toEqual([expect.objectContaining({ state: "active", acceptingParticipants: true })]);
+  expect(a.snapshot.phase.id).toBe("film");
+  expect(b.snapshot.phase.id).toBe("film");
+  expect(h.engine.adminForceReunion(undefined, "roles", "a")).toEqual({ ok: true });
+  expect(a.snapshot.participantState).toBe("finished");
+  expect(b.snapshot.participantState).toBe("active");
+  h.engine.stop();
+});
+
+it("starts an empty group from its beginning when a late phone chooses it", () => {
+  const h = setup(); h.display(); const a = h.phone("one"); h.engine.adminStart(); h.choose(a, "a"); h.tick(100);
+  expect(h.engine.groupPaths.find(p => p.groupId === "c")?.state).toBe("empty");
+  const screen = h.display("c"); expect(screen.snapshot.phase.kind).toBe("idle");
+  h.setNow(150); const late = h.phone("late");
+  expect(late.snapshot.participantState).toBe("unassigned");
+  expect(late.sent.at(-1)).toMatchObject({ t: "group_selection_options", selectedGroupId: null });
+  h.choose(late, "c");
+  expect(late.snapshot).toMatchObject({ participantState: "active", currentGroup: { id: "c" }, phase: { id: "film", startedAt: 150 } });
+  expect(a.snapshot.phase.id).toBe("vote");
+  expect(h.engine.groupPaths.find(p => p.groupId === "c")?.state).toBe("active");
+  expect(screen.snapshot.phase).toMatchObject({ id: "film", startedAt: 150 });
+  h.engine.stop();
+});
+
+it("does not replay a selected legacy instruction and gives a late choice its full window", () => {
+  const h = setup(scenarioSchema.parse({ ...scenario, phases: scenario.phases.map(p => p.kind === "group-branch" ? { ...p, branches: p.branches.map(b => ({ ...b, phoneAudioSrc: "instruction.mp3" })) } : p) }));
+  h.display(); const a = h.phone("one"); h.engine.adminStart(); h.setNow(90); h.choose(a, "a");
+  const count = h.audio.length; h.choose(a, "a"); expect(h.audio.length).toBe(count);
+  h.tick(100); expect(h.engine.groupPathsStarted).toBe(false);
+  h.tick(190); expect(h.engine.groupPathsStarted).toBe(true);
+  h.engine.stop();
+});
+
+it("retains the parent cohort when a trade selection is revisited", () => {
+  const repeated = scenarioSchema.parse({ ...nestedRecovery(), phases: nestedRecovery().phases.map(p => p.id === "roles" ? { ...p, next: "film" } : p) });
+  const h = setup(repeated); h.display(); const a = h.phone("one"), b = h.phone("two"); h.engine.adminStart(); h.choose(a, "a"); h.choose(b, "b"); h.tick(100);
+  h.choose(a, "c"); expect(h.engine.adminStartGroupPaths(undefined, "roles", "a")).toEqual({ ok: true });
+  expect(h.engine.adminForceReunion(undefined, "roles", "a")).toEqual({ ok: true });
+  expect(h.engine.adminJumpGroup("a", "roles")).toEqual({ ok: true });
+  expect(h.groups.groupFor("one")).toBeNull();
+  expect(a.sent.at(-1).t).toBe("group_selection_options");
+  h.choose(a, "c"); expect(h.groups.groupFor("one")).toBe("c");
+  h.engine.stop();
+});
+
+it("moves an outsider into a nested selection that reuses its parent group ID", () => {
+  const h = setup(nestedRecovery()); h.display(); const a = h.phone("one"), b = h.phone("two");
+  h.engine.adminStart(); h.choose(a, "a"); h.choose(b, "b"); h.tick(100);
+  expect(h.engine.adminAssignGroup("two", "c")).toEqual({ ok: true });
+  expect(b.snapshot).toMatchObject({ participantState: "choosing", currentGroup: { id: "c" }, phase: { id: "roles" } });
+  expect(h.engine.groupPaths.find(p => p.groupId === "a")?.memberIds).toEqual(["one", "two"]);
+  h.engine.stop();
+});
+
+it("warns when a group entry immediately reaches its reunion", () => {
+  const value = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map(p => p.kind === "group-branch" ? { ...p, branches: p.branches.map(b => ({ ...b, next: p.next })) } : p) });
+  expect(validateScenario(value).warnings).toEqual(expect.arrayContaining([expect.objectContaining({ code: "immediate-group-reunion", phaseId: "split" })]));
 });
