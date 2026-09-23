@@ -242,6 +242,18 @@ function connectSignage(engine: PhaseEngine, socket: WebSocket, signageId: strin
 }
 
 describe("PhaseEngine lifecycle", () => {
+  it("starts a scheduled show with no participants", () => {
+    let now = 1_000;
+    const { engine } = setup({ now: () => now, scheduledStartTimes: [2_000], autoStartOnFirstParticipant: false });
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe("lobby");
+    now = 2_000;
+    engine.tick(now);
+    expect(engine.lifecycleState).toBe("active");
+    expect(engine.currentPhaseId).toBe("intro");
+    expect(engine.connectedParticipantCount).toBe(0);
+  });
+
   it("waits for an operator or scheduled start when participant-count auto-start is disabled", () => {
     let now = 1_000;
     const { engine, registry } = setup({ now: () => now, autoStartOnFirstParticipant: false });
@@ -694,7 +706,7 @@ describe("PhaseEngine lifecycle", () => {
     expect(checkpoints.at(-1)?.reason).toBe("video-complete");
   });
 
-  it("enforces interactive idle during the lobby", () => {
+  it("keeps the lobby open without phone input", () => {
     let now = 1_000;
     const checkpoints: PhaseCheckpoint[] = [];
     const { engine, registry } = setup({
@@ -711,11 +723,11 @@ describe("PhaseEngine lifecycle", () => {
 
     engine.tick(now + 51);
 
-    expect(engine.lifecycleState).toBe("idle");
-    expect(checkpoints.at(-1)?.reason).toBe("interactive-idle-timeout");
+    expect(engine.lifecycleState).toBe("lobby");
+    expect(checkpoints.at(-1)?.reason).toBe("lobby-start");
   });
 
-  it("cancels the lobby when the last participant disconnects", () => {
+  it("starts from the lobby even when the last participant disconnects", () => {
     let now = 1_000;
     const checkpoints: PhaseCheckpoint[] = [];
     const { engine, registry } = setup({ now: () => now, checkpoints });
@@ -730,9 +742,10 @@ describe("PhaseEngine lifecycle", () => {
     registry.releaseSocket(phone as unknown as WebSocket, now);
     engine.socketClosed(phone as unknown as WebSocket);
 
-    expect(engine.lifecycleState).toBe("idle");
-    expect(engine.currentSessionId).toBe("idle");
-    expect(checkpoints.at(-1)?.reason).toBe("lobby-empty");
+    expect(engine.lifecycleState).toBe("lobby");
+    engine.tick(1_100);
+    expect(engine.lifecycleState).toBe("active");
+    expect(checkpoints.at(-1)?.reason).toBe("session-start");
   });
 
   it("emits one deadline event and checkpoints transitions", () => {
@@ -759,7 +772,7 @@ describe("PhaseEngine lifecycle", () => {
     ]);
   });
 
-  it("aborts to idle on interactive inactivity and max duration", () => {
+  it("keeps interactive scenes running without input but enforces max duration", () => {
     const cases = [
       { label: "interactive-idle-timeout", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
       { label: "max-session-duration", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },
@@ -782,8 +795,8 @@ describe("PhaseEngine lifecycle", () => {
       engine.tick(now);
       engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
       testCase.trigger(engine, now);
-      expect(engine.lifecycleState, testCase.label).toBe("idle");
-      expect(checkpoints.at(-1)?.reason, testCase.label).toBe(testCase.label);
+      expect(engine.lifecycleState, testCase.label).toBe(testCase.label === "max-session-duration" ? "idle" : "active");
+      expect(checkpoints.at(-1)?.reason, testCase.label).toBe(testCase.label === "max-session-duration" ? testCase.label : "video-complete");
     }
   });
 
@@ -801,11 +814,16 @@ describe("PhaseEngine lifecycle", () => {
 
     registry.releaseSocket(phone as unknown as WebSocket, now);
     engine.socketClosed(phone as unknown as WebSocket);
-    engine.tick(now + 1_000);
+    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+    engine.tick(now + 100);
 
     expect(engine.lifecycleState).toBe("active");
-    expect(engine.currentPhaseId).toBe("intro");
-    expect(checkpoints.at(-1)?.reason).toBe("session-start");
+    expect(engine.currentPhaseId).toBe("question");
+    expect(checkpoints.at(-1)?.reason).toBe("video-complete");
+    engine.tick(now + 200);
+    engine.tick(now + 220);
+    expect(engine.lifecycleState).toBe("idle");
+    expect(checkpoints.at(-1)?.reason).toBe("question-freeze-complete");
   });
 
   it("recovers active state to idle and authenticates/replaces displays", () => {
@@ -844,7 +862,8 @@ describe("PhaseEngine lifecycle", () => {
     const checkpoints: PhaseCheckpoint[] = [];
     const { engine, registry } = setup({ now: () => now, checkpoints });
 
-    expect(engine.adminStart(now)).toEqual({ ok: false, reason: "wrong-phase" });
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    expect(engine.adminRestart(now)).toEqual({ ok: true });
     expect(engine.adminIdle(now)).toEqual({ ok: true });
     expect(engine.lifecycleState).toBe("idle");
 

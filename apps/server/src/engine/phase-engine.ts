@@ -41,6 +41,7 @@ export type EngineLifecycle = "idle" | "lobby" | "active";
 
 export type PhaseEnginePolicy = {
   lobbyCountdownMs: number;
+  /** @deprecated Participant inactivity no longer ends shows. Retained for policy compatibility. */
   interactiveIdleTimeoutMs: number;
   maxSessionDurationMs: number;
   displayDisconnectTimeoutMs: number;
@@ -240,7 +241,6 @@ export class PhaseEngine {
   private phaseStartedAt: number;
   private deadlineAt: number | null = null;
   private sessionStartedAt: number | null = null;
-  private lastInputAt: number | null = null;
   private displayHeartbeatAt: number | null = null;
   private displayPlaybackIssue: DisplayPlaybackIssue | null = null;
   private deadlineNotified = false;
@@ -413,14 +413,13 @@ export class PhaseEngine {
     this.routingEpochs.clear();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
-    this.lastInputAt = now;
     this.joinMovementRecordingForConnectedParticipants();
     this.enterPhase(target, now, "rehearsal-start");
     return { ok: true };
   }
 
   adminStart(now = this.now()): TransitionResult {
-    if (this.lifecycle === "active" || this.registry.connectedCount < 1) {
+    if (this.lifecycle === "active") {
       return { ok: false, reason: "wrong-phase" };
     }
     this.startSession(now);
@@ -732,16 +731,7 @@ export class PhaseEngine {
 
     if (this.lifecycle === "lobby") {
       if (this.deadlineAt !== null && now >= this.deadlineAt) {
-        if (this.registry.connectedCount > 0) {
-          this.startSession(now);
-        } else {
-          this.consumeScheduledStart(this.deadlineAt);
-          this.syncLobbyDeadline(now, "lobby-start-missed");
-        }
-      }
-      if (this.lifecycle === "lobby" && this.autoStartOnFirstParticipant && this.interactiveIdleTimedOut(now)) {
-        this.abortToIdle("interactive-idle-timeout", now);
-        return;
+        this.startSession(now);
       }
       if (this.lifecycle === "lobby") return;
     }
@@ -827,11 +817,6 @@ export class PhaseEngine {
       return;
     }
 
-    if (this.interactiveIdleTimedOut(now)) {
-      this.abortToIdle("interactive-idle-timeout", now);
-      return;
-    }
-
     if (this.deadlineAt !== null && now >= this.deadlineAt && !this.deadlineNotified) {
       this.deadlineNotified = true;
       if (phase.kind === "position-question") this.resolveQuestionAtDeadline(now, phase);
@@ -895,9 +880,6 @@ export class PhaseEngine {
     if (this.displaySocket === socket) {
       this.displaySocket = undefined;
       this.displayHeartbeatAt = null;
-    }
-    if (this.lifecycle === "lobby" && this.registry.connectedCount === 0 && this.nextLobbyStartAt === null) {
-      this.abortToIdle("lobby-empty", this.now());
     }
   }
 
@@ -1062,7 +1044,6 @@ export class PhaseEngine {
       if (!this.votes.recordInput(participantId, x, y, now)) return false;
       this.queueQuestionStatus(now);
     }
-    this.lastInputAt = now;
     return true;
   }
 
@@ -1291,7 +1272,6 @@ export class PhaseEngine {
     this.deadlineAt = this.nextLobbyStartAt ?? (this.autoStartOnFirstParticipant ? now + this.policy.lobbyCountdownMs : null);
     this.phaseEpoch = this.nextEpoch();
     this.sessionStartedAt = null;
-    this.lastInputAt = now;
     this.deadlineNotified = false;
     this.transition("lobby-start");
   }
@@ -1302,7 +1282,6 @@ export class PhaseEngine {
     this.routingEpochs.clear();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
-    this.lastInputAt = null;
     this.joinMovementRecordingForConnectedParticipants();
     this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "session-start");
@@ -1373,10 +1352,8 @@ export class PhaseEngine {
       this.lifecycle = "idle";
       this.sessionId = "idle";
       this.sessionStartedAt = null;
-      this.lastInputAt = null;
     } else {
       this.lifecycle = "active";
-      this.lastInputAt = phase.kind === "position-question" || phase.kind === "video-position-question" ? now : null;
     }
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
@@ -1488,12 +1465,6 @@ export class PhaseEngine {
 
   private currentPhase(): Phase {
     return this.requirePhase(this.phaseId);
-  }
-
-  private interactiveIdleTimedOut(now: number): boolean {
-    const kind = this.currentPhase().kind;
-    const interactive = (this.lifecycle === "lobby" && this.autoStartOnFirstParticipant) || kind === "position-question" || kind === "video-position-question";
-    return interactive && this.lastInputAt !== null && now - this.lastInputAt >= this.policy.interactiveIdleTimeoutMs;
   }
 
   private normalizeStartTimes(startTimes: readonly number[]): number[] {

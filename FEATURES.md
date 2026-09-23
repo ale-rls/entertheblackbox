@@ -5,7 +5,7 @@ An extensive map of what this repo does, grouped by area, with the app(s), servi
 ## Show orchestration & lifecycle
 
 - **Authoritative phase engine** (single running scenario graph, transitions, timers, epochs) — `apps/server/src/engine/phase-engine.ts`
-- **Lifecycle states** (idle / lobby / active) with manual or scheduled start, restart, return-to-idle — `apps/server/src/engine/phase-engine.ts`, admin API (`apps/server/src/admin/admin.ts`), operator UI `apps/admin/src/App.tsx`
+- **Lifecycle states** (idle / lobby / active) with manual or scheduled start (no connected participants required), restart, return-to-idle; phone inactivity or disconnects do not end the show — `apps/server/src/engine/phase-engine.ts`, admin API (`apps/server/src/admin/admin.ts`), operator UI `apps/admin/src/App.tsx`
 - **Lobby scheduling** — one or more date/time show starts, ±10s/±1min quick adjust — `apps/server/src/persistence/lobby-config.ts`, display `apps/display/src/components/LobbyCountdown.tsx` + `Countdown.tsx`
 - **Session recovery / stale-command rejection** — expected-phaseId/epoch/sessionId checks on every admin mutation — `apps/server/src/engine/phase-engine.ts`, `apps/server/src/admin/admin.ts`
 - **Public phase map for preloading** — unauthenticated `GET /api/phases` — `apps/server/src/server.ts`

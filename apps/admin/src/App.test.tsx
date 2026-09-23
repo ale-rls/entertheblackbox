@@ -120,10 +120,10 @@ describe("Admin operations UI", () => {
     expect(requests.map(request => request.url)).toEqual(["/api/admin/status"]);
   });
 
-  it("allows starting a show without a connected display", async () => {
+  it("allows starting a show without connected participants or a display", async () => {
     localStorage.setItem("admin-token", "operator-token");
     const { requests } = createAdminFetch({
-      status: { ...activeStatus, lifecycle: "lobby", displayConnected: false },
+      status: { ...activeStatus, lifecycle: "lobby", displayConnected: false, connectedParticipants: 0 },
     });
     await renderApp();
     expect(button("Start show").disabled).toBe(false);
