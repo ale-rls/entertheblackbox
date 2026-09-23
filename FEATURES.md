@@ -88,6 +88,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Shared media-library picker for default, per-group, and per-signage-kiosk lobby/waiting videos (MP4/WebM, sync readiness, muted loop, live updates, black-screen override) — protocol platform settings, display `IdleAttract`, Admin `DisplaySettingsPanel`, PocketBase platform config
 - Display text editor — `DisplaySettingsPanel.tsx`
 - Participant roster + group (re)assignment
+- Downloadable high-resolution PNG export of the configured participant join QR code
 - Session export (JSON/CSV) — `apps/server/src/persistence/admin-data.ts`
 - Error log / audit log
 - Admin API rate limiting — `apps/server/src/admission/rate-limit.ts`

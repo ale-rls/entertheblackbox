@@ -10,7 +10,7 @@ import type { IncomingMessage } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import { TrackingClient } from "./tracking/client.js";
 import { z } from "zod";
-import { AdmissionController, InMemoryIpRateLimiter } from "./admission/index.js";
+import { AdmissionController, InMemoryIpRateLimiter, phoneJoinUrl } from "./admission/index.js";
 import { verifyParticipantLease } from "./admission/tokens.js";
 import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
 import { loadConfig, type ServerConfig } from "./config.js";
@@ -321,6 +321,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     verifyToken: options.verifyOperatorToken ?? createOperatorTokenVerifier(config.pocketbase.url),
     engine: () => engine,
     ready: readiness.ready,
+    phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
     startedAt,
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,

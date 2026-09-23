@@ -16,6 +16,7 @@ export type Status = {
   audio?: { backgroundMusic?: { src: string; volume: number } | null; configured: boolean; capacity?: { total: number; assigned: number; available: number }; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; backend?: "remote" | "local"; backendLabel?: string; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; phoneReportAgeMs?: number; reconnects?: number; lastRecoveryMs?: number | null }> };
   healthy: boolean;
   ready: boolean;
+  phoneJoinUrl: string | null;
   uptimeMs: number;
   serverTime?: number;
   timingMonitors?: TimingMonitor[];
@@ -855,7 +856,7 @@ export function App() {
           </div>
         </section>
 
-        <RunOfShowPanel />
+        <RunOfShowPanel phoneJoinUrl={status.phoneJoinUrl} />
 
         {isActive && <section className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
           <div className="admin-section-heading">

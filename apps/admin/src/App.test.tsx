@@ -26,6 +26,7 @@ import { App, type Status } from "./App.js";
 const activeStatus: Status = {
   healthy: true,
   ready: true,
+  phoneJoinUrl: "https://show.example/phone/",
   uptimeMs: 3_723_000,
   displayConnected: true,
   displayHeartbeatAgeMs: 42,

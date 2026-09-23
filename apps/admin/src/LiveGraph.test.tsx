@@ -10,7 +10,7 @@ const flow: SceneFlow = { entryPhaseId: "split", scenes: [
   { id: "b1", kind: "video", title: "Scene B", routes: [{ outcome: "next", target: "reunion" }] },
   { id: "reunion", kind: "video", title: "Reunion", routes: [{ outcome: "next", target: "idle" }] },
 ] };
-const status: Status = { healthy: true, ready: true, uptimeMs: 0, displayConnected: true, displayHeartbeatAgeMs: 0, displayPlaybackIssue: null, connectedParticipants: 2, lifecycle: "active", sessionId: "s", phaseId: "split", phaseEpoch: 4, groupPathsStarted: true,
+const status: Status = { healthy: true, ready: true, phoneJoinUrl: "https://show.example/phone/", uptimeMs: 0, displayConnected: true, displayHeartbeatAgeMs: 0, displayPlaybackIssue: null, connectedParticipants: 2, lifecycle: "active", sessionId: "s", phaseId: "split", phaseEpoch: 4, groupPathsStarted: true,
  participants: ["Alex", "Late"].map((name) => ({ clientId: name, name, color: "red", connected: true, joinedAt: 0, lastSeenAt: 0 })),
  groupPaths: [{ groupId: "a", label: "Actors", color: null, memberIds: ["Alex"], phaseId: "a1", phaseTitle: "Scene A", phaseEpoch: 5, done: false, jumpTargets: ["a1", "reunion"], reunionPhaseId: "reunion" }, { groupId: "b", label: "Builders", color: null, memberIds: [], phaseId: "b1", phaseTitle: "Scene B", phaseEpoch: 6, done: false, jumpTargets: ["b1", "reunion"], reunionPhaseId: "reunion" }] };
 let root: Root;

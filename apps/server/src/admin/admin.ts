@@ -58,6 +58,7 @@ export type RegisterAdminOptions = {
   rateLimitPolicy?: AdminRateLimitPolicy;
   rateLimiters?: AdminRateLimiters;
   now?: () => number;
+  phoneJoinUrl?: string;
   showConfig?: {
     /** The showId this running process actually booted with, or null if no scenario is ready. */
     activeShowId: string | null;
@@ -170,6 +171,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         audio: await options.audioStatus?.() ?? { configured: false, players: [] },
         healthy: true,
         ready: options.ready,
+        phoneJoinUrl: options.phoneJoinUrl ?? null,
         serverTime: Date.now(),
         phaseTiming: engine ? { startedAt: engine.getSnapshot().startedAt, deadlineAt: engine.getSnapshot().deadlineAt } : null,
         uptimeMs: Date.now() - options.startedAt,

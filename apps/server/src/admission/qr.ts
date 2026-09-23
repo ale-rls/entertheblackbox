@@ -4,6 +4,14 @@ import type { JoinGrantClaims } from "./tokens.js";
 export type QrLifecycle = "idle" | "lobby" | "active";
 export type QrPushMessage = QrGrantMessage | QrHiddenMessage;
 
+export function phoneJoinUrl(phoneJoinBaseUrl: string, rehearsalId?: string): string {
+  const url = new URL(phoneJoinBaseUrl);
+  url.search = "";
+  if (rehearsalId) url.searchParams.set("rehearsal", rehearsalId);
+  url.hash = "";
+  return url.toString();
+}
+
 export type QrGrantPushLoopOptions = {
   phoneJoinBaseUrl: string;
   rehearsalId?: string;
@@ -55,14 +63,10 @@ export class QrGrantPushLoop {
 
     const now = this.now();
     const grant = this.options.issueGrant(now);
-    const url = new URL(this.options.phoneJoinBaseUrl);
-    url.search = "";
-    if (this.options.rehearsalId) url.searchParams.set("rehearsal", this.options.rehearsalId);
-    url.hash = "";
     this.options.send({
       t: "qr_grant",
       v: PROTOCOL_VERSION,
-      url: url.toString(),
+      url: phoneJoinUrl(this.options.phoneJoinBaseUrl, this.options.rehearsalId),
       expiresAt: grant.claims.expiresAt,
       placement: "large",
       showJoinUrl: this.options.showPhoneJoinBaseUrl !== false,
