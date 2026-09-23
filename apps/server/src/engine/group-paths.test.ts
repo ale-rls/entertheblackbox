@@ -131,7 +131,7 @@ describe("independent group paths", () => {
     h.setNow(150);
     expect(h.engine.adminAssignGroup("two", "a")).toEqual({ ok: true });
     h.send(b, { t: "input", v: 2, sessionId: "visit", phaseEpoch: b.snapshot.phaseEpoch, seq: 1, x: 0.8, y: 0.5 });
-    expect(h.engine.groupPaths.find((p) => p.groupId === "b")?.done).toBe(true);
+    expect(h.engine.groupPaths.find((p) => p.groupId === "b")?.done).toBe(false);
     h.tick(200);
     expect(h.votes[0]?.votes.map((v) => v.participantId)).toEqual(["one", "two"]);
     const late = h.phone("late");
@@ -140,6 +140,8 @@ describe("independent group paths", () => {
     expect(h.audio.at(-1)).toEqual({ ids: ["late"], phase: "idle" });
     expect(h.engine.adminSkipGroup("c")).toEqual({ ok: true });
     h.tick(201);
+    expect(h.engine.currentPhaseId).toBe("split");
+    h.tick(1_100);
     expect(h.engine.currentPhaseId).toBe("together");
     h.engine.stop();
   });
@@ -182,7 +184,7 @@ describe("independent group paths", () => {
     expect(b.snapshot.phase.id).toBe("film");
     expect(screenA.snapshot.phase.id).toBe("vote");
     expect(screenB.snapshot.phase.id).toBe("film");
-    expect(screenC.snapshot.phase.kind).toBe("idle");
+    expect(screenC.snapshot.phase).toMatchObject({ id: "film", startedAt: 100 });
     const input = { t: "input" as const, v: 2 as const, sessionId: "visit", phaseEpoch: a.snapshot.phaseEpoch, seq: 1, x: 0.8, y: 0.5 };
     h.send(b, input); // Forging another path's epoch must not cast a vote there.
     h.send(a, input);
@@ -243,7 +245,7 @@ describe("independent group paths", () => {
     h.engine.stop();
   });
 
-  it("ends group media on the server clock with no group display, and ignores empty groups at reunion", () => {
+  it("ends group media on the server clock with no group display, including empty groups at reunion", () => {
     const h = setup();
     const main = h.display();
     const b = h.phone("two");
@@ -393,6 +395,8 @@ describe("independent group paths", () => {
     expect(reused.engine.groupPaths.filter((p) => p.groupId === "a" && p.state !== "split")).toHaveLength(1);
     expect(reused.engine.adminJumpGroup("a", "ki-after")).toEqual({ ok: true });
     reused.tick(201);
+    expect(original.snapshot.participantState).toBe("finished");
+    reused.tick(300);
     expect(original.snapshot.phase.id).toBe("ki-after");
     reused.engine.stop();
   });
@@ -552,18 +556,18 @@ it("admin assigns and starts a nested selection and reunites only its children",
   h.engine.stop();
 });
 
-it("starts an empty group from its beginning when a late phone chooses it", () => {
+it("joins the running clock when the first late phone chooses an empty group", () => {
   const h = setup(); h.display(); const a = h.phone("one"); h.engine.adminStart(); h.choose(a, "a"); h.tick(100);
-  expect(h.engine.groupPaths.find(p => p.groupId === "c")?.state).toBe("empty");
-  const screen = h.display("c"); expect(screen.snapshot.phase.kind).toBe("idle");
+  expect(h.engine.groupPaths.find(p => p.groupId === "c")?.state).toBe("active");
+  const screen = h.display("c"); expect(screen.snapshot.phase).toMatchObject({ id: "film", startedAt: 100 });
   h.setNow(150); const late = h.phone("late");
   expect(late.snapshot.participantState).toBe("unassigned");
   expect(late.sent.at(-1)).toMatchObject({ t: "group_selection_options", selectedGroupId: null });
   h.choose(late, "c");
-  expect(late.snapshot).toMatchObject({ participantState: "active", currentGroup: { id: "c" }, phase: { id: "film", startedAt: 150 } });
+  expect(late.snapshot).toMatchObject({ participantState: "active", currentGroup: { id: "c" }, phase: { id: "film", startedAt: 100 } });
   expect(a.snapshot.phase.id).toBe("vote");
   expect(h.engine.groupPaths.find(p => p.groupId === "c")?.state).toBe("active");
-  expect(screen.snapshot.phase).toMatchObject({ id: "film", startedAt: 150 });
+  expect(screen.snapshot.phase).toMatchObject({ id: "film", startedAt: 100 });
   h.engine.stop();
 });
 
@@ -617,4 +621,57 @@ it("scopes display and phone telemetry to the active group and invalidates trans
   h.engine.adminAssignGroup("two", "a", h.engine.currentPhaseEpoch);
   h.send(b, phoneReport);
   expect(h.engine.timingMonitors.find((r) => r.id === "phone:two")?.timing).toBeNull(); h.engine.stop();
+});
+
+
+it("advances every empty branch through decisions and media before the show's first phone arrives", () => {
+  const h = setup(scenarioSchema.parse({ ...scenario, phases: [
+    ...scenario.phases.map(p => p.id === "film" ? { ...p, next: "second-film" } : p),
+    { kind: "video", id: "second-film", src: "second.mp4", phoneAudioSrc: "second.mp3", expectedDurationMs: 1_000, next: "together" },
+  ] }));
+  h.display();
+  const earlyScreen = h.display("b");
+  expect(h.engine.adminStart()).toEqual({ ok: true });
+  h.tick(100);
+  expect(h.engine.groupPaths).toHaveLength(3);
+  expect(h.engine.groupPaths.every(p => p.startedAt === 100 && p.memberIds.length === 0)).toBe(true);
+  expect(earlyScreen.snapshot.phase).toMatchObject({ id: "film", startedAt: 100 });
+  h.tick(200);
+  expect(h.engine.groupPaths.find(p => p.groupId === "a")?.done).toBe(true);
+  expect(h.engine.currentPhaseId).toBe("split");
+  h.tick(1_100);
+  h.tick(1_500);
+  expect(h.engine.timingMonitors).toContainEqual(expect.objectContaining({
+    id: "display:c", phaseId: "second-film", connected: false, mediaExpected: true,
+  }));
+  const before = h.cues.length;
+  const lateScreen = h.display("c");
+  const first = h.phone("first");
+  h.choose(first, "c");
+  expect(first.snapshot).toMatchObject({
+    phoneAudioActive: true, serverTime: 1_500,
+    phase: { id: "second-film", startedAt: 1_100, deadlineAt: 2_100 },
+  });
+  expect(first.snapshot.phase).toEqual(lateScreen.snapshot.phase);
+  expect(earlyScreen.snapshot.phase).toMatchObject({ id: "second-film", startedAt: 1_100 });
+  expect(h.cues).toHaveLength(before);
+  h.tick(2_100);
+  expect(h.engine.currentPhaseId).toBe("together");
+  h.engine.stop();
+});
+
+it("keeps an emptied group's clock when its last participant leaves and later returns", () => {
+  const h = setup(); h.display();
+  const phone = h.phone("one");
+  h.engine.adminStart(); h.choose(phone, "b"); h.tick(100);
+  const original = phone.snapshot;
+  h.setNow(150); h.engine.adminAssignGroup("one", "a");
+  h.tick(200); h.setNow(450);
+  expect(h.engine.adminAssignGroup("one", "b")).toEqual({ ok: true });
+  expect(phone.snapshot.phase).toEqual(original.phase);
+  expect(phone.snapshot.phaseEpoch).toBe(original.phaseEpoch);
+  expect(phone.snapshot.serverTime - phone.snapshot.phase.startedAt).toBe(350);
+  h.tick(1_100);
+  expect(h.engine.currentPhaseId).toBe("together");
+  h.engine.stop();
 });
