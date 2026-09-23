@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { QrPushMessage } from "./qr.js";
-import { QrGrantPushLoop, type QrLifecycle } from "./qr.js";
+import { phoneJoinUrl, QrGrantPushLoop, type QrLifecycle } from "./qr.js";
 
 afterEach(() => vi.useRealTimers());
 
@@ -29,6 +29,13 @@ function setup(overrides: Partial<ConstructorParameters<typeof QrGrantPushLoop>[
 }
 
 describe("QR grant push loop", () => {
+  it("normalizes the public phone URL used by displays and exports", () => {
+    expect(phoneJoinUrl("https://phone.example/join?installation=one#old"))
+      .toBe("https://phone.example/join");
+    expect(phoneJoinUrl("https://phone.example/join?installation=one#old", "preview-one"))
+      .toBe("https://phone.example/join?rehearsal=preview-one");
+  });
+
   it("keeps the rehearsal QR in its isolated session", () => {
     const { loop, sent } = setup({ rehearsalId: "test-preview" });
     loop.push();

@@ -9,6 +9,7 @@ function setup(options: {
   rateLimiters?: AdminRateLimiters;
   trustProxy?: boolean;
   now?: () => number;
+  phoneJoinUrl?: string;
   showConfig?: {
     activeShowId: string | null;
     list: () => Promise<PublishedShowSummary[]>;
@@ -108,7 +109,7 @@ describe("admin API", () => {
   });
 
   it("protects every admin endpoint and exposes operational status", async () => {
-    const { app } = setup();
+    const { app } = setup({ phoneJoinUrl: "https://show.example/phone/" });
     expect((await app.inject({ url: "/api/admin/status" })).statusCode).toBe(401);
     const response = await app.inject({ url: "/api/admin/status", headers: { authorization: "Bearer strong-admin-token" } });
     expect(response.json()).toMatchObject({
@@ -116,6 +117,7 @@ describe("admin API", () => {
       phaseTiming: { startedAt: 1000, deadlineAt: 21000 },
       healthy: true,
       ready: true,
+      phoneJoinUrl: "https://show.example/phone/",
       displayConnected: true,
       displayHeartbeatAgeMs: 12,
       displayPlaybackIssue: { status: "stalled", mediaId: "intro.mp4", detail: "buffering stopped", reportedAt: 1_000 },
