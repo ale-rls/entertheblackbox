@@ -406,7 +406,9 @@ export function App() {
               </div>
             </section>
           )}
-          {state.phoneDisplayText !== null && <p className="phone-phase-text" aria-live="polite">{state.phoneDisplayText}</p>}
+          {state.participantState === "finished" && <p className="phone-phase-text" role="status">Deine Gruppe ist fertig. Die anderen Gruppen machen noch weiter.</p>}
+          {state.participantState === "unassigned" && !state.groupSelection && <p className="phone-phase-text" role="status">Du bist noch keiner Gruppe zugeteilt. Bitte melde dich beim Team.</p>}
+          {state.participantState !== "finished" && state.participantState !== "unassigned" && state.phoneDisplayText !== null && <p className="phone-phase-text" aria-live="polite">{state.phoneDisplayText}</p>}
           {identity && state.inputOpen && <div className="live-cursor-field" aria-hidden="true"><span
               ref={cursorMarker}
               className="live-cursor-dot"

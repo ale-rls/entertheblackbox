@@ -295,7 +295,7 @@ describe("Admin operations UI", () => {
     expect(startButton.disabled).toBe(false);
     await act(async () => { startButton.click(); });
     await flush();
-    expect(requests).toContainEqual({ url: "/api/admin/groups/start-paths", method: "POST" });
+    expect(requests).toContainEqual({ url: "/api/admin/groups/start-paths", method: "POST", body: JSON.stringify({ expectedPhaseId: "split", expectedEpoch: 7 }) });
   });
 
   it("lets an operator advance one running group independently and force a reunion for the rest", async () => {
@@ -319,7 +319,7 @@ describe("Admin operations UI", () => {
     await renderApp();
 
     expect(document.body.textContent).not.toContain("Skip current phase");
-    expect(document.body.textContent).toContain("Builders — waiting");
+    expect(document.body.textContent).toContain("Builders — finished");
 
     const groupButton = button("Next scene for Actors — 2 people");
     await act(async () => { groupButton.click(); });
@@ -332,7 +332,7 @@ describe("Admin operations UI", () => {
     expect(dialog.textContent).toContain("Bring all groups to reunion?");
     await act(async () => { dialog.querySelector<HTMLButtonElement>('[data-sc-tool-variant="danger"]')?.click(); });
     await flush();
-    expect(requests).toContainEqual({ url: "/api/admin/groups/reunion", method: "POST" });
+    expect(requests).toContainEqual({ url: "/api/admin/groups/reunion", method: "POST", body: JSON.stringify({ expectedPhaseId: "split", expectedEpoch: 7 }) });
   });
 
   it("surfaces a blocked phase video as a live operational failure", async () => {
@@ -475,4 +475,23 @@ it("plays and stops background music while the show is active", async () => {
   await flush();
   expect(JSON.parse(requests.filter(r => r.url.endsWith("/audio/music")).at(-1)!.body!)).toEqual({ src: null, volume: 0.2 });
   expect(musicContentType()).toBe("application/json");
+});
+
+it("offers scoped start and scoped reunion for nested splits", async () => {
+  localStorage.setItem("admin-token", "operator-secret");
+  const { requests } = createAdminFetch({
+    flow: { entryPhaseId: "split", scenes: [{ id: "split", kind: "group-branch", title: "Split", routes: [] }] },
+    status: { ...activeStatus, phaseId: "split", groupPathsStarted: true, groupPaths: [
+      { groupId: "ki", label: "KI", color: null, memberIds: ["p1"], phaseId: "roles", phaseTitle: "Choose trade", phaseEpoch: 5, done: false, state: "choosing", pendingAssignments: 0 },
+      { groupId: "other", label: "Other", color: null, memberIds: [], phaseId: "other-split", phaseTitle: "Other selection", phaseEpoch: 6, done: false, state: "split", acceptingParticipants: false },
+    ] },
+  });
+  await renderApp();
+  await act(async () => button("Start groups for KI").click()); await flush();
+  expect(requests).toContainEqual({ url: "/api/admin/groups/start-paths", method: "POST", body: JSON.stringify({ groupId: "ki", expectedPhaseId: "roles", expectedEpoch: 5 }) });
+  await act(async () => button("Finish subgroups of Other").click());
+  const dialog = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+  expect(dialog.textContent).toContain("Other groups continue");
+  await act(async () => dialog.querySelector<HTMLButtonElement>('[data-sc-tool-variant="danger"]')!.click()); await flush();
+  expect(requests).toContainEqual({ url: "/api/admin/groups/reunion", method: "POST", body: JSON.stringify({ groupId: "other", expectedPhaseId: "other-split", expectedEpoch: 6 }) });
 });

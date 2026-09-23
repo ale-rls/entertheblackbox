@@ -16,6 +16,7 @@ export type ScenarioIssue = {
     | "unknown-group"
     | "unknown-question"
     | "invalid-group-branch"
+    | "immediate-group-reunion"
     | "missing-media"
     | "unreachable-phase"
     | "unmarked-cycle";
@@ -109,6 +110,10 @@ export function validateScenario(
       }
     }
     if (phase.kind === "group-branch") {
+      for (const branch of phase.branches) if (branch.next === phase.next) warnings.push({
+        severity: "warning", code: "immediate-group-reunion", phaseId: phase.id,
+        message: `Group "${branch.groupId}" starts at the reunion of "${phase.id}" and will immediately finish. Use a separate entry scene if it should run its own path.`,
+      });
       const referenced = [
         ...(phase.sourceGroupIds ?? []),
         ...phase.branches.map((branch) => branch.groupId),

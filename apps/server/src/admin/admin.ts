@@ -176,9 +176,12 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         connectedParticipants: engine?.connectedParticipantCount ?? 0,
         participants: (engine?.participantPresence ?? []).map((participant) => ({
           ...participant,
-          groupId: memberships.get(participant.clientId) ?? null,
+          groupId: engine?.participantState?.(participant.clientId) === "unassigned" ? null : memberships.get(participant.clientId) ?? null,
+          state: engine?.participantState?.(participant.clientId) ?? "active",
         })),
         groups: options.groupControl?.catalogue ?? [],
+        groupDestinations: engine?.groupDestinations ?? [],
+        pendingGroupAssignments: engine?.pendingGroupAssignments ?? [],
         sessionId: engine?.currentSessionId ?? null,
         lifecycle: engine?.lifecycleState ?? null,
         phaseId: engine?.currentPhaseId ?? null,
@@ -435,28 +438,32 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       options.data?.audit({ action: "skip", at: new Date().toISOString(), detail: { groupId, ...result } });
       return result.ok ? result : reply.code(409).send(result);
     });
-    admin.post<{ Body: { expectedPhaseId?: unknown } }>("/groups/start-paths", async (request, reply) => {
-      const { expectedPhaseId } = request.body ?? {};
+    admin.post<{ Body: { expectedPhaseId?: unknown; groupId?: unknown; expectedEpoch?: unknown } }>("/groups/start-paths", async (request, reply) => {
+      const { expectedPhaseId, groupId, expectedEpoch } = request.body ?? {};
+      if (expectedEpoch !== undefined && (typeof expectedEpoch !== "number" || !Number.isInteger(expectedEpoch) || expectedEpoch < 0)) return reply.code(400).send({ error: "invalid_request" });
+      if (groupId !== undefined && (typeof groupId !== "string" || !groupId)) return reply.code(400).send({ error: "invalid_request" });
       if (expectedPhaseId !== undefined && (typeof expectedPhaseId !== "string" || expectedPhaseId === "")) {
         return reply.code(400).send({ error: "invalid_request" });
       }
       const engine = options.engine();
       const result: TransitionResult = engine === null
         ? { ok: false, reason: "wrong-phase" }
-        : engine.adminStartGroupPaths(undefined, expectedPhaseId);
-      options.data?.audit({ action: "start-group-paths", at: new Date().toISOString(), detail: result });
+        : engine.adminStartGroupPaths(undefined, expectedPhaseId, groupId as string | undefined, expectedEpoch as number | undefined);
+      options.data?.audit({ action: "start-group-paths", at: new Date().toISOString(), detail: { groupId, expectedPhaseId, expectedEpoch, ...result } });
       return result.ok ? result : reply.code(409).send(result);
     });
-    admin.post<{ Body: { expectedPhaseId?: unknown } }>("/groups/reunion", async (request, reply) => {
-      const { expectedPhaseId } = request.body ?? {};
+    admin.post<{ Body: { expectedPhaseId?: unknown; groupId?: unknown; expectedEpoch?: unknown } }>("/groups/reunion", async (request, reply) => {
+      const { expectedPhaseId, groupId, expectedEpoch } = request.body ?? {};
+      if (expectedEpoch !== undefined && (typeof expectedEpoch !== "number" || !Number.isInteger(expectedEpoch) || expectedEpoch < 0)) return reply.code(400).send({ error: "invalid_request" });
+      if (groupId !== undefined && (typeof groupId !== "string" || !groupId)) return reply.code(400).send({ error: "invalid_request" });
       if (expectedPhaseId !== undefined && (typeof expectedPhaseId !== "string" || expectedPhaseId === "")) {
         return reply.code(400).send({ error: "invalid_request" });
       }
       const engine = options.engine();
       const result: TransitionResult = engine === null
         ? { ok: false, reason: "wrong-phase" }
-        : engine.adminForceReunion(undefined, expectedPhaseId);
-      options.data?.audit({ action: "force-reunion", at: new Date().toISOString(), detail: result });
+        : engine.adminForceReunion(undefined, expectedPhaseId, groupId as string | undefined, expectedEpoch as number | undefined);
+      options.data?.audit({ action: "force-reunion", at: new Date().toISOString(), detail: { groupId, expectedPhaseId, expectedEpoch, ...result } });
       return result.ok ? result : reply.code(409).send(result);
     });
     for (const action of ["start", "idle", "restart"] as const) {
