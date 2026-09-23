@@ -1,3 +1,4 @@
+import type { TimingMonitor } from "@entertheblackbox/protocol";
 import { ServerClock } from "@entertheblackbox/shared";
 import { ShowClockPanel } from "./ShowClockPanel.js";
 import { DisplaySettingsPanel } from "./DisplaySettingsPanel.js";
@@ -17,6 +18,7 @@ export type Status = {
   ready: boolean;
   uptimeMs: number;
   serverTime?: number;
+  timingMonitors?: TimingMonitor[];
   phaseTiming?: { startedAt: number; deadlineAt: number | null } | null;
   displayConnected: boolean;
   displayHeartbeatAgeMs: number | null;
@@ -747,7 +749,6 @@ export function App() {
 
   return <div data-sc-tool-density="standard" data-sc-tool-root>
     <main className="admin-app">
-      {status && <ShowClockPanel clock={clock} status={status} stale={statusStale} />}
       <div className="admin-topbar">
         <header className="admin-header">
           <div><p className="sc-tool-eyebrow">Live installation / operator console</p><h1>{audioOnly ? "Audio diagnostics" : "Operations"}</h1></div>
@@ -767,6 +768,8 @@ export function App() {
           <OperationRow label="Session" status={isActive ? "success" : "info"} value={(status.lifecycle ?? "unavailable").toUpperCase()} detail={status.sessionId ? `session ${status.sessionId}` : "no session ID"} />
         </div>}
       </div>
+
+      {status && <ShowClockPanel clock={clock} status={status} stale={statusStale} receivedAt={statusReceivedAt} />}
 
       {!connectionAuthenticated && <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
         <div className="admin-section-heading">

@@ -22,6 +22,7 @@ export type HeartbeatState = {
   sessionId: string;
   phaseId: string;
   phaseEpoch: number;
+  timing?: DisplayHeartbeatMessage["timing"];
 };
 
 export type HeartbeatOptions = {
@@ -56,6 +57,7 @@ export function startHeartbeat(options: HeartbeatOptions): () => void {
       phaseId: state.phaseId,
       phaseEpoch: state.phaseEpoch,
       clientTime: now(),
+      ...(state.timing === undefined ? {} : { timing: state.timing }),
     };
     options.send(message);
   };

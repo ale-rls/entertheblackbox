@@ -108,9 +108,36 @@ export const inputSchema = z.object({
   y: z.number().finite(),
 });
 
+export const clockTimingSchema = z.object({
+  calibrated: z.boolean(),
+  offsetMs: z.number().finite(),
+  roundTripMs: z.number().finite().nonnegative().nullable(),
+  sampleAgeMs: z.number().finite().nonnegative().nullable(),
+  elapsedMs: z.number().finite(),
+  mode: z.enum(["display", "synchronized", "stream", "none"]),
+  media: z.array(z.object({
+    role: z.enum(["main", "extra"]),
+    positionMs: z.number().finite().nonnegative().nullable(),
+    targetMs: z.number().finite().nonnegative().nullable(),
+    driftMs: z.number().finite().nullable(),
+    state: z.enum(["playing", "paused", "seeking", "loading", "ended", "error", "disabled", "waiting", "ready"]),
+  })).max(2),
+});
+export type ClockTiming = z.infer<typeof clockTimingSchema>;
+const phoneTimingSchema = z.object({
+  sessionId: nonEmpty, phaseId: nonEmpty, phaseEpoch: z.number().int().nonnegative(),
+  routingEpoch: z.number().int().nonnegative(), timing: clockTimingSchema,
+});
+export type PhoneTiming = z.infer<typeof phoneTimingSchema>;
+export type TimingMonitor = {
+  id: string; label: string; kind: "display" | "phone"; phaseId: string; phaseEpoch: number;
+  connected: boolean; mediaExpected: boolean; reportAgeMs: number | null; timing: ClockTiming | null;
+};
+
 export const pingSchema = z.object({
   t: z.literal("ping"),
   v,
+  timing: phoneTimingSchema.optional(),
   clientTime: timestamp,
 });
 
@@ -186,6 +213,7 @@ export const videoEndedSchema = z.object({
 export const displayHeartbeatSchema = z.object({
   t: z.literal("display_heartbeat"),
   v,
+  timing: clockTimingSchema.optional(),
   sessionId: nonEmpty,
   phaseId: nonEmpty,
   phaseEpoch: z.number().int().nonnegative(),

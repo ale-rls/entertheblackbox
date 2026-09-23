@@ -344,3 +344,14 @@ describe("clampNormalized", () => {
 it("exports the protocol version", () => {
   expect(PROTOCOL_VERSION).toBe(2);
 });
+
+it("bounds device timing reports and keeps old heartbeat/ping payloads valid", () => {
+  const timing = { calibrated: true, offsetMs: -100, roundTripMs: 8, sampleAgeMs: 10, elapsedMs: -300, mode: "display",
+    media: [{ role: "main", positionMs: 0, targetMs: 0, driftMs: 0, state: "paused" }] };
+  const heartbeat = { t: "display_heartbeat", v: 2, sessionId: "s", phaseId: "p", phaseEpoch: 1, clientTime: 1000 };
+  expect(parseClientMessage(JSON.stringify(heartbeat)).ok).toBe(true);
+  expect(parseClientMessage(JSON.stringify({ ...heartbeat, timing }))).toMatchObject({ ok: true, message: { timing } });
+  expect(parseClientMessage(JSON.stringify({ ...heartbeat, timing: { ...timing, media: Array(3).fill(timing.media[0]) } })).ok).toBe(false);
+  expect(parseClientMessage(JSON.stringify({ ...heartbeat, timing: { ...timing, roundTripMs: -1 } })).ok).toBe(false);
+  expect(parseClientMessage(JSON.stringify({ t: "ping", v: 2, clientTime: 1000, timing: { sessionId: "s", phaseId: "p", phaseEpoch: 1, routingEpoch: 2, timing: { ...timing, mode: "synchronized" } } })).ok).toBe(true);
+});

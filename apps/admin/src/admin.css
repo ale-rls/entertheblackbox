@@ -146,3 +146,16 @@
   .admin-session-layout { grid-template-columns: minmax(0, 1fr); }
   .admin-session-schedule { border-inline-start: 0; padding-inline-start: 0; border-block-start: 1px solid var(--sc-tool-color-rule); padding-block-start: var(--sc-tool-space-6); }
 }
+
+.show-clock-monitor { margin-block-start: var(--sc-tool-space-6); }
+.clock-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--sc-tool-space-5); }
+.clock-summary dd { margin: var(--sc-tool-space-2) 0; font-size: var(--sc-tool-font-size-3); font-variant-numeric: tabular-nums; }
+.show-clock-monitor small { display: block; color: var(--sc-tool-color-text-muted); font-weight: normal; }
+.clock-table-scroll { overflow-x: auto; }
+.clock-table-scroll table { border-collapse: collapse; width: 100%; text-align: left; font-variant-numeric: tabular-nums; }
+.clock-table-scroll th, .clock-table-scroll td { padding: var(--sc-tool-space-4); border-bottom: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); vertical-align: top; }
+.clock-table-scroll thead th { color: var(--sc-tool-color-text-muted); white-space: nowrap; }
+.clock-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-5); margin-block: var(--sc-tool-space-5); }
+.show-clock-monitor details { margin-block-start: var(--sc-tool-space-5); }
+.show-clock-monitor summary { cursor: pointer; }
+@media (max-width: 720px) { .show-clock-monitor .admin-section-heading { flex-direction: column; } }

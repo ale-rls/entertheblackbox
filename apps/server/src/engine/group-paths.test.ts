@@ -601,3 +601,20 @@ it("warns when a group entry immediately reaches its reunion", () => {
   const value = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map(p => p.kind === "group-branch" ? { ...p, branches: p.branches.map(b => ({ ...b, next: p.next })) } : p) });
   expect(validateScenario(value).warnings).toEqual(expect.arrayContaining([expect.objectContaining({ code: "immediate-group-reunion", phaseId: "split" })]));
 });
+
+it("scopes display and phone telemetry to the active group and invalidates transferred reports", () => {
+  const h = setup(); h.display();
+  const a = h.phone("one"), b = h.phone("two");
+  h.engine.adminStart(); h.choose(a, "a"); h.choose(b, "b"); h.tick(100);
+  const screen = h.display("b");
+  const timing = { calibrated: true, offsetMs: -50, roundTripMs: 12, sampleAgeMs: 10, elapsedMs: 100, mode: "display" as const, media: [] };
+  h.send(screen, { t: "display_heartbeat", v: 2, sessionId: screen.snapshot.sessionId, phaseId: screen.snapshot.phase.id, phaseEpoch: screen.snapshot.phaseEpoch, clientTime: 100, timing });
+  const phoneReport = { t: "ping" as const, v: 2 as const, clientTime: 100, timing: { sessionId: b.snapshot.sessionId, phaseId: b.snapshot.phase.id, phaseEpoch: b.snapshot.phaseEpoch, routingEpoch: 0, timing: { ...timing, mode: "stream" as const } } };
+  h.send(b, phoneReport);
+  expect(h.engine.timingMonitors.find((r) => r.id === "display:b")?.timing).toEqual(timing);
+  expect(h.engine.timingMonitors.find((r) => r.id === "display:a")?.timing).toBeNull();
+  expect(h.engine.timingMonitors.find((r) => r.id === "phone:two")?.timing?.mode).toBe("stream");
+  h.engine.adminAssignGroup("two", "a", h.engine.currentPhaseEpoch);
+  h.send(b, phoneReport);
+  expect(h.engine.timingMonitors.find((r) => r.id === "phone:two")?.timing).toBeNull(); h.engine.stop();
+});

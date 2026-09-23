@@ -1,4 +1,6 @@
 import { rehearsalId, runtimeApi, runtimeWebSocket } from "@entertheblackbox/protocol";
+import { PhoneClockMonitor } from "./PhoneClockMonitor.js";
+import type { SynchronizedAudio } from "./lib/synchronized-audio.js";
 import { SynchronizedPhoneAudio } from "./SynchronizedPhoneAudio";
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
 import { PhoneAudio } from "./PhoneAudio.js";
@@ -66,6 +68,7 @@ const REJECTION_TEXT: Record<string, string> = {
 
 export function App() {
   const [state, dispatch] = useReducer(phoneReducer, initialPhoneState);
+  const synchronizedTiming = useRef<(() => ReturnType<SynchronizedAudio["getTiming"]>) | null>(null);
   const [name, setName] = useState(loadParticipantName);
   const [submittedName, setSubmittedName] = useState<string | null>(null);
   const [joinConfig, setJoinConfig] = useState<JoinConfig | null>(null);
@@ -471,13 +474,14 @@ export function App() {
         </div>
       )}
 
-      {audioIdentity && connection && <SynchronizedPhoneAudio key={audioIdentity.clientId} clock={connection.clock} cue={state.synchronizedPhase?.phoneAudioSrc ? {
+      {audioIdentity && connection && <SynchronizedPhoneAudio timingRef={synchronizedTiming} key={audioIdentity.clientId} clock={connection.clock} cue={state.synchronizedPhase?.phoneAudioSrc ? {
         key: `${state.sessionId}:${state.routingEpoch}:${state.phaseEpoch}`,
         src: state.synchronizedPhase.phoneAudioSrc,
         startedAt: state.synchronizedPhase.startedAt,
         endsAt: state.synchronizedPhase.startedAt + state.synchronizedPhase.expectedDurationMs,
       } : null} />}
       {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} sceneKey={JSON.stringify([state.phaseEpoch, state.phaseTiming?.startedAt, state.currentGroup?.id])} suspended={state.synchronizedPhase !== null} active={state.phoneAudioActive} />}
+      {identity && connection && <PhoneClockMonitor connection={connection} state={state} timingRef={synchronizedTiming} />}
       <footer className="hud">
         {state.currentGroup && <span className="phone-current-group" aria-label="Deine Gruppe" style={{ color: state.currentGroup.color }}>{state.currentGroup.label}</span>}
         {identity && (

@@ -1,3 +1,4 @@
+import { readDisplayTiming } from "./lib/displayTiming.js";
 import { ShowClockOverlay } from "./components/ShowClockOverlay.js";
 import { rehearsalId, runtimeWebSocket } from "@entertheblackbox/protocol";
 import { resolveSignageVideoUrl, resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
@@ -148,11 +149,13 @@ export function App() {
   // nonEmpty sessionId/phaseId before the first snapshot arrives.
   useEffect(() => {
     const dispose = startHeartbeat({
+      intervalMs: 2000,
       isOpen: () => connection.currentStatus === "open",
       getState: () => ({
         sessionId: stateRef.current.sessionId ?? IDLE_PLACEHOLDER,
         phaseId: stateRef.current.phase?.id ?? IDLE_PLACEHOLDER,
         phaseEpoch: Math.max(0, stateRef.current.phaseEpoch),
+        timing: readDisplayTiming(connection.clock, stateRef.current.phase, activeMediaRef.current, activeExtraAudioRef.current),
       }),
       send: (message) => connection.send(message),
     });
