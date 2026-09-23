@@ -1,0 +1,38 @@
+name: blackbox-janus
+services:
+  janus:
+    build:
+      context: .
+      target: janus
+    restart: unless-stopped
+    environment:
+      JANUS_PUBLIC_IP: ${JANUS_PUBLIC_IP:?set the phone-reachable host IPv4 address in .env}
+      JANUS_LISTENER_PIN: ${JANUS_LISTENER_PIN:?set a listener PIN in .env}
+    ports:
+      # RTP ingest is local-only by default. Do not publish it to the internet.
+      - "127.0.0.1:${JANUS_INPUT_PORT:-9900}:5002/udp"
+      - "20000-20200:20000-20200/udp"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/janus/info', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  web:
+    build:
+      context: .
+      target: web
+    restart: unless-stopped
+    depends_on:
+      janus:
+        condition: service_healthy
+    ports:
+      - "${JANUS_WEB_BIND:-127.0.0.1}:${JANUS_WEB_PORT:-8400}:80"
+  tone:
+    profiles: [test-tone]
+    build:
+      context: .
+      target: tone
+    restart: unless-stopped
+    depends_on:
+      janus:
+        condition: service_healthy

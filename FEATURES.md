@@ -115,6 +115,8 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 ## Audio (personal + ambient)
 
+- Optional isolated Janus/WebRTC shared-feed trial with a standalone listener; no show integration — [services/audio-janus](services/audio-janus/README.md)
+
 - Personal audio bridge integration (Icecast/Liquidsoap) — `audio/personal-audio.ts` → **services/audio**
 - Per-scene phone narration injection with delivery-failure retry
 - Background/ambient music control (admin `/audio/music`)

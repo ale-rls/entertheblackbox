@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blackbox · Janus audio trial</title>
+<style>
+body { max-width: 38rem; margin: 3rem auto; padding: 0 1rem; font: 18px/1.5 system-ui; background: #141414; color: #eee; }
+input, button { font: inherit; padding: .6rem; margin: .4rem 0; max-width: 100%; box-sizing: border-box; }
+label { display: block; } audio { width: 100%; } #status { min-height: 3em; } small { color: #bbb; }
+</style>
+<h1>Janus audio trial</h1>
+<p>Experimental shared audio feed. Start at a comfortable headphone volume.</p>
+<form id="connect">
+<label>Listener PIN <input id="pin" type="password" required autocomplete="off"></label>
+<button id="start">Connect</button>
+<button id="stop" type="button" disabled>Disconnect</button>
+</form>
+<p id="status" role="status">Disconnected</p>
+<audio id="audio" controls autoplay playsinline></audio>
+<p><small>Playback controls may require a second tap after connection. A connected status does not prove audible sound. Rehearse screen lock and recovery on this phone.</small></p>
+<script type="module" src="listener.js"></script>
+</html>
