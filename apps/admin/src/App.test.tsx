@@ -495,3 +495,21 @@ it("offers scoped start and scoped reunion for nested splits", async () => {
   await act(async () => dialog.querySelector<HTMLButtonElement>('[data-sc-tool-variant="danger"]')!.click()); await flush();
   expect(requests).toContainEqual({ url: "/api/admin/groups/reunion", method: "POST", body: JSON.stringify({ groupId: "other", expectedPhaseId: "other-split", expectedEpoch: 6 }) });
 });
+
+
+it("offers explicit recovery when disconnected people block a nested selection", async () => {
+  localStorage.setItem("admin-token", "operator-secret");
+  const { requests } = createAdminFetch({
+    flow: { entryPhaseId: "split", scenes: [{ id: "split", kind: "group-branch", title: "Split", routes: [] }] },
+    status: { ...activeStatus, phaseId: "split", groupPathsStarted: true, groupPaths: [
+      { groupId: "ki", label: "KI", color: null, memberIds: ["p1", "old"], phaseId: "roles", phaseTitle: "Choose trade", phaseEpoch: 5, done: false, state: "choosing", pendingAssignments: 1, pendingDisconnectedAssignments: 1 },
+    ] },
+  });
+  await renderApp();
+  expect(button("Start groups for KI").disabled).toBe(true);
+  expect(document.body.textContent).toContain("1 still need to choose (1 disconnected)");
+  const recover = button("Start groups for KI — leave disconnected choices open");
+  expect(recover.disabled).toBe(false);
+  await act(async () => recover.click()); await flush();
+  expect(requests).toContainEqual({ url: "/api/admin/groups/start-paths", method: "POST", body: JSON.stringify({ groupId: "ki", expectedPhaseId: "roles", expectedEpoch: 5, skipDisconnected: true }) });
+});

@@ -269,7 +269,7 @@ describe("admin API", () => {
 
     const started = await app.inject({ method: "POST", url: "/api/admin/groups/start-paths", headers, payload: {} });
     expect(started.statusCode).toBe(200);
-    expect(engine.adminStartGroupPaths).toHaveBeenCalledWith(undefined, undefined, undefined, undefined);
+    expect(engine.adminStartGroupPaths).toHaveBeenCalledWith(undefined, undefined, undefined, undefined, false);
 
     const reunited = await app.inject({ method: "POST", url: "/api/admin/groups/reunion", headers, payload: { expectedPhaseId: "split" } });
     expect(reunited.statusCode).toBe(200);
@@ -598,7 +598,10 @@ it("passes nested start and reunion scope and rejects malformed group IDs", asyn
     expect((await app.inject({ method: "POST", url: `/api/admin/groups/${route}`, headers, payload: { groupId: 12 } })).statusCode).toBe(400);
     expect((await app.inject({ method: "POST", url: `/api/admin/groups/${route}`, headers, payload: { groupId: "ki", expectedPhaseId: "roles" } })).statusCode).toBe(200);
   }
-  expect(engine.adminStartGroupPaths).toHaveBeenCalledWith(undefined, "roles", "ki", undefined);
+  expect(engine.adminStartGroupPaths).toHaveBeenCalledWith(undefined, "roles", "ki", undefined, false);
+  expect((await app.inject({ method: "POST", url: "/api/admin/groups/start-paths", headers, payload: { skipDisconnected: "true" } })).statusCode).toBe(400);
+  expect((await app.inject({ method: "POST", url: "/api/admin/groups/start-paths", headers, payload: { groupId: "ki", expectedPhaseId: "roles", skipDisconnected: true } })).statusCode).toBe(200);
+  expect(engine.adminStartGroupPaths).toHaveBeenCalledWith(undefined, "roles", "ki", undefined, true);
   expect(engine.adminForceReunion).toHaveBeenCalledWith(undefined, "roles", "ki", undefined);
   await app.close();
 });

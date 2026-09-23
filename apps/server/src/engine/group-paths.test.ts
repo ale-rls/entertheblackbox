@@ -675,3 +675,36 @@ it("keeps an emptied group's clock when its last participant leaves and later re
   expect(h.engine.currentPhaseId).toBe("together");
   h.engine.stop();
 });
+
+
+it("lets Admin recover a nested selection blocked by a disconnected phone and starts instruction audio", () => {
+  const value = scenarioSchema.parse({ ...scenario,
+    groups: [...scenario.groups!, { id: "d", label: "Stage" }, { id: "e", label: "Decision" }],
+    phases: [
+      ...scenario.phases.map(p => p.id === "split" && p.kind === "group-branch" ? { ...p, branches: p.branches.map(b => b.groupId === "a" ? { ...b, next: "roles" } : b) } : p),
+      { id: "roles", kind: "group-branch", sourceGroupIds: ["a"], durationMs: 100, assignment: { type: "self-select" }, branches: [{ groupId: "d", next: "instructions" }, { groupId: "e", next: "instructions" }], next: "together" },
+      { id: "instructions", kind: "narration", text: "Listen", durationMs: 1000, phoneAudioSrc: "instructions.mp3", next: "together" },
+    ],
+  });
+  const h = setup(value); h.display();
+  const ready = h.phone("ready"), missing = h.phone("missing");
+  h.engine.adminStart(); h.choose(ready, "a"); h.choose(missing, "a"); h.tick(100);
+  h.choose(ready, "d");
+  // An explicit override cannot skip connected people, even if the UI was stale.
+  expect(h.engine.adminStartGroupPaths(undefined, "roles", "a", undefined, true)).toEqual({ ok: false, reason: "unassigned-participants" });
+  h.engine.socketClosed(missing.ws); h.registry.releaseSocket(missing.ws, 100); missing.close();
+  h.tick(200);
+  expect(h.engine.groupPaths.find(p => p.groupId === "a")).toMatchObject({ state: "choosing", pendingAssignments: 1, pendingDisconnectedAssignments: 1 });
+  expect(h.engine.adminStartGroupPaths(undefined, "roles", "a")).toEqual({ ok: false, reason: "unassigned-participants" });
+  expect(h.engine.adminStartGroupPaths(undefined, "roles", "a", -1, true)).toEqual({ ok: false, reason: "stale" });
+  expect(h.engine.adminStartGroupPaths(undefined, "roles", "a", undefined, true)).toEqual({ ok: true });
+  expect(ready.snapshot).toMatchObject({ phase: { id: "instructions", startedAt: 200 }, phoneAudioActive: true });
+  expect(h.audio).toContainEqual({ ids: ["ready"], phase: "instructions" });
+  h.setNow(500);
+  const restored = h.phone("missing");
+  expect(restored.snapshot.participantState).toBe("unassigned");
+  expect(restored.sent.at(-1).t).toBe("group_selection_options");
+  h.choose(restored, "e");
+  expect(restored.snapshot).toMatchObject({ phase: { id: "instructions", startedAt: 200 }, phoneAudioActive: true });
+  h.engine.stop();
+});
