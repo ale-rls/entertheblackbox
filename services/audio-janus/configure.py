@@ -6,11 +6,13 @@ import re
 import secrets
 
 
-def render(address, pin):
+def render(address, pin, admin_key=None):
     address = str(ipaddress.IPv4Address(address))
     if not re.fullmatch(r"[A-Za-z0-9-]{8,64}", pin):
         raise ValueError("JANUS_LISTENER_PIN must contain 8–64 letters, digits or hyphens")
-    admin_key = secrets.token_hex(32)
+    admin_key = admin_key or secrets.token_hex(32)
+    if not re.fullmatch(r"[A-Za-z0-9-]{32,128}", admin_key):
+        raise ValueError("JANUS_ADMIN_KEY must contain 32–128 letters, digits or hyphens")
     return {
         "janus.jcfg": f'''general: {{
  configs_folder = "/run/janus"
@@ -51,7 +53,7 @@ blackbox: {{
 
 
 if __name__ == "__main__":
-    configs = render(os.environ["JANUS_PUBLIC_IP"], os.environ["JANUS_LISTENER_PIN"])
+    configs = render(os.environ["JANUS_PUBLIC_IP"], os.environ["JANUS_LISTENER_PIN"], os.environ.get("JANUS_ADMIN_KEY"))
     for name, content in configs.items():
         path = Path("/run/janus") / name
         path.write_text(content)

@@ -101,3 +101,13 @@ describe("bundle video assets", () => {
     expect(hashedAsset.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
   });
 });
+
+it("serves the same phone bundle at the isolated route and preserves join query on redirect", async () => {
+  const app = await bundleApp();
+  const normal = await app.inject({ url: "/phone/" });
+  const janus = await app.inject({ url: "/phone-janus/" });
+  expect(janus.statusCode).toBe(200);
+  expect(janus.body).toBe(normal.body);
+  const redirect = await app.inject({ url: "/phone-janus?grant=test" });
+  expect(redirect.headers.location).toBe("/phone-janus/?grant=test");
+});

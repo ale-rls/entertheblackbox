@@ -44,6 +44,9 @@ export class PersonalAudio {
   private lastError: string | null = null;
   private readonly deliveryErrors = new Map<string, string>();
   private readonly telemetry = new Map<string, Telemetry>();
+  private readonly pendingReleases = new Set<string>();
+  private readonly sourceEpochs = new Map<string, string>();
+  private restoreMusic = false;
   private reconciling = false;
   private stopped = false;
 
@@ -105,7 +108,7 @@ export class PersonalAudio {
 
   private async pushToBackend(id: string): Promise<void> {
     if (!this.players.has(id) || this.stopped) return;
-    await this.call(`/players/${encodeURIComponent(id)}/active`, "PUT", { active: true });
+    this.observeSourceEpoch(id, await this.call(`/players/${encodeURIComponent(id)}/active`, "PUT", { active: true }));
     const generation = this.generation;
     const revision = this.playerRevisions.get(id);
     const src = this.currentAudioByPlayer.has(id)
@@ -157,7 +160,8 @@ export class PersonalAudio {
     const id = participant.clientId;
     const registered = this.work.then(async () => {
       if (!this.players.has(id) || this.stopped) return;
-      await this.call(`/players/${encodeURIComponent(id)}/active`, "PUT", { active: true });
+      await this.releasePending(id);
+      this.observeSourceEpoch(id, await this.call(`/players/${encodeURIComponent(id)}/active`, "PUT", { active: true }));
       const generation = this.generation;
       const revision = this.playerRevisions.get(id);
       const src = this.currentAudioByPlayer.has(id)
@@ -194,18 +198,75 @@ export class PersonalAudio {
   }
 
   private async reconcile(): Promise<void> {
-    if (this.reconciling) return;
+    if (this.reconciling || this.stopped) return;
     this.reconciling = true;
     try {
-      // One failed participant must not stop registration/recovery for others.
+      const cleanup = this.work.then(() => this.releaseAllPending());
+      this.work = cleanup.catch((error: unknown) => this.failed(error));
+      await cleanup;
       await Promise.all([...this.players.values()].map(async (player) => {
-        if (this.stopped) return;
+        const generation = this.generation;
+        const id = player.clientId;
         try {
-          await this.call(`/players/${encodeURIComponent(player.clientId)}/active`, "PUT", { active: true });
-          if (this.deliveryErrors.has(player.clientId)) await this.refreshParticipant(player.clientId);
+          // Heartbeats allocate remote slots too. Serialize them with release
+          // so a delayed /active can never recreate an already-released slot.
+          const active = this.work.then(async () => {
+            if (this.stopped || generation !== this.generation || !this.players.has(id)) return;
+            await this.releasePending(id);
+            const response = await this.call(`/players/${encodeURIComponent(id)}/active`, "PUT", { active: true });
+            if (generation === this.generation && this.players.has(id)) this.observeSourceEpoch(id, response);
+          });
+          this.work = active.catch((error: unknown) => this.failed(error));
+          await active;
+          if (!this.stopped && generation === this.generation && this.players.has(id) && this.deliveryErrors.has(id)) {
+            await this.refreshParticipant(id);
+          }
         } catch (error) { this.failed(error); }
       }));
+      if (this.restoreMusic && !this.stopped) {
+        await this.setMusic(this.music?.src ?? null, this.music?.volume ?? 0.2);
+        this.restoreMusic = false;
+      }
     } finally { this.reconciling = false; }
+  }
+
+  // Janus's independent bridge reports source recreation. Icecast responses
+  // omit this field and retain their existing behavior.
+  private observeSourceEpoch(id: string, response: { sourceEpoch?: unknown }): void {
+    if (typeof response.sourceEpoch !== "string") return;
+    const previous = this.sourceEpochs.get(id);
+    this.sourceEpochs.set(id, response.sourceEpoch);
+    // The mixer may have restarted while there were no participants to poll.
+    if (previous === undefined && this.music) this.restoreMusic = true;
+    if (previous !== undefined && previous !== response.sourceEpoch) {
+      this.playedGeneration.delete(id);
+      this.uploaded.clear();
+      this.deliveryErrors.set(id, "Audio source restarted; restoring current cue");
+      this.restoreMusic = true;
+    }
+  }
+
+  private async releasePending(id: string): Promise<void> {
+    if (!this.pendingReleases.has(id)) return;
+    await this.call(`/players/${encodeURIComponent(id)}`, "DELETE");
+    this.pendingReleases.delete(id);
+  }
+
+  private async releaseAllPending(): Promise<void> {
+    const results = await Promise.allSettled([...this.pendingReleases].map(id => this.releasePending(id)));
+    for (const result of results) if (result.status === "rejected") this.failed(result.reason);
+  }
+
+  async unregister(id: string): Promise<void> {
+    this.players.delete(id);
+    this.playedGeneration.delete(id);
+    this.deliveryErrors.delete(id);
+    this.telemetry.delete(id);
+    this.sourceEpochs.delete(id);
+    this.pendingReleases.add(id);
+    const task = this.work.then(() => this.releasePending(id));
+    this.work = task.catch((error: unknown) => this.failed(error));
+    await task;
   }
 
   private upload(src: string): Promise<string> {
@@ -379,9 +440,9 @@ export class PersonalAudio {
     this.playedGeneration.clear();
     this.deliveryErrors.clear();
     this.telemetry.clear();
-    this.work = this.work.then(async () => {
-      for (const id of ids) await this.call(`/players/${encodeURIComponent(id)}`, "DELETE");
-    }).catch((error: unknown) => this.failed(error));
+    this.sourceEpochs.clear();
+    for (const id of ids) this.pendingReleases.add(id);
+    this.work = this.work.then(() => this.releaseAllPending()).catch((error: unknown) => this.failed(error));
   }
 
   async stop(): Promise<void> {

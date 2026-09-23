@@ -7,7 +7,7 @@ import { DEFAULT_INSTALLATION_POLICY } from "@entertheblackbox/shared";
 import type { ClientToServerMessage } from "@entertheblackbox/protocol";
 import type { MediaManifest, Scenario } from "@entertheblackbox/scenario";
 import { AdmissionController } from "../admission/index.js";
-import { PersonalAudio } from "../audio/personal-audio.js";
+import { AudioDelivery } from "../audio/audio-delivery.js";
 import type { ServerConfig } from "../config.js";
 import { CueFeed } from "../cues/feed.js";
 import { PhaseEngine } from "../engine/phase-engine.js";
@@ -27,7 +27,7 @@ export class Rehearsal {
   readonly cues = new CueFeed();
   readonly sockets = new Set<WebSocket>();
   readonly installationId: string;
-  readonly audio: PersonalAudio | null;
+  readonly audio: AudioDelivery | null;
   private readonly displays = new Map<WebSocket, { message: DisplayJoin; request: IncomingMessage }>();
   private groups!: GroupManager;
   engine!: PhaseEngine;
@@ -38,7 +38,7 @@ export class Rehearsal {
 
   constructor(readonly id: string, private readonly config: ServerConfig, report: (error: unknown) => void) {
     this.installationId = `rehearsal-${id}`;
-    this.audio = config.audio ? new PersonalAudio(config.audio, config.mediaDir, report) : null;
+    this.audio = config.audio || config.janusAudio ? new AudioDelivery(config, report) : null;
     this.audio?.start();
     this.admission = new AdmissionController({
       installationId: this.installationId, roomId: config.roomId, secret: randomUUID(),
@@ -177,7 +177,7 @@ export class Rehearsals {
       preview.get("/status", async (request) => session(request.params).status());
       preview.get("/join-config", async (request) => {
         const current = session(request.params);
-        return { installationId: current.installationId, roomId: this.config.roomId, audioEnabled: current.audio !== null };
+        return { installationId: current.installationId, roomId: this.config.roomId, audioEnabled: !!current.audio?.icecast, janusAudioEnabled: !!current.audio?.janus };
       });
       preview.get("/media-manifest.json", async (request) => session(request.params).manifest);
       preview.get("/synchronized-audio", async (request) => [...new Set(session(request.params).scenario.phases.flatMap((p) => p.kind === "video" && p.phoneAudioMode === "synchronized" && p.phoneAudioSrc ? [p.phoneAudioSrc] : []))]);
@@ -186,24 +186,27 @@ export class Rehearsals {
         if (request.headers.authorization !== `Bearer ${current.id}`) return reply.code(401).send({ error: "unauthorized" });
         current.cues.connect(reply);
       });
-      preview.post("/audio/register", async (request, reply) => {
+      for (const transport of ["icecast", "janus"] as const) {
+      const prefix = transport === "janus" ? "/audio-janus" : "/audio";
+      preview.post(`${prefix}/register`, async (request, reply) => {
         const current = session(request.params);
-        const body = z.object({ participantLease: z.string() }).safeParse(request.body);
+        const body = z.object({ participantLease: z.string().max(4096), recover: z.boolean().optional() }).safeParse(request.body);
         const participant = body.success ? current.admission.registry.get(body.data.participantLease) : undefined;
         if (!participant) return reply.code(401).send({ error: "invalid_participant_lease" });
-        if (!current.audio) return reply.code(503).send({ error: "audio_not_configured" });
-        try { return { streamUrl: await current.audio.register(participant) }; }
+        if (!current.audio?.[transport]) return reply.code(503).send({ error: "audio_not_configured" });
+        try { return await current.audio.register(participant, transport, body.success && body.data.recover); }
         catch { return reply.code(503).send({ error: "audio_unavailable" }); }
       });
-      preview.post("/audio/event", async (request, reply) => {
+      preview.post(`${prefix}/event`, async (request, reply) => {
         const current = session(request.params);
         const body = z.object({ participantLease: z.string(), state: z.enum(["ready", "connecting", "playing", "reconnecting", "blocked", "paused"]), at: z.number().finite() }).safeParse(request.body);
         if (!body.success) return reply.code(400).send({ error: "invalid_request" });
         const participant = current.admission.registry.get(body.data.participantLease);
         if (!participant) return reply.code(401).send({ error: "invalid_participant_lease" });
-        current.audio?.recordEvent(participant.clientId, body.data.state, body.data.at);
+        current.audio?.recordEvent(participant.clientId, body.data.state, body.data.at, transport);
         return { ok: true };
       });
+      }
     }, { prefix: "/api/rehearsals/:id" });
     const cleanup = setInterval(() => {
       for (const [id, session] of this.sessions) if (!this.applying.has(id) && Date.now() - session.updatedAt >= IDLE_TTL_MS) void this.remove(id);

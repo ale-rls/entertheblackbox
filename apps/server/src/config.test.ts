@@ -76,7 +76,7 @@ describe("production secret configuration", () => {
         NODE_ENV: "production",
         ...productionSecrets,
         PHONE_JOIN_BASE_URL: url,
-      })).toThrow(new ConfigError("PHONE_JOIN_BASE_URL must use HTTPS and end in /phone/ in production"));
+      })).toThrow(new ConfigError("PHONE_JOIN_BASE_URL must use HTTPS and end in /phone/ or /phone-janus/ in production"));
     }
   });
 });

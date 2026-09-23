@@ -35,7 +35,8 @@ const baseConfig = {
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };
 
-type JoinConfig = { installationId: string; roomId: string; audioEnabled?: boolean };
+const janusRoute = /^\/phone-janus(?:\/|$)/.test(location.pathname);
+type JoinConfig = { installationId: string; roomId: string; audioEnabled?: boolean; janusAudioEnabled?: boolean };
 type ConsentStatus = "prompt" | "submitting" | "granted" | "deleted";
 type ConsentState = {
   session: EndedPhoneSession;
@@ -115,7 +116,7 @@ export function App() {
           // A fresh identity means a new registration is about to happen --
           // drop any stale override so it can't briefly out-race the new one.
           if (message.t === "identity") { setAudioIdentity(message); setAudioBridgeUrl(null); }
-          if (message.t === "audio_bridge_changed") setAudioBridgeUrl(message.streamUrl);
+          if (message.t === "audio_bridge_changed" && !janusRoute) setAudioBridgeUrl(message.streamUrl);
           dispatch({ type: "server-message", message, receivedAtMs: Date.now() });
         },
         onSocketOpen: () => dispatch({ type: "socket-open" }),
@@ -480,7 +481,7 @@ export function App() {
         startedAt: state.synchronizedPhase.startedAt,
         endsAt: state.synchronizedPhase.startedAt + state.synchronizedPhase.expectedDurationMs,
       } : null} />}
-      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} sceneKey={JSON.stringify([state.phaseEpoch, state.phaseTiming?.startedAt, state.currentGroup?.id])} suspended={state.synchronizedPhase !== null} active={state.phoneAudioActive} />}
+      {(janusRoute ? joinConfig?.janusAudioEnabled : joinConfig?.audioEnabled) && audioIdentity && <PhoneAudio transport={janusRoute ? "janus" : "icecast"} key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} sceneKey={JSON.stringify([state.phaseEpoch, state.phaseTiming?.startedAt, state.currentGroup?.id])} suspended={state.synchronizedPhase !== null} active={state.phoneAudioActive} />}
       {identity && connection && <PhoneClockMonitor connection={connection} state={state} timingRef={synchronizedTiming} />}
       <footer className="hud">
         {state.currentGroup && <span className="phone-current-group" aria-label="Deine Gruppe" style={{ color: state.currentGroup.color }}>{state.currentGroup.label}</span>}

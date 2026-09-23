@@ -180,6 +180,11 @@ export function registerBundleRoutes(
   // the venue's one big-screen kiosk, never via the bare root path.
   app.get("/", async (_request, reply) => reply.redirect("/phone/"));
 
+  // Same compiled UI; the pathname selects the optional Janus transport.
+  app.get("/phone-janus", async (request, reply) => reply.redirect(`/phone-janus/${request.url.includes("?") ? request.url.slice(request.url.indexOf("?")) : ""}`));
+  app.get<{ Params: { "*": string } }>("/phone-janus/*", async (request, reply) => {
+    await sendBundleFile(reply, bundles.phone, request.params["*"], request.headers.range);
+  });
   for (const role of ["display", "phone", "admin", "studio"] as const) {
     app.get(`/${role}`, async (_request, reply) => reply.redirect(`/${role}/`));
     app.get<{ Params: { "*": string } }>(`/${role}/*`, async (request, reply) => {

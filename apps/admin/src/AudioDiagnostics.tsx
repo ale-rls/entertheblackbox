@@ -65,7 +65,7 @@ export function AudioDiagnostics({ status, receivedAt, failed }: { status: Statu
           <tbody>{visible.map(p => {
             const participant = status.participants.find(participant => participant.clientId === p.player_id);
             return <tr key={p.player_id}>
-              <th scope="row">{p.name ?? p.player_id}<small>{p.name ? p.player_id : ""}</small>{audio?.deliveryFailures?.[p.player_id] && <small role="alert">Delivery failed: {audio.deliveryFailures[p.player_id]}</small>}</th>
+              <th scope="row">{p.name ?? p.player_id}<small>{p.name ? p.player_id : ""}{p.transport ? ` · ${p.transport === "janus" ? "Janus" : "Icecast"}` : ""}</small>{audio?.deliveryFailures?.[p.player_id] && <small role="alert">Delivery failed: {audio.deliveryFailures[p.player_id]}</small>}</th>
               <td><span className="sc-tool-status" data-sc-tool-status={uncertain || !p.connected ? "warning" : "success"}>{uncertain ? "Last reported: " : ""}{p.connected ? `${p.listeners} connected` : p.flagged ? "Missing listener" : "Waiting for listener"}</span></td>
               <td>{participant ? participant.connected ? "Connected" : "Disconnected" : "Unknown"}</td>
               <td>{labels[p.playbackState ?? ""] ?? p.playbackState ?? "No report"}</td>

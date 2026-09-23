@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 export type Status = {
-  audio?: { backgroundMusic?: { src: string; volume: number } | null; configured: boolean; capacity?: { total: number; assigned: number; available: number }; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; backend?: "remote" | "local"; backendLabel?: string; players: Array<{ player_id: string; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; phoneReportAgeMs?: number; reconnects?: number; lastRecoveryMs?: number | null }> };
+  audio?: { backgroundMusic?: { src: string; volume: number } | null; configured: boolean; capacity?: { total: number; assigned: number; available: number }; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; backend?: "remote" | "local"; backendLabel?: string; players: Array<{ player_id: string; transport?: "icecast" | "janus"; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; phoneReportAgeMs?: number; reconnects?: number; lastRecoveryMs?: number | null }> };
   healthy: boolean;
   ready: boolean;
   uptimeMs: number;

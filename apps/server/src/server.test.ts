@@ -254,6 +254,49 @@ describe("HTTP readiness and bundles", () => {
     phone.close();
   });
 
+  it("registers a private Janus mount only for its signed participant and never returns management secrets", async () => {
+    const bridgeCalls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      bridgeCalls.push(String(input));
+      return new Response(JSON.stringify(String(input).endsWith("/listen") ? { mountpoint: 101, pin: "participant-pin" } : {}), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const config = {
+      ...await fixture(),
+      janusAudio: { iceServers: [], url: "http://bridge:8090", token: "secret", publicUrl: "https://audio.example" },
+    };
+    const runtime = await buildServer({ config });
+    runtimes.push(runtime);
+    expect((await runtime.app.inject({ url: "/api/join-config" })).json()).toMatchObject({ audioEnabled: false, janusAudioEnabled: true });
+
+    const phone = await openWebSocket(await listen(runtime));
+    const identityPromise = new Promise<{ clientId: string; participantLease: string }>((resolve) => {
+      phone.once("message", (raw) => resolve(JSON.parse(raw.toString()) as { clientId: string; participantLease: string }));
+    });
+    phone.send(JSON.stringify({
+      t: "join", v: 2, clientVersion: "dev",
+      installationId: runtime.config.installationId,
+      roomId: runtime.config.roomId,
+      name: "Ada",
+      joinGrant: runtime.admission.issueJoinGrant().token,
+    }));
+    const identity = await identityPromise;
+
+    expect((await runtime.app.inject({
+      method: "POST", url: "/api/audio-janus/register",
+      payload: { participantLease: "not-a-signed-lease" },
+    })).statusCode).toBe(401);
+    const registered = await runtime.app.inject({
+      method: "POST", url: "/api/audio-janus/register",
+      payload: { participantLease: identity.participantLease },
+    });
+    expect(registered.statusCode).toBe(200);
+    expect(registered.json()).toEqual({ janus: { server: "https://audio.example/janus", mountpoint: 101, pin: "participant-pin", iceServers: [] } });
+    expect(registered.body).not.toContain("secret");
+    expect((await runtime.app.inject({ method: "POST", url: "/api/audio/register", payload: { participantLease: identity.participantLease } })).statusCode).toBe(503);
+    expect(bridgeCalls).toContain(`http://bridge:8090/players/${identity.clientId}/active`);
+    phone.close();
+  });
+
   // Regression for #111: a merge conflict resolution dropped the `basename`/
   // `syncMediaFromPocketbase` imports that this code path needs, so it only
   // failed once something actually called sources()/set() with a track that

@@ -30,6 +30,10 @@ const envSchema = z.object({
   ALLOW_LATE_JOIN: z.enum(["true", "false"]).default("true"),
   // Absent by default: without it the server behaves exactly as it did for
   // the Frankfurt run, with the phone trackpad as the only position source.
+  JANUS_BRIDGE_URL: optionalUrl,
+  JANUS_BRIDGE_TOKEN: z.string().min(32).optional(),
+  JANUS_PUBLIC_URL: optionalUrl,
+  JANUS_ICE_SERVERS: z.string().default("[]"),
   AUDIO_BRIDGE_URL: z.string().url().optional(),
   AUDIO_BRIDGE_TOKEN: z.string().min(1).optional(),
   AUDIO_PUBLIC_URL: z.string().url().optional(),
@@ -75,6 +79,7 @@ export type ServerConfig = {
   /** TrackingBox `/ws` URL, or null when no camera position source is configured. */
   trackingBoxUrl: string | null;
   audio?: { url: string; token: string; publicUrl: string };
+  janusAudio?: import("./audio/audio-delivery.js").JanusConfig;
   phoneJoinBaseUrl: string;
   showPhoneJoinBaseUrl: boolean;
   scenarioPath: string;
@@ -109,12 +114,23 @@ export function loadConfig(
   }
 
   const value = parsed.data;
+  const janusValues = [value.JANUS_BRIDGE_URL, value.JANUS_BRIDGE_TOKEN, value.JANUS_PUBLIC_URL];
+  if (janusValues.some(x => x !== undefined) && janusValues.some(x => x === undefined)) {
+    throw new ConfigError("JANUS_BRIDGE_URL, JANUS_BRIDGE_TOKEN and JANUS_PUBLIC_URL must be set together");
+  }
+  let iceServers: { urls: string | string[]; username?: string | undefined; credential?: string | undefined }[];
+  try {
+    iceServers = z.array(z.object({ urls: z.union([z.string().regex(/^(stun|stuns|turn|turns):/), z.array(z.string().regex(/^(stun|stuns|turn|turns):/)).min(1)]), username: z.string().optional(), credential: z.string().optional() })).parse(JSON.parse(value.JANUS_ICE_SERVERS));
+  } catch { throw new ConfigError("JANUS_ICE_SERVERS must be a JSON array of ICE server configurations"); }
+  if (value.NODE_ENV === "production" && value.JANUS_PUBLIC_URL && !value.JANUS_PUBLIC_URL.startsWith("https://")) {
+    throw new ConfigError("JANUS_PUBLIC_URL must use HTTPS in production");
+  }
   const audioValues = [value.AUDIO_BRIDGE_URL, value.AUDIO_BRIDGE_TOKEN, value.AUDIO_PUBLIC_URL];
   const configuredAudioValues = audioValues.filter((item) => item !== undefined).length;
   if (configuredAudioValues !== 0 && configuredAudioValues !== audioValues.length) {
     throw new ConfigError("AUDIO_BRIDGE_URL, AUDIO_BRIDGE_TOKEN, and AUDIO_PUBLIC_URL must be set together");
   }
-  if (value.REQUIRE_PHONE_AUDIO === "true" && configuredAudioValues === 0) {
+  if (value.REQUIRE_PHONE_AUDIO === "true" && configuredAudioValues === 0 && !value.JANUS_BRIDGE_URL) {
     throw new ConfigError("REQUIRE_PHONE_AUDIO=true requires AUDIO_BRIDGE_URL, AUDIO_BRIDGE_TOKEN, and AUDIO_PUBLIC_URL");
   }
   if (value.NODE_ENV === "production" && value.AUDIO_PUBLIC_URL && !value.AUDIO_PUBLIC_URL.startsWith("https://")) {
@@ -122,8 +138,8 @@ export function loadConfig(
   }
   if (value.NODE_ENV === "production") {
     const joinUrl = new URL(value.PHONE_JOIN_BASE_URL);
-    if (joinUrl.protocol !== "https:" || !joinUrl.pathname.endsWith("/phone/")) {
-      throw new ConfigError("PHONE_JOIN_BASE_URL must use HTTPS and end in /phone/ in production");
+    if (joinUrl.protocol !== "https:" || !/\/phone(?:-janus)?\/$/.test(joinUrl.pathname)) {
+      throw new ConfigError("PHONE_JOIN_BASE_URL must use HTTPS and end in /phone/ or /phone-janus/ in production");
     }
     const defaultSecret = [
       ["JOIN_GRANT_SECRET", value.JOIN_GRANT_SECRET, DEVELOPMENT_JOIN_GRANT_SECRET],
@@ -162,6 +178,7 @@ export function loadConfig(
     allowLateJoin: value.ALLOW_LATE_JOIN === "true",
     trackingBoxUrl: value.TRACKINGBOX_URL ?? null,
     ...(value.AUDIO_BRIDGE_URL ? { audio: { url: value.AUDIO_BRIDGE_URL, token: value.AUDIO_BRIDGE_TOKEN!, publicUrl: value.AUDIO_PUBLIC_URL! } } : {}),
+    ...(value.JANUS_BRIDGE_URL ? { janusAudio: { url: value.JANUS_BRIDGE_URL, token: value.JANUS_BRIDGE_TOKEN!, publicUrl: value.JANUS_PUBLIC_URL!, iceServers } } : {}),
     phoneJoinBaseUrl: value.PHONE_JOIN_BASE_URL,
     showPhoneJoinBaseUrl: value.SHOW_PHONE_JOIN_BASE_URL === "true",
     scenarioPath: fromRoot(value.SCENARIO_PATH, "content/scenarios/dev.json"),

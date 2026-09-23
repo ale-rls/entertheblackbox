@@ -1,64 +1,132 @@
-# Isolated Janus audio trial
+# Independent Janus phone audio
 
-An opt-in shared audio backend for comparing WebRTC delivery with the existing
-Icecast/Liquidsoap setup. Nothing in `services/audio`, the show apps, or the
-production Compose stacks depends on this directory. Start and stop this stack
-separately. Its Compose project is `blackbox-janus` and its ports/volumes are
-independent; it does not ingest an existing Icecast stream.
+`/phone-janus/` uses the same phone UI, admission, voting, subtitles and show clock
+as `/phone/`, with a separate WebRTC audio controller. `/phone/` continues to use
+Icecast. Both routes can participate in the same show. Use one route per phone:
+the routes share participant identity, and switching routes releases that
+participant's previous audio backend.
+
+The optional `personal` Compose profile runs an independent bridge and Liquidsoap
+mixer. It does not change or connect to the existing `services/audio` deployment.
+The new bridge reuses its command/registry Python helpers at image build time.
 
 ```
-external source → Opus/RTP → Janus Streaming → WebRTC → test listener
-                                      ↑
-                          optional generated pulse source
+show server → Janus control bridge → independent Liquidsoap mix per participant
+                                                      ↓ PCM → Opus/RTP
+phone-janus ← WebRTC ← Janus private mount per participant
 ```
 
-This first version serves **one shared feed**, not participant-specific narration.
-There is no Admin selector, participant registration, show cue integration or
-automatic fallback to Icecast. The listener is a rehearsal tool, not a replacement
-for `/phone/`. A later personal-mix backend needs its own source/mount allocation
-and the existing bridge's control semantics, plus application integration.
+## Run the personal backend
 
-## Run on a Linux venue host with Docker Compose
+On a Linux venue host with Docker Compose:
 
 ```sh
 cd services/audio-janus
 cp .env.example .env
-# Edit JANUS_PUBLIC_IP and JANUS_LISTENER_PIN before starting.
-docker compose --profile test-tone up --build -d
-curl http://localhost:8400/janus/info
+# Set JANUS_PUBLIC_IP to the host IPv4 address reachable by phones.
+# Generate different JANUS_ADMIN_KEY and JANUS_BRIDGE_TOKEN secrets:
+openssl rand -hex 32
+openssl rand -hex 32
+# Set JANUS_LISTENER_PIN for the optional standalone test page.
+docker compose --profile personal up --build -d
+curl http://localhost:8500/health
 ```
 
-The build pins Janus v1.4.2 to upstream commit
-`0a24110ae55a172c4293749b763dbb66a138f9ec`. OS packages are installed from Debian
-Bookworm repositories. Image builds need internet access; the listener has no CDN
-or runtime internet dependency on a venue LAN.
+The default is 30 provisioned mixes, configurable with `JANUS_PLAYERS` (1–100).
+Provisioning 100 is not evidence that your host/Wi-Fi can sustain 100 participants;
+measure on the venue hardware. Audio uploads and beds use independent named
+volumes. The mixer generates a default silent bed inside its image.
 
-`JANUS_PUBLIC_IP` must be the host IPv4 address that phones can reach. It is
-advertised in ICE candidates instead of the private container address. Open UDP
-20000–20200 to phones and preserve those port numbers through NAT. Do not run two
-copies on the same host with this fixed media port range. Container VM networking
-on macOS/Windows requires separate reachability verification; Linux is the target.
+Set these environment variables on the **show server**, then restart it:
 
-Open `http://localhost:8400/` on the host, enter the PIN and Connect. For phones,
-put the web service behind a **trusted HTTPS** reverse proxy, forwarding the whole
-path including `/janus`, disabling response buffering and allowing long requests
-(at least 90 seconds). The default HTTP binding is loopback. If the reverse proxy
-runs elsewhere, set `JANUS_WEB_BIND` to an appropriate host address and restrict
-access to that proxy. Signaling passing through HTTPS does not tunnel WebRTC media;
-the separate UDP range must be reachable too.
+```dotenv
+JANUS_BRIDGE_URL=http://127.0.0.1:8500
+JANUS_BRIDGE_TOKEN=<same secret as the Janus bridge>
+JANUS_PUBLIC_URL=https://janus-audio.example.org
+JANUS_ICE_SERVERS=[]
+```
 
-A test pulse should sound once per second. Start with low headphone volume.
-The pulse verifies delivery; it does **not** measure cue-to-ear latency by itself.
+The bridge URL must be reachable from the show server. `127.0.0.1` applies only
+when it runs on the same host outside a container. For separate containers/hosts,
+use a private reachable address and configure `JANUS_BRIDGE_BIND` accordingly.
+Keep the control API private. Existing `AUDIO_*` variables continue configuring
+Icecast independently; neither set is required when the other is configured.
+
+Rebuild the phone and admin clients after installing this change:
 
 ```sh
-docker compose logs -f janus web tone
-docker compose --profile test-tone down
+pnpm --filter @entertheblackbox/phone build
+pnpm --filter @entertheblackbox/admin build
 ```
 
-## Feed real audio
+Open `https://<show-host>/phone-janus/`, join normally and tap **Start headphones**.
+Private mount credentials are obtained using the existing signed participant
+lease; participants do not enter the standalone listener PIN. For show QR codes
+to target this route, set `PHONE_JOIN_BASE_URL` to its HTTPS URL ending in
+`/phone-janus/`. The default `/phone/` route remains available.
 
-Stop the generated source first: only one RTP producer should feed mount 1.
-Run FFmpeg on the same Linux host as Docker, using your own local audio file:
+## Network and HTTPS
+
+Proxy the Janus web service on port 8400 through trusted HTTPS at
+`JANUS_PUBLIC_URL`, including `/janus`, with response buffering off and long
+request timeouts (at least 90 seconds). The service binds HTTP to loopback by
+default. Set `JANUS_WEB_BIND` appropriately if the reverse proxy is elsewhere.
+
+Allow phones to reach host UDP ports **20000–20200**, with matching ports through
+NAT. `JANUS_PUBLIC_IP` is advertised to browsers instead of the container address.
+An HTTPS proxy carries signaling, not WebRTC media. Linux is the deployment target;
+macOS/Windows container-VM networking needs its own reachability validation.
+
+When phone UI and Janus use different origins, Janus HTTP's CORS support handles
+signaling. An HTTPS phone page must use an HTTPS Janus URL. On localhost, HTTP is
+suitable for a desktop test. Restrictive Wi-Fi/internet paths may require TURN;
+no TURN server is bundled. Supply tested browser ICE configuration when needed:
+
+```dotenv
+JANUS_ICE_SERVERS=[{"urls":"turn:turn.example.org:3478","username":"trial","credential":"configured-turn-credential"}]
+```
+
+These TURN credentials are necessarily sent to authenticated phone clients.
+Use suitably scoped credentials; they are separate from the private bridge and
+Janus management secrets.
+
+## Behavior
+
+- Server-side personal narration, group overrides and independent group paths
+  reuse `PersonalAudio` cue selection, resets and elapsed-time offsets.
+- Late joins and recovery join the current scene rather than replaying its start.
+- Background music and rehearsal soundcheck use the existing Admin controls.
+  Music commands fan out to configured audio backends; failure is reported.
+  Soundcheck targets the participant's chosen backend. Diagnostics label each
+  participant's transport and show both backends' combined capacity.
+- The phone reuses its media element and retains playback intent across recovery
+  and scene suspension. Explicit pause remains paused. Failed connections retry
+  with bounded backoff and refresh private mount credentials.
+- Synchronized prerecorded soundtrack scenes still use the existing foreground
+  Web Audio mode, suspending streaming during those scenes.
+- Studio rehearsal URLs can also use `/phone-janus/?rehearsal=<id>`.
+- Ending a show or changing audio route destroys the old mount and disconnects
+  subscribers before slot reuse. Each allocation gets a fresh PIN. Bridge restart
+  revokes old personal mounts; source epochs trigger cue/music restoration.
+
+The controller can only recover while the browser permits it to run. Real-device
+locked-screen operation, missed speech, network interruption recovery and
+cue-to-ear latency remain **venue acceptance tests**, not guarantees from unit
+or desktop browser checks. Background music follows the existing phone scene
+activation rules; silent/inactive phases can suspend phone playback.
+
+## Independent shared-feed test
+
+The original standalone listener at `JANUS_PUBLIC_URL/` remains available. It
+subscribes to shared mount 1 using `JANUS_LISTENER_PIN`; personal mounts start at
+101 and have separate credentials.
+
+```sh
+docker compose --profile test-tone up --build -d
+```
+
+The pulse source tests connectivity, not latency. To feed a real file, stop the
+tone and run FFmpeg on the host:
 
 ```sh
 docker compose --profile test-tone stop tone
@@ -67,75 +135,34 @@ ffmpeg -re -stream_loop -1 -i /absolute/path/to/rehearsal.wav \
   -payload_type 111 -f rtp 'rtp://127.0.0.1:9900?pkt_size=1200'
 ```
 
-Use the configured `JANUS_INPUT_PORT` if changed from 9900. RTP ingest is bound
-only to host loopback. For live input, use the source device's FFmpeg/GStreamer
-capture input and keep Opus/48 kHz/payload type 111. No PipeWire or VLC dependency
-is required for this stack. Media stays outside git.
+The ingest port is loopback-only. Personal mixer RTP stays on the internal
+Compose network and is not fed from Icecast. Keep show media outside git.
 
-The future Liquidsoap adapter must output a fresh mix directly as Opus/RTP,
-before HTTP buffering. This trial deliberately does not change the running
-Liquidsoap instance or claim an adapter already exists.
+## Verification and operation
 
-## Access and network scope
-
-The listener PIN is shared rehearsal access, not individual authorization. Janus's
-Streaming management key is random per boot and is not delivered to browsers.
-Only the Streaming plugin and HTTP transport are intended to run; the Janus admin
-HTTP API is disabled. The web proxy exposes the normal Janus signaling API, so
-this is a controlled venue trial, not a hardened public audience gateway.
-
-No TURN service is included. The supplied listener uses direct ICE connectivity
-with no STUN/TURN servers. For remote listeners, restrictive Wi-Fi or internet
-hosting, add and validate a TURN deployment plus browser ICE configuration before
-calling that topology supported. An HTTPS proxy alone is insufficient.
-
-## Acceptance before show integration
-
-Compare with Icecast under the same source, devices, network and audience load:
-
-1. Record a source-time marker and actual wired headphone output on a common
-   recording clock. Measure median, p95 and maximum end-to-end delay, separately
-   from connection startup. A proposed realtime target is p95 below 300 ms;
-   it is not a measured result or guarantee. Test Bluetooth separately.
-2. Play for at least 45 minutes on representative iOS/Android phones, locked and
-   app-switched, including long quiet periods followed by speech. Record missed
-   words, interruptions, extra gestures and phone/browser versions.
-3. Test brief Wi-Fi loss, longer outages, audio-focus interruptions, explicit
-   pause/resume and Janus/source restarts. This listener reports connection failure
-   and allows manual reconnect; it does not promise recovery while JavaScript is
-   suspended. Janus session keepalives also need background-device verification.
-4. Repeat at expected audience size. A shared-feed load test does not validate
-   the CPU cost or correctness of 100 distinct personal mixes.
-5. Keep Icecast running independently throughout rehearsal. Disconnect one
-   listener before switching to the other page to avoid hearing both feeds.
-
-WebRTC prioritizes timely delivery and can lose/conceal audio during network
-trouble. Lower latency does not guarantee complete speech or synchronized output
-across phones. Neither connection status nor RTP frame duration proves audible
-latency. Use the existing synchronized-file mode for its separate foreground
-picture-sync use case.
-
-## Checks
+Janus v1.4.2 is pinned to commit `0a24110ae55a172c4293749b763dbb66a138f9ec`.
+Only Streaming and HTTP signaling are compiled; admin HTTP is disabled. The normal
+Janus API remains exposed for WebRTC signaling. This is a venue deployment, not
+a hardened internet service with per-user rate limiting.
 
 ```sh
 python3 -m unittest discover -s services/audio-janus/tests
 node --check services/audio-janus/web/listener.js
-# From this service directory, after configuring .env:
-docker compose --profile test-tone config --quiet
-```
-
-After startup, exercise signaling and access checks with:
-
-```sh
+# In services/audio-janus, with .env configured:
+docker compose --profile personal config --quiet
 JANUS_LISTENER_PIN=your-pin python3 scripts/smoke.py http://localhost:8400
+docker compose logs -f janus liquidsoap bridge
+# Stop both optional profiles without deleting the media volumes:
+docker compose --profile personal --profile test-tone down
 ```
 
-This checks an Opus offer, rejects a wrong PIN and rejects mount creation without
-the management key; it does not listen to or measure audio.
-
-Container build/start, browser negotiation and physical-phone acceptance must be
-reported separately from these static/unit checks.
+Before show use: compare acoustic median/p95/max delay against Icecast on wired
+headphones, test Bluetooth separately, run a full locked-phone show on iOS and
+Android, exercise group transfers/late joins/silent gaps/pause/resume/network loss,
+and repeat at audience load. A proposed p95 target below 300 ms is not a measured
+result. WebRTC can lose or conceal samples during congestion and does not ensure
+sample-accurate synchronization between phones.
 
 References: [Janus Streaming](https://janus.conf.meetecho.com/docs/streaming),
 [Janus signaling](https://janus.conf.meetecho.com/docs/rest),
-[Playback reference implementation](https://github.com/Public-Shorts/playback).
+[Playback reference](https://github.com/Public-Shorts/playback).

@@ -6,6 +6,7 @@ services:
       target: janus
     restart: unless-stopped
     environment:
+      JANUS_ADMIN_KEY: ${JANUS_ADMIN_KEY:?set a management secret in .env}
       JANUS_PUBLIC_IP: ${JANUS_PUBLIC_IP:?set the phone-reachable host IPv4 address in .env}
       JANUS_LISTENER_PIN: ${JANUS_LISTENER_PIN:?set a listener PIN in .env}
     ports:
@@ -36,3 +37,46 @@ services:
     depends_on:
       janus:
         condition: service_healthy
+
+  liquidsoap:
+    profiles: [personal]
+    build:
+      context: ./personal
+      dockerfile: liquidsoap.Dockerfile
+    restart: unless-stopped
+    environment:
+      PLAYERS: ${JANUS_PLAYERS:-30}
+    volumes:
+      - janus-audio:/audio:ro
+      - janus-beds:/beds
+    depends_on:
+      janus:
+        condition: service_healthy
+  bridge:
+    profiles: [personal]
+    build:
+      context: ..
+      dockerfile: audio-janus/personal/Dockerfile
+    restart: unless-stopped
+    environment:
+      PLAYERS: ${JANUS_PLAYERS:-30}
+      BRIDGE_TOKEN: ${JANUS_BRIDGE_TOKEN:?set a bridge secret in .env}
+      JANUS_ADMIN_KEY: ${JANUS_ADMIN_KEY:?set a management secret in .env}
+    volumes:
+      - janus-audio:/audio
+      - janus-beds:/beds:ro
+    ports:
+      - "${JANUS_BRIDGE_BIND:-127.0.0.1}:${JANUS_BRIDGE_PORT:-8500}:8090"
+    depends_on:
+      janus:
+        condition: service_healthy
+      liquidsoap:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+volumes:
+  janus-audio:
+  janus-beds:
