@@ -64,3 +64,14 @@ For top-down floor positions, calibrate the venue camera and use `floor_x` /
 [Floor Projection Calibration](../docs/floor_projection.md).
 
 For named floor regions and counts, see [Floor Zones](../docs/zones.md).
+
+## Question and scene monitor text
+
+For question titles, axis/zone labels, four independent messages, and full
+one- or two-minute scene countdowns, follow
+[Question and scene monitor setup](../../../docs/touchdesigner-question-monitor.md).
+Load `question_monitor.py` for the original question-only output, or
+`scene_monitor.py` plus a private `monitor_config` Text DAT for configurable
+four-monitor scenes. Both read the production receiver's `timelines` state;
+local tracking counts do not drive the text. Scene timers restore from the
+server phase start on reconnect and require one authoritative timeline.
