@@ -316,9 +316,10 @@ It has no media manifest, because every entry needs the byte length and hash of
 a real file. Put its audio and the narration still image into `content/media`,
 then run `pnpm build-media-manifest`.
 
-Its narration durations are placeholders. The server abandons a narration
-`expectedDurationMs` plus five seconds after it starts, so a placeholder that is
-shorter than the recording cuts it off mid-sentence. The importer measures each
+Its narration durations are placeholders. The server ends a narration exactly
+`expectedDurationMs` after it starts, whatever the display reports, so a
+placeholder that is shorter than the recording cuts it off mid-sentence and one
+that is longer holds the still image in silence. The importer measures each
 narration MP3 with `ffprobe` when the file is in `content/media`, so put the
 audio in place **before** re-running it. It exits non-zero and names every
 narration that fell back, so this cannot ship silently.

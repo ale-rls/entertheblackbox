@@ -98,9 +98,8 @@ test.describe("full scenario flow", () => {
     expect(cursorShape.centerX).toBeGreaterThan(0.51);
     expect(cursorShape.width).toBeLessThan(0.03);
 
-    // Video advances via display video_ended or the server's
-    // expectedDurationMs+5 s fallback (§16: a missing video_ended cannot
-    // block the experience) — either path must land on question-fixed.
+    // The server clock ends the video at expectedDurationMs; the display's
+    // video_ended is ignored, so this lands on question-fixed either way.
     await expect
       .poll(async () => (await adminStatus(server.baseUrl)).phaseId, { timeout: 20_000 })
       .toBe("question-fixed");

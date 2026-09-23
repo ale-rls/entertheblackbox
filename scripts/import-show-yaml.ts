@@ -55,10 +55,11 @@ const NARRATION_IMAGE = "narration.png";
 /**
  * Used only when a narration's length cannot be established. His engine plays
  * until the audio ends, so his file carries `duration_s: 0`; ours needs a
- * number up front, and the server abandons a video phase `expectedDurationMs`
- * plus five seconds after it starts. A narration longer than this value is
- * therefore cut off mid-sentence, which is why falling back to it is a
- * warning and a non-zero exit rather than a silent default.
+ * number up front, and the server ends a video phase exactly
+ * `expectedDurationMs` after it starts. A narration longer than this value is
+ * therefore cut off mid-sentence (a shorter one leaves silence), which is why
+ * falling back to it is a warning and a non-zero exit rather than a silent
+ * default.
  */
 const PLACEHOLDER_NARRATION_MS = 60_000;
 

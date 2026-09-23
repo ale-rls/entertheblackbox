@@ -129,7 +129,10 @@ function createHarness(
     });
   };
 
-  return { admission, advance, checkpoints, display, engine, input, phone, now: () => now };
+  // Video phases end on the server clock; displays only play along.
+  const finishVideo = () => advance(engine.getSnapshot().deadlineAt! - now);
+
+  return { admission, advance, checkpoints, display, engine, finishVideo, input, phone, now: () => now };
 }
 
 describe("fake scenario server integration", () => {
@@ -143,10 +146,7 @@ describe("fake scenario server integration", () => {
 
     h.advance(100);
     expect(h.engine.currentPhaseId).toBe("video-5c6497");
-    display.message({
-      t: "video_ended", v: 2, sessionId: h.engine.currentSessionId, phaseId: "video-5c6497",
-      phaseEpoch: h.engine.currentPhaseEpoch, mediaId: "video-1.mp4",
-    });
+    h.finishVideo();
     expect(h.engine.currentPhaseId).toBe("position-question-068b73");
 
     h.advance(50_000);
@@ -157,10 +157,7 @@ describe("fake scenario server integration", () => {
 
     h.advance(5_000);
     expect(h.engine.currentPhaseId).toBe(target);
-    display.message({
-      t: "video_ended", v: 2, sessionId: h.engine.currentSessionId, phaseId: target,
-      phaseEpoch: h.engine.currentPhaseEpoch, mediaId: media,
-    });
+    h.finishVideo();
     expect(h.engine.lifecycleState).toBe("idle");
     expect(h.engine.currentPhaseId).toBe("idle");
   });
@@ -175,10 +172,7 @@ describe("fake scenario server integration", () => {
     h.advance(100);
     expect(h.engine.currentPhaseId).toBe("intro-video");
 
-    display.message({
-      t: "video_ended", v: 2, sessionId: h.engine.currentSessionId, phaseId: "intro-video",
-      phaseEpoch: h.engine.currentPhaseEpoch, mediaId: "intro.mp4",
-    });
+    h.finishVideo();
     expect(h.engine.currentPhaseId).toBe("question-fixed");
     h.input(phone, 1, 0.8, 0.2);
     await Promise.resolve();
@@ -217,10 +211,7 @@ describe("fake scenario server integration", () => {
     const first = await h.phone(1);
     const firstLease = last(first, "identity").participantLease as string;
     h.advance(100);
-    display.message({
-      t: "video_ended", v: 2, sessionId: h.engine.currentSessionId, phaseId: "intro-video",
-      phaseEpoch: h.engine.currentPhaseEpoch, mediaId: "intro.mp4",
-    });
+    h.finishVideo();
     const late = await h.phone(2);
     expect(last(late, "identity")).toMatchObject({ sessionId: h.engine.currentSessionId });
     expect(last(late, "snapshot")).toMatchObject({ phase: { id: "question-fixed" } });
@@ -282,10 +273,7 @@ describe("trackingbox positions", () => {
     const display = h.display();
     await h.phone(1);
     h.advance(100);
-    display.message({
-      t: "video_ended", v: 2, sessionId: h.engine.currentSessionId, phaseId: "intro-video",
-      phaseEpoch: h.engine.currentPhaseEpoch, mediaId: "intro.mp4",
-    });
+    h.finishVideo();
     h.advance(20_000);
     h.advance(3_000);
     expect(h.engine.currentPhaseId).toBe("question-quadrant");

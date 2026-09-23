@@ -177,6 +177,7 @@ Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenari
 ## Central show timing
 
 - Display and phone connections bootstrap server time from phase snapshots, then refine it with ping/pong samples. Phone subtitle and reaction windows use that same corrected clock.
+- Video and still-narration cues end on the server clock at `expectedDurationMs`; displays only play along (`apps/server/src/engine/video.ts`). A disconnected display cannot delay or advance the show.
 - All finite display cue media (ordinary video, video questions, extra soundtracks, and still-image narration) seek to elapsed server cue time after late loading/reconnects and correct drift during playback. Future cues wait, and late arrivals honor the remaining visual tail.
 - Admin's **Show clock** panel exposes server UTC, clock offset/round trip, and shared/per-group cue positions. Display `?clock=1` exposes actual media position and drift for rehearsal.
 - Timing contract, participating apps, and stream limitations: [docs/show-clock.md](docs/show-clock.md).

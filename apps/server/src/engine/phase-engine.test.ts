@@ -229,6 +229,14 @@ function connectDisplay(engine: PhaseEngine, socket: WebSocket): void {
   }, socket);
 }
 
+/** Ends the current video the way production does: the server clock reaches its end. */
+function finishVideo(engine: PhaseEngine): number {
+  const endAt = engine.getSnapshot().deadlineAt;
+  if (endAt === null) throw new Error("expected a video deadline");
+  engine.tick(endAt);
+  return endAt;
+}
+
 function connectSignage(engine: PhaseEngine, socket: WebSocket, signageId: string): void {
   engine.handleClientMessage({
     t: "display_join",
@@ -483,7 +491,7 @@ describe("PhaseEngine lifecycle", () => {
     }
   });
 
-  it("rejects stale video events and transitions only on the current epoch", () => {
+  it("ends a video on the server clock at its expected duration", () => {
     let now = 1_000;
     const { engine, registry } = setup({ now: () => now });
     const phone = new MockSocket();
@@ -493,9 +501,10 @@ describe("PhaseEngine lifecycle", () => {
     connectDisplay(engine, display as unknown as WebSocket);
     now = 1_100;
     engine.tick(now);
-    const epoch = engine.currentPhaseEpoch;
-    expect(engine.completeVideo("session-1", "intro", epoch - 1, now)).toEqual({ ok: false, reason: "stale" });
-    expect(engine.completeVideo("session-1", "intro", epoch, now)).toEqual({ ok: true });
+    expect(engine.getSnapshot().deadlineAt).toBe(1_200);
+    engine.tick(1_199);
+    expect(engine.currentPhaseId).toBe("intro");
+    engine.tick(1_200);
     expect(engine.currentPhaseId).toBe("question");
   });
 
@@ -553,11 +562,11 @@ describe("PhaseEngine lifecycle", () => {
       applause: 1,
       boo: 0,
     });
-    expect(engine.completeVideo("session-1", "video-question", epoch, now)).toEqual({ ok: true });
+    now = finishVideo(engine);
     expect(engine.currentPhaseId).toBe("idle");
   });
 
-  it("accepts video_ended only from the authenticated display and cannot double-advance", () => {
+  it("ignores display video_ended: only the server clock ends a video", () => {
     let now = 1_000;
     const { engine, registry } = setup({ now: () => now });
     const phone = new MockSocket();
@@ -578,10 +587,9 @@ describe("PhaseEngine lifecycle", () => {
     };
 
     engine.handleClientMessage(event, stranger as unknown as WebSocket);
+    engine.handleClientMessage(event, display as unknown as WebSocket);
     expect(engine.currentPhaseId).toBe("intro");
-    engine.handleClientMessage(event, display as unknown as WebSocket);
-    expect(engine.currentPhaseId).toBe("question");
-    engine.handleClientMessage(event, display as unknown as WebSocket);
+    engine.tick(1_200);
     expect(engine.currentPhaseId).toBe("question");
   });
 
@@ -647,13 +655,13 @@ describe("PhaseEngine lifecycle", () => {
     }, display as unknown as WebSocket);
     expect(engine.currentDisplayPlaybackIssue?.status).toBe("error");
 
-    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+    now = finishVideo(engine);
 
     expect(engine.currentPhaseId).toBe("question");
     expect(engine.currentDisplayPlaybackIssue).toBeNull();
   });
 
-  it("advances video at expected duration plus five seconds when no event arrives", () => {
+  it("advances video at its expected duration exactly once", () => {
     let now = 1_000;
     const checkpoints: PhaseCheckpoint[] = [];
     const { engine, registry } = setup({ now: () => now, checkpoints });
@@ -664,16 +672,14 @@ describe("PhaseEngine lifecycle", () => {
     connectDisplay(engine, display as unknown as WebSocket);
     now = 1_100;
     engine.tick(now);
-    const epoch = engine.currentPhaseEpoch;
-    expect(engine.getSnapshot().deadlineAt).toBe(6_200);
+    expect(engine.getSnapshot().deadlineAt).toBe(1_200);
 
-    engine.tick(6_199);
+    engine.tick(1_199);
     expect(engine.currentPhaseId).toBe("intro");
-    engine.tick(6_200);
+    engine.tick(1_200);
     expect(engine.currentPhaseId).toBe("question");
-    expect(checkpoints.at(-1)?.reason).toBe("video-fallback");
-    expect(engine.completeVideo("session-1", "intro", epoch, 6_201)).toEqual({ ok: false, reason: "wrong-phase" });
-    engine.tick(6_202);
+    expect(checkpoints.at(-1)?.reason).toBe("video-complete");
+    engine.tick(1_202);
     expect(engine.currentPhaseId).toBe("question");
   });
 
@@ -698,7 +704,7 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.currentPhaseId).toBe("intro");
 
     now = 221_100;
-    expect(engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now)).toEqual({ ok: true });
+    engine.tick(now);
     engine.tick(now + 1_000);
 
     expect(engine.lifecycleState).toBe("active");
@@ -759,11 +765,11 @@ describe("PhaseEngine lifecycle", () => {
     connectDisplay(engine, display as unknown as WebSocket);
     now = 1_100;
     engine.tick(now);
-    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
-    engine.recordInput(1_350);
-    now = 1_300;
+    now = finishVideo(engine);
+    engine.recordInput(now + 250);
+    now += 200;
     engine.tick(now);
-    engine.tick(1_400);
+    engine.tick(now + 100);
     expect(checkpoints.map((checkpoint) => checkpoint.reason)).toEqual([
       "lobby-start",
       "session-start",
@@ -793,7 +799,7 @@ describe("PhaseEngine lifecycle", () => {
       connectDisplay(engine, display as unknown as WebSocket);
       now = 1_100;
       engine.tick(now);
-      engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+      now = finishVideo(engine);
       testCase.trigger(engine, now);
       expect(engine.lifecycleState, testCase.label).toBe(testCase.label === "max-session-duration" ? "idle" : "active");
       expect(checkpoints.at(-1)?.reason, testCase.label).toBe(testCase.label === "max-session-duration" ? testCase.label : "video-complete");
@@ -814,7 +820,7 @@ describe("PhaseEngine lifecycle", () => {
 
     registry.releaseSocket(phone as unknown as WebSocket, now);
     engine.socketClosed(phone as unknown as WebSocket);
-    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+    now = finishVideo(engine);
     engine.tick(now + 100);
 
     expect(engine.lifecycleState).toBe("active");
@@ -978,7 +984,7 @@ describe("PhaseEngine lifecycle", () => {
     engine.socketClosed(first as unknown as WebSocket);
 
     now = 1_100;
-    expect(engine.completeVideo("session-1", "intro", highSeq, now)).toEqual({ ok: true });
+    now = finishVideo(engine);
     const questionEpoch = engine.currentPhaseEpoch;
     engine.handleClientMessage({
       t: "input", v: 2, sessionId: "session-1", phaseEpoch: questionEpoch, seq: 0, x: 0.1, y: 0.9,
@@ -1165,10 +1171,8 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.adminRestart(now + 1)).toEqual({ ok: true });
     expect(engine.currentPhaseId).toBe("intro");
     expect(engine.currentPhaseEpoch).toBeGreaterThan(firstVideoEpoch);
-    expect(engine.completeVideo("session-1", "intro", firstVideoEpoch, now + 2)).toEqual({
-      ok: false,
-      reason: "stale",
-    });
+    engine.tick(now + 100);
+    expect(engine.currentPhaseId).toBe("intro");
 
     now = 1_110;
     expect(engine.adminSkip(now)).toEqual({ ok: true });
@@ -1221,7 +1225,6 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.currentPhaseEpoch).toBeGreaterThan(introEpoch);
     expect(engine.getSnapshot()).toMatchObject({ id: "question", startedAt: now, deadlineAt: now + 200 });
     expect(checkpoints.at(-1)?.reason).toBe("admin-jump");
-    expect(engine.completeVideo("session-1", "intro", introEpoch, now + 1)).toEqual({ ok: false, reason: "wrong-phase" });
     expect(engine.currentPhaseId).toBe("question");
 
     expect(engine.adminJump("idle", now + 1)).toEqual({ ok: false, reason: "invalid-target" });
@@ -1282,7 +1285,7 @@ describe("PhaseEngine lifecycle", () => {
     connectDisplay(engine, display as unknown as WebSocket);
     now = 1_100;
     engine.tick(now);
-    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+    now = finishVideo(engine);
     const questionEpoch = engine.currentPhaseEpoch;
 
     const status = display.sent.find((message) => message.t === "question_status");
@@ -1291,7 +1294,7 @@ describe("PhaseEngine lifecycle", () => {
     engine.handleClientMessage({
       t: "input", v: 2, sessionId: "session-1", phaseEpoch: questionEpoch, seq: 1, x: 0.5, y: 0.5,
     }, phone as unknown as WebSocket);
-    now = 1_300;
+    now = 1_400;
     engine.tick(now);
 
     const resolved = display.sent.find((message) => message.t === "question_resolved");
@@ -1301,19 +1304,19 @@ describe("PhaseEngine lifecycle", () => {
       quadrantCounts: { q1: 0, q2: 0, q3: 0, q4: 1 },
       winner: "fixed",
       resolvedTarget: "idle",
-      freezeUntil: 1_320,
+      freezeUntil: 1_420,
     });
     expect(snapshot?.votes[0]).toMatchObject({ participantId: "p1", x: 0.5, y: 0.5 });
     expect(engine.currentPhaseId).toBe("question");
 
-    now = 1_310;
+    now = 1_410;
     engine.handleClientMessage({
       t: "input", v: 2, sessionId: "session-1", phaseEpoch: questionEpoch, seq: 2, x: 0, y: 0,
     }, phone as unknown as WebSocket);
     expect(snapshot?.votes[0]?.x).toBe(0.5);
-    engine.tick(1_319);
+    engine.tick(1_419);
     expect(engine.currentPhaseId).toBe("question");
-    engine.tick(1_320);
+    engine.tick(1_420);
     expect(engine.currentPhaseId).toBe("idle");
   });
 
@@ -1331,7 +1334,7 @@ describe("PhaseEngine lifecycle", () => {
     connectDisplay(engine, display as unknown as WebSocket);
     now = 1_100;
     engine.tick(now);
-    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+    now = finishVideo(engine);
     const status = display.sent.find((message) => message.t === "question_status");
     expect(status).toMatchObject({ quadrantCounts: { q1: 0, q2: 0, q3: 0, q4: 0 } });
   });
@@ -1350,7 +1353,7 @@ describe("PhaseEngine lifecycle", () => {
     connectDisplay(engine, display as unknown as WebSocket);
     now = 1_100;
     engine.tick(now);
-    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+    now = finishVideo(engine);
     const questionEpoch = engine.currentPhaseEpoch;
 
     engine.handleClientMessage({
@@ -1362,7 +1365,7 @@ describe("PhaseEngine lifecycle", () => {
       x: 0.5,
       y: 0.2,
     }, phone as unknown as WebSocket);
-    now = 1_350;
+    now = 1_450;
     engine.tick(now);
 
     expect(display.sent.filter((message) => message.t === "question_status").at(-1)).toMatchObject({
@@ -1403,7 +1406,7 @@ describe("PhaseEngine lifecycle", () => {
     connectDisplay(engine, display as unknown as WebSocket);
     now = 1_100;
     engine.tick(now);
-    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+    now = finishVideo(engine);
     const questionEpoch = engine.currentPhaseEpoch;
     const initialCount = display.sent.filter((message) => message.t === "question_status").length;
 
@@ -1415,7 +1418,7 @@ describe("PhaseEngine lifecycle", () => {
     }
     expect(display.sent.filter((message) => message.t === "question_status")).toHaveLength(initialCount);
 
-    now = 1_350;
+    now = 1_450;
     engine.tick(now);
     expect(display.sent.filter((message) => message.t === "question_status")).toHaveLength(initialCount + 1);
   });
@@ -1474,10 +1477,9 @@ describe("PhaseEngine lifecycle", () => {
     }, phone as unknown as WebSocket);
     expect(display.sent.filter((message) => message.t === "rating_status")).toHaveLength(1); // only the initial 0/0
 
-    now = 1_100;
-    engine.completeVideo("session-1", "intro", engine.currentPhaseEpoch, now);
+    now = finishVideo(engine);
     display.sent.length = 0;
-    now = 1_150;
+    now += 50;
     engine.tick(now);
     expect(display.sent.some((message) => message.t === "rating_status")).toBe(false);
   });
@@ -1522,7 +1524,7 @@ it("lets an operator skip a narration phase before its duration elapses", () => 
   expect(engine.currentPhaseId).toBe("idle");
 });
 
-it("announces a future synchronized start and moves the fallback deadline with it", () => {
+it("announces a future synchronized start and moves the video end with it", () => {
   let now = 1000;
   const testScenario = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map((p) => p.id === "intro" ? {
     ...p, phoneAudioMode: "synchronized", phoneAudioSrc: "voice.mp3", syncLeadMs: 3000, syncVideoOffsetMs: 200,
@@ -1532,11 +1534,11 @@ it("announces a future synchronized start and moves the fallback deadline with i
   addParticipant(registry, phone as unknown as WebSocket, now, "p1");
   engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
   engine.adminStart(now);
-  expect(engine.getSnapshot()).toMatchObject({ id: "intro", startedAt: 4000, deadlineAt: 9300 });
+  expect(engine.getSnapshot()).toMatchObject({ id: "intro", startedAt: 4000, deadlineAt: 4300 });
   expect(phone.sent.filter((m) => m.t === "phase").at(-1)).toMatchObject({ serverTime: 1000, phase: { startedAt: 4000, phoneAudioMode: "synchronized" } });
-  now = 6100; engine.tick(now);
+  now = 4299; engine.tick(now);
   expect(engine.currentPhaseId).toBe("intro");
-  now = 9300; engine.tick(now);
+  now = 4300; engine.tick(now);
   expect(engine.currentPhaseId).toBe("question");
   engine.stop();
 });
