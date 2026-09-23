@@ -80,3 +80,17 @@ describe("scheduled phone audio", () => {
     audio.dispose();
   });
 });
+
+it("reports latency-compensated position and stops claiming a measurement while suspended", async () => {
+  const { audio, context } = setup();
+  audio.setCue({ ...cue, startedAt: 9000 }); await audio.enable();
+  const report = audio.getTiming();
+  expect(report.cueKey).toBe(cue.key);
+  expect(report.media[0]?.positionMs).toBeCloseTo(2100);
+  expect(report.media[0]?.targetMs).toBeCloseTo(2100);
+  expect(report.media[0]?.driftMs).toBeCloseTo(0);
+  context.state = "suspended";
+  expect(audio.getTiming().media[0]).toMatchObject({ state: "disabled", positionMs: null, driftMs: null });
+  audio.setCue(null); expect(audio.getTiming().media).toEqual([]);
+  audio.dispose();
+});

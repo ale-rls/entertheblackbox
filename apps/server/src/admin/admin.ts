@@ -173,6 +173,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         serverTime: Date.now(),
         phaseTiming: engine ? { startedAt: engine.getSnapshot().startedAt, deadlineAt: engine.getSnapshot().deadlineAt } : null,
         uptimeMs: Date.now() - options.startedAt,
+        timingMonitors: engine?.timingMonitors ?? [],
         displayConnected: engine?.isDisplayConnected ?? false,
         displayHeartbeatAgeMs: engine?.displayHeartbeatAgeMs ?? null,
         displayPlaybackIssue: engine?.currentDisplayPlaybackIssue ?? null,

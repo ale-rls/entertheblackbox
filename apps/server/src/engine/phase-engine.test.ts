@@ -1542,3 +1542,30 @@ it("announces a future synchronized start and moves the video end with it", () =
   expect(engine.currentPhaseId).toBe("question");
   engine.stop();
 });
+
+it("accepts timing only from current authenticated devices and invalidates it on cue changes", () => {
+  let now = 1000;
+  const { engine, registry } = setup({ now: () => now });
+  const display = new MockSocket(), phone = new MockSocket(), stranger = new MockSocket();
+  addParticipant(registry, phone as unknown as WebSocket, now, "p1"); engine.participantJoined(phone as unknown as WebSocket, registry.values()[0]);
+  connectDisplay(engine, display as unknown as WebSocket); engine.adminStart(now);
+  const timing = { calibrated: true, offsetMs: 25, roundTripMs: 10, sampleAgeMs: 0, elapsedMs: 50, mode: "display" as const, media: [] };
+  const cue = { sessionId: engine.currentSessionId, phaseId: engine.currentPhaseId, phaseEpoch: engine.currentPhaseEpoch };
+  const heartbeat = { t: "display_heartbeat" as const, v: 2 as const, ...cue, clientTime: now, timing };
+  engine.handleClientMessage(heartbeat, stranger as unknown as WebSocket);
+  expect(engine.timingMonitors[0]?.timing).toBeNull();
+  engine.handleClientMessage(heartbeat, display as unknown as WebSocket);
+  const ping = { t: "ping" as const, v: 2 as const, clientTime: now, timing: { ...cue, routingEpoch: 0, timing: { ...timing, mode: "synchronized" as const } } };
+  engine.handleClientMessage(ping, stranger as unknown as WebSocket);
+  expect(engine.timingMonitors.find((r) => r.kind === "phone")?.timing).toBeNull();
+  engine.handleClientMessage(ping, phone as unknown as WebSocket);
+  now += 300;
+  expect(engine.timingMonitors[0]).toMatchObject({ timing, reportAgeMs: 300, connected: true });
+  expect(engine.timingMonitors.find((r) => r.kind === "phone")?.timing?.mode).toBe("synchronized");
+  engine.adminSkip(now);
+  engine.handleClientMessage(heartbeat, display as unknown as WebSocket);
+  engine.handleClientMessage(ping, phone as unknown as WebSocket);
+  expect(engine.timingMonitors.every((r) => r.timing === null)).toBe(true);
+  engine.socketClosed(display as unknown as WebSocket);
+  expect(engine.timingMonitors[0]?.connected).toBe(false); engine.stop();
+});

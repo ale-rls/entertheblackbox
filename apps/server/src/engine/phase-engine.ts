@@ -3,6 +3,8 @@ import {
   encodeMessage,
   PROTOCOL_VERSION,
   type ClientToServerMessage,
+  type ClockTiming,
+  type TimingMonitor,
   type DisplayPlaybackStatusMessage,
   type PhaseSnapshotMessage,
   type ServerToClientMessage,
@@ -242,6 +244,7 @@ export class PhaseEngine {
   private deadlineAt: number | null = null;
   private sessionStartedAt: number | null = null;
   private displayHeartbeatAt: number | null = null;
+  private timingReports = new Map<WebSocket, { sessionId: string; phaseId: string; phaseEpoch: number; routingEpoch: number; receivedAt: number; timing: ClockTiming }>();
   private displayPlaybackIssue: DisplayPlaybackIssue | null = null;
   private deadlineNotified = false;
   private displaySocket: WebSocket | undefined;
@@ -354,6 +357,25 @@ export class PhaseEngine {
     return this.displaySocket === undefined || this.displayHeartbeatAt === null
       ? null
       : Math.max(0, this.now() - this.displayHeartbeatAt);
+  }
+
+  get timingMonitors(): TimingMonitor[] {
+    const make = (id: string, label: string, kind: "display" | "phone", engine: PhaseEngine, socket?: WebSocket, routingEpoch = 0): TimingMonitor => {
+      const saved = socket ? this.timingReports.get(socket) : undefined;
+      const report = saved && engine.matches(saved.sessionId, saved.phaseId, saved.phaseEpoch) && saved.routingEpoch === routingEpoch ? saved : null;
+      const phase = engine.currentPhase();
+      return { id, label, kind, phaseId: engine.phaseId, phaseEpoch: engine.phaseEpoch,
+        connected: socket?.readyState === 1, mediaExpected: !engine.pathDone && (kind === "phone"
+          ? "phoneAudioSrc" in phase && !!phase.phoneAudioSrc : phase.kind === "video" || phase.kind === "video-position-question"),
+        reportAgeMs: report ? Math.max(0, this.now() - report.receivedAt) : null, timing: report?.timing ?? null };
+    };
+    const displays = this.groupPaths.filter((row) => row.state !== "empty" && row.state !== "finished" && row.state !== "split").map((row) =>
+      make(`display:${row.groupId}`, this.scenario.groups?.find((g) => g.id === row.groupId)?.label ?? row.groupId, "display", this.pathForGroup(row.groupId) ?? this, this.groupDisplays.get(row.groupId)));
+    const phones = this.registry.values().map((participant) => {
+      const socket = [...this.participantIds].find(([candidate, id]) => id === participant.clientId && candidate.readyState === 1)?.[0];
+      return make(`phone:${participant.clientId}`, participant.name, "phone", this.pathForParticipant(participant.clientId) ?? this, socket, this.routingEpochs.get(participant.clientId) ?? 0);
+    });
+    return [make("display:main", "Main display", "display", this, this.displaySocket), ...displays, ...phones];
   }
 
   get currentDisplayPlaybackIssue(): DisplayPlaybackIssue | null {
@@ -857,6 +879,7 @@ export class PhaseEngine {
   }
 
   socketClosed(socket: WebSocket): void {
+    this.timingReports.delete(socket);
     for (const { engine } of this.paths.values()) engine.socketClosed(socket);
     for (const [groupId, display] of this.groupDisplays) if (display === socket) this.groupDisplays.delete(groupId);
     for (const [signageId, display] of this.signageDisplays) if (display === socket) this.signageDisplays.delete(signageId);
@@ -879,6 +902,19 @@ export class PhaseEngine {
   }
 
   handleClientMessage(message: ClientToServerMessage, socket: WebSocket, _request?: IncomingMessage): void {
+    if (!this.path && (message.t === "ping" || message.t === "display_heartbeat")) {
+      const participantId = this.participantIds.get(socket);
+      const isPhone = message.t === "ping" && participantId !== undefined;
+      const isDisplay = message.t === "display_heartbeat" && (socket === this.displaySocket || [...this.groupDisplays.values()].includes(socket));
+      const report = isPhone && message.t === "ping" ? message.timing
+        : isDisplay && message.t === "display_heartbeat" && message.timing ? { ...message, timing: message.timing, routingEpoch: 0 } : undefined;
+      const engine = isPhone ? this.pathForParticipant(participantId!) ?? this : this.pathForDisplay(socket) ?? this;
+      if (report && engine.matches(report.sessionId, report.phaseId, report.phaseEpoch)
+        && (!isPhone || report.routingEpoch === (this.routingEpochs.get(participantId!) ?? 0))) {
+        this.timingReports.set(socket, { sessionId: report.sessionId, phaseId: report.phaseId, phaseEpoch: report.phaseEpoch,
+          routingEpoch: report.routingEpoch, receivedAt: this.now(), timing: report.timing });
+      }
+    }
     if (message.t !== "display_join") {
       const id = this.participantIds.get(socket);
       const localPath = id === undefined ? this.pathForDisplay(socket) : this.pathForParticipant(id);

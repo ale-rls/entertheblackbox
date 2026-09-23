@@ -11,12 +11,15 @@ const messages: Record<SyncStatus, string | null> = {
   playing: null,
   error: "Soundtrack unavailable. Check your connection and retry.",
 };
-export function SynchronizedPhoneAudio({ clock, cue }: { clock: ServerClock; cue: AudioCue | null }) {
+export function SynchronizedPhoneAudio({ clock, cue, timingRef }: { clock: ServerClock; cue: AudioCue | null;
+  timingRef?: React.MutableRefObject<(() => ReturnType<SynchronizedAudio["getTiming"]>) | null>;
+}) {
   const player = useRef<SynchronizedAudio>();
   const [status, setStatus] = useState<SyncStatus>("disabled");
   useEffect(() => {
     const audio = new SynchronizedAudio(clock, setStatus);
     player.current = audio;
+    if (timingRef) timingRef.current = () => audio.getTiming();
     let cancelled = false;
     let retry: ReturnType<typeof setTimeout>;
     const load = async () => {
@@ -33,7 +36,7 @@ export function SynchronizedPhoneAudio({ clock, cue }: { clock: ServerClock; cue
       } catch { if (!cancelled) retry = setTimeout(() => void load(), 5000); }
     };
     void load();
-    return () => { cancelled = true; clearTimeout(retry); audio.dispose(); player.current = undefined; };
+    return () => { cancelled = true; clearTimeout(retry); audio.dispose(); player.current = undefined; if (timingRef) timingRef.current = null; };
   }, [clock]);
   useEffect(() => { player.current?.setCue(cue); }, [cue?.key, cue?.src, cue?.startedAt, cue?.endsAt, clock]);
   if (!cue || messages[status] === null) return null;

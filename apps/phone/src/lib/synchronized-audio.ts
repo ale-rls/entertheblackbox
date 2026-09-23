@@ -1,3 +1,4 @@
+import type { ClockTiming } from "@entertheblackbox/protocol";
 import type { ServerClock } from "@entertheblackbox/shared";
 
 export type AudioCue = { key: string; src: string; startedAt: number; endsAt: number };
@@ -124,6 +125,19 @@ export class SynchronizedAudio {
     }
     this.report(now < cue.startedAt ? "waiting" : "playing");
   }
+  /** Web Audio position estimate including the same latency compensation as playback. */
+  getTiming(): { cueKey: string | null; media: ClockTiming["media"] } {
+    const ctx = this.context, cue = this.cue;
+    if (!cue) return { cueKey: null, media: [] };
+    const active = ctx?.state === "running" && this.source !== null && ctx.currentTime >= this.anchorTime;
+    const positionMs = active ? Math.max(0, (this.anchorPosition + (ctx.currentTime - this.anchorTime) * this.rate) * 1000) : null;
+    const latency = ctx ? Math.max(0, ctx.baseLatency || 0) + Math.max(0, ctx.outputLatency || 0) : 0;
+    const targetMs = this.clock.hasSamples ? Math.max(0, this.clock.now() - cue.startedAt + latency * 1000) : null;
+    const state = ctx && ctx.state !== "running" ? "disabled" : this.finished ? "ended" : this.status;
+    return { cueKey: cue.key, media: [{ role: "main", positionMs, targetMs,
+      driftMs: positionMs === null || targetMs === null ? null : positionMs - targetMs, state }] };
+  }
+
   dispose(): void {
     this.disposed = true;
     ++this.generation;
