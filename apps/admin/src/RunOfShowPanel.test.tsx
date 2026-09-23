@@ -52,3 +52,50 @@ it("downloads a high-resolution PNG containing the configured phone URL", async 
   expect(host.textContent).toContain("Downloaded enter-the-blackbox-join-qr.png.");
   act(() => root.unmount());
 });
+
+it("exports an operator override without changing the configured URL", async () => {
+  qr.toDataURL.mockResolvedValue("data:image/png;base64,override");
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  await act(async () => root.render(<RunOfShowPanel phoneJoinUrl="https://show.example/phone/" />));
+  const input = host.querySelector("input") as HTMLInputElement;
+
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "  https://alternate.example/special-join  ");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const download = [...host.querySelectorAll("button")].find((candidate) => candidate.textContent === "Download join QR (PNG)") as HTMLButtonElement;
+  await act(async () => {
+    download.click();
+    await vi.waitFor(() => expect(click).toHaveBeenCalledOnce());
+  });
+
+  expect(qr.toDataURL).toHaveBeenCalledWith("https://alternate.example/special-join", expect.any(Object));
+  expect(input.value).toBe("https://alternate.example/special-join");
+  act(() => root.unmount());
+});
+
+it("rejects invalid overrides and can restore the configured URL", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  await act(async () => root.render(<RunOfShowPanel phoneJoinUrl="https://show.example/phone/" />));
+  const input = host.querySelector("input") as HTMLInputElement;
+
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "javascript:alert(1)");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const buttons = [...host.querySelectorAll("button")];
+  const download = buttons.find((candidate) => candidate.textContent === "Download join QR (PNG)") as HTMLButtonElement;
+  const reset = buttons.find((candidate) => candidate.textContent === "Use configured URL") as HTMLButtonElement;
+  expect(download.disabled).toBe(true);
+  expect(host.textContent).toContain("Enter a valid HTTP or HTTPS URL.");
+
+  act(() => reset.click());
+  expect(input.value).toBe("https://show.example/phone/");
+  expect(download.disabled).toBe(false);
+  act(() => root.unmount());
+});
