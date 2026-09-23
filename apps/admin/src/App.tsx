@@ -723,7 +723,7 @@ export function App() {
   };
 
   const isActive = status?.lifecycle === "active";
-  const canStart = Boolean(status && !isActive && status.connectedParticipants > 0);
+  const canStart = Boolean(status && !isActive);
   const canReturnToIdle = Boolean(status?.lifecycle && status.lifecycle !== "idle");
   const busy = workingAction !== null;
   const currentScene = status ? flow?.scenes.find((scene) => scene.id === status.phaseId) : undefined;
@@ -794,7 +794,7 @@ export function App() {
             <div><dt>Lifecycle</dt><dd className="sc-tool-mono">{status.lifecycle ?? "—"}</dd></div>
           </dl>
           <div className="admin-control-list">
-            <div><button className="sc-tool-button" data-sc-tool-variant={isActive ? "secondary" : "primary"} type="button" disabled={!canStart || busy} onClick={() => void control("start")}>Start show</button><span>{isActive ? "Unavailable while active" : status.connectedParticipants < 1 ? "A participant must be connected" : "Begin a new live session"}</span></div>
+            <div><button className="sc-tool-button" data-sc-tool-variant={isActive ? "secondary" : "primary"} type="button" disabled={!canStart || busy} onClick={() => void control("start")}>Start show</button><span>{isActive ? "Unavailable while active" : "Begin a new live session"}</span></div>
             {inGroupBranch ? (status.groupPathsStarted ? <>
               {status.groupPaths.map((path) => <div key={`${path.groupId}:${path.phaseEpoch}`}>
                 {path.state === "choosing" ? <button className="sc-tool-button" type="button" disabled={busy || (path.pendingAssignments ?? 0) > 0} onClick={() => void startGroupPaths(path.groupId, path.phaseId, path.phaseEpoch)}>Start groups for {path.label}</button>
