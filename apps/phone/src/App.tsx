@@ -477,7 +477,7 @@ export function App() {
         startedAt: state.synchronizedPhase.startedAt,
         endsAt: state.synchronizedPhase.startedAt + state.synchronizedPhase.expectedDurationMs,
       } : null} />}
-      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} suspended={state.synchronizedPhase !== null} active={state.phoneAudioActive} />}
+      {joinConfig?.audioEnabled && audioIdentity && <PhoneAudio key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} sceneKey={JSON.stringify([state.phaseEpoch, state.phaseTiming?.startedAt, state.currentGroup?.id])} suspended={state.synchronizedPhase !== null} active={state.phoneAudioActive} />}
       <footer className="hud">
         {state.currentGroup && <span className="phone-current-group" aria-label="Deine Gruppe" style={{ color: state.currentGroup.color }}>{state.currentGroup.label}</span>}
         {identity && (
