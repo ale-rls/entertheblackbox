@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { ServerClock } from "@entertheblackbox/shared";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -32,12 +33,12 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function renderPair(send: (message: DisplayToServerMessage) => void, soundEnabled = false) {
+async function renderPair(send: (message: DisplayToServerMessage) => void, soundEnabled = false, clock?: ServerClock) {
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
   document.body.innerHTML = '<div id="root"></div>';
   root = createRoot(document.querySelector("#root")!);
   await act(async () => {
-    root?.render(<PhaseImageAudio sessionId="session-1" phase={phase} phaseEpoch={3} imageSrc="blob:image" audioSrc="blob:audio" soundEnabled={soundEnabled} send={send} />);
+    root?.render(<PhaseImageAudio {...(clock ? { clock } : {})} sessionId="session-1" phase={phase} phaseEpoch={3} imageSrc="blob:image" audioSrc="blob:audio" soundEnabled={soundEnabled} send={send} />);
     await Promise.resolve();
   });
   return { image: document.querySelector("img")!, audio: document.querySelector("audio")! };
@@ -71,4 +72,20 @@ describe("PhaseImageAudio", () => {
     const { audio } = await renderPair(vi.fn(), true);
     expect(audio.muted).toBe(false);
   });
+});
+
+it("joins a narration tail without replaying audio or restarting its full tail", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(14000);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  const clock = new ServerClock(); clock.addSample(14000, 14000, 14000);
+  const send = vi.fn();
+  const { audio } = await renderPair(send, true, clock);
+  Object.defineProperties(audio, { readyState: { value: 4 }, duration: { value: 12 } });
+  audio.dispatchEvent(new Event("loadedmetadata"));
+  expect(audio.currentTime).toBeCloseTo(11.999);
+  expect(audio.play).not.toHaveBeenCalled();
+  await act(async () => { await vi.advanceTimersByTimeAsync(999); });
+  expect(send).not.toHaveBeenCalledWith(expect.objectContaining({ t: "video_ended" }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+  expect(send).toHaveBeenCalledWith(expect.objectContaining({ t: "video_ended" }));
 });

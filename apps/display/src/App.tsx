@@ -1,3 +1,4 @@
+import { ShowClockOverlay } from "./components/ShowClockOverlay.js";
 import { rehearsalId, runtimeWebSocket } from "@entertheblackbox/protocol";
 import { resolveSignageVideoUrl, resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
 import { currentInstallation } from "./lib/resolveInstallation.js";
@@ -297,6 +298,7 @@ export function App() {
 
   return (
     <main className="display-root">
+      {new URLSearchParams(location.search).get("clock") === "1" && <ShowClockOverlay clock={connection.clock} phase={phase} />}
       {/* Layer 1: video */}
       <section className="layer layer-video">
         <IdleAttract
@@ -325,6 +327,7 @@ export function App() {
           && media.videoUrl !== null
           && media.audioUrl !== null && (
           <PhaseImageAudio
+            clock={connection.clock}
             key={phase.id}
             sessionId={state.sessionId}
             phase={phase as typeof phase & { audioSrc: string }}
@@ -428,7 +431,7 @@ export function App() {
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.rating && (
           <CrowdReactionSounds status={state.ratingStatus} soundEnabled={soundEnabled} {...(phase.rating.windows === undefined ? {} : { windows: phase.rating.windows })} elapsedMs={connection.clock.now() - phase.startedAt} />
         )}
-        <VoteDecisionSound resolution={state.resolution} soundEnabled={soundEnabled} />
+        <VoteDecisionSound clock={connection.clock} resolution={state.resolution} soundEnabled={soundEnabled} />
         {state.notice && (
           <div
             className={[

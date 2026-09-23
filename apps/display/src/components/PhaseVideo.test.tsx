@@ -188,3 +188,20 @@ it("lets an outstanding synchronized seek finish before correcting the clock aga
   expect(seek).toHaveBeenCalledTimes(1);
   expect(seek.mock.calls[0]![0]).toBeCloseTo(4.55);
 });
+
+it("catches up ordinary video and its extra soundtrack to the same phase clock", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(5000);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  const clock = new ServerClock(); clock.addSample(5000, 5000, 7000);
+  const video = await renderVideo(vi.fn(), "session-1", true, phase, "blob:extra", clock);
+  const audio = document.querySelector("audio")!;
+  for (const media of [video, audio]) {
+    Object.defineProperty(media, "readyState", { value: 4 });
+    Object.defineProperty(media, "duration", { value: 15 });
+    media.dispatchEvent(new Event("loadedmetadata"));
+  }
+  expect(video.currentTime).toBe(6);
+  expect(audio.currentTime).toBe(6);
+  expect(video.muted).toBe(false);
+  expect(video.autoplay).toBe(false);
+});

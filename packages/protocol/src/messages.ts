@@ -325,6 +325,7 @@ const questionResolvedBaseSchema = z.object({
   sessionId: nonEmpty,
   phaseEpoch: z.number().int().nonnegative(),
   resolvedTarget: nonEmpty,
+  resolvedAt: timestamp.optional(),
   freezeUntil: timestamp,
   tieBreak: z.object({
     type: z.literal("kleroterion"),

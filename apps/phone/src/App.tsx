@@ -239,11 +239,11 @@ export function App() {
 
   useEffect(() => {
     if (state.phaseTiming === null || (state.phaseTiming.subtitles.length === 0 && state.phaseTiming.rating?.windows === undefined)) return;
-    const update = () => dispatch({ type: "clock-tick", nowMs: Date.now() });
+    const update = () => dispatch({ type: "clock-tick", nowMs: Date.now(), ...(connection ? { serverNowMs: connection.clock.now() } : {}) });
     update();
     const timer = window.setInterval(update, 100);
     return () => window.clearInterval(timer);
-  }, [state.phaseEpoch, state.phaseTiming?.startedAt]);
+  }, [connection, state.phaseEpoch, state.phaseTiming?.startedAt]);
 
   const sendPosition = (delivery: "move" | "final" = "move") => {
     if (!state.inputOpen || state.sessionId === null) return;

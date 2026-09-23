@@ -1,3 +1,4 @@
+import type { ServerClock } from "@entertheblackbox/shared";
 import { useEffect, useRef } from "react";
 import type { QuestionResolvedMessage } from "@entertheblackbox/protocol";
 
@@ -15,9 +16,11 @@ function isSpectrumResolution(resolution: QuestionResolvedMessage): boolean {
 export function VoteDecisionSound({
   resolution,
   soundEnabled,
+  clock,
 }: {
   resolution: QuestionResolvedMessage | null;
   soundEnabled: boolean;
+  clock?: ServerClock;
 }) {
   const seenResolution = useRef<string | null>(null);
 
@@ -32,6 +35,9 @@ export function VoteDecisionSound({
     seenResolution.current = key;
     if (!soundEnabled) return;
 
+    const elapsedMs = clock && resolution.resolvedAt !== undefined
+      ? Math.max(0, clock.now() - resolution.resolvedAt) : 0;
+    if (elapsedMs >= VOTE_DECISION_SOUND_DURATION_MS) return;
     const spectrumResolution = isSpectrumResolution(resolution);
     const audio = new Audio(spectrumResolution ? SPECTRUM_DECISION_SOUND_SRC : VOTE_DECISION_SOUND_SRC);
     audio.preload = "auto";
@@ -41,11 +47,18 @@ export function VoteDecisionSound({
       audio.preservesPitch = false;
       audio.playbackRate = SPECTRUM_DECISION_PLAYBACK_RATE;
     }
+    const seek = () => {
+      const elapsed = clock && resolution.resolvedAt !== undefined
+        ? Math.max(0, clock.now() - resolution.resolvedAt) : elapsedMs;
+      audio.currentTime = elapsed / 1000 * audio.playbackRate;
+    };
+    if (elapsedMs > 0) seek();
+    audio.addEventListener("loadedmetadata", seek, { once: true });
     const stop = () => {
       audio.pause();
       audio.removeAttribute("src");
     };
-    const timer = window.setTimeout(stop, VOTE_DECISION_SOUND_DURATION_MS);
+    const timer = window.setTimeout(stop, VOTE_DECISION_SOUND_DURATION_MS - elapsedMs);
     audio.addEventListener("ended", () => window.clearTimeout(timer), { once: true });
     void audio.play().catch(() => {
       window.clearTimeout(timer);
@@ -56,7 +69,7 @@ export function VoteDecisionSound({
       window.clearTimeout(timer);
       stop();
     };
-  }, [resolution, soundEnabled]);
+  }, [resolution, soundEnabled, clock]);
 
   return null;
 }

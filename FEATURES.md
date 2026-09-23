@@ -173,3 +173,10 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Silent phone scenes suspend native streaming and clear buffered audio while keeping the media element and listener playback intent. Scene and group changes wait for queued bridge reset/play work via registration before reconnecting, including when the stream URL is unchanged; an explicit listener pause remains paused (`apps/phone/src/PhoneAudio.tsx`).
 
 Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenario`, `apps/admin`, `apps/phone`.
+
+## Central show timing
+
+- Display and phone connections bootstrap server time from phase snapshots, then refine it with ping/pong samples. Phone subtitle and reaction windows use that same corrected clock.
+- All finite display cue media (ordinary video, video questions, extra soundtracks, and still-image narration) seek to elapsed server cue time after late loading/reconnects and correct drift during playback. Future cues wait, and late arrivals honor the remaining visual tail.
+- Admin's **Show clock** panel exposes server UTC, clock offset/round trip, and shared/per-group cue positions. Display `?clock=1` exposes actual media position and drift for rehearsal.
+- Timing contract, participating apps, and stream limitations: [docs/show-clock.md](docs/show-clock.md).

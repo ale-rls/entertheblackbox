@@ -1,3 +1,4 @@
+import { ServerClock } from "@entertheblackbox/shared";
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -125,4 +126,17 @@ describe("VoteDecisionSound", () => {
     expect(FakeAudio.created[1]?.preservesPitch).toBe(false);
     expect(FakeAudio.created[1]?.playbackRate).toBe(SPECTRUM_DECISION_PLAYBACK_RATE);
   });
+});
+
+it("seeks a late decision sting and ignores an expired decision", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(5000); vi.stubGlobal("Audio", FakeAudio);
+  const clock = new ServerClock(); clock.addSample(5000, 5000, 9000);
+  document.body.innerHTML = '<div id="root"></div>';
+  root = createRoot(document.querySelector("#root")!);
+  await act(async () => root?.render(<VoteDecisionSound clock={clock} resolution={{ ...resolution, resolvedAt: 6000 }} soundEnabled />));
+  expect(FakeAudio.created[0]?.currentTime).toBe(3);
+  await act(async () => { await vi.advanceTimersByTimeAsync(4000); });
+  expect(FakeAudio.created[0]?.pause).toHaveBeenCalled();
+  await act(async () => root?.render(<VoteDecisionSound clock={clock} resolution={{ ...resolution, phaseEpoch: 99, resolvedAt: 1000 }} soundEnabled />));
+  expect(FakeAudio.created).toHaveLength(1);
 });

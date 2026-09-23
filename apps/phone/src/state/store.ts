@@ -73,7 +73,7 @@ export const initialPhoneState: PhoneState = {
 
 export type PhoneAction =
   | { type: "server-message"; message: ServerToClientMessage; receivedAtMs?: number }
-  | { type: "clock-tick"; nowMs: number }
+  | { type: "clock-tick"; nowMs: number; serverNowMs?: number }
   | { type: "socket-open" }
   | { type: "socket-lost" }
   | { type: "session-ended" }
@@ -82,7 +82,7 @@ export type PhoneAction =
 export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState {
   if (action.type === "clock-tick") {
     if (state.phaseTiming === null) return state;
-    const temporal = temporalFields(state.phaseTiming, action.nowMs);
+    const temporal = temporalFields(state.phaseTiming, action.serverNowMs === undefined ? action.nowMs : action.serverNowMs - state.phaseTiming.serverOffsetMs);
     return temporal.ratingCandidateLabel === state.ratingCandidateLabel && temporal.phoneDisplayText === state.phoneDisplayText
       ? state
       : { ...state, ...temporal };
