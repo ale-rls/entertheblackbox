@@ -8,7 +8,7 @@ Display and Phone bootstrap from snapshot arrival time, then estimate clock offs
 
 | App/service | Clock and media behavior |
 | --- | --- |
-| Server | Owns cue starts, vote windows, deadlines, epochs, and per-group timing. |
+| Server | Owns cue starts, vote windows, deadlines, epochs, and per-group timing. Video and still-narration cues end exactly `expectedDurationMs` after `startedAt`; display `video_ended` reports are ignored, so a missing or late display never changes the show's timing. |
 | Display | Video, video questions, extra audio, and still narration follow corrected cue time. Errors over 250 ms seek; small errors adjust playback rate within 0.98–1.02. Pending seeks finish before another correction. Tail holds use the remaining cue duration. Decision stings seek from server `resolvedAt` and expired stings are skipped. |
 | Phone | Subtitles/reaction windows follow the connection clock. Downloaded synchronized audio follows the same start, with Web Audio output latency compensation and drift correction. |
 | Audio bridge | Receives elapsed `offsetSeconds` from the server for scene starts, reconnection/recovery, and group transfers. Liquidsoap cues the source at that offset. Icecast/browser buffering adds latency; stream `currentTime` is not a scene timecode and must not be sought as one. For precise audiovisual synchronization, author synchronized phone audio. |

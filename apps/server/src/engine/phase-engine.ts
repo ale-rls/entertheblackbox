@@ -248,7 +248,6 @@ export class PhaseEngine {
   private readonly participantIds = new Map<WebSocket, string>();
   private questionFreezeUntil: number | null = null;
   private questionResolutionTarget: string | null = null;
-  private compositeVideoCompleted = false;
   private questionStatusDirty = false;
   private lastQuestionStatusAt: number | null = null;
   private ratingStatusDirty = false;
@@ -759,8 +758,8 @@ export class PhaseEngine {
 
     if (phase.kind === "video") {
       if (phase.rating) this.broadcastRatingStatus(now);
-      const fallback = this.video.consumeFallback(now);
-      if (fallback !== null && this.matches(fallback.sessionId, fallback.phaseId, fallback.phaseEpoch)) {
+      const ended = this.video.consumeEnded(now);
+      if (ended !== null && this.matches(ended.sessionId, ended.phaseId, ended.phaseEpoch)) {
         this.onPhaseDeadline?.({
           sessionId: this.sessionId,
           phaseId: this.phaseId,
@@ -768,7 +767,7 @@ export class PhaseEngine {
           phase,
           deadlineAt: this.deadlineAt!,
         });
-        this.advanceTo(phase.next, now, "video-fallback");
+        this.advanceTo(phase.next, now, "video-complete");
       }
       return;
     }
@@ -781,13 +780,9 @@ export class PhaseEngine {
       }
       if (now >= this.phaseStartedAt + phase.closeAtMs && this.questionResolutionTarget === null) {
         this.resolveCompositeQuestion(now, phase);
-        if (this.compositeVideoCompleted && this.questionResolutionTarget !== null) {
-          this.advanceTo(this.questionResolutionTarget, now, "video-complete");
-          return;
-        }
       }
-      const fallback = this.video.consumeFallback(now);
-      if (fallback !== null && this.matches(fallback.sessionId, fallback.phaseId, fallback.phaseEpoch)) {
+      const ended = this.video.consumeEnded(now);
+      if (ended !== null && this.matches(ended.sessionId, ended.phaseId, ended.phaseEpoch)) {
         this.onPhaseDeadline?.({
           sessionId: this.sessionId,
           phaseId: this.phaseId,
@@ -800,7 +795,7 @@ export class PhaseEngine {
           this.resolveCompositeQuestion(now, phase);
         }
         if (this.questionResolutionTarget !== null) {
-          this.advanceTo(this.questionResolutionTarget, now, "video-fallback");
+          this.advanceTo(this.questionResolutionTarget, now, "video-complete");
         }
       }
       return;
@@ -943,9 +938,8 @@ export class PhaseEngine {
         return;
       }
       case "video_ended":
-        if (socket === this.displaySocket) {
-          this.completeVideo(message.sessionId, message.phaseId, message.phaseEpoch);
-        }
+        // Video phases end on the server clock (tick). Displays only play
+        // along, so a missing or late display never stretches the show.
         return;
       case "reaction":
         if (
@@ -1161,19 +1155,6 @@ export class PhaseEngine {
     return this.bindings.participantForGid(gid) ?? participantIdForGid(gid);
   }
 
-  completeVideo(sessionId: string, phaseId: string, phaseEpoch: number, now = this.now()): TransitionResult {
-    const phase = this.currentPhase();
-    if (phase.kind !== "video" && phase.kind !== "video-position-question") return { ok: false, reason: "wrong-phase" };
-    if (!this.matches(sessionId, phaseId, phaseEpoch)) return { ok: false, reason: "stale" };
-    if (!this.video.complete({ sessionId, phaseId, phaseEpoch })) return { ok: false, reason: "stale" };
-    if (phase.kind === "video") return this.advanceTo(phase.next, now, "video-complete");
-    if (this.questionResolutionTarget !== null) {
-      return this.advanceTo(this.questionResolutionTarget, now, "video-complete");
-    }
-    this.compositeVideoCompleted = true;
-    return { ok: true };
-  }
-
   resolveQuestion(
     sessionId: string,
     phaseId: string,
@@ -1334,7 +1315,6 @@ export class PhaseEngine {
     this.lastRatingStatusAt = null;
     this.questionFreezeUntil = null;
     this.questionResolutionTarget = null;
-    this.compositeVideoCompleted = false;
     this.displayPlaybackIssue = null;
     this.phaseId = target;
     this.phaseStartedAt = now + (phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? phase.syncLeadMs ?? 3000 : 0);

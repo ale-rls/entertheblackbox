@@ -197,12 +197,12 @@ describe("independent group paths", () => {
     expect(main.snapshot.phase.kind).toBe("group-branch");
     expect(h.audio).toContainEqual({ ids: ["one"], phase: "idle" });
     const endFilm = { t: "video_ended" as const, v: 2 as const, sessionId: "visit", phaseEpoch: b.snapshot.phaseEpoch, phaseId: "film", mediaId: "film.mp4" };
-    h.send(main, endFilm); // Main cannot end a group display's media.
-    h.tick(201);
+    h.send(main, endFilm); // Displays only play along; the server clock ends media.
+    h.send(screenB, endFilm);
+    h.tick(1_099);
     expect(b.snapshot.phase.id).toBe("film");
     const lastLocalEpoch = reconnected.snapshot.phaseEpoch;
-    h.send(screenB, endFilm);
-    h.tick(202);
+    h.tick(1_100);
     expect(main.snapshot.phase.id).toBe("together");
     expect(reconnected.snapshot.phase.id).toBe("together");
     expect(b.snapshot.phase.id).toBe("together");
@@ -243,12 +243,12 @@ describe("independent group paths", () => {
     h.engine.stop();
   });
 
-  it("uses media fallback with no group display, and ignores empty groups at reunion", () => {
+  it("ends group media on the server clock with no group display, and ignores empty groups at reunion", () => {
     const h = setup();
     const main = h.display();
     const b = h.phone("two");
     h.engine.adminStart(); h.choose(b, "b"); h.tick(100);
-    h.tick(6_100);
+    h.tick(1_100);
     expect(main.snapshot.phase.id).toBe("together");
     h.engine.stop();
   });
