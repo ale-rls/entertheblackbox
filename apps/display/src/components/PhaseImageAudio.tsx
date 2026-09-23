@@ -1,3 +1,4 @@
+import { followMediaClock, type ServerClock } from "@entertheblackbox/shared";
 import { useCallback, useEffect, useRef } from "react";
 import {
   PROTOCOL_VERSION,
@@ -15,6 +16,7 @@ export function PhaseImageAudio({
   imageSrc,
   audioSrc,
   soundEnabled,
+  clock,
   onAudioElement,
   send,
 }: {
@@ -24,6 +26,7 @@ export function PhaseImageAudio({
   imageSrc: string;
   audioSrc: string;
   soundEnabled: boolean;
+  clock?: ServerClock;
   onAudioElement?: (audio: HTMLAudioElement | null) => void;
   send: (message: DisplayToServerMessage) => void;
 }) {
@@ -34,6 +37,7 @@ export function PhaseImageAudio({
     phaseEpoch,
     mediaId: phase.src,
     videoUrl: audioSrc,
+    autoPlay: !clock,
     send,
   });
   const setAudioRef = useCallback((audio: HTMLAudioElement | null) => {
@@ -55,7 +59,7 @@ export function PhaseImageAudio({
     if (tailTimer.current !== null) clearTimeout(tailTimer.current);
   }, [completePhase]);
   const handleEnded = () => {
-    const tailDurationMs = phase.tailDurationMs ?? 0;
+    const tailDurationMs = clock ? Math.max(0, phase.startedAt + phase.expectedDurationMs - clock.now()) : phase.tailDurationMs ?? 0;
     if (tailDurationMs === 0) {
       completePhase();
       return;
@@ -67,14 +71,23 @@ export function PhaseImageAudio({
     }, tailDurationMs);
   };
 
+  useEffect(() => {
+    const audio = diagnostics.ref.current;
+    if (!clock || !audio) return;
+    return followMediaClock(audio, clock, phase.startedAt, {
+      ended: handleEnded,
+      blocked: diagnostics.onError,
+    });
+  }, [clock, phase.startedAt, phaseEpoch, audioSrc]);
+
   return <div className="phase-image-audio">
     <img src={imageSrc} alt="" />
     <audio
       ref={setAudioRef}
       src={audioSrc}
-      autoPlay
+      autoPlay={!clock}
       muted={!soundEnabled}
-      onEnded={handleEnded}
+      onEnded={clock ? undefined : handleEnded}
       onPlaying={diagnostics.onPlaying}
       onStalled={diagnostics.onStalled}
       onError={diagnostics.onError}

@@ -160,7 +160,8 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       return { configured: true, display };
     });
 
-    admin.get("/status", async () => {
+    admin.get("/status", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
       const engine = options.engine();
       const memberships = new Map(options.groupControl?.memberships().map((row) => [row.participantId, row.groupId]) ?? []);
       const catalogueById = new Map((options.groupControl?.catalogue ?? []).map((group) => [group.id, group]));
@@ -169,6 +170,8 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         audio: await options.audioStatus?.() ?? { configured: false, players: [] },
         healthy: true,
         ready: options.ready,
+        serverTime: Date.now(),
+        phaseTiming: engine ? { startedAt: engine.getSnapshot().startedAt, deadlineAt: engine.getSnapshot().deadlineAt } : null,
         uptimeMs: Date.now() - options.startedAt,
         displayConnected: engine?.isDisplayConnected ?? false,
         displayHeartbeatAgeMs: engine?.displayHeartbeatAgeMs ?? null,

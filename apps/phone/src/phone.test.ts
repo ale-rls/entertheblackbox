@@ -421,6 +421,9 @@ describe("phoneReducer", () => {
     expect(s.ratingCandidateLabel).toBe("OpenApollo");
     s = phoneReducer(s, { type: "clock-tick", nowMs: 20_000 });
     expect(s.ratingCandidateLabel).toBeNull();
+    // Later ping samples correct a device clock that is several seconds fast.
+    s = phoneReducer(s, { type: "clock-tick", nowMs: 25_000, serverNowMs: 16_000 });
+    expect(s.ratingCandidateLabel).toBe("OpenApollo");
   });
 
   it("shows the scene title except while a subtitle is active", () => {

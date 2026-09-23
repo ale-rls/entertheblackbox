@@ -1,3 +1,5 @@
+import { ServerClock } from "@entertheblackbox/shared";
+import { ShowClockPanel } from "./ShowClockPanel.js";
 import { DisplaySettingsPanel } from "./DisplaySettingsPanel.js";
 import { AudioMediaLibrary } from "./AudioMediaLibrary.js";
 import { RunOfShowPanel } from "./RunOfShowPanel.js";
@@ -14,6 +16,8 @@ export type Status = {
   healthy: boolean;
   ready: boolean;
   uptimeMs: number;
+  serverTime?: number;
+  phaseTiming?: { startedAt: number; deadlineAt: number | null } | null;
   displayConnected: boolean;
   displayHeartbeatAgeMs: number | null;
   displayPlaybackIssue: {
@@ -43,6 +47,7 @@ export type Status = {
   groupPathsStarted: boolean;
   groupPaths: Array<{
     groupId: string;
+    startedAt?: number;
     memberIds: string[];
     jumpTargets?: string[];
     acceptingParticipants?: boolean;
@@ -237,6 +242,7 @@ function sceneKindLabel(kind: FlowScene["kind"]): string {
 }
 
 export function App() {
+  const clock = useRef(new ServerClock()).current;
   const audioOnly = new URLSearchParams(window.location.search).get("view") === "audio";
   const [statusReceivedAt, setStatusReceivedAt] = useState<number | null>(null);
   const refreshInFlight = useRef(false);
@@ -323,8 +329,10 @@ export function App() {
     const timeout = window.setTimeout(() => abort.abort(), 10_000);
     setRefreshing(true);
     try {
+      const sentAt = Date.now();
       const response = await api("status", connectedToken, { signal: abort.signal });
       const nextStatus = await response.json() as Status;
+      if (nextStatus.serverTime !== undefined) clock.addSample(sentAt, Date.now(), nextStatus.serverTime);
       statusRef.current = nextStatus;
       setStatus(nextStatus);
       setStatusReceivedAt(Date.now());
@@ -739,6 +747,7 @@ export function App() {
 
   return <div data-sc-tool-density="standard" data-sc-tool-root>
     <main className="admin-app">
+      {status && <ShowClockPanel clock={clock} status={status} stale={statusStale} />}
       <div className="admin-topbar">
         <header className="admin-header">
           <div><p className="sc-tool-eyebrow">Live installation / operator console</p><h1>{audioOnly ? "Audio diagnostics" : "Operations"}</h1></div>

@@ -118,6 +118,9 @@ export class DisplayConnection {
           parsed.message.serverTime,
         );
       }
+      if (parsed.message.t === "snapshot" || parsed.message.t === "phase") {
+        this.clock.observe(parsed.message.serverTime, this.now());
+      }
       this.options.onMessage(parsed.message);
     };
 

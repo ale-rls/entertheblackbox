@@ -1571,6 +1571,7 @@ export class PhaseEngine {
       sessionId: this.sessionId,
       phaseEpoch: this.phaseEpoch,
       resolvedTarget: resolution.resolvedTarget,
+      resolvedAt: now,
       freezeUntil: phase.kind === "position-question"
         ? now + phase.freezeMs
         : this.phaseStartedAt + phase.hideAtMs,

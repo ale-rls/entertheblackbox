@@ -33,6 +33,7 @@ function setup(options: {
   const audit = vi.fn();
   let lobbyTimes = [20_000, 40_000];
   const engine = {
+    getSnapshot: () => ({ startedAt: 1000, deadlineAt: 21000 }),
     lifecycleState: options.lifecycle ?? "active", currentSessionId: "s1", currentPhaseId: "q1", currentPhaseEpoch: 2,
     isDisplayConnected: true, displayHeartbeatAgeMs: 12, connectedParticipantCount: 3,
     participantPresence: [{ clientId: "p1", name: "Ada", color: "#fff", connected: true, joinedAt: 500, lastSeenAt: 900 }],
@@ -111,6 +112,8 @@ describe("admin API", () => {
     expect((await app.inject({ url: "/api/admin/status" })).statusCode).toBe(401);
     const response = await app.inject({ url: "/api/admin/status", headers: { authorization: "Bearer strong-admin-token" } });
     expect(response.json()).toMatchObject({
+      serverTime: expect.any(Number),
+      phaseTiming: { startedAt: 1000, deadlineAt: 21000 },
       healthy: true,
       ready: true,
       displayConnected: true,
@@ -281,6 +284,7 @@ describe("admin API", () => {
   it("exposes per-group path status enriched with group labels and scene titles on /status", async () => {
     const headers = { authorization: "Bearer strong-admin-token" };
     const engineWithPaths = {
+      getSnapshot: () => ({ startedAt: 1000, deadlineAt: 21000 }),
       lifecycleState: "active", currentSessionId: "s1", currentPhaseId: "split", currentPhaseEpoch: 3,
       isDisplayConnected: true, displayHeartbeatAgeMs: 1, connectedParticipantCount: 2,
       participantPresence: [],
