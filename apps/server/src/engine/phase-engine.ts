@@ -210,7 +210,6 @@ export class PhaseEngine {
   private selectionCohort = new Set<string>();
   private pathsStarted = false;
   private pathDone = false;
-  private pathDormant = false;
   private readonly scenario: Scenario;
   private readonly registry: ParticipantRegistry;
   private readonly installationId: string;
@@ -484,7 +483,7 @@ export class PhaseEngine {
    * running group path untouched. */
   adminSkipGroup(groupId: string, now = this.now(), expectedPhaseId?: string): TransitionResult {
     const child = this.pathForGroup(groupId);
-    if (!child || child.pathDormant) return { ok: false, reason: "wrong-phase" };
+    if (!child) return { ok: false, reason: "wrong-phase" };
     return child.adminSkip(now, expectedPhaseId);
   }
 
@@ -532,7 +531,7 @@ export class PhaseEngine {
     const chain = this.pathChainForGroup(groupId);
     const child = chain.at(-1)?.engine;
     const parent = chain.length > 1 ? chain[chain.length - 2]!.engine : this;
-    if (!child || child.pathDone || child.pathDormant) return { ok: false, reason: "wrong-phase" };
+    if (!child || child.pathDone) return { ok: false, reason: "wrong-phase" };
     if (!parent.groupJumpTargets(groupId).includes(target)) return { ok: false, reason: "invalid-target" };
     return child.adminJump(target, now, expectedPhaseId);
   }
@@ -549,7 +548,7 @@ export class PhaseEngine {
     const selectionOwners: PhaseEngine[] = [];
     const collectSelections = (engine: PhaseEngine) => {
       const phase = engine.currentPhase();
-      if (!engine.pathDone && !engine.pathDormant && !engine.pathsStarted && phase.kind === "group-branch" && phase.branches.some((branch) => branch.groupId === groupId)) selectionOwners.push(engine);
+      if (!engine.pathDone && !engine.pathsStarted && phase.kind === "group-branch" && phase.branches.some((branch) => branch.groupId === groupId)) selectionOwners.push(engine);
       for (const path of engine.paths.values()) collectSelections(path.engine);
     };
     if (!parentOnly) collectSelections(this);
@@ -607,18 +606,10 @@ export class PhaseEngine {
     this.routingEpochs.set(participantId, (this.routingEpochs.get(participantId) ?? 0) + 1);
     for (const target of destinationChain) target.members.add(participantId);
     const child = destination.engine;
-    if (child.pathDormant) {
-      child.pathDormant = false;
-      child.enterPhase(child.phaseId, this.now(), "first-group-member");
-      const display = child.path?.displayForGroup(groupId);
-      if (display) child.connectDisplay(display);
-    }
     // Operator admission to a selection also works for a source-restricted cohort.
     if (!child.pathDone && child.currentPhase().kind === "group-branch") child.selectionCohort.add(participantId);
     for (const [socket, id] of this.participantIds) if (id === participantId && isOpen(socket)) destinationChain[0]!.engine.participantJoined(socket, participant);
     this.options.onParticipantPhase?.([participantId], child.pathDone ? { kind: "idle", id: "idle" } : child.currentPhase(), child.phaseStartedAt);
-    // Empty timelines stop issuing cues and cannot hold up either reunion.
-    for (const source of [...leaving].reverse()) if (source.members.size === 0) source.engine.enterPhase(source.engine.path!.stopAt, this.now(), "group-emptied");
     return { ok: true };
   }
 
@@ -649,7 +640,7 @@ export class PhaseEngine {
 
   get groupDestinations(): string[] {
     const phase = this.currentPhase();
-    if (this.pathDone || this.pathDormant) return [];
+    if (this.pathDone) return [];
     if (!this.path && phase.kind !== "group-branch") return (this.scenario.groups ?? []).map((group) => group.id);
     const local = phase.kind === "group-branch" ? phase.branches.filter((branch) => !this.paths.get(branch.groupId)?.engine.pathsStarted).map((branch) => branch.groupId) : [];
     return [...new Set([...local, ...[...this.paths.values()].flatMap(({ engine }) => engine.groupDestinations)])];
@@ -664,9 +655,9 @@ export class PhaseEngine {
     const rows = [...this.paths.entries()].flatMap(([groupId, { engine, members }]) => [{
       groupId,
       pendingAssignments: engine.pendingGroupAssignments.length,
-      state: engine.pathDormant ? "empty" as const : engine.pathDone ? "finished" as const : engine.pathsStarted ? "split" as const : engine.currentPhase().kind === "group-branch" ? "choosing" as const : "active" as const,
+      state: engine.pathDone ? "finished" as const : engine.pathsStarted ? "split" as const : engine.currentPhase().kind === "group-branch" ? "choosing" as const : "active" as const,
       memberIds: [...members].filter((id) => !engine.pathForParticipant(id)),
-      jumpTargets: engine.pathsStarted || engine.pathDormant ? [] : this.groupJumpTargets(groupId),
+      jumpTargets: engine.pathsStarted ? [] : this.groupJumpTargets(groupId),
       reunionPhaseId: engine.path!.stopAt,
       startedAt: engine.phaseStartedAt,
       acceptingParticipants: !engine.pathsStarted,
@@ -674,8 +665,8 @@ export class PhaseEngine {
       phaseEpoch: engine.phaseEpoch,
       done: engine.pathDone,
     }, ...engine.groupPaths]);
-    // An unused sibling with the same catalogue ID must not hide a running destination.
-    const visible = rows.filter((row) => row.state !== "empty" || !rows.some((other) => other.groupId === row.groupId && other.state !== "empty" && other.state !== "split"));
+    // Prefer the occupied destination when sibling timelines reuse a catalogue ID.
+    const visible = rows.filter((row) => row.state === "split" || row.memberIds.length > 0 || !rows.some((other) => other.groupId === row.groupId && other.memberIds.length > 0 && other.state !== "split"));
     return visible.filter((row) => row.state === "split" || row.acceptingParticipants || !visible.some((other) => other !== row && other.groupId === row.groupId && other.acceptingParticipants))
       .map((row) => visible.filter((other) => other.groupId === row.groupId && other.acceptingParticipants).length > 1
         ? { ...row, acceptingParticipants: false, jumpTargets: [] } : row);
@@ -742,7 +733,7 @@ export class PhaseEngine {
   }
 
   tick(now = this.now()): void {
-    if (this.pathDone || this.pathDormant) return;
+    if (this.pathDone) return;
     this.bindings.tick(now);
     this.expireStaleDisplay(now);
     if (this.lifecycle === "idle") {
@@ -768,7 +759,7 @@ export class PhaseEngine {
       if (!this.pathsStarted && this.deadlineAt !== null && now >= this.deadlineAt) this.startGroupPaths(phase, now);
       if (this.pathsStarted) {
         for (const { engine } of this.paths.values()) engine.tick(now);
-        if ([...this.paths.values()].every(({ engine }) => engine.pathDone || engine.pathDormant)) this.advanceTo(phase.next, now, "group-branch-complete");
+        if ([...this.paths.values()].every(({ engine }) => engine.pathDone)) this.advanceTo(phase.next, now, "group-branch-complete");
       }
       return;
     }
@@ -950,7 +941,7 @@ export class PhaseEngine {
           }
           this.groupDisplays.set(message.groupId, socket);
           const localPath = this.pathForGroup(message.groupId);
-          if (localPath && !localPath.pathDormant) localPath.connectDisplay(socket);
+          if (localPath) localPath.connectDisplay(socket);
           else this.sendBlankDisplay(socket);
         } else this.connectDisplay(socket);
         return;
@@ -1685,8 +1676,8 @@ export class PhaseEngine {
     collect(this, []);
     // A group ID cannot identify two concurrent sibling timelines safely.
     const deepest = matches.filter((chain) => !matches.some((other) => other.length > chain.length && chain.every((path, index) => other[index] === path)));
-    const running = deepest.filter((chain) => !chain.at(-1)!.engine.pathDormant);
-    const candidates = running.length ? running : deepest;
+    const occupied = deepest.filter((chain) => chain.at(-1)!.members.size > 0);
+    const candidates = occupied.length ? occupied : deepest;
     return candidates.length === 1 ? candidates[0]! : [];
   }
 
@@ -1704,7 +1695,7 @@ export class PhaseEngine {
     const matches: PhaseEngine[] = [];
     const visit = (engine: PhaseEngine) => {
       for (const [id, path] of engine.paths) {
-        if (id === groupId && path.engine.phaseId === phaseId && !path.engine.pathDormant) matches.push(path.engine);
+        if (id === groupId && path.engine.phaseId === phaseId) matches.push(path.engine);
         visit(path.engine);
       }
     };
@@ -1768,16 +1759,13 @@ export class PhaseEngine {
         if (participant) child.cursors.join(id, participant.color);
       }
       const display = this.path?.displayForGroup(branch.groupId) ?? this.groupDisplays.get(branch.groupId);
-      if (display && members.size > 0) {
+      if (display) {
         child.displaySocket = display;
         child.clients.add(display);
         child.displayHeartbeatAt = now;
       }
-      if (members.size === 0) {
-        child.pathDormant = true;
-        child.phaseId = branch.next ?? phase.next;
-        child.phaseEpoch = this.nextEpoch();
-      } else child.enterPhase(branch.next ?? phase.next, now, "group-path-start");
+      // Attendance never gates the show clock: first late arrivals join this live phase.
+      child.enterPhase(branch.next ?? phase.next, now, "group-path-start");
       if (this.timer !== null) child.cursors.start();
     }
     return true;
