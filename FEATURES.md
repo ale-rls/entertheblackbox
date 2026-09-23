@@ -77,7 +77,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 ## Admin operations — `apps/admin`
 
 - Operator authentication (30-day session) — **PocketBase** `operators` collection, `apps/server/src/persistence/operator-auth.ts`
-- Live operational status (server/display/playback/participants/session)
+- Live operational status (server/displays/playback/participants/session). **Displays** lists every connected main, group and signage display with its heartbeat age, and warns only when the main display is missing outside group paths — `apps/server/src/engine/phase-engine.ts` (`connectedDisplays`, `mainDisplayNeeded`)
 - Active-show scene navigator / live show graph, jump-to-scene, participant dropdown and reassignment — `LiveGraph.tsx`
 - Session controls: start/skip/restart/idle, group-path start, force-reunion
 - Lobby schedule management within the combined session controls panel

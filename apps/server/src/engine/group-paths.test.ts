@@ -156,6 +156,32 @@ describe("independent group paths", () => {
     h.engine.stop();
   });
 
+  it("lists main, group and signage displays with their own heartbeat ages", () => {
+    const h = setup();
+    const main = h.display();
+    const screenA = h.display("a");
+    const lobby = new Socket();
+    h.send(lobby, { t: "display_join", v: 2, clientVersion: "test", installationId: "inst", roomId: "room", displayToken: "secret", signageId: "entrance" });
+    const a = h.phone("one");
+    expect(h.engine.mainDisplayNeeded).toBe(true);
+    h.engine.adminStart(); h.choose(a, "a"); h.tick(100);
+    expect(h.engine.mainDisplayNeeded).toBe(false);
+
+    const beat = (socket: Socket) => h.send(socket, { t: "display_heartbeat", v: 2, sessionId: "stale", phaseId: "stale", phaseEpoch: 0, clientTime: 0 });
+    beat(main); beat(lobby);
+    h.setNow(150);
+    beat(screenA); // routed to group a's path, but still recorded here
+    h.setNow(160);
+    expect(h.engine.connectedDisplays).toEqual([
+      { kind: "main", id: null, heartbeatAgeMs: 60 },
+      { kind: "group", id: "a", heartbeatAgeMs: 10 },
+      { kind: "signage", id: "entrance", heartbeatAgeMs: 60 },
+    ]);
+    h.engine.socketClosed(main.ws);
+    expect(h.engine.connectedDisplays.map((display) => display.kind)).toEqual(["group", "signage"]);
+    h.engine.stop();
+  });
+
   it("keeps disconnected transfers on their destination when they reconnect", () => {
     const h = setup(); h.display(); const a = h.phone("one"); const b = h.phone("two");
     h.engine.adminStart(); h.choose(a, "a"); h.choose(b, "b"); h.tick(100);

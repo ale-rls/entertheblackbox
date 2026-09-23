@@ -175,6 +175,11 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         uptimeMs: Date.now() - options.startedAt,
         displayConnected: engine?.isDisplayConnected ?? false,
         displayHeartbeatAgeMs: engine?.displayHeartbeatAgeMs ?? null,
+        displays: (engine?.connectedDisplays ?? []).map((display) => ({
+          ...display,
+          label: display.kind === "group" ? catalogueById.get(display.id!)?.label ?? display.id : display.id,
+        })),
+        mainDisplayNeeded: engine?.mainDisplayNeeded ?? false,
         displayPlaybackIssue: engine?.currentDisplayPlaybackIssue ?? null,
         connectedParticipants: engine?.connectedParticipantCount ?? 0,
         participants: (engine?.participantPresence ?? []).map((participant) => ({
