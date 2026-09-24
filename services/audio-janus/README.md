@@ -1,71 +1,18 @@
-# Janus phone audio in the production stack
+# Janus phone audio — disabled in production
 
-`/phone-janus/` uses the same phone UI, admission, voting, subtitles and show clock
-as `/phone/`, with WebRTC audio. `/phone/` continues to use Icecast. Both routes
-participate in the same production show. Use one route per phone: the routes
-share participant identity, and switching routes releases that participant's
-previous audio backend.
+The experimental `/phone-janus/` code is retained for future development.
+Use `/phone/` for the active Icecast setup.
 
-The production entry point is [`deploy/coolify/docker-compose.yml`](../../deploy/coolify/docker-compose.yml).
-Janus runs in that existing application and its default Docker network. There
-is no separate Janus Compose deployment or cross-application bridge URL.
+## Production disabled
 
-```
-production frontend → janus-bridge:8090 → janus-liquidsoap → Opus/RTP → janus
-phone-janus ← WebRTC media from janus
-phone-janus ↔ HTTPS signaling through janus-web
-```
+Janus is disabled in the production Compose stack while connectivity and host
+resource issues are investigated. No Janus services build or start. The show
+server's Janus configuration is explicitly empty. The code below is retained
+for future development, not an active deployment guide.
 
-The Janus mixer and media volumes are independent of the existing Icecast mixer
-and volumes. The bridge reuses command/registry Python helpers at image build
-time. Production cue selection and group membership come from the same show
-server that drives Icecast.
-
-## Deploy using the existing Coolify application
-
-1. Update the existing application's repository checkout to this change. Keep
-   Base Directory `/` and Compose Location `/deploy/coolify/docker-compose.yml`.
-   If the resource contains manually pasted Compose, replace it with this file.
-   Keep the existing domains and persistent volumes.
-2. Add the following runtime Environment Variables in that application:
-
-   | Variable | Value |
-   |---|---|
-   | `JANUS_PUBLIC_URL` | HTTPS domain for `janus-web`, e.g. `https://janus.example.org` |
-   | `JANUS_PUBLIC_IP` | Host IPv4 address reachable by audience phones |
-   | `JANUS_ADMIN_KEY` | Unique random 32–128 character secret, letters/digits/hyphens |
-   | `JANUS_BRIDGE_TOKEN` | Different random secret, at least 32 characters |
-   | `JANUS_LISTENER_PIN` | 8–64 letters/digits for the optional shared listener |
-   | `JANUS_PLAYERS` | Participant capacity; default `30`, allowed 1–100 |
-   | `JANUS_ICE_SERVERS` | Default `[]`; configure TURN if needed |
-
-   Generate the secrets in a password manager. `JANUS_BRIDGE_URL` is already
-   fixed to `http://janus-bridge:8090` in Compose; remove any old external override
-   from the Coolify environment editor.
-3. Assign the domain from `JANUS_PUBLIC_URL` to **janus-web**, container port 80.
-   Point its DNS to this host. Do not assign public domains or host TCP ports to
-   `janus`, `janus-bridge` or `janus-liquidsoap`. The control bridge stays private.
-4. Allow host UDP **20000–20200** through the host/cloud firewall using its UI.
-   HTTPS carries signaling; the UDP ports carry the audio and must be reachable.
-5. Click **Deploy** in the existing application. No profiles or custom startup
-   commands are needed. The deployment builds the phone and Admin clients too.
-6. Open `/phone-janus/`, join and tap **Start headphones**. Use
-   `/admin/` → **Headphone streams** for music/soundcheck and
-   `/admin/?view=audio` for per-phone diagnostics. Optionally set
-   `PHONE_JOIN_BASE_URL` to the frontend HTTPS URL ending in `/phone-janus/`
-   to direct the show QR codes there.
-
-All four added services (`janus`, `janus-web`, `janus-liquidsoap`, `janus-bridge`)
-appear in the same Coolify application for logs and restarts. The existing
-Icecast services and volumes retain their names. The frontend's startup does
-not wait for Janus health, so a Janus outage does not prevent Icecast startup;
-Janus failures appear in audio diagnostics. Required Janus variables must still
-be set for Compose to accept the configuration before deployment.
-
-The former separate Janus Compose definitions have been removed. If you already
-created a separate Janus application, stop it before deploying this version on
-the same host so it releases UDP 20000–20200. Do not delete the production
-PocketBase or Icecast volumes.
+Use `/phone/` for Icecast and restore `PHONE_JOIN_BASE_URL` to `/phone/` if needed.
+Stop any old Janus containers in Coolify; redeployment may leave removed services
+as orphans. See the [shutdown instructions](../../deploy/coolify/README.md#janus-disabled).
 
 ## Network and capacity
 
