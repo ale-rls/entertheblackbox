@@ -4,7 +4,7 @@ import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
 import { basename } from "node:path";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
-import { PersonalAudio } from "./audio/personal-audio.js";
+import { AudioDelivery } from "./audio/audio-delivery.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
@@ -104,9 +104,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         ...(options.movementConsentTimeoutMs === undefined ? {} : { timeoutMs: options.movementConsentTimeoutMs }),
         onError: (error) => app.log.error({ error }, "failed to delete unconsented movement recording"),
       });
-  const audio = config.audio ? new PersonalAudio(
-    config.audio, config.mediaDir, (error) => app.log.error({ error }, "personal audio failed"), undefined,
-    // `engine` is assigned below; this closure only runs after buildServer() has finished setting it up.
+  const audio = config.audio || config.janusAudio ? new AudioDelivery(
+    config, (error) => app.log.error({ error }, "personal audio failed"),
     (clientId, streamUrl) => engine?.notifyAudioBridgeChanged(clientId, streamUrl),
   ) : null;
   const groups = readiness.ready ? new GroupManager(readiness.scenario) : null;
@@ -240,36 +239,40 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   app.get("/api/join-config", async () => ({
     installationId: config.installationId,
     roomId: config.roomId,
-    audioEnabled: audio !== null,
+    audioEnabled: audio?.icecast !== null && audio?.icecast !== undefined,
+    janusAudioEnabled: audio?.janus !== null && audio?.janus !== undefined,
   }));
-  app.post<{ Body: unknown }>("/api/audio/register", async (request, reply) => {
-    reply.header("cache-control", "no-store");
-    if (!audio) return reply.code(503).send({ error: "audio_not_configured" });
-    const body = z.object({ participantLease: z.string().min(1).max(4096) }).safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: "invalid_request" });
-    const lease = verifyParticipantLease(body.data.participantLease, { secret: config.joinGrantSecret, installationId: config.installationId });
-    const participant = admission.registry.get(body.data.participantLease);
-    if (!lease || !participant || participant.clientId !== lease.clientId) return reply.code(401).send({ error: "invalid_participant_lease" });
-    groups?.ensureParticipant(participant.clientId);
-    try { return { streamUrl: await audio.register(participant) }; }
-    catch { return reply.code(503).send({ error: "audio_unavailable" }); }
-  });
-  const audioEventBodySchema = z.object({
-    participantLease: z.string().min(1).max(4096),
-    state: z.enum(["ready", "connecting", "playing", "reconnecting", "blocked", "paused"]),
-    at: z.number().finite(),
-  });
-  app.post<{ Body: unknown }>("/api/audio/event", async (request, reply) => {
-    reply.header("cache-control", "no-store");
-    if (!audio) return reply.code(503).send({ error: "audio_not_configured" });
-    const body = audioEventBodySchema.safeParse(request.body);
-    if (!body.success) return reply.code(400).send({ error: "invalid_request" });
-    const lease = verifyParticipantLease(body.data.participantLease, { secret: config.joinGrantSecret, installationId: config.installationId });
-    const participant = admission.registry.get(body.data.participantLease);
-    if (!lease || !participant || participant.clientId !== lease.clientId) return reply.code(401).send({ error: "invalid_participant_lease" });
-    audio.recordEvent(participant.clientId, body.data.state, body.data.at);
-    return { ok: true };
-  });
+  for (const transport of ["icecast", "janus"] as const) {
+    const audioPrefix = transport === "janus" ? "/api/audio-janus" : "/api/audio";
+    app.post<{ Body: unknown }>(`${audioPrefix}/register`, async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!audio?.[transport]) return reply.code(503).send({ error: "audio_not_configured" });
+      const body = z.object({ participantLease: z.string().min(1).max(4096), recover: z.boolean().optional() }).safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ error: "invalid_request" });
+      const lease = verifyParticipantLease(body.data.participantLease, { secret: config.joinGrantSecret, installationId: config.installationId });
+      const participant = admission.registry.get(body.data.participantLease);
+      if (!lease || !participant || participant.clientId !== lease.clientId) return reply.code(401).send({ error: "invalid_participant_lease" });
+      groups?.ensureParticipant(participant.clientId);
+      try { return await audio.register(participant, transport, body.data.recover); }
+      catch { return reply.code(503).send({ error: "audio_unavailable" }); }
+    });
+    const audioEventBodySchema = z.object({
+      participantLease: z.string().min(1).max(4096),
+      state: z.enum(["ready", "connecting", "playing", "reconnecting", "blocked", "paused"]),
+      at: z.number().finite(),
+    });
+    app.post<{ Body: unknown }>(`${audioPrefix}/event`, async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!audio?.[transport]) return reply.code(503).send({ error: "audio_not_configured" });
+      const body = audioEventBodySchema.safeParse(request.body);
+      if (!body.success) return reply.code(400).send({ error: "invalid_request" });
+      const lease = verifyParticipantLease(body.data.participantLease, { secret: config.joinGrantSecret, installationId: config.installationId });
+      const participant = admission.registry.get(body.data.participantLease);
+      if (!lease || !participant || participant.clientId !== lease.clientId) return reply.code(401).send({ error: "invalid_participant_lease" });
+      audio.recordEvent(participant.clientId, body.data.state, body.data.at, transport);
+      return { ok: true };
+    });
+  }
   const movementConsentBodySchema = z.object({
     sessionId: z.string().min(1).max(200),
     participantLease: z.string().min(1).max(4_096),

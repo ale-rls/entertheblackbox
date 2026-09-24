@@ -116,6 +116,8 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 ## Audio (personal + ambient)
 
+- Janus/WebRTC personal audio at `/phone-janus/`, sharing phone UI and show cues; private mounts, group narration, music, soundcheck, recovery and services in the production Coolify Compose stack — [services/audio-janus](services/audio-janus/README.md)
+
 - Personal audio bridge integration (Icecast/Liquidsoap) — `audio/personal-audio.ts` → **services/audio**
 - Per-scene phone narration injection with delivery-failure retry
 - Background/ambient music control (admin `/audio/music`)

@@ -407,3 +407,50 @@ it("holds registration until a participant's delayed reset and play finish witho
   expect(calls.filter(path => path.endsWith("/one/play"))).toHaveLength(1);
   await audio.stop();
 });
+
+it('retries failed mount revocations without skipping other participants', async () => {
+  const request = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response('{}'));
+  const audio = new PersonalAudio({ url: 'http://bridge', token: 'x', publicUrl: 'http://audio' }, '/tmp', vi.fn(), request as typeof fetch);
+  await audio.register({ clientId: 'one', name: 'One' });
+  await audio.register({ clientId: 'two', name: 'Two' });
+  let failOne = true;
+  request.mockImplementation(async (url, init) => new Response('{}', { status: init?.method === 'DELETE' && String(url).endsWith('/one') && failOne ? 503 : 200 }));
+  audio.endSession();
+  // Registration is a queue barrier and also retries its own pending release.
+  await expect(audio.register({ clientId: 'one', name: 'One' })).rejects.toThrow();
+  expect(request.mock.calls.some(([url, init]) => String(url).endsWith('/two') && init?.method === 'DELETE')).toBe(true);
+  failOne = false;
+  await audio.register({ clientId: 'one', name: 'One' });
+  expect(request.mock.calls.filter(([url, init]) => String(url).endsWith('/one') && init?.method === 'DELETE').length).toBeGreaterThanOrEqual(2);
+  await audio.stop();
+});
+
+it('restores the current cue after a source epoch changes without replaying healthy registrations', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'janus-epoch-'));
+  await writeFile(join(dir, 'voice.mp3'), 'voice');
+  let epoch = 'first';
+  const request = vi.fn(async (url: string | URL | Request) => new Response(JSON.stringify(String(url).endsWith('/active') ? { sourceEpoch: epoch } : {})));
+  const audio = new PersonalAudio({ url: 'http://bridge', token: 'x', publicUrl: 'http://audio' }, dir, vi.fn(), request as typeof fetch);
+  audio.transition(phase('voice.mp3'), () => null, Date.now() - 1000);
+  await audio.register({ clientId: 'one', name: 'One' });
+  await audio.register({ clientId: 'one', name: 'One' });
+  expect(request.mock.calls.filter(([url]) => String(url).endsWith('/play'))).toHaveLength(1);
+  epoch = 'restarted';
+  await audio.register({ clientId: 'one', name: 'One' });
+  expect(request.mock.calls.filter(([url]) => String(url).endsWith('/play'))).toHaveLength(2);
+  await audio.stop();
+});
+
+it('restores configured music when the first source appears after an idle mixer restart', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'janus-music-'));
+  await writeFile(join(dir, 'music.mp3'), 'music');
+  const request = vi.fn(async (url: string | URL | Request) => new Response(JSON.stringify(String(url).endsWith('/active') ? { sourceEpoch: 'new-mixer' } : {})));
+  const audio = new PersonalAudio({ url: 'http://bridge', token: 'x', publicUrl: 'http://audio' }, dir, vi.fn(), request as typeof fetch);
+  await audio.setMusic('music.mp3', 0.2);
+  await audio.register({ clientId: 'one', name: 'One' });
+  await (audio as unknown as { reconcile(): Promise<void> }).reconcile();
+  expect(request.mock.calls.filter(([url]) => String(url).endsWith('/music'))).toHaveLength(2);
+  await (audio as unknown as { reconcile(): Promise<void> }).reconcile();
+  expect(request.mock.calls.filter(([url]) => String(url).endsWith('/music'))).toHaveLength(2);
+  await audio.stop();
+});
