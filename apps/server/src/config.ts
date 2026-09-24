@@ -30,6 +30,7 @@ const envSchema = z.object({
   ALLOW_LATE_JOIN: z.enum(["true", "false"]).default("true"),
   // Absent by default: without it the server behaves exactly as it did for
   // the Frankfurt run, with the phone trackpad as the only position source.
+  JANUS_ENABLED: z.enum(["true", "false"]).optional(),
   JANUS_BRIDGE_URL: optionalUrl,
   JANUS_BRIDGE_TOKEN: z.preprocess((input) => input === "" ? undefined : input, z.string().min(32).optional()),
   JANUS_PUBLIC_URL: optionalUrl,
@@ -105,7 +106,13 @@ export function loadConfig(
   env: NodeJS.ProcessEnv = process.env,
   rootDir = repoRoot,
 ): ServerConfig {
-  const parsed = envSchema.safeParse(env);
+  // A deliberate shutdown must override saved, partial or invalid Janus values.
+  // Keep validating enabled configurations so wiring errors remain visible.
+  const input = env.JANUS_ENABLED === "false"
+    ? { ...env, JANUS_BRIDGE_URL: undefined, JANUS_BRIDGE_TOKEN: undefined,
+        JANUS_PUBLIC_URL: undefined, JANUS_ICE_SERVERS: "[]" }
+    : env;
+  const parsed = envSchema.safeParse(input);
   if (!parsed.success) {
     const details = parsed.error.issues
       .map((issue) => `${issue.path.join(".") || "environment"}: ${issue.message}`)

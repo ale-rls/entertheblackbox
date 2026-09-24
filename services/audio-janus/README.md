@@ -91,3 +91,13 @@ sample-accurate synchronization between phones.
 References: [Janus Streaming](https://janus.conf.meetecho.com/docs/streaming),
 [Janus signaling](https://janus.conf.meetecho.com/docs/rest),
 [Playback reference](https://github.com/Public-Shorts/playback).
+
+### Frontend startup with saved Janus variables
+
+Production Compose sets `JANUS_ENABLED=false`. This explicitly ignores all
+Janus connection and ICE settings before validation, including old partial
+Coolify values. Deploy this server version for the switch to take effect.
+For an older server reporting that Janus settings must be set together, remove
+all three `JANUS_BRIDGE_URL`, `JANUS_BRIDGE_TOKEN` and `JANUS_PUBLIC_URL` runtime
+entries and deploy the shutdown Compose definition. Keep Icecast `AUDIO_*`
+settings. Restarting an old container alone does not update its environment.

@@ -218,3 +218,13 @@ containers depending on deployment cleanup; verify all four are stopped after
 redeploy. Keep `liquidsoap`, `bridge`, `icecast` and their volumes. The unused
 `janus-audio` and `janus-beds` volumes are retained to preserve data. Remove the
 old Janus domain assignment if Coolify still lists it.
+
+### Frontend startup with saved Janus variables
+
+Production Compose sets `JANUS_ENABLED=false`. This explicitly ignores all
+Janus connection and ICE settings before validation, including old partial
+Coolify values. Deploy this server version for the switch to take effect.
+For an older server reporting that Janus settings must be set together, remove
+all three `JANUS_BRIDGE_URL`, `JANUS_BRIDGE_TOKEN` and `JANUS_PUBLIC_URL` runtime
+entries and deploy the shutdown Compose definition. Keep Icecast `AUDIO_*`
+settings. Restarting an old container alone does not update its environment.
