@@ -77,3 +77,7 @@ visible and puts question text/final-five-second countdown on the opposite
 axis, swapping roles automatically when the question axis changes. Both read the production receiver's `timelines` state;
 local tracking counts do not drive the text. Scene timers restore from the
 server phase start on reconnect and require one authoritative timeline.
+
+For pre-show joining, the same guide describes a shared live join-display TOP
+and `scene_monitor.output_index` Switch TOP binding. This selects the join
+screen during the main idle phase and text outputs when the show starts.

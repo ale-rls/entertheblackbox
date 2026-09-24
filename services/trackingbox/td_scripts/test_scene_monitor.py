@@ -131,5 +131,35 @@ class AutomaticAxisTests(unittest.TestCase):
             self.outputs(0)
 
 
+class JoinDisplayTests(unittest.TestCase):
+    def test_only_idle_selects_join_video(self):
+        for kind in ['idle', 'position-question', 'video', 'narration', 'group-branch', None]:
+            self.assertEqual(monitor.join_index({'kind': kind}), int(kind == 'idle'))
+        self.assertEqual(monitor.join_index({'kind': 'idle'}, enabled=False), 0)
+
+    def test_main_lobby_is_independent_of_group_and_reset_clears(self):
+        import json
+        from collections import defaultdict
+        from types import SimpleNamespace
+        config = {'timeline': 'ki', 'joinDisplay': {'enabled': True, 'timeline': 'main'}}
+        table = defaultdict(lambda: None)
+        table['main', 'payload_json'] = json.dumps({'phase': {'kind': 'idle'}})
+        table['ki', 'payload_json'] = json.dumps({'phase': {'kind': 'position-question'}})
+        ops = {'monitor_config': SimpleNamespace(text=json.dumps(config)), 'timelines': table}
+        with patch.object(monitor, 'op', ops.get, create=True):
+            self.assertEqual(monitor.output_index(1), 1)
+            table['main', 'payload_json'] = json.dumps({'phase': {'kind': 'group-branch'}})
+            self.assertEqual(monitor.output_index(2), 0)
+            table.clear()
+            self.assertEqual(monitor.output_index(3), 0)
+            # Reconnect snapshot restores the lobby selection.
+            table['main', 'payload_json'] = json.dumps({'phase': {'kind': 'idle'}})
+            self.assertEqual(monitor.output_index(4), 1)
+            ops['monitor_config'].text = '{}'
+            self.assertEqual(monitor.output_index(5), 0)
+            ops['monitor_config'].text = '{'
+            self.assertEqual(monitor.output_index(6), 0)
+
+
 if __name__ == '__main__':
     unittest.main()

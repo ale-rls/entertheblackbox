@@ -91,3 +91,24 @@ def text(monitor, frame=None):
     except (AttributeError, KeyError, ValueError, TypeError, OverflowError):
         # Visible diagnostic instead of silently retaining a previous scene.
         return 'MONITOR CONFIG ERROR'
+
+
+def join_index(phase, enabled=True):
+    """Switch TOP: input 0 is monitor text; input 1 is the live join screen."""
+    return int(enabled and phase.get('kind') == 'idle')
+
+
+def output_index(frame=None):
+    """Read the main lobby phase independently of the group text timeline."""
+    try:
+        config = json.loads(op('monitor_config').text)
+        lobby = config.get('joinDisplay', {})
+        if not lobby.get('enabled', False):
+            return 0
+        table = op('timelines')
+        cell = table[lobby.get('timeline', 'main'), 'payload_json'] if table is not None else None
+        if cell is None:
+            return 0
+        return join_index(json.loads(str(cell)).get('phase', {}))
+    except (AttributeError, KeyError, ValueError, TypeError):
+        return 0

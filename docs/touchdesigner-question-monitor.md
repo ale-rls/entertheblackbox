@@ -57,6 +57,7 @@ Text TOP binding; keep the same production receiver, `cue_execute`, and
 ```json
 {
   "timeline": "ki",
+  "joinDisplay": {"enabled": true, "timeline": "main"},
   "monitors": {
     "M1": {"mode": "axis-auto", "slot": "y_min"},
     "M2": {"mode": "axis-auto", "slot": "x_min"},
@@ -153,3 +154,42 @@ configuration displays `MONITOR CONFIG ERROR`; correct it before the show.
   recover, not return to the full duration. Reset the show and check blanking.
 - Run the group audio paths together and check their instructions against the
   common timer, including any delayed timer start and the return to questions.
+
+
+## Pre-show join display on all four monitors
+
+Use the existing live browser join display as a shared video TOP named
+`join_display`. This must be a live capture/feed of that display, including its
+current QR code, not a screenshot or a fixed QR URL. The browser owns QR grant
+rotation, expiry, and visibility. Connect your venue's existing display capture
+or video transport to this TOP; the Python helper does not capture the browser
+or generate a QR image. Do not open another `/display` client or attach a second
+`display_join` WebSocket just to feed these monitors.
+
+For each monitor, insert a Switch TOP before the final output:
+
+- Input 0: that monitor's existing text output (question/labels/themes/timer).
+- Input 1: the same live `join_display` TOP, fitted without cropping the QR code.
+- Index parameter, Python expression mode:
+  `op('scene_monitor').module.output_index(absTime.frame)`.
+
+Set `joinDisplay` in `monitor_config` as shown in the example above. It selects
+input 1 while the configured lobby timeline's phase kind is `idle`, and input 0
+as soon as that timeline leaves idle. This uses `main` independently of the
+`ki` timeline that supplies question text: the group timeline may not exist yet
+before the show starts. If your lobby uses another timeline, set its exact ID.
+A pre-show video/narration phase is not an idle lobby and will not activate this
+selector. The selector does not alter the show start or admission policy.
+
+Omitting `joinDisplay`, setting `enabled` to false, missing/reset timeline state,
+or malformed configuration selects input 0. Reconnect snapshots restore the
+selection. During an outage the last phase is retained, so monitor `cue_status`;
+an undelivered show-start event cannot switch the outputs. Returning the main
+timeline to idle selects the join screen again.
+
+Before the audience enters, verify that all four monitors show the live join
+screen, scan each QR with a phone, and check that QR rotation/visibility matches
+the source browser. Start the show and confirm that all four outputs switch to
+their text scenes. Reset to the lobby and confirm the join screen returns.
+This requires the live video connection in the venue `.toe`; loading the Python
+script alone supplies only the automatic selector.
