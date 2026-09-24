@@ -15,11 +15,15 @@ class SceneMonitorTests(unittest.TestCase):
                           'monitors': ['M1', 'M2', 'M3', 'M4']}}, 'clear': {}}}
         self.phase = {'id': 'scene', 'kind': 'narration', 'startedAt': 10000}
 
-    def test_full_countdown_and_zero_hold(self):
+    def test_full_countdown_hides_zero_and_preserves_theme(self):
         self.assertEqual([monitor.render(self.phase, self.config, 'M1', t)
                           for t in [10000, 12000, 13000, 71500, 72000, 90000]],
                          ['Theme A', 'Theme A\n1:00', 'Theme A\n0:59',
-                          'Theme A\n0:01', 'Theme A\n0:00', 'Theme A\n0:00'])
+                          'Theme A\n0:01', 'Theme A', 'Theme A'])
+
+    def test_expired_countdown_only_is_blank(self):
+        for now in [72000, 90000]:
+            self.assertEqual(monitor.render(self.phase, self.config, 'M4', now), '')
 
     def test_two_minutes_video_and_different_monitor_messages(self):
         self.config['scenes']['scene']['timer']['durationMs'] = 120000
@@ -99,7 +103,7 @@ class AutomaticAxisTests(unittest.TestCase):
         for axis, question_slots in [('x', [0, 2]), ('y', [1, 3])]:
             self.phase['field']['axis'] = axis
             for now, text in [(0, 'Question?'), (4999, 'Question?'), (5000, '5'),
-                              (6000, '4'), (9000, '1'), (10000, '0'), (12000, '0')]:
+                              (6000, '4'), (9000, '1'), (10000, ''), (12000, '')]:
                 with self.subTest(axis=axis, now=now):
                     result = self.outputs(now)
                     self.assertEqual([result[i] for i in question_slots], [text, text])

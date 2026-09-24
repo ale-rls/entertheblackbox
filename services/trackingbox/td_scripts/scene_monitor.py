@@ -37,6 +37,8 @@ def render(phase, config, monitor, now_ms):
         if now_ms < start + offset:
             return message
         remaining = max(0, math.ceil((start + offset + duration - now_ms) / 1000))
+        if remaining == 0:
+            return message
         clock = '{}:{:02d}'.format(remaining // 60, remaining % 60)
         return message + '\n' + clock if message else clock
 
@@ -66,7 +68,7 @@ def render(phase, config, monitor, now_ms):
         if deadline is not None:
             remaining = max(0, math.ceil((deadline - now_ms) / 1000))
             if remaining <= 5:
-                return str(remaining)
+                return str(remaining) if remaining > 0 else ''
         return phase.get('text', '')
     if mode == 'labels':
         labels = _labels(phase)

@@ -18,15 +18,15 @@ branch, or `main` for a shared timeline). Passing `absTime.frame` causes the
 expression to evaluate every frame, even when no new cue arrives.
 
 For a `position-question`, the monitor displays `payload.phase.text`, then
-5, 4, 3, 2, 1, 0 during the final five seconds before
-`payload.phase.deadlineAt`. Zero remains during the result freeze; the next
-non-question phase clears the monitor. Other phase kinds show blank text.
+5, 4, 3, 2, 1 during the final five seconds before
+`payload.phase.deadlineAt`. At the deadline the countdown clears and stays
+blank during the result freeze; zero is never displayed. Other phase kinds show blank text.
 Existing side-label monitors continue using the `labels` table.
 
 Keep the TouchDesigner computer clock synchronized: the helper compares local
 wall-clock time to the server's absolute deadline. Reconnect snapshots restore
 the current question and deadline. During an outage the receiver holds its last
-phase, so this monitor counts down to zero until reconnection. Monitor
+phase, so this monitor finishes its countdown and stays blank until reconnection. Monitor
 `cue_status` for connection health.
 
 For optional one-shot triggers, put the question text in the phase's
@@ -86,7 +86,7 @@ an example, not a verified venue layout: identify the red and blue floor axes,
 then record which physical monitors correspond to each minimum and maximum.
 In `axis-auto` mode, the voting axis keeps its endpoint labels while both
 monitors on the other axis display the question, then the final five-second
-countdown (holding zero during the result freeze). Changing from x to y voting
+countdown (blank during the result freeze). Changing from x to y voting
 automatically swaps these roles; endpoint labels remain visible throughout
 the countdown. For four-quadrant questions both axes vote, so all four outputs
 show endpoint labels. Non-question and polygon fields are blank in this mode
@@ -109,15 +109,15 @@ message is supplied. Only the monitors listed in `timer.monitors` receive it.
 A timer works with narration, video, or any other phase carrying `startedAt`.
 It displays `m:ss` for its entire configured duration. `offsetMs` delays the
 start relative to the server's phase start, for example until an instruction
-finishes. Before that offset, only the message is shown. The timer clamps to
-`0:00` and stays there until the phase changes. It does not advance the show,
+finishes. Before that offset, only the message is shown. At expiry the timer disappears; neither `0` nor `0:00` is displayed.
+Any static scene message remains until the phase changes. It does not advance the show,
 open the curtain, or wait for audio completion automatically.
 
-Set the show phase duration to at least `offsetMs + durationMs` plus a visible
-zero hold (for example 1000 ms). Otherwise the next phase can replace the timer
-before zero is visible. Rehearse the hold and next phase timing with the curtain
-operators. The preparation zero is the opening signal; the performance zero is
-the closing signal. These are separate scenes with separate phase IDs.
+Set the show phase duration to at least `offsetMs + durationMs` to let the countdown finish. An optional
+short hold after expiry makes its disappearance visible before the next scene.
+Rehearse the transition with the curtain operators: the preparation timer
+disappearing after `0:01` is the opening signal; the performance timer
+disappearing is the closing signal. These are separate scenes with separate phase IDs.
 
 Choose **one authoritative timeline** for all four monitor outputs using
 `monitor_config.timeline`. All configured scenes must run on that timeline.
@@ -133,7 +133,7 @@ synchronize the Studio graph for you.
 No custom one-shot cue callback is needed. The renderer reads current phase
 state each frame. Snapshot reconnects recover the original `startedAt`, so a
 reconnect does not restart the timer. During a connection outage it continues
-from the last received phase and holds at zero; check `cue_status` before
+from the last received phase and hides the timer at expiry; check `cue_status` before
 following a curtain signal. Missing timeline state clears the outputs. Invalid
 configuration displays `MONITOR CONFIG ERROR`; correct it before the show.
 
@@ -147,8 +147,8 @@ configuration displays `MONITOR CONFIG ERROR`; correct it before the show.
   scene messages and are not inferred from spoken instructions.
 - Trigger the theme scene: four different themes, each with the same full
   one-minute clock. Check text wrapping from the audience position.
-- Trigger preparation and performance: two minutes then one minute, visible
-  zero holds, themes cleared, and the agreed curtain actions at zero.
+- Trigger preparation and performance: two minutes then one minute, no zero displayed,
+  themes cleared, and the agreed curtain actions when the timer disappears.
 - Restart the receiver halfway through a timer: the remaining time should
   recover, not return to the full duration. Reset the show and check blanking.
 - Run the group audio paths together and check their instructions against the

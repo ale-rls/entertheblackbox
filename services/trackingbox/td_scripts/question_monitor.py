@@ -11,7 +11,7 @@ def display_text(phase, now_ms, countdown_seconds=5):
     if deadline is not None:
         remaining = max(0, math.ceil((deadline - now_ms) / 1000))
         if remaining <= countdown_seconds:
-            return str(remaining)
+            return str(remaining) if remaining > 0 else ''
     return phase.get('text', '')
 
 
