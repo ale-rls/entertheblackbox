@@ -176,3 +176,22 @@ it("does not resume the next audible scene until its registration finishes", asy
   await act(async () => resolve({ ok: true, json: async () => ({ streamUrl }) }));
   expect(play).toHaveBeenCalledTimes(2);
 });
+
+
+it("automatically starts Icecast once and offers a manual fallback when blocked", async () => {
+  play.mockRejectedValueOnce(new DOMException("Gesture required", "NotAllowedError"));
+  await act(async () => root.render(<PhoneAudio autoStart participantLease="lease-one" />));
+  expect(play).toHaveBeenCalledTimes(1);
+  expect(host.querySelector("button")?.textContent).toBe("Resume headphones");
+  await act(async () => root.render(<PhoneAudio autoStart participantLease="lease-two" />));
+  expect(play).toHaveBeenCalledTimes(1);
+  await start();
+  expect(play).toHaveBeenCalledTimes(2);
+});
+
+it("defers automatic Icecast playback until the scene is active", async () => {
+  await act(async () => root.render(<PhoneAudio autoStart active={false} participantLease="lease-one" />));
+  expect(play).not.toHaveBeenCalled();
+  await act(async () => root.render(<PhoneAudio autoStart active participantLease="lease-one" />));
+  expect(play).toHaveBeenCalledTimes(1);
+});

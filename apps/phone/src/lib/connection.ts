@@ -44,6 +44,7 @@ export class PhoneConnection {
   private ws: WebSocket | null = null;
   private stopped = false;
   private attempt = 0;
+  private retryNotBefore = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private endedSession: EndedPhoneSession | null = null;
@@ -82,7 +83,6 @@ export class PhoneConnection {
     this.ws = ws;
 
     ws.onopen = () => {
-      this.attempt = 0;
       this.options.onSocketOpen?.();
       const lease = loadLease(this.options.installationId, this.options.storage);
       this.send({
@@ -108,7 +108,15 @@ export class PhoneConnection {
         return;
       }
       if (parsed.message.t === "pong") this.clock.addSample(parsed.message.echoClientTime, this.now(), parsed.message.serverTime);
+      if (parsed.message.t === "join_rejected" && parsed.message.reason === "rate_limited") {
+        this.retryNotBefore = this.now() + Math.max(1000, parsed.message.retryAfterMs ?? 60_000);
+        this.options.onMessage(parsed.message);
+        ws.close();
+        return;
+      }
       if (parsed.message.t === "identity") {
+        this.attempt = 0;
+        this.retryNotBefore = 0;
         this.endedSession = {
           sessionId: parsed.message.sessionId,
           clientId: parsed.message.clientId,
@@ -147,7 +155,7 @@ export class PhoneConnection {
       const raw = Math.min(15_000, 500 * 2 ** this.attempt);
       this.attempt += 1;
       const jitterSpan = raw * 0.2;
-      const delay = Math.round(raw - jitterSpan / 2 + jitterSpan * this.rng());
+      const delay = Math.max(this.retryNotBefore - this.now(), Math.round(raw - jitterSpan / 2 + jitterSpan * this.rng()));
       this.reconnectTimer = setTimeout(() => this.connect(), delay);
     };
 

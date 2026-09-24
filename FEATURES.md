@@ -188,3 +188,6 @@ Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenari
 - Timing contract, participating apps, and stream limitations: [docs/show-clock.md](docs/show-clock.md).
 
 - Phones expose a collapsible **Show timing** monitor and send authenticated timing reports every 2 seconds. Synchronized Web Audio reports output-latency-compensated estimates; stream drift is explicitly unmeasured. Reports are checked against the current session, cue epoch and participant routing epoch.
+
+- Phone recovery uses verified participant throttling independently of shared Wi-Fi join limits; rate-limited connections retry automatically after the server delay.
+- Icecast phones attempt headphones automatically after registration when the scene permits audio, with a manual fallback if browser autoplay is blocked. Janus remains disabled.

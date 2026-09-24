@@ -197,20 +197,6 @@ export class AdmissionController {
       this.close(socket, 1008, "socket already joined");
       return;
     }
-    const rate = this.rateLimiter.consume(
-      requestIp(request, this.options.trustProxy ?? false),
-      this.now(),
-    );
-    if (!rate.allowed) {
-      this.send(socket, {
-        t: "join_rejected",
-        v: PROTOCOL_VERSION,
-        reason: "rate_limited",
-        ...(rate.retryAfterMs === undefined ? {} : { retryAfterMs: rate.retryAfterMs }),
-      });
-      return;
-    }
-
     const now = this.now();
     this.registry.pruneExpired(now);
     const lease = parsed.message.participantLease
@@ -230,6 +216,23 @@ export class AdmissionController {
     // watermark, invalidating every earlier lease the moment a show ends.
     const returningParticipant = knownLease !== undefined ||
       (lease !== null && (this.lastVisitEndedAt === null || lease.issuedAt > this.lastVisitEndedAt));
+    // Verified recovery uses its own bucket, never the audience's shared NAT IP.
+    const rate = this.rateLimiter.consume(
+      returningParticipant && lease
+        ? `participant:${lease.clientId}`
+        : `ip:${requestIp(request, this.options.trustProxy ?? false)}`,
+      now,
+    );
+    if (!rate.allowed) {
+      this.send(socket, {
+        t: "join_rejected",
+        v: PROTOCOL_VERSION,
+        reason: "rate_limited",
+        ...(rate.retryAfterMs === undefined ? {} : { retryAfterMs: rate.retryAfterMs }),
+      });
+      return;
+    }
+
     if (!returningParticipant) {
       if (!this.options.allowPublicJoin) {
         const grant = verifyJoinGrant(parsed.message.joinGrant ?? "", {
