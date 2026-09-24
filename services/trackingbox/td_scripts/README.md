@@ -3,7 +3,11 @@
 For monitor labels from the production show server, use
 [`td_receive_production.py`](td_receive_production.py) and follow
 [Production monitor labels](../../../docs/touchdesigner-production.md).
-It connects to `https://bb-frontend.enabler.space/api/cues` and automatically
+Then follow [the complete four-monitor setup](../../../docs/touchdesigner-question-monitor.md#four-monitor-scenes-and-full-countdowns)
+for automatic axis switching, themes, countdowns without zero, and pre-show
+join-screen selection.
+
+The receiver connects to `https://bb-frontend.enabler.space/api/cues` and automatically
 restores labels after reconnects and server redeploys.
 
 Drop-in Python for wiring TouchDesigner to a local `audience-tracker serve`

@@ -1,8 +1,20 @@
-# Question title and countdown monitor
+# TouchDesigner question, scene, and join monitors
 
 Set up the production cue receiver first using
 [touchdesigner-production.md](touchdesigner-production.md). Its `timelines`
 Table DAT contains the current phase payload for each show timeline.
+
+For the complete four-monitor setup, follow [Four-monitor scenes and full
+countdowns](#four-monitor-scenes-and-full-countdowns), then
+[Pre-show join display](#pre-show-join-display-on-all-four-monitors).
+That setup includes automatic voting-axis labels, the opposite-axis question
+and countdown, scene themes and timers, and lobby join-screen selection.
+All countdowns disappear at expiry without showing zero.
+
+The section below is the optional question-only setup; do not use its Text TOP
+binding on the same outputs as `scene_monitor`.
+
+## Question-only output
 
 1. Add a Text DAT named `question_monitor` beside `timelines`.
 2. Load [question_monitor.py](../services/trackingbox/td_scripts/question_monitor.py)
@@ -151,7 +163,8 @@ configuration displays `MONITOR CONFIG ERROR`; correct it before the show.
 - Trigger preparation and performance: two minutes then one minute, no zero displayed,
   themes cleared, and the agreed curtain actions when the timer disappears.
 - Restart the receiver halfway through a timer: the remaining time should
-  recover, not return to the full duration. Reset the show and check blanking.
+  recover, not return to the full duration. Reset the show and check that text
+  clears; with join-display routing enabled, the idle lobby shows the join screen.
 - Run the group audio paths together and check their instructions against the
   common timer, including any delayed timer start and the return to questions.
 
