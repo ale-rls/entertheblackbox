@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { AudioPlayback, playbackAction, playbackMessage, type PlaybackState } from "./lib/audio-playback";
 
 /** One native media element stays mounted across scene and WebSocket changes. */
-export function PhoneAudio({ transport = "icecast", participantLease, streamUrlOverride, suspended = false, active = true, sceneKey = "" }: { transport?: "icecast" | "janus"; participantLease: string; streamUrlOverride?: string | null; suspended?: boolean; active?: boolean; sceneKey?: string }) {
+export function PhoneAudio({ transport = "icecast", autoStart = false, participantLease, streamUrlOverride, suspended = false, active = true, sceneKey = "" }: { transport?: "icecast" | "janus"; autoStart?: boolean; participantLease: string; streamUrlOverride?: string | null; suspended?: boolean; active?: boolean; sceneKey?: string }) {
   const api = transport === "janus" ? "/api/audio-janus" : "/api/audio";
   const cue = JSON.stringify([sceneKey, active, suspended]);
   const [readiness, setReadiness] = useState({ cue, ready: false });
@@ -91,6 +91,8 @@ export function PhoneAudio({ transport = "icecast", participantLease, streamUrlO
     playback.setSuspended(pauseForScene);
     player.current = playback;
     setState("ready");
+    // One initial attempt only; explicit pause and browser blocking stay authoritative.
+    if (autoStart && transport === "icecast") playback.play();
     const visible = () => { if (!document.hidden) playback.foreground(); };
     document.addEventListener("visibilitychange", visible);
     window.addEventListener("pageshow", playback.foreground);
