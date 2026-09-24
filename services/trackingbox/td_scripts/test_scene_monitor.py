@@ -82,5 +82,50 @@ class SceneMonitorTests(unittest.TestCase):
             self.assertEqual(monitor.text('M1', 3), 'MONITOR CONFIG ERROR')
 
 
+class AutomaticAxisTests(unittest.TestCase):
+    def setUp(self):
+        self.config = {'monitors': {name: {'mode': 'axis-auto', 'slot': slot}
+                       for name, slot in zip(['M1', 'M2', 'M3', 'M4'],
+                                             ['y_min', 'x_min', 'y_max', 'x_max'])}}
+        self.phase = {'id': 'q', 'kind': 'position-question', 'text': 'Question?',
+                      'deadlineAt': 10000, 'field': {'type': 'two-quadrant', 'axis': 'x',
+                      'labels': {'minLabel': 'Low', 'maxLabel': 'High'}}}
+
+    def outputs(self, now):
+        return [monitor.render(self.phase, self.config, m, now)
+                for m in ['M1', 'M2', 'M3', 'M4']]
+
+    def test_x_then_y_swap_question_countdown_and_keep_extremes(self):
+        for axis, question_slots in [('x', [0, 2]), ('y', [1, 3])]:
+            self.phase['field']['axis'] = axis
+            for now, text in [(0, 'Question?'), (4999, 'Question?'), (5000, '5'),
+                              (6000, '4'), (9000, '1'), (10000, '0'), (12000, '0')]:
+                with self.subTest(axis=axis, now=now):
+                    result = self.outputs(now)
+                    self.assertEqual([result[i] for i in question_slots], [text, text])
+                    self.assertEqual([v for i, v in enumerate(result) if i not in question_slots],
+                                     ['Low', 'High'])
+
+    def test_no_deadline_clearing_four_axis_and_scene_override(self):
+        self.phase['deadlineAt'] = None
+        self.assertEqual(self.outputs(50000), ['Question?', 'Low', 'Question?', 'High'])
+        self.phase['kind'] = 'narration'
+        self.assertEqual(self.outputs(0), ['', '', '', ''])
+        self.phase['kind'] = 'position-question'
+        self.phase['field'] = {'type': 'four-quadrant',
+                              'xAxis': {'minLabel': 'Left', 'maxLabel': 'Right'},
+                              'yAxis': {'minLabel': 'Top', 'maxLabel': 'Bottom'}}
+        self.assertEqual(self.outputs(0), ['Top', 'Left', 'Bottom', 'Right'])
+        self.phase['field'] = {'type': 'polygon-zones', 'zones': []}
+        self.assertEqual(self.outputs(0), ['', '', '', ''])
+        self.config['scenes'] = {'q': {'messages': {'M1': 'Theme'}}}
+        self.assertEqual(self.outputs(0), ['Theme', '', '', ''])
+
+    def test_invalid_physical_slot_is_an_error(self):
+        self.config['monitors']['M1']['slot'] = 'centre'
+        with self.assertRaises(ValueError):
+            self.outputs(0)
+
+
 if __name__ == '__main__':
     unittest.main()

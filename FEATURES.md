@@ -129,7 +129,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 ## External show control
 
-- Phase-driven TouchDesigner monitor messages, axis/zone routing, and full scene countdowns with reconnect recovery — `services/trackingbox/td_scripts/scene_monitor.py`, `docs/touchdesigner-question-monitor.md`
+- Phase-driven TouchDesigner monitor messages, automatic voting-axis labels/opposite-axis question countdown, axis/zone routing, and full scene countdowns with reconnect recovery — `services/trackingbox/td_scripts/scene_monitor.py`, `docs/touchdesigner-question-monitor.md`
 - Authenticated SSE cue feed (TouchDesigner/other receivers) — `cues/feed.ts`, `GET /api/cues`, `docs/touchdesigner-production.md`, `docs/touchdesigner-question-monitor.md`
 - Per-phase outgoing cue authoring — `packages/scenario`, Studio
 

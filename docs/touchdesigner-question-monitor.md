@@ -58,10 +58,10 @@ Text TOP binding; keep the same production receiver, `cue_execute`, and
 {
   "timeline": "ki",
   "monitors": {
-    "M1": {"mode": "labels", "slots": ["y_min"]},
-    "M2": {"mode": "labels", "slots": ["x_min"]},
-    "M3": {"mode": "labels", "slots": ["y_max"]},
-    "M4": {"mode": "labels", "slots": ["x_max"]}
+    "M1": {"mode": "axis-auto", "slot": "y_min"},
+    "M2": {"mode": "axis-auto", "slot": "x_min"},
+    "M3": {"mode": "axis-auto", "slot": "y_max"},
+    "M4": {"mode": "axis-auto", "slot": "x_max"}
   },
   "scenes": {
     "REPLACE_WITH_SELECTION_PHASE_ID": {
@@ -84,11 +84,18 @@ Replace all placeholder phase IDs with exact `phase.id` values from Studio or
 Keep production configuration private and out of git. The mapping above is
 an example, not a verified venue layout: identify the red and blue floor axes,
 then record which physical monitors correspond to each minimum and maximum.
-The renderer clears inactive axis slots automatically. For polygon/circle
-labels, put the actual zone IDs in `slots`. For text independent of field
+In `axis-auto` mode, the voting axis keeps its endpoint labels while both
+monitors on the other axis display the question, then the final five-second
+countdown (holding zero during the result freeze). Changing from x to y voting
+automatically swaps these roles; endpoint labels remain visible throughout
+the countdown. For four-quadrant questions both axes vote, so all four outputs
+show endpoint labels. Non-question and polygon fields are blank in this mode
+unless overridden by a configured scene. For polygon/circle
+labels, use `mode: "labels"` and put the actual zone IDs in `slots`. For text independent of field
 geometry, use a scene's `messages` mapping instead.
 
-Outside configured scenes, `mode: "labels"` displays the selected field slots;
+Outside configured scenes, `mode: "axis-auto"` uses one physical axis `slot`
+and applies the automatic behavior above. `mode: "labels"` displays the selected field slots;
 `mode: "question"` displays question text then the final five seconds;
 `mode: "blank"` clears the output. A question output can be another Text TOP
 using the original helper, or one of the four monitors assigned question mode.
@@ -133,7 +140,9 @@ configuration displays `MONITOR CONFIG ERROR`; correct it before the show.
 ### Venue verification
 
 - Trigger one red-axis and one blue-axis question. Check the actual min/max
-  texts at each end, including which two monitors go blank.
+  texts at each end, including the question on both opposite-axis monitors. Wait through the last
+  five seconds and confirm only those two outputs switch to the countdown,
+  then change the voting axis and verify that the roles swap.
 - Check any circle-zone messages explicitly; they need their own slots or
   scene messages and are not inferred from spoken instructions.
 - Trigger the theme scene: four different themes, each with the same full

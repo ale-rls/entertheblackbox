@@ -42,6 +42,23 @@ def render(phase, config, monitor, now_ms):
 
     setting = config.get('monitors', {}).get(monitor, {})
     mode = setting.get('mode', 'blank')
+    if mode == 'axis-auto':
+        slot = setting.get('slot')
+        if slot not in ('x_min', 'x_max', 'y_min', 'y_max'):
+            raise ValueError('axis-auto requires one physical axis slot')
+        if phase.get('kind') != 'position-question':
+            return ''
+        field = phase.get('field', {})
+        if field.get('type') == 'two-quadrant':
+            if slot[0] == field.get('axis', 'x'):
+                return _labels(phase).get(slot, '')
+            mode = 'question'
+        elif field.get('type') == 'four-quadrant':
+            # Both axes vote: all four monitors retain their endpoint labels.
+            return _labels(phase).get(slot, '')
+        else:
+            # Polygon/circle fields need explicit scene or zone assignments.
+            return ''
     if mode == 'question':
         if phase.get('kind') != 'position-question':
             return ''

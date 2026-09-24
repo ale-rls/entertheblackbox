@@ -72,6 +72,8 @@ one- or two-minute scene countdowns, follow
 [Question and scene monitor setup](../../../docs/touchdesigner-question-monitor.md).
 Load `question_monitor.py` for the original question-only output, or
 `scene_monitor.py` plus a private `monitor_config` Text DAT for configurable
-four-monitor scenes. Both read the production receiver's `timelines` state;
+four-monitor scenes. The `axis-auto` mode keeps voting-axis endpoint labels
+visible and puts question text/final-five-second countdown on the opposite
+axis, swapping roles automatically when the question axis changes. Both read the production receiver's `timelines` state;
 local tracking counts do not drive the text. Scene timers restore from the
 server phase start on reconnect and require one authoritative timeline.
