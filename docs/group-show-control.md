@@ -73,3 +73,7 @@ Use `bootId` plus `sequence` for deduplication. Treat `cue` as a one-shot trigge
 
 See [Production monitor labels](touchdesigner-production.md) for the ready-to-use
 Python receiver and Text TOP expressions.
+
+For automatic axis labels/opposite-axis questions, full scene timers, and
+pre-show join-screen routing, continue with
+[the four-monitor setup](touchdesigner-question-monitor.md#four-monitor-scenes-and-full-countdowns).

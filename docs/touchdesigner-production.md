@@ -29,6 +29,18 @@ receiver Text DAT, run it again to reload the full source. Do not use the old
 `mod('td_receive_production')` callbacks alongside this loader.
 Network reads run in a background thread; only the frame callback updates DATs.
 
+For the complete four-monitor setup, continue with
+[Question, scene, and join monitors](touchdesigner-question-monitor.md#four-monitor-scenes-and-full-countdowns).
+It uses the receiver above with `scene_monitor.py` and a private `monitor_config`
+DAT for automatic axis switching, countdowns without zero, scene messages, and
+pre-show join-screen routing. Use that guide's Text TOP and Switch TOP bindings.
+
+### Optional labels-only outputs
+
+The expressions below are for fixed labels-only outputs; they do not switch
+the opposite axis to question text or countdowns. Do not use them in place of
+`scene_monitor.text` for the complete four-monitor setup.
+
 The labels table contains `key, timeline, slot, text, phase_id`.
 For a horizontal spectrum on timeline `ki`, use these Python expressions in
 the Text TOPs driving the two monitors:
@@ -69,8 +81,8 @@ Expect an immediate `data:` snapshot, phase events when the show advances,
 and heartbeat comments every 15 seconds. A 401 means the token is missing or
 incorrect. Reconnect after redeploy should produce a new boot ID.
 
-For a monitor that displays the question title and switches to a final
-five-second countdown, see [Question title and countdown monitor](touchdesigner-question-monitor.md).
+For all monitor output modes and the venue verification checklist, see
+[Question, scene, and join monitors](touchdesigner-question-monitor.md).
 
 ## Studio device preview
 

@@ -3,7 +3,11 @@
 For monitor labels from the production show server, use
 [`td_receive_production.py`](td_receive_production.py) and follow
 [Production monitor labels](../../../docs/touchdesigner-production.md).
-It connects to `https://bb-frontend.enabler.space/api/cues` and automatically
+Then follow [the complete four-monitor setup](../../../docs/touchdesigner-question-monitor.md#four-monitor-scenes-and-full-countdowns)
+for automatic axis switching, themes, countdowns without zero, and pre-show
+join-screen selection.
+
+The receiver connects to `https://bb-frontend.enabler.space/api/cues` and automatically
 restores labels after reconnects and server redeploys.
 
 Drop-in Python for wiring TouchDesigner to a local `audience-tracker serve`
@@ -64,3 +68,20 @@ For top-down floor positions, calibrate the venue camera and use `floor_x` /
 [Floor Projection Calibration](../docs/floor_projection.md).
 
 For named floor regions and counts, see [Floor Zones](../docs/zones.md).
+
+## Question and scene monitor text
+
+For question titles, axis/zone labels, four independent messages, and full
+one- or two-minute scene countdowns, follow
+[Question and scene monitor setup](../../../docs/touchdesigner-question-monitor.md).
+Load `question_monitor.py` for the original question-only output, or
+`scene_monitor.py` plus a private `monitor_config` Text DAT for configurable
+four-monitor scenes. The `axis-auto` mode keeps voting-axis endpoint labels
+visible and puts question text/final-five-second countdown on the opposite
+axis, swapping roles automatically when the question axis changes. Both read the production receiver's `timelines` state;
+local tracking counts do not drive the text. Scene timers restore from the
+server phase start on reconnect and require one authoritative timeline.
+
+For pre-show joining, the same guide describes a shared live join-display TOP
+and `scene_monitor.output_index` Switch TOP binding. This selects the join
+screen during the main idle phase and text outputs when the show starts.

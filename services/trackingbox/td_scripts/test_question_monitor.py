@@ -7,7 +7,7 @@ class QuestionMonitorTests(unittest.TestCase):
         phase = {'kind': 'position-question', 'text': 'Question?', 'deadlineAt': 25000}
         times = [0, 19999, 20000, 21000, 24000, 25000, 30000]
         self.assertEqual([display_text(phase, t) for t in times],
-                         ['Question?', 'Question?', '5', '4', '1', '0', '0'])
+                         ['Question?', 'Question?', '5', '4', '1', '', ''])
 
     def test_reconnect_uses_current_deadline(self):
         phase = {'kind': 'position-question', 'text': 'Restored', 'deadlineAt': 25000}
