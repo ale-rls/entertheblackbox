@@ -3,7 +3,7 @@
 This is the production Compose entry point for replacing the current
 `enter-the-blackbox` Coolify Git resource with this canonical repository. It
 deploys the installation server and its four browser bundles, PocketBase, the
-personal-audio stack, Janus audio services, and the low-latency realtime cursor
+personal-audio stack and the low-latency realtime cursor
 relay as one Coolify Compose resource.
 
 The Compose project name, public service names, and volume names deliberately
@@ -117,11 +117,6 @@ or insecure phone-audio settings again at startup.
 | `BRIDGE_TOKEN` | runtime secret | long random server-to-bridge bearer token |
 | `ICECAST_SOURCE_PASSWORD` | runtime secret | unique long random value |
 | `ICECAST_ADMIN_PASSWORD` | runtime secret | different long random value |
-| `JANUS_PUBLIC_URL` | runtime | public `janus-web` HTTPS URL |
-| `JANUS_PUBLIC_IP` | runtime | phone-reachable host IPv4 address |
-| `JANUS_ADMIN_KEY` | runtime secret | unique random 32–128 letters/digits/hyphens |
-| `JANUS_BRIDGE_TOKEN` | runtime secret | different random secret, at least 32 characters |
-| `JANUS_LISTENER_PIN` | runtime secret | 8–64 letters/digits for shared diagnostics |
 | `POCKETBASE_ADMIN_EMAIL` | runtime secret | existing PocketBase superuser email |
 | `POCKETBASE_ADMIN_PASSWORD` | runtime secret | existing PocketBase superuser password |
 
@@ -209,21 +204,17 @@ bridge needs to move closer to the audience. See
 for the recommended Tailscale-based setup and the Admin control that switches
 to it live, with no redeploy of this stack.
 
-## Janus audio in this stack
+## Janus disabled
 
-The same application now includes `janus`, `janus-web`, `janus-liquidsoap` and
-`janus-bridge`. Production cues reach `http://janus-bridge:8090` over the default
-Compose network. No separate application or public control-bridge domain is
-needed. `/phone/` stays on Icecast; `/phone-janus/` uses Janus.
+Janus services have been removed from the production Compose configuration.
+The frontend's Janus settings are explicitly empty, so saved Coolify variables
+cannot enable Janus polling, cue uploads or registration. Icecast remains active.
+Use `/phone/`; set `PHONE_JOIN_BASE_URL` back to the frontend URL ending in
+`/phone/` if it was changed during the trial.
 
-Set `JANUS_PUBLIC_URL`, `JANUS_PUBLIC_IP`, `JANUS_ADMIN_KEY`, `JANUS_BRIDGE_TOKEN`
-and `JANUS_LISTENER_PIN` in the existing Coolify environment editor. Optional
-`JANUS_PLAYERS` defaults to 30 and `JANUS_ICE_SERVERS` to `[]`. Assign only
-`janus-web` a public HTTPS domain (container port 80), allow host UDP 20000–20200,
-and click Deploy. See the [Janus UI setup guide](../../services/audio-janus/README.md#deploy-using-the-existing-coolify-application)
-for exact values, phone checks and migration from the removed separate setup.
-
-Existing service and volume names are retained; new audio volumes are
-`janus-audio` and `janus-beds`. Never assign domains to `janus-bridge` or
-`janus-liquidsoap`. Remove any old `JANUS_BRIDGE_URL` override; Compose wires it
-internally. Restart/deploy actions now operate in this same application.
+Stop any existing `janus-liquidsoap`, `janus-bridge`, `janus-web` and `janus`
+containers in Coolify before redeploying. Removed services can remain as orphan
+containers depending on deployment cleanup; verify all four are stopped after
+redeploy. Keep `liquidsoap`, `bridge`, `icecast` and their volumes. The unused
+`janus-audio` and `janus-beds` volumes are retained to preserve data. Remove the
+old Janus domain assignment if Coolify still lists it.

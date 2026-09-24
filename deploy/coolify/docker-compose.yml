@@ -46,11 +46,11 @@ services:
       AUDIO_BRIDGE_URL: http://bridge:8090
       AUDIO_BRIDGE_TOKEN: ${BRIDGE_TOKEN:?set in Coolify}
       AUDIO_PUBLIC_URL: ${PUBLIC_STREAM_BASE:?set to the public audio HTTPS URL}
-      # Private control path on this stack's network; phones use janus-web.
-      JANUS_BRIDGE_URL: http://janus-bridge:8090
-      JANUS_BRIDGE_TOKEN: ${JANUS_BRIDGE_TOKEN:?set in Coolify}
-      JANUS_PUBLIC_URL: ${JANUS_PUBLIC_URL:?set to the public Janus HTTPS URL}
-      JANUS_ICE_SERVERS: ${JANUS_ICE_SERVERS:-[]}
+      # Janus disabled: explicit empty values override saved deployment settings.
+      JANUS_BRIDGE_URL: ""
+      JANUS_BRIDGE_TOKEN: ""
+      JANUS_PUBLIC_URL: ""
+      JANUS_ICE_SERVERS: "[]"
       TRACKINGBOX_URL: ${TRACKINGBOX_URL:-}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:80/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
@@ -178,75 +178,10 @@ services:
       retries: 8
       start_period: 20s
 
-  # Janus uses the same network and production cues, with independent audio volumes.
-  janus:
-    build:
-      context: ./services/audio-janus
-      target: janus
-    restart: unless-stopped
-    environment:
-      JANUS_ADMIN_KEY: ${JANUS_ADMIN_KEY:?set a management secret in Coolify}
-      JANUS_PUBLIC_IP: ${JANUS_PUBLIC_IP:?set the phone-reachable host IPv4 address in Coolify}
-      JANUS_LISTENER_PIN: ${JANUS_LISTENER_PIN:?set a listener PIN in Coolify}
-    ports:
-      - "20000-20200:20000-20200/udp"
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/janus/info', timeout=3)"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  janus-web:
-    build:
-      context: ./services/audio-janus
-      target: web
-    restart: unless-stopped
-    depends_on:
-      janus:
-        condition: service_healthy
-    expose:
-      - "80"
-  janus-liquidsoap:
-    build:
-      context: ./services/audio-janus/personal
-      dockerfile: liquidsoap.Dockerfile
-    restart: unless-stopped
-    environment:
-      PLAYERS: ${JANUS_PLAYERS:-30}
-    volumes:
-      - janus-audio:/audio:ro
-      - janus-beds:/beds
-    depends_on:
-      janus:
-        condition: service_healthy
-  janus-bridge:
-    build:
-      context: ./services
-      dockerfile: audio-janus/personal/Dockerfile
-    restart: unless-stopped
-    environment:
-      LIQUIDSOAP_HOST: janus-liquidsoap
-      JANUS_URL: http://janus:8088/janus
-      PLAYERS: ${JANUS_PLAYERS:-30}
-      BRIDGE_TOKEN: ${JANUS_BRIDGE_TOKEN:?set a bridge secret in Coolify}
-      JANUS_ADMIN_KEY: ${JANUS_ADMIN_KEY:?set a management secret in Coolify}
-    volumes:
-      - janus-audio:/audio
-      - janus-beds:/beds:ro
-    expose:
-      - "8090"
-    depends_on:
-      janus:
-        condition: service_healthy
-      janus-liquidsoap:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
 
 volumes:
   pocketbase-data:
   audio-data:
+  # Retained for data preservation; no Janus services are started.
   janus-audio:
   janus-beds:
