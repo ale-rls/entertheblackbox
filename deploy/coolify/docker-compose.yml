@@ -46,6 +46,11 @@ services:
       AUDIO_BRIDGE_URL: http://bridge:8090
       AUDIO_BRIDGE_TOKEN: ${BRIDGE_TOKEN:?set in Coolify}
       AUDIO_PUBLIC_URL: ${PUBLIC_STREAM_BASE:?set to the public audio HTTPS URL}
+      # Optional independent Janus deployment. Leave all three empty to disable.
+      JANUS_BRIDGE_URL: ${JANUS_BRIDGE_URL:-}
+      JANUS_BRIDGE_TOKEN: ${JANUS_BRIDGE_TOKEN:-}
+      JANUS_PUBLIC_URL: ${JANUS_PUBLIC_URL:-}
+      JANUS_ICE_SERVERS: ${JANUS_ICE_SERVERS:-[]}
       TRACKINGBOX_URL: ${TRACKINGBOX_URL:-}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:80/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]

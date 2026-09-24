@@ -203,3 +203,12 @@ bridge needs to move closer to the audience. See
 [`services/audio/README.md`](../../services/audio/README.md#keeping-appsserver-remote-while-audio-runs-at-the-venue)
 for the recommended Tailscale-based setup and the Admin control that switches
 to it live, with no redeploy of this stack.
+
+## Optional independent Janus phone audio
+
+Deploy the separate [Janus Coolify application](../../services/audio-janus/README.md#deploy-from-coolify-without-terminal-commands)
+for `/phone-janus/`. This show Compose file forwards `JANUS_BRIDGE_URL`,
+`JANUS_BRIDGE_TOKEN`, `JANUS_PUBLIC_URL` and `JANUS_ICE_SERVERS`; set them in the
+Coolify environment editor and redeploy. Leave the first three empty for
+Icecast only. No custom startup command or Compose profile is required. The
+existing audio services and volumes remain independent.

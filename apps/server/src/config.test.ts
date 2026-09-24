@@ -47,6 +47,11 @@ describe("production secret configuration", () => {
     expect(loadConfig({ TRACKINGBOX_URL: "" }).trackingBoxUrl).toBeNull();
   });
 
+  it("keeps Janus disabled when optional Compose settings are empty", () => {
+    expect(loadConfig({ JANUS_BRIDGE_URL: "", JANUS_BRIDGE_TOKEN: "", JANUS_PUBLIC_URL: "", JANUS_ICE_SERVERS: "[]" }).janusAudio).toBeUndefined();
+    expect(() => loadConfig({ JANUS_BRIDGE_URL: "https://control.example", JANUS_BRIDGE_TOKEN: "", JANUS_PUBLIC_URL: "https://janus.example" })).toThrow(ConfigError);
+  });
+
   it("requires a token and phone-reachable public URL with the audio bridge", () => {
     expect(() => loadConfig({ AUDIO_BRIDGE_URL: "http://bridge:8090" })).toThrow(ConfigError);
     expect(() => loadConfig({ AUDIO_BRIDGE_TOKEN: "secret" })).toThrow(ConfigError);

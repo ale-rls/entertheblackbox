@@ -31,7 +31,7 @@ const envSchema = z.object({
   // Absent by default: without it the server behaves exactly as it did for
   // the Frankfurt run, with the phone trackpad as the only position source.
   JANUS_BRIDGE_URL: optionalUrl,
-  JANUS_BRIDGE_TOKEN: z.string().min(32).optional(),
+  JANUS_BRIDGE_TOKEN: z.preprocess((input) => input === "" ? undefined : input, z.string().min(32).optional()),
   JANUS_PUBLIC_URL: optionalUrl,
   JANUS_ICE_SERVERS: z.string().default("[]"),
   AUDIO_BRIDGE_URL: z.string().url().optional(),

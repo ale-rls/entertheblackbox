@@ -1,17 +1,18 @@
 name: blackbox-janus
+
+# Coolify Git deployment: repository-root build contexts; no host HTTP ports.
+# Assign HTTPS domains to web:80 and bridge:8090. Keep Janus itself private.
 services:
   janus:
     build:
-      context: .
+      context: ./services/audio-janus
       target: janus
     restart: unless-stopped
     environment:
-      JANUS_ADMIN_KEY: ${JANUS_ADMIN_KEY:?set a management secret in .env}
-      JANUS_PUBLIC_IP: ${JANUS_PUBLIC_IP:?set the phone-reachable host IPv4 address in .env}
-      JANUS_LISTENER_PIN: ${JANUS_LISTENER_PIN:?set a listener PIN in .env}
+      JANUS_ADMIN_KEY: ${JANUS_ADMIN_KEY:?set a management secret in Coolify}
+      JANUS_PUBLIC_IP: ${JANUS_PUBLIC_IP:?set the phone-reachable host IPv4 address in Coolify}
+      JANUS_LISTENER_PIN: ${JANUS_LISTENER_PIN:?set a listener PIN in Coolify}
     ports:
-      # RTP ingest is local-only by default. Do not publish it to the internet.
-      - "127.0.0.1:${JANUS_INPUT_PORT:-9900}:5002/udp"
       - "20000-20200:20000-20200/udp"
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/janus/info', timeout=3)"]
@@ -20,18 +21,18 @@ services:
       retries: 5
   web:
     build:
-      context: .
+      context: ./services/audio-janus
       target: web
     restart: unless-stopped
     depends_on:
       janus:
         condition: service_healthy
-    ports:
-      - "${JANUS_WEB_BIND:-127.0.0.1}:${JANUS_WEB_PORT:-8400}:80"
+    expose:
+      - "80"
   tone:
     profiles: [test-tone]
     build:
-      context: .
+      context: ./services/audio-janus
       target: tone
     restart: unless-stopped
     depends_on:
@@ -40,7 +41,7 @@ services:
 
   liquidsoap:
     build:
-      context: ./personal
+      context: ./services/audio-janus/personal
       dockerfile: liquidsoap.Dockerfile
     restart: unless-stopped
     environment:
@@ -53,18 +54,18 @@ services:
         condition: service_healthy
   bridge:
     build:
-      context: ..
+      context: ./services
       dockerfile: audio-janus/personal/Dockerfile
     restart: unless-stopped
     environment:
       PLAYERS: ${JANUS_PLAYERS:-30}
-      BRIDGE_TOKEN: ${JANUS_BRIDGE_TOKEN:?set a bridge secret in .env}
-      JANUS_ADMIN_KEY: ${JANUS_ADMIN_KEY:?set a management secret in .env}
+      BRIDGE_TOKEN: ${JANUS_BRIDGE_TOKEN:?set a bridge secret in Coolify}
+      JANUS_ADMIN_KEY: ${JANUS_ADMIN_KEY:?set a management secret in Coolify}
     volumes:
       - janus-audio:/audio
       - janus-beds:/beds:ro
-    ports:
-      - "${JANUS_BRIDGE_BIND:-127.0.0.1}:${JANUS_BRIDGE_PORT:-8500}:8090"
+    expose:
+      - "8090"
     depends_on:
       janus:
         condition: service_healthy
