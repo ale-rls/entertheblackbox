@@ -47,6 +47,7 @@ services:
       AUDIO_BRIDGE_TOKEN: ${BRIDGE_TOKEN:?set in Coolify}
       AUDIO_PUBLIC_URL: ${PUBLIC_STREAM_BASE:?set to the public audio HTTPS URL}
       # Janus disabled: explicit empty values override saved deployment settings.
+      JANUS_ENABLED: "false"
       JANUS_BRIDGE_URL: ""
       JANUS_BRIDGE_TOKEN: ""
       JANUS_PUBLIC_URL: ""

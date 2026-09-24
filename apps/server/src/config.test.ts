@@ -85,3 +85,28 @@ describe("production secret configuration", () => {
     }
   });
 });
+
+
+describe("explicit Janus shutdown", () => {
+  it("ignores stale partial and invalid Janus settings while keeping Icecast", () => {
+    const env = {
+      JANUS_ENABLED: "false", JANUS_BRIDGE_TOKEN: "old", JANUS_PUBLIC_URL: "not-a-url",
+      JANUS_ICE_SERVERS: "invalid-json", AUDIO_BRIDGE_URL: "http://bridge:8090",
+      AUDIO_BRIDGE_TOKEN: "icecast-secret", AUDIO_PUBLIC_URL: "https://audio.example",
+      REQUIRE_PHONE_AUDIO: "true",
+    };
+    const config = loadConfig(env);
+    expect(config.janusAudio).toBeUndefined();
+    expect(config.audio?.url).toBe("http://bridge:8090");
+    expect(env.JANUS_BRIDGE_TOKEN).toBe("old");
+  });
+  it("still rejects partial settings when Janus is enabled", () => {
+    expect(() => loadConfig({ JANUS_ENABLED: "true", JANUS_BRIDGE_URL: "http://janus-bridge:8090" })).toThrow(ConfigError);
+    expect(() => loadConfig({ JANUS_ENABLED: "flase" })).toThrow(ConfigError);
+  });
+  it("does not count disabled Janus as required phone audio", () => {
+    expect(() => loadConfig({ JANUS_ENABLED: "false", REQUIRE_PHONE_AUDIO: "true",
+      JANUS_BRIDGE_URL: "http://janus-bridge:8090", JANUS_BRIDGE_TOKEN: "a".repeat(32),
+      JANUS_PUBLIC_URL: "https://janus.example" })).toThrow(ConfigError);
+  });
+});
