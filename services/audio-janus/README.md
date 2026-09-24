@@ -1,149 +1,93 @@
-# Independent Janus phone audio
+# Janus phone audio in the production stack
 
 `/phone-janus/` uses the same phone UI, admission, voting, subtitles and show clock
-as `/phone/`, with a separate WebRTC audio controller. `/phone/` continues to use
-Icecast. Both routes can participate in the same show. Use one route per phone:
-the routes share participant identity, and switching routes releases that
-participant's previous audio backend.
+as `/phone/`, with WebRTC audio. `/phone/` continues to use Icecast. Both routes
+participate in the same production show. Use one route per phone: the routes
+share participant identity, and switching routes releases that participant's
+previous audio backend.
 
-The Compose stack starts an independent bridge and Liquidsoap mixer by default. It does not change or connect to the existing `services/audio` deployment.
-The new bridge reuses its command/registry Python helpers at image build time.
+The production entry point is [`deploy/coolify/docker-compose.yml`](../../deploy/coolify/docker-compose.yml).
+Janus runs in that existing application and its default Docker network. There
+is no separate Janus Compose deployment or cross-application bridge URL.
 
 ```
-show server → Janus control bridge → independent Liquidsoap mix per participant
-                                                      ↓ PCM → Opus/RTP
-phone-janus ← WebRTC ← Janus private mount per participant
+production frontend → janus-bridge:8090 → janus-liquidsoap → Opus/RTP → janus
+phone-janus ← WebRTC media from janus
+phone-janus ↔ HTTPS signaling through janus-web
 ```
 
-## Deploy from Coolify without terminal commands
+The Janus mixer and media volumes are independent of the existing Icecast mixer
+and volumes. The bridge reuses command/registry Python helpers at image build
+time. Production cue selection and group membership come from the same show
+server that drives Icecast.
 
-Create a **separate Git application** for this repository using the Docker Compose
-build pack. Keep the Base Directory at `/` and set Docker Compose Location to
-`/services/audio-janus/docker-compose.coolify.yml`. The Janus, web, mixer and
-bridge services all start by default; no custom command or profile is needed.
-The test tone stays disabled.
+## Deploy using the existing Coolify application
 
-In this application's Environment Variables, set:
+1. Update the existing application's repository checkout to this change. Keep
+   Base Directory `/` and Compose Location `/deploy/coolify/docker-compose.yml`.
+   If the resource contains manually pasted Compose, replace it with this file.
+   Keep the existing domains and persistent volumes.
+2. Add the following runtime Environment Variables in that application:
 
-| Variable | Value |
-|---|---|
-| `JANUS_PUBLIC_IP` | Public IPv4 address of the host, reachable by phones |
-| `JANUS_ADMIN_KEY` | Unique random 32–128 character secret, letters/digits/hyphens |
-| `JANUS_BRIDGE_TOKEN` | Different random secret, at least 32 characters |
-| `JANUS_LISTENER_PIN` | 8–64 letters/digits for the optional shared test page |
-| `JANUS_PLAYERS` | Participant capacity, default `30` |
+   | Variable | Value |
+   |---|---|
+   | `JANUS_PUBLIC_URL` | HTTPS domain for `janus-web`, e.g. `https://janus.example.org` |
+   | `JANUS_PUBLIC_IP` | Host IPv4 address reachable by audience phones |
+   | `JANUS_ADMIN_KEY` | Unique random 32–128 character secret, letters/digits/hyphens |
+   | `JANUS_BRIDGE_TOKEN` | Different random secret, at least 32 characters |
+   | `JANUS_LISTENER_PIN` | 8–64 letters/digits for the optional shared listener |
+   | `JANUS_PLAYERS` | Participant capacity; default `30`, allowed 1–100 |
+   | `JANUS_ICE_SERVERS` | Default `[]`; configure TURN if needed |
 
-Use your password manager to generate the secrets. Set the domain for **web** to
-`https://janus.example.org` (port 80) and **bridge** to
-`https://janus-control.example.org:8090`. The `:8090` suffix selects the internal
-container port in Coolify; the resulting public control URL is
-`https://janus-control.example.org`. Do not assign domains to Janus or Liquidsoap.
-The bridge's control endpoints require the bearer token; do not add that token
-to a URL. For an entirely private control plane, use a reachable private network
-address instead of assigning the bridge a public domain.
+   Generate the secrets in a password manager. `JANUS_BRIDGE_URL` is already
+   fixed to `http://janus-bridge:8090` in Compose; remove any old external override
+   from the Coolify environment editor.
+3. Assign the domain from `JANUS_PUBLIC_URL` to **janus-web**, container port 80.
+   Point its DNS to this host. Do not assign public domains or host TCP ports to
+   `janus`, `janus-bridge` or `janus-liquidsoap`. The control bridge stays private.
+4. Allow host UDP **20000–20200** through the host/cloud firewall using its UI.
+   HTTPS carries signaling; the UDP ports carry the audio and must be reachable.
+5. Click **Deploy** in the existing application. No profiles or custom startup
+   commands are needed. The deployment builds the phone and Admin clients too.
+6. Open `/phone-janus/`, join and tap **Start headphones**. Use
+   `/admin/` → **Headphone streams** for music/soundcheck and
+   `/admin/?view=audio` for per-phone diagnostics. Optionally set
+   `PHONE_JOIN_BASE_URL` to the frontend HTTPS URL ending in `/phone-janus/`
+   to direct the show QR codes there.
 
-Allow inbound UDP **20000–20200** in the host/cloud firewall using its management
-UI. DNS for both domains must point to this host. Click **Deploy**. HTTPS carries
-signaling; the UDP ports must also be reachable for audio.
+All four added services (`janus`, `janus-web`, `janus-liquidsoap`, `janus-bridge`)
+appear in the same Coolify application for logs and restarts. The existing
+Icecast services and volumes retain their names. The frontend's startup does
+not wait for Janus health, so a Janus outage does not prevent Icecast startup;
+Janus failures appear in audio diagnostics. Required Janus variables must still
+be set for Compose to accept the configuration before deployment.
 
-In the **existing show application's** Environment Variables, set:
+The former separate Janus Compose definitions have been removed. If you already
+created a separate Janus application, stop it before deploying this version on
+the same host so it releases UDP 20000–20200. Do not delete the production
+PocketBase or Icecast volumes.
 
-```dotenv
-JANUS_BRIDGE_URL=https://janus-control.example.org
-JANUS_BRIDGE_TOKEN=<same secret as the Janus application>
-JANUS_PUBLIC_URL=https://janus.example.org
-JANUS_ICE_SERVERS=[]
-```
+## Network and capacity
 
-The updated `deploy/coolify/docker-compose.yml` passes these optional values to
-the show server. Leave them empty to keep Janus disabled. Redeploy the show
-application to load the configuration and the `/phone-janus/` client. Existing
-Icecast configuration and persistent volumes stay in place. If the resource uses
-a manually pasted Compose definition, update that definition from the repository
-as well.
+`JANUS_PUBLIC_IP` is advertised instead of the container address. Match UDP port
+mappings through NAT. Linux is the deployment target; container-VM networking
+on macOS/Windows requires separate reachability validation. Janus HTTP supports
+CORS when its domain differs from the phone UI. Use HTTPS for both.
 
-Open `/phone-janus/` on a phone and tap **Start headphones**; operate soundcheck
-and music from `/admin/`, and inspect `/admin/?view=audio`. Optionally change
-`PHONE_JOIN_BASE_URL` to the frontend URL ending in `/phone-janus/` for QR codes.
-Service logs and restart/deploy actions are in the separate Coolify application.
-
-See [Coolify's Docker Compose documentation](https://coolify.io/docs/applications/builds/docker-compose)
-for domain and environment configuration.
-
-## Run the personal backend from a terminal
-
-On a Linux venue host with Docker Compose:
-
-```sh
-cd services/audio-janus
-cp .env.example .env
-# Set JANUS_PUBLIC_IP to the host IPv4 address reachable by phones.
-# Generate different JANUS_ADMIN_KEY and JANUS_BRIDGE_TOKEN secrets:
-openssl rand -hex 32
-openssl rand -hex 32
-# Set JANUS_LISTENER_PIN for the optional standalone test page.
-docker compose up --build -d
-curl http://localhost:8500/health
-```
-
-The default is 30 provisioned mixes, configurable with `JANUS_PLAYERS` (1–100).
-Provisioning 100 is not evidence that your host/Wi-Fi can sustain 100 participants;
-measure on the venue hardware. Audio uploads and beds use independent named
-volumes. The mixer generates a default silent bed inside its image.
-
-Set these environment variables on the **show server**, then restart it:
-
-```dotenv
-JANUS_BRIDGE_URL=http://127.0.0.1:8500
-JANUS_BRIDGE_TOKEN=<same secret as the Janus bridge>
-JANUS_PUBLIC_URL=https://janus-audio.example.org
-JANUS_ICE_SERVERS=[]
-```
-
-The bridge URL must be reachable from the show server. `127.0.0.1` applies only
-when it runs on the same host outside a container. For separate containers/hosts,
-use a private reachable address and configure `JANUS_BRIDGE_BIND` accordingly.
-Use a private control address where available, or the authenticated HTTPS
-control endpoint described in the Coolify setup. Existing `AUDIO_*` variables continue configuring
-Icecast independently; neither set is required when the other is configured.
-
-Rebuild the phone and admin clients after installing this change:
-
-```sh
-pnpm --filter @entertheblackbox/phone build
-pnpm --filter @entertheblackbox/admin build
-```
-
-Open `https://<show-host>/phone-janus/`, join normally and tap **Start headphones**.
-Private mount credentials are obtained using the existing signed participant
-lease; participants do not enter the standalone listener PIN. For show QR codes
-to target this route, set `PHONE_JOIN_BASE_URL` to its HTTPS URL ending in
-`/phone-janus/`. The default `/phone/` route remains available.
-
-## Network and HTTPS
-
-Proxy the Janus web service on port 8400 through trusted HTTPS at
-`JANUS_PUBLIC_URL`, including `/janus`, with response buffering off and long
-request timeouts (at least 90 seconds). The service binds HTTP to loopback by
-default. Set `JANUS_WEB_BIND` appropriately if the reverse proxy is elsewhere.
-
-Allow phones to reach host UDP ports **20000–20200**, with matching ports through
-NAT. `JANUS_PUBLIC_IP` is advertised to browsers instead of the container address.
-An HTTPS proxy carries signaling, not WebRTC media. Linux is the deployment target;
-macOS/Windows container-VM networking needs its own reachability validation.
-
-When phone UI and Janus use different origins, Janus HTTP's CORS support handles
-signaling. An HTTPS phone page must use an HTTPS Janus URL. On localhost, HTTP is
-suitable for a desktop test. Restrictive Wi-Fi/internet paths may require TURN;
-no TURN server is bundled. Supply tested browser ICE configuration when needed:
+Restrictive networks may need TURN; no TURN server is bundled. Example browser
+configuration (use your own tested server and credentials):
 
 ```dotenv
 JANUS_ICE_SERVERS=[{"urls":"turn:turn.example.org:3478","username":"trial","credential":"configured-turn-credential"}]
 ```
 
-These TURN credentials are necessarily sent to authenticated phone clients.
-Use suitably scoped credentials; they are separate from the private bridge and
-Janus management secrets.
+TURN credentials are sent to authenticated phone clients and must be suitably
+scoped. They are separate from private management and bridge secrets.
+
+Each provisioned slot runs its own mix and encoder. `JANUS_PLAYERS=100` is not
+evidence the host/Wi-Fi supports 100 participants; measure on venue hardware.
+`janus-audio` and `janus-beds` are separate persistent volumes. The default bed
+is generated silence.
 
 ## Behavior
 
@@ -170,45 +114,24 @@ cue-to-ear latency remain **venue acceptance tests**, not guarantees from unit
 or desktop browser checks. Background music follows the existing phone scene
 activation rules; silent/inactive phases can suspend phone playback.
 
-## Independent shared-feed test
-
-The original standalone listener at `JANUS_PUBLIC_URL/` remains available. It
-subscribes to shared mount 1 using `JANUS_LISTENER_PIN`; personal mounts start at
-101 and have separate credentials.
-
-```sh
-docker compose --profile test-tone up --build -d
-```
-
-The pulse source tests connectivity, not latency. To feed a real file, stop the
-tone and run FFmpeg on the host:
-
-```sh
-docker compose --profile test-tone stop tone
-ffmpeg -re -stream_loop -1 -i /absolute/path/to/rehearsal.wav \
-  -vn -ar 48000 -ac 2 -c:a libopus -b:a 64k -frame_duration 20 \
-  -payload_type 111 -f rtp 'rtp://127.0.0.1:9900?pkt_size=1200'
-```
-
-The ingest port is loopback-only. Personal mixer RTP stays on the internal
-Compose network and is not fed from Icecast. Keep show media outside git.
-
 ## Verification and operation
 
 Janus v1.4.2 is pinned to commit `0a24110ae55a172c4293749b763dbb66a138f9ec`.
-Only Streaming and HTTP signaling are compiled; admin HTTP is disabled. The normal
-Janus API remains exposed for WebRTC signaling. This is a venue deployment, not
-a hardened internet service with per-user rate limiting.
+Only Streaming and HTTP signaling are compiled; admin HTTP is disabled.
+The public signaling API does not include per-user rate limiting.
+
+Coolify provides service health and logs. A healthy container does not prove
+that a phone can receive UDP media. Use the real phone soundcheck after deploy.
+The shared listener at `JANUS_PUBLIC_URL/` is a diagnostic page for shared mount
+1; it does not receive personal narration and has no shared audio source by
+default. Show participants should use `/phone-janus/`.
+
+Developer checks:
 
 ```sh
 python3 -m unittest discover -s services/audio-janus/tests
 node --check services/audio-janus/web/listener.js
-# In services/audio-janus, with .env configured:
-docker compose config --quiet
-JANUS_LISTENER_PIN=your-pin python3 scripts/smoke.py http://localhost:8400
-docker compose logs -f janus liquidsoap bridge
-# Stop the stack and optional test tone without deleting the media volumes:
-docker compose --profile test-tone down
+pnpm -r typecheck && pnpm -r test
 ```
 
 Before show use: compare acoustic median/p95/max delay against Icecast on wired

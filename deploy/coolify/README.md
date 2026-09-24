@@ -3,8 +3,8 @@
 This is the production Compose entry point for replacing the current
 `enter-the-blackbox` Coolify Git resource with this canonical repository. It
 deploys the installation server and its four browser bundles, PocketBase, the
-personal-audio stack, and the low-latency realtime cursor relay as one Coolify
-Compose resource.
+personal-audio stack, Janus audio services, and the low-latency realtime cursor
+relay as one Coolify Compose resource.
 
 The Compose project name, public service names, and volume names deliberately
 match the current resource:
@@ -108,7 +108,7 @@ or insecure phone-audio settings again at startup.
 |---|---|---|
 | `VITE_POCKETBASE_URL` | build | public PocketBase `https://` URL |
 | `REALTIME_WS_URL` | build | public `realtime` service `wss://` URL |
-| `PHONE_JOIN_BASE_URL` | runtime | public frontend URL ending in `/phone/` |
+| `PHONE_JOIN_BASE_URL` | runtime | public frontend URL ending in `/phone/` or `/phone-janus/` |
 | `PUBLIC_STREAM_BASE` | runtime | public bridge `https://` URL; also handed to phones |
 | `ICECAST_HOSTNAME` | runtime | audio hostname only, without scheme/path/port |
 | `INSTALLATION_ID` | runtime | stable installation identifier |
@@ -117,6 +117,11 @@ or insecure phone-audio settings again at startup.
 | `BRIDGE_TOKEN` | runtime secret | long random server-to-bridge bearer token |
 | `ICECAST_SOURCE_PASSWORD` | runtime secret | unique long random value |
 | `ICECAST_ADMIN_PASSWORD` | runtime secret | different long random value |
+| `JANUS_PUBLIC_URL` | runtime | public `janus-web` HTTPS URL |
+| `JANUS_PUBLIC_IP` | runtime | phone-reachable host IPv4 address |
+| `JANUS_ADMIN_KEY` | runtime secret | unique random 32–128 letters/digits/hyphens |
+| `JANUS_BRIDGE_TOKEN` | runtime secret | different random secret, at least 32 characters |
+| `JANUS_LISTENER_PIN` | runtime secret | 8–64 letters/digits for shared diagnostics |
 | `POCKETBASE_ADMIN_EMAIL` | runtime secret | existing PocketBase superuser email |
 | `POCKETBASE_ADMIN_PASSWORD` | runtime secret | existing PocketBase superuser password |
 
@@ -204,11 +209,21 @@ bridge needs to move closer to the audience. See
 for the recommended Tailscale-based setup and the Admin control that switches
 to it live, with no redeploy of this stack.
 
-## Optional independent Janus phone audio
+## Janus audio in this stack
 
-Deploy the separate [Janus Coolify application](../../services/audio-janus/README.md#deploy-from-coolify-without-terminal-commands)
-for `/phone-janus/`. This show Compose file forwards `JANUS_BRIDGE_URL`,
-`JANUS_BRIDGE_TOKEN`, `JANUS_PUBLIC_URL` and `JANUS_ICE_SERVERS`; set them in the
-Coolify environment editor and redeploy. Leave the first three empty for
-Icecast only. No custom startup command or Compose profile is required. The
-existing audio services and volumes remain independent.
+The same application now includes `janus`, `janus-web`, `janus-liquidsoap` and
+`janus-bridge`. Production cues reach `http://janus-bridge:8090` over the default
+Compose network. No separate application or public control-bridge domain is
+needed. `/phone/` stays on Icecast; `/phone-janus/` uses Janus.
+
+Set `JANUS_PUBLIC_URL`, `JANUS_PUBLIC_IP`, `JANUS_ADMIN_KEY`, `JANUS_BRIDGE_TOKEN`
+and `JANUS_LISTENER_PIN` in the existing Coolify environment editor. Optional
+`JANUS_PLAYERS` defaults to 30 and `JANUS_ICE_SERVERS` to `[]`. Assign only
+`janus-web` a public HTTPS domain (container port 80), allow host UDP 20000–20200,
+and click Deploy. See the [Janus UI setup guide](../../services/audio-janus/README.md#deploy-using-the-existing-coolify-application)
+for exact values, phone checks and migration from the removed separate setup.
+
+Existing service and volume names are retained; new audio volumes are
+`janus-audio` and `janus-beds`. Never assign domains to `janus-bridge` or
+`janus-liquidsoap`. Remove any old `JANUS_BRIDGE_URL` override; Compose wires it
+internally. Restart/deploy actions now operate in this same application.
