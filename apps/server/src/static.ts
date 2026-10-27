@@ -107,6 +107,7 @@ async function sendRangedFile(
   filePath: string,
   rangeHeader: string | undefined,
   notFoundError: string,
+  cacheControl = "public, max-age=31536000, immutable",
 ): Promise<void> {
   let fileSize: number;
   try {
@@ -127,7 +128,7 @@ async function sendRangedFile(
 
   reply
     .header("accept-ranges", "bytes")
-    .header("cache-control", "public, max-age=31536000, immutable");
+    .header("cache-control", cacheControl);
 
   if (rangeHeader !== undefined) {
     const range = parseByteRange(rangeHeader, fileSize);
@@ -167,7 +168,9 @@ export function registerMediaRoutes(
       return;
     }
 
-    await sendRangedFile(reply, filePath, request.headers.range, "media_not_found");
+    const mutableShowChannel = /^native-shows\/channels\/(rehearsal|production)\.json$/.test(request.params["*"]);
+    await sendRangedFile(reply, filePath, request.headers.range, "media_not_found",
+      mutableShowChannel ? "no-store" : "public, max-age=31536000, immutable");
   });
 }
 

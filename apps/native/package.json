@@ -1,0 +1,39 @@
+{
+  "name": "@entertheblackbox/native",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "export": "expo export --platform ios --platform android",
+    "update:preview": "eas update --channel preview --environment preview",
+    "update:production": "eas update --channel production --environment production"
+  },
+  "dependencies": {
+    "@entertheblackbox/protocol": "workspace:*",
+    "@entertheblackbox/shared": "workspace:*",
+    "@entertheblackbox/show-content": "workspace:*",
+    "expo": "~55.0.0",
+    "expo-audio": "~55.0.0",
+    "expo-crypto": "~55.0.0",
+    "expo-dev-client": "~55.0.0",
+    "expo-file-system": "~55.0.0",
+    "expo-secure-store": "~55.0.0",
+    "expo-updates": "~55.0.0",
+    "react": "19.2.0",
+    "react-native": "0.83.10",
+    "zod": "^3.23.8",
+    "react-dom": "19.2.0",
+    "expo-build-properties": "~55.0.18"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.0",
+    "typescript": "^5.9.2",
+    "vitest": "^2.1.8",
+    "@types/node": "^22.0.0"
+  }
+}

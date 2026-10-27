@@ -43,3 +43,12 @@ pocketbase/bin/
 pocketbase/pb_data/
 pocketbase/pb_logs/
 pocketbase/.e2e-data/
+
+# Native generated projects/builds and private published show bundles
+apps/native/.expo/
+apps/native/android/
+apps/native/ios/
+*.ipa
+*.apk
+*.aab
+content/media/native-shows/

@@ -1,0 +1,24 @@
+{
+  "name": "@entertheblackbox/show-content",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "publish-show": "tsx src/publish.ts"
+  },
+  "dependencies": {
+    "zod": "^3.23.8",
+    "@entertheblackbox/scenario": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

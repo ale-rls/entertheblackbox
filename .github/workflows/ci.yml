@@ -63,5 +63,7 @@ jobs:
       - run: pnpm validate-scenario content/scenarios/dev.json
       - name: Build production client bundles
         run: pnpm --filter @entertheblackbox/display build && pnpm --filter @entertheblackbox/phone build && pnpm --filter @entertheblackbox/admin build && pnpm --filter @entertheblackbox/studio build
+      - name: Bundle native iOS and Android app
+        run: pnpm --filter @entertheblackbox/native exec expo export --platform ios --platform android
       - name: Build Coolify images
         run: docker compose --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml build

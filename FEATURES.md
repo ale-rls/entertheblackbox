@@ -189,5 +189,10 @@ Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenari
 
 - Phones expose a collapsible **Show timing** monitor and send authenticated timing reports every 2 seconds. Synchronized Web Audio reports output-latency-compensated estimates; stream drift is explicitly unmeasured. Reports are checked against the current session, cue epoch and participant routing epoch.
 
-- Phone recovery uses verified participant throttling independently of shared Wi-Fi join limits; rate-limited connections retry automatically after the server delay.
-- Icecast phones attempt headphones automatically after registration when the scene permits audio, with a manual fallback if browser autoplay is blocked. Janus remains disabled.
+## Native participant app — `apps/native`
+
+- Expo iOS/Android builds, preview/production EAS Update channels, fingerprint runtime compatibility, explicit disconnected-only updates — `app.config.ts`, `eas.json`, `src/App.tsx`
+- Verified persistent MP3 downloads, per-group server cues, late-join seeking, native background audio configuration, pause/resume, reconnect and timing reports — `src/content.ts`, `src/cues.ts`, `src/player.ts`, `src/connection.ts`
+- Participant name/identity, group selection, cursor/buttons/reactions, narration/subtitles — `src/App.tsx`; existing protocol and authoritative server
+- Independent rehearsal/production content channels, SHA-256 immutable audio releases and atomic server-side promotion — `packages/show-content`, `pnpm publish-native-show`; mutable channel cache policy in `apps/server/src/static.ts`
+- Native lock-screen cue delivery is a physical-device acceptance requirement, not an automated guarantee. No fleet provisioning UI or live streaming fallback. Setup, publishing and rehearsal: [native player guide](docs/native-player.md).
