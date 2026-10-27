@@ -12,6 +12,9 @@ services:
         VITE_POCKETBASE_URL: ${VITE_POCKETBASE_URL:?set to the public PocketBase HTTPS URL}
         REALTIME_WS_URL: ${REALTIME_WS_URL:?set to the public WSS relay URL}
         DISPLAY_TOKEN: ${DISPLAY_TOKEN:?set in Coolify}
+    # Keep published native audio and channel pointers across replacements.
+    volumes:
+      - native-shows:/app/content/media/native-shows
     restart: unless-stopped
     expose:
       - "80"
@@ -181,6 +184,7 @@ services:
 
 
 volumes:
+  native-shows:
   pocketbase-data:
   audio-data:
   # Retained for data preservation; no Janus services are started.
