@@ -700,3 +700,34 @@ it("publishes Studio native audio through the authenticated API and serves a usa
     expect(runtime.engine?.getSnapshot().scenarioVersion).toBe("test-1"); // Publishing does not activate this draft.
   } finally { await runtime.app.close(); }
 });
+
+it("pulls native background music from the shared media library before publishing", async () => {
+  const config = await fixture();
+  await writeFile(join(config.mediaDir, "voice.mp3"), "test narration bytes");
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) =>
+    String(input) === "https://pocketbase.example/files/library-music.mp3" ? new Response("library music") : new Response(null, { status: 404 })));
+  const pocketbase = {
+    ensureAuth: vi.fn(async () => {}),
+    pb: {
+      collection: vi.fn(() => ({
+        getFullList: vi.fn(async () => [{ id: "rec1", src: "library-music.mp3", file: "library-music.mp3", bytes: 13 }]),
+      })),
+      files: { getURL: vi.fn(() => "https://pocketbase.example/files/library-music.mp3") },
+    },
+  };
+  const runtime = await buildServer({ config, pocketbase: pocketbase as unknown as PocketBaseClient, verifyOperatorToken: async () => true });
+  const scenario = { version: "native-music", entryPhaseId: "voice", cyclesAllowed: false, phases: [
+    { id: "idle", kind: "idle" },
+    { id: "voice", kind: "narration", text: "Test", durationMs: 1000, next: "idle", phoneAudioSrc: "voice.mp3" },
+  ] };
+  try {
+    const publish = await runtime.app.inject({ method: "POST", url: "/api/admin/native-shows/publish",
+      headers: { authorization: "Bearer any-token" },
+      payload: { channel: "rehearsal", scenario, backgroundMusic: { src: "library-music.mp3", volume: 0.3 } } });
+    expect(publish.statusCode).toBe(200);
+    const release = (await runtime.app.inject({ url: "/media/native-shows/channels/rehearsal.json" })).json();
+    expect(release.backgroundMusic).toEqual({ src: "library-music.mp3", volume: 0.3 });
+    const music = release.files.find((file: { src: string }) => file.src === "library-music.mp3");
+    expect((await runtime.app.inject({ url: `/media/native-shows/audio/${music.sha256}.mp3` })).body).toBe("library music");
+  } finally { await runtime.app.close(); }
+});
