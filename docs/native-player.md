@@ -84,9 +84,17 @@ The CLI supports the same settings, but reads the music from the media directory
 pnpm publish-native-show /absolute/path/show.json /absolute/path/content/media rehearsal music/atmosphere.mp3 0.2
 ```
 
-Publishing includes the music in the hashed, verified downloads, and volume changes produce a new release revision. A missing music file prevents channel promotion. Join downloads the release before admission. On admission, a separate native player loops the local music beneath narration. Skips, auto-advances, narration-free phases and temporary control connection loss leave this loop playing. Device pause stops both layers; explicit resume rejoins narration at the current show position. Leaving or ending the participant session releases both players. The continuous layer owns lock-screen controls; its pause/resume status is propagated to narration by the JavaScript controller.
+Publishing includes the music in the hashed, verified downloads, and volume changes produce a new release revision. A missing music file prevents channel promotion. Join downloads the release before admission. On admission, the music plays as a looping `bed` layer of the native audio scheduler (below), beneath the narration `cue` layer. Skips, auto-advances, narration-free phases and temporary control connection loss leave this loop playing. Device pause stops both layers; explicit resume rejoins narration at the current show position. Leaving or ending the participant session releases both layers. Lock-screen controls pause and resume the whole scheduler natively.
 
-This is continuous local playback, not streaming or pocket mode. Native looping does not require JavaScript to restart the music on each repetition, but cue reception, narration scheduling and pause coordination still use JavaScript. Audible background playback supports the intended background operation; it does not prove that all OS interruptions or suspension conditions are handled. A silent recording, muted device, or an audio-session flag is not a guaranteed keep-alive mechanism.
+This is continuous local playback, not streaming or pocket mode. Audible background playback supports the intended background operation; it does not prove that all OS interruptions or suspension conditions are handled. A silent recording, muted device, or an audio-session flag is not a guaranteed keep-alive mechanism.
+
+## Native audio scheduling
+
+Playback runs in `packages/expo-audio-scheduler`, an Expo module with a config plugin (see its README). The app hands each cue to it as a layer anchored to server time (`startAt`/`endAt`) and keeps its clock calibrated; native code then starts the clip at the right position, stops it at the cue end and corrects drift, without JavaScript timers. This matters behind a locked screen: React Native pauses JS timers on Android and throttles them on iOS, which previously left narration unplayed (Android) or cut off (iOS).
+
+Cues still *arrive* through JavaScript over the WebSocket. Android delivers socket messages to JS while locked, and the app's Android foreground media service keeps the process alive; the client heartbeat is a JS timer, so it pauses while locked (admission is not tied to it). On iOS, the app stays running only while audio is audible, so keep the music bed playing through narration-free stretches.
+
+The module is native code: changing it needs a new EAS build, not an EAS update.
 
 Before production, use installed builds on each supported iPhone/Android model. Keep devices locked for the full show, including at least ten minutes of music without narration, then exercise repeated operator skips, timed advances, group changes and reconnects. Verify music remains audible and every correct narration starts at the show position. Check lock-screen pause/resume stops/starts both layers, phone calls and headphone removal, and leave/show end cleanup. Record cue-to-ear delay at audience-scale load. These physical checks have not been performed by automated tests.
 
@@ -132,7 +140,7 @@ Submission requires your Apple/Google accounts and configured credentials. Compl
 
 ## Physical acceptance checklist
 
-This scaffold uses JavaScript WebSocket handling and timers around a native player. Native background audio can continue, but the scaffold does **not** guarantee arbitrary background execution, precise cue scheduling while suspended, or waking a suspended iPhone after silence. Keeping an audio session active does not grant that ability. Do not advertise locked-screen show control until it passes on your actual devices. Depending on results, further native scheduling/control work or a foreground venue mode may be required.
+Cue scheduling is native (see **Native audio scheduling**), but cue *reception* is JavaScript over the WebSocket. Nothing here guarantees arbitrary background execution or waking a suspended iPhone after silence; keeping an audio session active does not grant that ability. Do not advertise locked-screen show control until it passes on your actual devices.
 
 - Run the full show on a real iPhone and Android, with wired headphones first, then the intended Bluetooth devices. Record audible cue-to-ear skew against the main display; the reported drift is playback-position telemetry, not an acoustic measurement.
 - Lock both devices for at least ten minutes, including a long silent section. Trigger a new cue and change groups while locked; confirm the right audio actually starts.

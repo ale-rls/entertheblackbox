@@ -1,0 +1,22 @@
+{
+  "name": "@entertheblackbox/expo-audio-scheduler",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plays local audio layers on a shared clock natively, so cues start and stop on time with the screen locked.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "expo": "~55.0.0",
+    "typescript": "^5.9.2",
+    "vitest": "^2.1.8"
+  }
+}

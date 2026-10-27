@@ -1,124 +1,114 @@
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import AudioScheduler, { type LayerTiming } from '@entertheblackbox/expo-audio-scheduler';
 import type { ClockTiming } from '@entertheblackbox/protocol';
 import type { ServerClock } from '@entertheblackbox/shared';
 import type { ShowManifest } from '@entertheblackbox/show-content';
 import { localAudio } from './content';
-import { targetPosition, type Cue } from './cues';
+import type { Cue } from './cues';
 
+const CUE = 'cue';
+const BED = 'bed';
+type MediaTiming = ClockTiming['media'][number];
+
+/**
+ * Maps show cues onto native scheduler layers. Native code starts, offsets and stops
+ * the audio on the server clock, so playback keeps working while JavaScript timers
+ * are frozen (Android) or throttled (iOS) behind a locked screen.
+ */
 export class ShowPlayer {
-  private player: AudioPlayer;
-  private music: AudioPlayer | null = null;
-  private musicSubscription: { remove(): void } | null = null;
+  private bedUri: string | null = null;
   private musicStarted = false;
-  private musicWasPlaying = false;
   private cue: Cue | null = null;
-  private timer: ReturnType<typeof setInterval>;
-  private seeking = false;
-  private generation = 0;
+  private cueUri: string | null = null;
+  private cueApplied = false;
   private enabled = true;
-  private started = false;
   private disposed = false;
   private status = 'Ready';
+  private timer: ReturnType<typeof setInterval>;
+  private subscription: { remove(): void };
   constructor(private manifest: ShowManifest, private clock: ServerClock, private changed: (status: string) => void) {
-    this.player = createAudioPlayer(null, { updateInterval: 250, keepAudioSessionActive: true });
     const bed = manifest.backgroundMusic;
     if (bed) {
       const file = manifest.files.find(f => f.src === bed.src);
-      if (!file || !localAudio(file.sha256).exists) {
-        this.player.remove();
-        throw new Error(`Missing downloaded background music: ${bed.src}`);
-      }
-      this.music = createAudioPlayer({ uri: localAudio(file.sha256).uri }, { updateInterval: 250, keepAudioSessionActive: true });
-      this.music.loop = true;
-      this.music.volume = bed.volume;
-      // Keep lock-screen ownership on the continuous layer across narration changes.
-      this.music.setActiveForLockScreen(true, { title: 'Enter the Blackbox', artist: 'Show audio' },
-        { showSeekBackward: false, showSeekForward: false });
-      this.musicSubscription = this.music.addListener('playbackStatusUpdate', status => {
-        if (this.disposed || !this.musicStarted) return;
-        if (status.playing && !this.musicWasPlaying) {
-          this.enabled = true;
-          this.started = false;
-        } else if (!status.playing && this.musicWasPlaying && !status.isBuffering) {
-          // Explicit lock-screen pause or OS interruption stops narration too.
-          this.enabled = false;
-          this.player.pause();
-          this.report('Paused — use Resume at show position');
-        }
-        if (!status.isBuffering) this.musicWasPlaying = status.playing;
-      });
+      if (!file || !localAudio(file.sha256).exists) throw new Error(`Missing downloaded background music: ${bed.src}`);
+      this.bedUri = localAudio(file.sha256).uri;
     }
-    this.timer = setInterval(() => { void this.tick(); }, 250);
-  }
-  startMusic() {
-    // Admission/reconnection must not override an explicit participant pause.
-    if (this.musicStarted || !this.music || this.disposed) return;
-    this.musicStarted = true;
-    if (this.enabled) this.music.play();
+    this.subscription = AudioScheduler.addListener('onPausedChange', ({ paused, reason }) => {
+      // Lock-screen controls, calls and unplugged headphones act natively; mirror them here.
+      if (this.disposed || reason === 'api') return;
+      this.enabled = !paused;
+      this.report(paused ? 'Paused — use Resume at show position' : 'Playing');
+    });
+    // Foreground housekeeping only: keeps the native clock calibrated and the status line
+    // current. Playback never waits on it.
+    this.timer = setInterval(() => this.sync(), 500);
   }
   static async configure() {
-    await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true,
-      interruptionMode: 'doNotMix', allowsRecording: false });
+    await AudioScheduler.configure({ title: 'Enter the Blackbox', artist: 'Show audio' });
   }
   private report(status: string) { if (status !== this.status) { this.status = status; this.changed(status); } }
+  private fail(error: unknown) { if (!this.disposed) this.report(`Playback error: ${String(error)}`); }
+  startMusic() {
+    // Admission/reconnection must not override an explicit participant pause; the native
+    // scheduler keeps new layers paused until resume.
+    if (this.musicStarted || !this.bedUri || this.disposed) return;
+    this.musicStarted = true;
+    AudioScheduler.setLayer(BED, { uri: this.bedUri, loop: true, volume: this.manifest.backgroundMusic!.volume })
+      .catch(error => this.fail(error));
+  }
   setCue(cue: Cue | null) {
     if (this.cue?.key === cue?.key && this.cue?.endsAt === cue?.endsAt) return;
-    ++this.generation; this.player.pause(); this.cue = null; this.started = false;
-    if (!cue) { this.report('Waiting for the next cue'); return; }
+    this.cue = null; this.cueUri = null; this.cueApplied = false;
+    if (!cue) { this.clearCue('Waiting for the next cue'); return; }
     if (cue.scenarioVersion !== this.manifest.scenarioVersion) {
-      this.report('Show changed — leave and download the matching show'); return;
+      this.clearCue('Show changed — leave and download the matching show'); return;
     }
     const file = this.manifest.files.find(f => f.src === cue.src);
-    if (!file || !localAudio(file.sha256).exists) { this.report(`Missing downloaded audio: ${cue.src}`); return; }
-    this.cue = cue;
-    this.player.replace({ uri: localAudio(file.sha256).uri });
-    if (!this.music) this.player.setActiveForLockScreen(true, { title: 'Enter the Blackbox', artist: cue.src },
-      { showSeekBackward: false, showSeekForward: false });
-    this.report('Loading');
+    if (!file || !localAudio(file.sha256).exists) { this.clearCue(`Missing downloaded audio: ${cue.src}`); return; }
+    this.cue = cue; this.cueUri = localAudio(file.sha256).uri;
+    this.applyCue();
+  }
+  private clearCue(status: string) {
+    AudioScheduler.clearLayer(CUE).catch(error => this.fail(error));
+    this.report(status);
+  }
+  private applyCue() {
+    const cue = this.cue;
+    if (!cue || !this.cueUri || this.cueApplied || this.disposed) return;
+    // Wait for a measured offset; the snapshot-only estimate can be off by the network delay.
+    if (!this.clock.hasSamples) { this.report('Waiting for clock'); return; }
+    this.cueApplied = true;
+    AudioScheduler.setClock(this.clock.now());
+    AudioScheduler.setLayer(CUE, { uri: this.cueUri, startAt: cue.startedAt, endAt: cue.endsAt })
+      .catch(error => this.fail(error));
+    this.report(this.enabled ? 'Scheduled' : 'Paused on this device');
   }
   setEnabled(enabled: boolean) {
     this.enabled = enabled;
-    if (enabled) {
-      this.started = false;
-      if (this.musicStarted) this.music?.play();
-    } else this.music?.pause();
-    if (!enabled) { this.player.pause(); this.report('Paused on this device'); }
+    (enabled ? AudioScheduler.resume() : AudioScheduler.pause()).catch(error => this.fail(error));
+    if (!enabled) this.report('Paused on this device');
   }
-  private async tick() {
-    const cue = this.cue;
-    if (this.disposed || !cue || !this.enabled || this.seeking || !this.clock.hasSamples) return;
-    const target = targetPosition(cue, this.clock.now());
-    if (target === null) { this.player.pause(); this.report(this.clock.now() < cue.startedAt ? 'Waiting for cue time' : 'Cue ended'); return; }
-    if (!this.player.isLoaded) return;
-    if (this.player.duration > 0 && target >= this.player.duration) { this.player.pause(); this.report('Cue ended'); return; }
-    // Honor native lock-screen pauses and interruptions. Resume is an explicit user action.
-    if (this.started && !this.player.playing) { this.report('Paused — use Resume at show position'); return; }
-    const generation = this.generation;
-    try {
-      if (Math.abs(this.player.currentTime - target) > 0.25) {
-        this.seeking = true;
-        await this.player.seekTo(target);
-        if (this.disposed || generation !== this.generation || !this.enabled) return;
-      }
-      if (!this.started) { this.player.play(); this.started = true; }
-      this.report('Playing');
-    } catch (error) { this.report(`Playback error: ${String(error)}`); }
-    finally { this.seeking = false; }
+  private sync() {
+    if (this.disposed) return;
+    if (this.clock.hasSamples) AudioScheduler.setClock(this.clock.now());
+    this.applyCue();
+    const cue = this.cueApplied ? AudioScheduler.getTiming().find(layer => layer.id === CUE) : undefined;
+    if (!cue || !this.enabled) return;
+    const status = { waiting: 'Waiting for cue time', loading: 'Loading', playing: 'Playing', paused: null,
+      ended: 'Cue ended', error: `Playback error: ${cue.error ?? 'unknown'}` }[cue.state];
+    if (status) this.report(status);
   }
   timing(): ClockTiming {
-    const target = this.cue ? targetPosition(this.cue, this.clock.now()) : null;
-    const position = this.player.isLoaded ? this.player.currentTime * 1000 : null;
+    const media = (role: MediaTiming['role'], layer: LayerTiming | undefined): MediaTiming[] => layer ? [{ role,
+      positionMs: layer.positionMs, targetMs: layer.targetMs, driftMs: layer.driftMs,
+      state: !this.enabled && layer.state !== 'error' ? 'paused' : layer.state }] : [];
+    const layers = AudioScheduler.getTiming();
     return { calibrated: this.clock.hasSamples, offsetMs: this.clock.offset,
       roundTripMs: this.clock.roundTripMs, sampleAgeMs: this.clock.sampleAgeMs(),
       elapsedMs: this.cue ? this.clock.now() - this.cue.startedAt : 0, mode: 'synchronized',
-      media: [{ role: 'main', positionMs: position, targetMs: target === null ? null : target * 1000,
-        driftMs: position === null || target === null ? null : position - target * 1000,
-        state: this.status.startsWith('Playback error') || this.status.startsWith('Missing') || this.status.startsWith('Show changed') ? 'error'
-          : this.player.playing ? 'playing' : !this.enabled ? 'paused' : this.status === 'Loading' ? 'loading' : 'waiting' }] };
+      media: [...media('main', layers.find(l => l.id === CUE)), ...media('extra', layers.find(l => l.id === BED))] };
   }
-  dispose() { this.disposed = true; ++this.generation; clearInterval(this.timer);
-    this.musicSubscription?.remove();
-    this.music?.setActiveForLockScreen(false); this.music?.remove();
-    if (!this.music) this.player.setActiveForLockScreen(false);
-    this.player.remove(); }
+  dispose() {
+    this.disposed = true; clearInterval(this.timer); this.subscription.remove();
+    AudioScheduler.reset().catch(() => {});
+  }
 }

@@ -14,21 +14,21 @@
     "update:production": "eas update --channel production --environment production"
   },
   "dependencies": {
+    "@entertheblackbox/expo-audio-scheduler": "workspace:*",
     "@entertheblackbox/protocol": "workspace:*",
     "@entertheblackbox/shared": "workspace:*",
     "@entertheblackbox/show-content": "workspace:*",
     "expo": "~55.0.0",
-    "expo-audio": "~55.0.0",
+    "expo-build-properties": "~55.0.18",
     "expo-crypto": "~55.0.0",
     "expo-dev-client": "~55.0.0",
     "expo-file-system": "~55.0.0",
     "expo-secure-store": "~55.0.0",
     "expo-updates": "~55.0.0",
     "react": "19.2.0",
-    "react-native": "0.83.10",
-    "zod": "^3.23.8",
     "react-dom": "19.2.0",
-    "expo-build-properties": "~55.0.18"
+    "react-native": "0.83.10",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
