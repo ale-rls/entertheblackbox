@@ -1,14 +1,15 @@
 import type { ExpoConfig } from 'expo/config';
-const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID;
+// eas-cli resolves the project before it pulls EAS environment variables, and does not read .env.local.
+// These identifiers are public, so the show's EAS project is the fallback; env vars still override.
+const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? 'b9d7bb05-42d6-4711-9b1e-2cdfb6c21ef1';
 const config: ExpoConfig = {
   name: 'Enter the Blackbox', slug: 'enter-the-blackbox', scheme: 'entertheblackbox',
   version: '1.0.0', orientation: 'portrait',
-  ...(process.env.EXPO_OWNER ? { owner: process.env.EXPO_OWNER } : {}),
+  owner: process.env.EXPO_OWNER ?? 'manusnijhoff',
   runtimeVersion: { policy: 'fingerprint' },
   // Shows never reload themselves mid-performance. Updates are requested explicitly while disconnected.
-  updates: { checkAutomatically: 'NEVER', fallbackToCacheTimeout: 0,
-    ...(projectId ? { url: `https://u.expo.dev/${projectId}` } : { enabled: false }) },
-  extra: { ...(projectId ? { eas: { projectId } } : {}) },
+  updates: { checkAutomatically: 'NEVER', fallbackToCacheTimeout: 0, url: `https://u.expo.dev/${projectId}` },
+  extra: { eas: { projectId } },
   ios: {
     bundleIdentifier: process.env.APP_BUNDLE_ID ?? 'org.entertheblackbox.player',
     supportsTablet: true,

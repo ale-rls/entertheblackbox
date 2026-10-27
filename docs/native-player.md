@@ -43,7 +43,7 @@ eas login
 eas init
 ```
 
-The app uses a dynamic `app.config.ts`. If EAS asks you to add its project UUID manually, use the environment variables below. Create an ignored `apps/native/.env.local` with:
+The app uses a dynamic `app.config.ts`. It falls back to this show's EAS project (`b9d7bb05-…`, owner `manusnijhoff`), so `eas update` works without exporting anything. To point it at a different project, set the environment variables below. Create an ignored `apps/native/.env.local` with:
 
 ```dotenv
 EXPO_PUBLIC_EAS_PROJECT_ID=YOUR_PROJECT_UUID
@@ -55,7 +55,7 @@ EXPO_PUBLIC_SERVER_BUILD_VERSION=0.0.0-dev
 
 Choose your final bundle identifier before making a store build; the checked-in `org.entertheblackbox.player` is a scaffold default. Match `EXPO_PUBLIC_SERVER_BUILD_VERSION` to the server's `BUILD_VERSION`; the current server sends a soft reload notice on mismatch. The native app shows that notice without interrupting a performance.
 
-Set the same values in EAS environments **development**, **preview**, and **production** (dashboard or `eas env:create --environment preview --name EXPO_PUBLIC_EAS_PROJECT_ID --value YOUR_PROJECT_UUID --visibility plaintext`, repeated for the other values/environments). These identifiers and URLs are public configuration, not secrets. Set `ALLOW_INSECURE_LAN=1` in the development and preview environments too, so their update fingerprints match their builds; leave it unset or `0` in production. Keep bundle ID, owner and project UUID consistent between each build and its updates. Without the project UUID, remote app updates are intentionally disabled.
+Set the same values in EAS environments **development**, **preview**, and **production** (dashboard or `eas env:create --environment preview --name EXPO_PUBLIC_EAS_PROJECT_ID --value YOUR_PROJECT_UUID --visibility plaintext`, repeated for the other values/environments). These identifiers and URLs are public configuration, not secrets. Set `ALLOW_INSECURE_LAN=1` in the development and preview environments too, so their update fingerprints match their builds; leave it unset or `0` in production. Keep bundle ID, owner and project UUID consistent between each build and its updates.
 
 ```sh
 eas device:create                         # register each iPhone for internal builds
