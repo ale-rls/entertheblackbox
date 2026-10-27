@@ -194,6 +194,7 @@ Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenari
 - Expo iOS/Android builds, preview/production EAS Update channels, fingerprint runtime compatibility, explicit disconnected-only updates — `app.config.ts`, `eas.json`, `src/App.tsx`
 - Automatic latest-channel verification/download before every join (failed checks block admission; joined sessions pin their release), verified persistent MP3 downloads, per-group server cues, late-join seeking, native background audio configuration, pause/resume, reconnect and timing reports — `src/content.ts`, `src/cues.ts`, `src/player.ts`, `src/connection.ts`
 - Participant name/identity, group selection, cursor/buttons/reactions, narration/subtitles — `src/App.tsx`; existing protocol and authoritative server
+- Coolify persists published native releases and channel pointers in the frontend’s `native-shows` volume across redeployments (`deploy/coolify/docker-compose.yml`).
 - Independent rehearsal/production content channels, SHA-256 immutable audio releases and atomic server-side promotion — `packages/show-content`, `pnpm publish-native-show`; mutable channel cache policy in `apps/server/src/static.ts`
 - Native lock-screen cue delivery is a physical-device acceptance requirement, not an automated guarantee. No fleet provisioning UI or live streaming fallback. Setup, publishing and rehearsal: [native player guide](docs/native-player.md).
 

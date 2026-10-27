@@ -228,3 +228,29 @@ For an older server reporting that Janus settings must be set together, remove
 all three `JANUS_BRIDGE_URL`, `JANUS_BRIDGE_TOKEN` and `JANUS_PUBLIC_URL` runtime
 entries and deploy the shutdown Compose definition. Keep Icecast `AUDIO_*`
 settings. Restarting an old container alone does not update its environment.
+
+## Native show storage
+
+The frontend mounts the named `native-shows` volume at
+`/app/content/media/native-shows`. Published audio, immutable release manifests,
+and rehearsal/production channel pointers survive frontend container replacement.
+Coolify creates the volume from the Compose definition on deployment; no manual
+storage entry is required. Reload the Compose configuration if needed and review
+the parsed frontend mount under Persistent Storage before deploying.
+
+This path assumes the default `MEDIA_DIR=/app/content/media`. If overriding
+`MEDIA_DIR`, adjust the mount destination to its `native-shows` subdirectory.
+PocketBase continues to hold source media; its existing volume stays unchanged.
+
+Before the first deployment with this mount, back up any native releases already
+published into the current frontend container. Do not rely on container-local
+files surviving replacement. Restore those files into the new volume, or publish
+the intended channels again from Studio after the matching media has synchronized.
+
+Verify persistence outside a performance: publish a rehearsal channel, record the
+revision from `/media/native-shows/channels/rehearsal.json`, redeploy the frontend,
+and check that the same revision and its referenced audio remain available.
+Include the native-shows volume in off-server backups. Restore its entire contents
+(audio, releases, and channels) together while publishing is stopped; restore the
+matching server scenario separately. Never remove this volume during routine
+redeployment. Persistent storage is not itself a backup.
