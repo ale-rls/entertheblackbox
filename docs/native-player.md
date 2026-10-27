@@ -72,6 +72,24 @@ The action compiles the current draft, validates the graph on the server, and in
 
 This publishes the native audio channel only. It does not publish the scenario to PocketBase, change the active server show, or send an Expo update. Use the existing PocketBase publishing/active-show flow separately and ensure the server scenario matches the device release. The standalone Vite Studio has no publishing API; use the Studio served by the venue server. The CLI below remains available for scripted deployment.
 
+## Local background music
+
+Install the app update containing background-music support before publishing a release with music. Older native clients cannot verify the extended manifest. Releases without music remain compatible.
+
+In **File → Publish to devices…**, enter the background music MP3's relative path in the server media directory and its volume (greater than zero, at most 1; default 0.2). The music must be real audible show content. No track is bundled or chosen automatically. Set these fields for every publication; leaving the path blank publishes a release without music. The existing Admin streaming-music controls do not configure this local layer.
+
+The CLI supports the same settings:
+
+```sh
+pnpm publish-native-show /absolute/path/show.json /absolute/path/content/media rehearsal music/atmosphere.mp3 0.2
+```
+
+Publishing includes the music in the hashed, verified downloads, and volume changes produce a new release revision. A missing music file prevents channel promotion. Join downloads the release before admission. On admission, a separate native player loops the local music beneath narration. Skips, auto-advances, narration-free phases and temporary control connection loss leave this loop playing. Device pause stops both layers; explicit resume rejoins narration at the current show position. Leaving or ending the participant session releases both players. The continuous layer owns lock-screen controls; its pause/resume status is propagated to narration by the JavaScript controller.
+
+This is continuous local playback, not streaming or pocket mode. Native looping does not require JavaScript to restart the music on each repetition, but cue reception, narration scheduling and pause coordination still use JavaScript. Audible background playback supports the intended background operation; it does not prove that all OS interruptions or suspension conditions are handled. A silent recording, muted device, or an audio-session flag is not a guaranteed keep-alive mechanism.
+
+Before production, use installed builds on each supported iPhone/Android model. Keep devices locked for the full show, including at least ten minutes of music without narration, then exercise repeated operator skips, timed advances, group changes and reconnects. Verify music remains audible and every correct narration starts at the show position. Check lock-screen pause/resume stops/starts both layers, phone calls and headphone removal, and leave/show end cleanup. Record cue-to-ear delay at audience-scale load. These physical checks have not been performed by automated tests.
+
 ## Two independent update systems
 
 | Change | Mechanism | New installed binary? |

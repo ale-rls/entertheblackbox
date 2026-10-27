@@ -199,3 +199,5 @@ Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenari
 - Native lock-screen cue delivery is a physical-device acceptance requirement, not an automated guarantee. No fleet provisioning UI or live streaming fallback. Setup, publishing and rehearsal: [native player guide](docs/native-player.md).
 
 - **Studio native device publishing** — File → Publish to devices, operator sign-in, rehearsal/production selection, draft validation, release feedback, live-show/concurrent-request guards; `apps/studio/src/NativePublishPanel.tsx`, authenticated `POST /api/admin/native-shows/publish`, `packages/show-content` publisher. Channel publishing does not activate the server scenario.
+
+- Native downloaded background music: publish an MP3 and volume through Studio or CLI; a separate native loop continues across narration transitions, with device pause/resume and session cleanup — `packages/show-content`, `apps/studio/src/NativePublishPanel.tsx`, `apps/native/src/player.ts`. Locked-device cue delivery requires physical acceptance; no pocket mode.

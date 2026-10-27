@@ -3,6 +3,8 @@ import { useRef, useState, type FormEvent } from "react";
 type Props = { token: string; exportScenario: () => unknown; active: boolean; onClose: () => void };
 export function NativePublishPanel({ token, exportScenario, active, onClose }: Props) {
   const [channel, setChannel] = useState<"rehearsal" | "production">("rehearsal");
+  const [musicSrc, setMusicSrc] = useState("");
+  const [musicVolume, setMusicVolume] = useState(0.2);
   const [working, setWorking] = useState(false);
   const [feedback, setFeedback] = useState<{ error: boolean; message: string }>();
   const inFlight = useRef(false);
@@ -14,7 +16,7 @@ export function NativePublishPanel({ token, exportScenario, active, onClose }: P
       const scenario = exportScenario(); // Compile/validate the current draft, not a stale saved copy.
       const response = await fetch("/api/admin/native-shows/publish", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ channel, scenario }),
+        body: JSON.stringify({ channel, scenario, ...(musicSrc.trim() ? { backgroundMusic: { src: musicSrc.trim(), volume: musicVolume } } : {}) }),
       });
       const result = await response.json().catch(() => null) as {
         error?: string; message?: string; revision?: string; fileCount?: number; scenarioVersion?: string;
@@ -45,6 +47,14 @@ export function NativePublishPanel({ token, exportScenario, active, onClose }: P
         <option value="rehearsal">Rehearsal</option><option value="production">Production</option>
       </select>
     </label>
+    <label className="sc-tool-label">Background music MP3 (relative media path)
+      <input className="sc-tool-field" value={musicSrc} disabled={working} placeholder="music/atmosphere.mp3" onChange={event => setMusicSrc(event.target.value)} />
+    </label>
+    <label className="sc-tool-label">Background music volume
+      <input className="sc-tool-field" type="number" min="0.01" max="1" step="0.01" value={musicVolume} disabled={working}
+        onChange={event => setMusicVolume(Number(event.target.value))} />
+    </label>
+    <p className="sc-tool-help">Music loops locally throughout the joined session, including gaps between narration. Choose an audible show soundscape. Leaving this blank publishes without background music.</p>
     <div className="publish-panel-actions">
       <button className="sc-tool-button" type="button" disabled={working} onClick={onClose}>Close</button>
       <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={working || active || !token}>

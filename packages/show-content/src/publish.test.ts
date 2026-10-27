@@ -47,3 +47,16 @@ describe('show publishing', () => {
     for (const value of ['ftp://host', 'https://user:secret@host', 'https://host/phone', 'https://host/?x=1']) expect(() => serverOrigin(value)).toThrow();
   });
 });
+it('publishes and hashes background music configuration and preserves the channel on a missing bed', async () => {
+  const root = await fixture();
+  await writeFile(join(root, 'bed.mp3'), 'audible music');
+  const first = await publishShow(join(root, 'scenario.json'), root, 'rehearsal', { src: 'bed.mp3', volume: 0.2 });
+  expect(first.backgroundMusic).toEqual({ src: 'bed.mp3', volume: 0.2 });
+  expect(first.files.map(f => f.src)).toContain('bed.mp3');
+  const second = await publishShow(join(root, 'scenario.json'), root, 'rehearsal', { src: 'bed.mp3', volume: 0.3 });
+  expect(second.revision).not.toBe(first.revision);
+  await expect(publishShow(join(root, 'scenario.json'), root, 'rehearsal', { src: 'absent.mp3', volume: 0.2 })).rejects.toThrow();
+  expect(JSON.parse(await readFile(join(root, 'native-shows/channels/rehearsal.json'), 'utf8')).revision).toBe(second.revision);
+  expect(showManifestSchema.safeParse({ ...first, backgroundMusic: { src: 'absent.mp3', volume: 0.2 } }).success).toBe(false);
+  expect(showManifestSchema.safeParse({ ...first, backgroundMusic: { src: 'bed.mp3', volume: 0 } }).success).toBe(false);
+});
