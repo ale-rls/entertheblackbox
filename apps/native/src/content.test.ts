@@ -56,3 +56,31 @@ it('rejects a manifest whose revision does not match its contents', async () => 
   await expect(downloadShow(origin, 'rehearsal', () => {})).rejects.toThrow('manifest integrity');
   expect(await loadShow(origin, 'rehearsal')).toBeNull();
 });
+
+
+it('checks the channel again and reuses already verified audio without downloading it again', async () => {
+  const a = release('old audio'); const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => a });
+  vi.stubGlobal('fetch', fetcher);
+  await downloadShow(origin, 'rehearsal', () => {});
+  storage.downloads.clear(); // Any attempted audio download would fail.
+  expect(await downloadShow(origin, 'rehearsal', () => {})).toEqual(a);
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+it('selects the new published revision on the next check', async () => {
+  const a = release('old audio'); const b = release('new audio');
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => a })
+    .mockResolvedValueOnce({ ok: true, json: async () => b }));
+  expect(await downloadShow(origin, 'rehearsal', () => {})).toEqual(a);
+  expect(await downloadShow(origin, 'rehearsal', () => {})).toEqual(b);
+  expect(await loadShow(origin, 'rehearsal')).toEqual(b);
+  expect(localAudio(a.files[0]!.sha256).exists).toBe(true);
+});
+it('rejects a failed latest check instead of returning the saved release', async () => {
+  const a = release('old audio');
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: async () => a })
+    .mockRejectedValueOnce(new Error('Offline')));
+  await downloadShow(origin, 'rehearsal', () => {});
+  await expect(downloadShow(origin, 'rehearsal', () => {})).rejects.toThrow('Offline');
+  expect(await loadShow(origin, 'rehearsal')).toEqual(a);
+});
