@@ -71,3 +71,9 @@ The checked-in example is `content/scenarios/dev.json` with `content/media-manif
 ## V1 acceptance record
 
 All §18 requirements are covered by adapter/unit/e2e regression tests: fixture import and canonical round-trip; runtime-validator-gated export; UI authoring; fixed, four-quadrant, and two-quadrant transitions with shared targets; unreachable/cycle diagnostics; all outcome presets; distinct-media and 2 GiB gates; reload-persistent drafts and corrupt-revision recovery; runtime/layout separation; and versioned reproducible exports. Studio has no production route or installation-control API, so publishing and active sessions remain outside it. The sole deferred item is multi-participant drag simulation (STEP-044); it is not an §18 acceptance-row omission.
+
+## Publish native device audio
+
+In Studio served from the venue server, choose **File → Publish to devices…**. Sign in as an operator, select **Rehearsal** or **Production**, and press **Publish to devices**. Studio exports the current draft; the server validates it and publishes a verified audio release to that channel. The result shows its scenario version, audio count, and revision. Native apps download the latest channel release before joining.
+
+Referenced MP3s must already be synced to the server. Missing files leave the old channel selected. Publishing is unavailable during an active show. This action changes only the native audio channel; use the existing scenario publishing and active-show controls separately. See [native player publishing](native-player.md#publish-directly-from-studio) for the complete workflow.

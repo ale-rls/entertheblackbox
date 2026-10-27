@@ -196,3 +196,5 @@ Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenari
 - Participant name/identity, group selection, cursor/buttons/reactions, narration/subtitles — `src/App.tsx`; existing protocol and authoritative server
 - Independent rehearsal/production content channels, SHA-256 immutable audio releases and atomic server-side promotion — `packages/show-content`, `pnpm publish-native-show`; mutable channel cache policy in `apps/server/src/static.ts`
 - Native lock-screen cue delivery is a physical-device acceptance requirement, not an automated guarantee. No fleet provisioning UI or live streaming fallback. Setup, publishing and rehearsal: [native player guide](docs/native-player.md).
+
+- **Studio native device publishing** — File → Publish to devices, operator sign-in, rehearsal/production selection, draft validation, release feedback, live-show/concurrent-request guards; `apps/studio/src/NativePublishPanel.tsx`, authenticated `POST /api/admin/native-shows/publish`, `packages/show-content` publisher. Channel publishing does not activate the server scenario.

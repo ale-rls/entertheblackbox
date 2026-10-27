@@ -64,6 +64,14 @@ eas build --profile preview --platform all
 
 Install the Android APK and registered-device iOS build using EAS's links. Register new iPhones before building or resigning the iOS app. For a custom development client, use the `development` profile and `pnpm start`. A preview build runs independently of Metro.
 
+## Publish directly from Studio
+
+Open Studio on the venue server at `/studio/`, open the draft, and choose **File → Publish to devices…**. Sign in with the same operator account used for Admin, choose **Rehearsal** or **Production**, then press **Publish to devices**. The panel reports the published scenario version, audio-file count, and release revision. Phones pick up the selected channel on their next **Update show & join**.
+
+The action compiles the current draft, validates the graph on the server, and invokes the same release publisher as the CLI. Every referenced MP3 must already exist in the server's media directory; sync newly uploaded media before publishing. Missing/invalid audio leaves the previous channel selected and produces an error. Concurrent publications are rejected, and publishing is disabled/rejected while a live show is active.
+
+This publishes the native audio channel only. It does not publish the scenario to PocketBase, change the active server show, or send an Expo update. Use the existing PocketBase publishing/active-show flow separately and ensure the server scenario matches the device release. The standalone Vite Studio has no publishing API; use the Studio served by the venue server. The CLI below remains available for scripted deployment.
+
 ## Two independent update systems
 
 | Change | Mechanism | New installed binary? |

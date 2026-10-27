@@ -781,3 +781,15 @@ describe("Studio feedback and keyboard entry", () => {
     expect(document.querySelector("[data-save-status]")?.getAttribute("aria-hidden")).toBe("true");
   });
 });
+
+
+it("opens device publishing from File and requires operator sign-in", async () => {
+  localStorage.clear();
+  await render(<App />);
+  await act(async () => { button("New show").click(); });
+  await act(async () => { button("File").click(); });
+  await act(async () => { button("Publish to devices…").click(); });
+  expect(document.querySelector("#publish-heading")?.textContent).toBe("Publish to devices");
+  expect(document.querySelector("#publish-email")).not.toBeNull();
+  expect(document.querySelector("#native-show-channel")).toBeNull();
+});
