@@ -25,8 +25,8 @@ const config: ExpoConfig = {
     blockedPermissions: ['android.permission.RECORD_AUDIO', 'android.permission.READ_EXTERNAL_STORAGE', 'android.permission.WRITE_EXTERNAL_STORAGE'],
   },
   plugins: [
-    ['expo-audio', { enableBackgroundPlayback: true, enableBackgroundRecording: false,
-      microphonePermission: false, recordAudioAndroid: false }],
+    // Native clock-scheduled playback: iOS background audio, Android media foreground service.
+    '@entertheblackbox/expo-audio-scheduler',
     ['expo-secure-store', { faceIDPermission: false }],
     ['expo-build-properties', { android: { usesCleartextTraffic: process.env.ALLOW_INSECURE_LAN === '1' } }],
   ],

@@ -1,0 +1,44 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:1:1-16:12
+INJECTED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:1:1-16:12
+	package
+		INJECTED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:1:11-69
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:2:3-75
+	android:name
+		ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:2:20-72
+uses-permission#android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK
+ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:3:3-90
+	android:name
+		ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:3:20-87
+uses-permission#android.permission.WAKE_LOCK
+ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:4:3-66
+	android:name
+		ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:4:20-63
+application
+ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:5:3-15:17
+service#org.entertheblackbox.audioscheduler.SchedulerService
+ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:7:5-14:15
+	android:exported
+		ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:9:7-30
+	android:foregroundServiceType
+		ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:10:7-52
+	android:name
+		ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:8:7-74
+intent-filter#action:name:androidx.media3.session.MediaSessionService
+ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:11:7-13:23
+action#androidx.media3.session.MediaSessionService
+ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:12:9-78
+	android:name
+		ADDED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml:12:17-75
+uses-sdk
+INJECTED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml
+INJECTED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/m/Documents/2026/intrbng/entertheblackbox/.worktrees/native-audio-scheduler/packages/expo-audio-scheduler/android/src/main/AndroidManifest.xml
