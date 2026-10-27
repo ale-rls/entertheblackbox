@@ -63,7 +63,7 @@ function storeParticipantName(name: string): void {
 const REJECTION_TEXT: Record<string, string> = {
   expired_grant: "This code has expired — scan the QR on the screen again.",
   room_full: "The room is full right now. Watch the screen and try again soon.",
-  rate_limited: "Too many attempts — wait a moment and scan again.",
+  rate_limited: "Connection retries paused briefly. Reconnecting automatically…",
   show_in_progress: "The show is in progress — wait for the next round.",
 };
 
@@ -481,7 +481,7 @@ export function App() {
         startedAt: state.synchronizedPhase.startedAt,
         endsAt: state.synchronizedPhase.startedAt + state.synchronizedPhase.expectedDurationMs,
       } : null} />}
-      {(janusRoute ? joinConfig?.janusAudioEnabled : joinConfig?.audioEnabled) && audioIdentity && <PhoneAudio transport={janusRoute ? "janus" : "icecast"} key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} sceneKey={JSON.stringify([state.phaseEpoch, state.phaseTiming?.startedAt, state.currentGroup?.id])} suspended={state.synchronizedPhase !== null} active={state.phoneAudioActive} />}
+      {(janusRoute ? joinConfig?.janusAudioEnabled : joinConfig?.audioEnabled) && audioIdentity && <PhoneAudio autoStart={!janusRoute} transport={janusRoute ? "janus" : "icecast"} key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} sceneKey={JSON.stringify([state.phaseEpoch, state.phaseTiming?.startedAt, state.currentGroup?.id])} suspended={state.synchronizedPhase !== null} active={state.phoneAudioActive} />}
       {identity && connection && <PhoneClockMonitor connection={connection} state={state} timingRef={synchronizedTiming} />}
       <footer className="hud">
         {state.currentGroup && <span className="phone-current-group" aria-label="Deine Gruppe" style={{ color: state.currentGroup.color }}>{state.currentGroup.label}</span>}

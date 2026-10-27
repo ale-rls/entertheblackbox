@@ -531,3 +531,24 @@ describe("participant admission", () => {
     expect(parseServerMessage(JSON.stringify(lastMessage(s))).ok).toBe(false);
   });
 });
+
+
+it("isolates verified recovery from shared-IP join throttling and still limits each participant", () => {
+  const admission = controller({ allowPublicJoin: true, rateLimiter: new InMemoryIpRateLimiter({ maxAttempts: 2, windowMs: 1000 }) });
+  const first = socket(); join(admission, first, "");
+  const lease = lastMessage(first).participantLease;
+  const second = socket(); join(admission, second, "");
+  const secondLease = lastMessage(second).participantLease;
+  const limited = socket(); join(admission, limited, "");
+  expect(lastMessage(limited)).toMatchObject({ reason: "rate_limited" });
+  for (let i = 0; i < 2; i++) {
+    const returning = socket(); join(admission, returning, "", lease);
+    expect(lastMessage(returning)).toMatchObject({ t: "identity", participantLease: lease });
+  }
+  const excessive = socket(); join(admission, excessive, "", lease);
+  expect(lastMessage(excessive)).toMatchObject({ reason: "rate_limited" });
+  const other = socket(); join(admission, other, "", secondLease);
+  expect(lastMessage(other)).toMatchObject({ t: "identity" });
+  const forged = socket(); join(admission, forged, "", lease + "x");
+  expect(lastMessage(forged)).toMatchObject({ reason: "rate_limited" });
+});
