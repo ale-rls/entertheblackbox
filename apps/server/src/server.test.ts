@@ -673,3 +673,30 @@ it("preloads only synchronized soundtracks even without a stream backend", async
     expect((await runtime.app.inject({ url: "/api/join-config" })).json().audioEnabled).toBe(false);
   } finally { await runtime.app.close(); }
 });
+
+
+it("publishes Studio native audio through the authenticated API and serves a usable channel", async () => {
+  const config = await fixture();
+  await writeFile(join(config.mediaDir, "voice.mp3"), "test narration bytes");
+  const runtime = await buildServer({ config, verifyOperatorToken: async token => token === "native-operator" });
+  const scenario = { version: "native-release", entryPhaseId: "voice", cyclesAllowed: false, phases: [
+    { id: "idle", kind: "idle" },
+    { id: "voice", kind: "narration", text: "Test", durationMs: 1000, next: "idle", phoneAudioSrc: "voice.mp3" },
+  ] };
+  try {
+    const publish = await runtime.app.inject({ method: "POST", url: "/api/admin/native-shows/publish",
+      headers: { authorization: "Bearer native-operator" }, payload: { channel: "rehearsal", scenario } });
+    expect(publish.statusCode).toBe(200);
+    const channel = await runtime.app.inject({ url: "/media/native-shows/channels/rehearsal.json" });
+    expect(channel.headers["cache-control"]).toBe("no-store");
+    const release = channel.json(); expect(release.revision).toBe(publish.json().revision);
+    const audio = await runtime.app.inject({ url: `/media/native-shows/audio/${release.files[0].sha256}.mp3` });
+    expect(audio.body).toBe("test narration bytes");
+    const missing = await runtime.app.inject({ method: "POST", url: "/api/admin/native-shows/publish",
+      headers: { authorization: "Bearer native-operator" }, payload: { channel: "rehearsal", scenario: { ...scenario,
+        phases: [scenario.phases[0], { ...scenario.phases[1], phoneAudioSrc: "missing.mp3" }] } } });
+    expect(missing.statusCode).toBe(422);
+    expect((await runtime.app.inject({ url: "/media/native-shows/channels/rehearsal.json" })).json().revision).toBe(release.revision);
+    expect(runtime.engine?.getSnapshot().scenarioVersion).toBe("test-1"); // Publishing does not activate this draft.
+  } finally { await runtime.app.close(); }
+});

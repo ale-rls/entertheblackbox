@@ -9,6 +9,7 @@ The native participant app is in `apps/native`. The browser app remains availabl
 - Per-group audio overrides, group selection, cursor positioning, phone-button votes, reactions, narration text and subtitles. The existing server chooses branches.
 - Persistent downloaded audio, SHA-256 and byte-count verification, immutable releases, separate rehearsal/production show selections, and preservation of the previous selection after failed downloads.
 - Existing Admin timing telemetry via protocol pings. Download readiness is shown on the phone before joining; this scaffold does not add an Admin fleet provisioning screen.
+- Automatic latest-show preparation before every join, without silently joining on stale content after a network error.
 - EAS development/preview/production app channels, fingerprint runtime compatibility, and explicit update checks while disconnected. No show-content update or app reload while joined.
 
 The native player does not implement the browser's optional post-show movement-retention opt-in. The server's existing timeout/default deletion policy continues to apply. There is no native streaming/live-microphone fallback or device-management service.
@@ -28,7 +29,7 @@ Use Node 22.13+ and the repo's pnpm 9.12.2. Run `pnpm install` at the repository
 
 3. Start the existing server with `SCENARIO_PATH` pointing to that same show and `MEDIA_MANIFEST_PATH` pointing to its normal media manifest. This publisher does not select/restart the server's scenario or replace Studio publishing. Use the existing scenario validation command before rehearsal. The app verifies `scenarioVersion` against cues; use distinct scenario versions when changing the graph. Server and all devices must use the intended content release, even when only audio bytes change.
 4. Check `https://YOUR_SERVER/media/native-shows/channels/rehearsal.json` is reachable. Use your actual server origin, without `/phone/` or another path. The venue server serves the channel with `no-store` and hashed audio with immutable caching.
-5. In the app enter the server, choose **rehearsal**, tap **Download / update show**, enter a name/device label, and tap **Join & start headphones**. Downloads include every possible group track. If already downloaded, **Use saved show** rechecks disk content without fetching the channel.
+5. In the app enter the server, choose **rehearsal**, enter a name/device label, and tap **Update show & join**. Every join fetches the current channel manifest and verifies/downloads its complete audio set before admission. Verified cached files are reused. A failed freshness check or download prevents joining; an older saved release is never used silently. **Download / update show** can prepare devices ahead of time; **Inspect saved show** verifies the saved copy without fetching the channel, but joining still requires a fresh check. Downloads include every possible group track.
 6. Start/operate the show through the existing Admin UI. Timing reports go to its existing timing monitor. Test two differently assigned devices before adding the fleet.
 
 For development on a Mac with Xcode, `cd apps/native && ALLOW_INSECURE_LAN=1 pnpm ios`. Android uses `ALLOW_INSECURE_LAN=1 pnpm android`. Preview/development EAS profiles also set this flag. Internal builds permit HTTP for venue testing, but use trusted HTTPS/WSS for production/store builds. iOS local-network permission must be granted. Never put signing keys, tokens, or private script/media files into git.
@@ -63,6 +64,14 @@ eas build --profile preview --platform all
 
 Install the Android APK and registered-device iOS build using EAS's links. Register new iPhones before building or resigning the iOS app. For a custom development client, use the `development` profile and `pnpm start`. A preview build runs independently of Metro.
 
+## Publish directly from Studio
+
+Open Studio on the venue server at `/studio/`, open the draft, and choose **File → Publish to devices…**. Sign in with the same operator account used for Admin, choose **Rehearsal** or **Production**, then press **Publish to devices**. The panel reports the published scenario version, audio-file count, and release revision. Phones pick up the selected channel on their next **Update show & join**.
+
+The action compiles the current draft, validates the graph on the server, and invokes the same release publisher as the CLI. Every referenced MP3 must already exist in the server's media directory; sync newly uploaded media before publishing. Missing/invalid audio leaves the previous channel selected and produces an error. Concurrent publications are rejected, and publishing is disabled/rejected while a live show is active.
+
+This publishes the native audio channel only. It does not publish the scenario to PocketBase, change the active server show, or send an Expo update. Use the existing PocketBase publishing/active-show flow separately and ensure the server scenario matches the device release. The standalone Vite Studio has no publishing API; use the Studio served by the venue server. The CLI below remains available for scripted deployment.
+
 ## Two independent update systems
 
 | Change | Mechanism | New installed binary? |
@@ -89,7 +98,7 @@ For show content, rerun the publisher with the desired channel after preparing t
 pnpm publish-native-show /absolute/path/show.json /absolute/path/content/media production
 ```
 
-The pointer changes only after all referenced audio files exist. On a remote host, upload hashed audio and release JSON first, then atomically replace the channel JSON last. Keep old releases/assets so installed devices and rollback remain valid. Roll back by atomically replacing the channel JSON with a saved release manifest; restore the corresponding server scenario separately if necessary. Devices select the replacement only after a successful download. Old on-device audio is retained; cache cleanup is a future fleet-management feature.
+The pointer changes only after all referenced audio files exist. On a remote host, upload hashed audio and release JSON first, then atomically replace the channel JSON last. Keep old releases/assets so installed devices and rollback remain valid. Roll back by atomically replacing the channel JSON with a saved release manifest; restore the corresponding server scenario separately if necessary. Devices select the replacement only after a successful download. Every new join automatically checks the current channel. Devices already joined keep their selected release until they leave; publishing does not interrupt an active performance. Publish before admitting participants and avoid changing the channel during admission, so all participants join the intended revision. The running server scenario must still match that release. Old on-device audio is retained; cache cleanup is a future fleet-management feature.
 
 ## Build for the stores
 

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,8 +7,13 @@ import { channelSchema, mediaPathSchema, manifestPayload, showManifestSchema, ty
 
 const hash = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
 export async function publishShow(scenarioFile: string, mediaDirectory: string, channel: string): Promise<ShowManifest> {
+  return publishScenario(JSON.parse(await readFile(scenarioFile, 'utf8')), mediaDirectory, channel);
+}
+
+/** Publish an already-exported Studio scenario without writing private scripts to disk. */
+export async function publishScenario(input: unknown, mediaDirectory: string, channel: string): Promise<ShowManifest> {
   const selectedChannel = channelSchema.parse(channel);
-  const scenario = scenarioSchema.parse(JSON.parse(await readFile(scenarioFile, 'utf8')));
+  const scenario = scenarioSchema.parse(input);
   const mediaRoot = await realpath(mediaDirectory);
   const sources = [...new Set(scenario.phases.flatMap(phase => {
     if (phase.kind === 'idle') return [];
@@ -39,7 +44,7 @@ export async function publishShow(scenarioFile: string, mediaDirectory: string, 
   const body = JSON.stringify(manifest, null, 2) + '\n';
   await writeFile(resolve(base, 'releases', `${manifest.revision}.json`), body);
   const target = resolve(base, 'channels', `${selectedChannel}.json`);
-  const temporary = `${target}.${process.pid}.tmp`;
+  const temporary = `${target}.${randomUUID()}.tmp`;
   await writeFile(temporary, body);
   await rename(temporary, target); // Promote only after every asset is present.
   return manifest;

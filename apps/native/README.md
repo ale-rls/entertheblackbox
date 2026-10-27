@@ -12,4 +12,4 @@ pnpm typecheck
 pnpm test
 ```
 
-The server still owns the show graph, groups, votes and phase times. This app downloads verified MP3s, joins the existing `/ws` protocol, and plays the participant's assigned audio from persistent device storage. Store publication and physical background reliability are not established by the scaffold's automated tests.
+The server still owns the show graph, groups, votes and phase times. Before every join, this app checks the selected published show channel, downloads/verifies its MP3s, then joins the existing `/ws` protocol, and plays the participant's assigned audio from persistent device storage. Store publication and physical background reliability are not established by the scaffold's automated tests.

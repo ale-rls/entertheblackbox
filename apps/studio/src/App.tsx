@@ -23,6 +23,7 @@ import { refreshDraftLocalMedia, runtimeMediaManifest, type MediaManifest } from
 import { PocketbaseMediaLibrary } from "./media/pocketbase-media.js";
 import { MediaLibraryDialog, type MediaLibraryRow } from "./media/MediaLibraryDialog.js";
 import { studioMediaKindForSource, type StudioMediaKind } from "./media/library.js";
+import { NativePublishPanel } from "./NativePublishPanel.js";
 import { productionDraftFromArtifact, type PublishedProductionArtifact } from "./production.js";
 import { projectPreviewUrl, storeProjectPreview } from "./preview/project-preview.js";
 import "@entertheblackbox/tool-ui/styles.css";
@@ -132,6 +133,7 @@ export function App() {
   const [devicePreviewDraftId, setDevicePreviewDraftId] = useState<string | null>(null);
   const [devicePreviewRequest, setDevicePreviewRequest] = useState(0);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [publishTarget, setPublishTarget] = useState<"server" | "devices">("server");
   const [productionImportOpen, setProductionImportOpen] = useState(false);
   const [publishForm, setPublishForm] = useState({ showId: "", name: "" });
   const [publishing, setPublishing] = useState(false);
@@ -872,7 +874,8 @@ export function App() {
       setExportFeedback({ status: "danger", message: `Deployment export failed: ${detail} Review Diagnostics, resolve the reported issues, and try again.` });
     }
   };
-  const openPublish = () => {
+  const openPublish = (target: "server" | "devices" = "server") => {
+    setPublishTarget(target);
     setPublishFeedback(undefined);
     setSignInFeedback(undefined);
     setStaleConflict(undefined);
@@ -976,7 +979,8 @@ export function App() {
         { separator: true },
         { label: "Export files", onSelect: () => Object.entries(exportArtifacts(draft)).forEach(([name, value]) => download(name, value)), disabled: blocked },
         { label: "Export for deployment", onSelect: exportDeployment, disabled: blocked },
-        { label: "Publish to PocketBase…", onSelect: openPublish, disabled: blocked },
+        { label: "Publish to PocketBase…", onSelect: () => openPublish(), disabled: blocked },
+        { label: "Publish to devices…", onSelect: () => openPublish("devices"), disabled: blocked },
         { label: "Save backup", onSelect: () => download(`${draft.name}.studio-backup.json`, exportBackup(draft)) },
         { separator: true },
         { label: "Close show", onSelect: closeShow },
@@ -1022,8 +1026,8 @@ export function App() {
       {exportFeedback && <Feedback id="studio-export-feedback" className="menubar-feedback" feedback={exportFeedback} />}
       <DevicePreview key={draft.id} draft={draft} phaseId={selectedPhase?.id} request={devicePreviewDraftId === draft.id ? devicePreviewRequest : 0} operator={operatorPb} onClose={() => setDevicePreviewRequest(0)} />
       {publishOpen && <div className="sc-tool-panel publish-panel" role="dialog" aria-labelledby="publish-heading">
-        <p className="sc-tool-eyebrow" id="publish-heading">Publish to PocketBase</p>
-        {showLifecycle === "active" && <LiveShowWarning />}
+        <p className="sc-tool-eyebrow" id="publish-heading">{publishTarget === "devices" ? "Publish to devices" : "Publish to PocketBase"}</p>
+        {showLifecycle === "active" && publishTarget === "server" && <LiveShowWarning />}
         {operatorEmail === null ? <>
           <p className="sc-tool-help">Sign in with your operator credentials (the same ones used for /admin). Stays signed in on this device for 30 days.</p>
           <form onSubmit={(event) => void signIn(event)}>
@@ -1041,6 +1045,8 @@ export function App() {
           {signInFeedback && <Feedback id="studio-signin-feedback" className="menubar-feedback" feedback={signInFeedback} />}
         </> : <>
           <p className="sc-tool-help">Signed in as {operatorEmail}. Publishing only works when Studio is served from apps/server. <button className="sc-tool-button" data-sc-tool-variant="quiet" type="button" onClick={signOut}>Sign out</button></p>
+          {publishTarget === "devices" ? <NativePublishPanel key={draft.id} token={operatorPb.authStore.token}
+            exportScenario={() => exportArtifacts(draft)["scenario.json"]} active={showLifecycle === "active"} onClose={() => setPublishOpen(false)} /> : <>
           <form onSubmit={(event) => void publishDraft(event)}>
             <label className="sc-tool-label" htmlFor="publish-show-id">Show ID
               <input id="publish-show-id" className="sc-tool-field sc-tool-mono" value={publishForm.showId} onChange={(event) => setPublishForm((form) => ({ ...form, showId: event.target.value }))} />
@@ -1066,6 +1072,7 @@ export function App() {
                 {publishing ? "Publishing…" : "Publish anyway, overwrite production"}
               </button>
             </div>
+          </>}
           </>}
         </>}
       </div>}
