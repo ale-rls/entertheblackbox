@@ -11,6 +11,7 @@ The server is authoritative: it manages admission, room state, timed vote snapsh
 - `apps/server` — Fastify HTTP and WebSocket server, phase engine, admission, and admin API.
 - `apps/display` — fullscreen React client for the installation screen.
 - `apps/phone` — mobile React controller used by participants.
+- `apps/native` — Expo iOS/Android participant player with downloaded audio and EAS updates; [setup and rehearsal](docs/native-player.md).
 - `apps/admin` — protected operational interface.
 - `apps/studio` — local visual editor for importing, authoring, validating, previewing, and exporting shows.
 - `apps/realtime-ws-coolify` — room-scoped, batched low-latency cursor relay, included in the production Coolify stack.

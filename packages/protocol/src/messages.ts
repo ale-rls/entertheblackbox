@@ -7,7 +7,7 @@ import {
   quadrantSchema,
   twoQuadrantFieldSchema,
   twoQuadrantSchema,
-} from "@entertheblackbox/scenario";
+} from "@entertheblackbox/scenario/schema";
 
 /**
  * WebSocket protocol (plan §7). All messages are JSON with a discriminator

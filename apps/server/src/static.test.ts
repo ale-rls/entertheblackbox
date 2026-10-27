@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
-import { registerBundleRoutes } from "./static.js";
+import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
 
 const apps: FastifyInstance[] = [];
 const roots: string[] = [];
@@ -110,4 +110,18 @@ it("serves the same phone bundle at the isolated route and preserves join query 
   expect(janus.body).toBe(normal.body);
   const redirect = await app.inject({ url: "/phone-janus?grant=test" });
   expect(redirect.headers.location).toBe("/phone-janus/?grant=test");
+});
+
+
+it('never caches mutable native show channels but keeps hashed audio immutable', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'native-show-route-')); roots.push(root);
+  await mkdir(join(root, 'native-shows/channels'), { recursive: true });
+  await mkdir(join(root, 'native-shows/audio'), { recursive: true });
+  await writeFile(join(root, 'native-shows/channels/rehearsal.json'), '{"format":1}');
+  await writeFile(join(root, 'native-shows/audio/hash.mp3'), 'audio');
+  const app = Fastify(); apps.push(app); registerMediaRoutes(app, root);
+  const channel = await app.inject({ url: '/media/native-shows/channels/rehearsal.json' });
+  expect(channel.statusCode).toBe(200); expect(channel.headers['cache-control']).toBe('no-store');
+  const audio = await app.inject({ url: '/media/native-shows/audio/hash.mp3' });
+  expect(audio.headers['cache-control']).toContain('immutable');
 });
