@@ -326,7 +326,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     engine: () => engine,
     ready: readiness.ready,
     phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
-    publishNativeShow: (scenario, channel, music) => publishNativeScenario(scenario, config.mediaDir, channel, music),
+    publishNativeShow: async (scenario, channel, music) => {
+      // Background music is chosen from the media library, so pull it down before the release is hashed.
+      if (music && options.pocketbase) await syncMediaFromPocketbase(options.pocketbase, config.mediaDir, music.src);
+      return publishNativeScenario(scenario, config.mediaDir, channel, music);
+    },
     startedAt,
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,

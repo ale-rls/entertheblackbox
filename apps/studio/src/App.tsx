@@ -1046,7 +1046,8 @@ export function App() {
         </> : <>
           <p className="sc-tool-help">Signed in as {operatorEmail}. Publishing only works when Studio is served from apps/server. <button className="sc-tool-button" data-sc-tool-variant="quiet" type="button" onClick={signOut}>Sign out</button></p>
           {publishTarget === "devices" ? <NativePublishPanel key={draft.id} token={operatorPb.authStore.token}
-            exportScenario={() => exportArtifacts(draft)["scenario.json"]} active={showLifecycle === "active"} onClose={() => setPublishOpen(false)} /> : <>
+            exportScenario={() => exportArtifacts(draft)["scenario.json"]}
+            musicSources={(localManifest?.files ?? []).map((file) => file.src).filter((src) => studioMediaKindForSource(src) === "audio")} active={showLifecycle === "active"} onClose={() => setPublishOpen(false)} /> : <>
           <form onSubmit={(event) => void publishDraft(event)}>
             <label className="sc-tool-label" htmlFor="publish-show-id">Show ID
               <input id="publish-show-id" className="sc-tool-field sc-tool-mono" value={publishForm.showId} onChange={(event) => setPublishForm((form) => ({ ...form, showId: event.target.value }))} />

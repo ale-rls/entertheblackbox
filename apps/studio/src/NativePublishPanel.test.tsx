@@ -13,7 +13,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); document.body.replaceChildren(); vi.unstubAllGlobals(); });
 async function render(active = false) {
-  await act(async () => root.render(<NativePublishPanel token="operator-token" exportScenario={exportScenario} active={active} onClose={() => {}} />));
+  await act(async () => root.render(<NativePublishPanel token="operator-token" exportScenario={exportScenario} musicSources={['atmosphere.mp3', 'drone.mp3']} active={active} onClose={() => {}} />));
 }
 async function submit() { await act(async () => { document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }); }
 it("publishes the current draft with operator credentials to the selected channel", async () => {
@@ -46,15 +46,17 @@ it("prevents duplicate submissions while a publication is pending", async () => 
   expect(document.querySelector('select')!.disabled).toBe(true);
   await act(async () => resolve(new Response(JSON.stringify({ revision: 'b'.repeat(64), fileCount: 0, scenarioVersion: 'draft-current' }))));
 });
-it("includes the chosen local background music in the published release", async () => {
+it("includes background music chosen from the media library in the published release", async () => {
   const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ revision: 'a'.repeat(64), fileCount: 4 })));
   vi.stubGlobal('fetch', fetcher); await render();
-  const inputs = document.querySelectorAll('input');
+  const music = document.querySelector<HTMLSelectElement>('#native-show-music')!;
+  expect([...music.options].map(option => option.value)).toEqual(['', 'atmosphere.mp3', 'drone.mp3']);
+  const volume = document.querySelector('input')!;
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
   await act(async () => {
-    setter.call(inputs[0], 'music/atmosphere.mp3'); inputs[0]!.dispatchEvent(new Event('input', { bubbles: true }));
-    setter.call(inputs[1], '0.15'); inputs[1]!.dispatchEvent(new Event('input', { bubbles: true }));
+    music.value = 'drone.mp3'; music.dispatchEvent(new Event('change', { bubbles: true }));
+    setter.call(volume, '0.15'); volume.dispatchEvent(new Event('input', { bubbles: true }));
   });
   await submit();
-  expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toMatchObject({ backgroundMusic: { src: 'music/atmosphere.mp3', volume: 0.15 } });
+  expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toMatchObject({ backgroundMusic: { src: 'drone.mp3', volume: 0.15 } });
 });

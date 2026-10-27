@@ -76,9 +76,9 @@ This publishes the native audio channel only. It does not publish the scenario t
 
 Install the app update containing background-music support before publishing a release with music. Older native clients cannot verify the extended manifest. Releases without music remain compatible.
 
-In **File → Publish to devices…**, enter the background music MP3's relative path in the server media directory and its volume (greater than zero, at most 1; default 0.2). The music must be real audible show content. No track is bundled or chosen automatically. Set these fields for every publication; leaving the path blank publishes a release without music. The existing Admin streaming-music controls do not configure this local layer.
+Upload the music MP3 to the shared media library (Studio **Media library**), the same place narration audio goes. Then, in **File → Publish to devices…**, choose it under **Background music** and set its volume (greater than zero, at most 1; default 0.2). Publishing pulls the chosen file from the library onto the server before the release is hashed, so it does not need to be copied there by hand. The music must be real audible show content. No track is bundled or chosen automatically. Set these fields for every publication; choosing **No background music** publishes a release without music. The existing Admin streaming-music controls do not configure this local layer.
 
-The CLI supports the same settings:
+The CLI supports the same settings, but reads the music from the media directory you pass it and does not pull from the library:
 
 ```sh
 pnpm publish-native-show /absolute/path/show.json /absolute/path/content/media rehearsal music/atmosphere.mp3 0.2
