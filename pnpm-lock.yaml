@@ -261,6 +261,9 @@ importers:
       '@entertheblackbox/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@entertheblackbox/show-content':
+        specifier: workspace:*
+        version: link:../../packages/show-content
       eventsource:
         specifier: ^5.1.1
         version: 5.1.1

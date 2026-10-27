@@ -1,3 +1,4 @@
+import { publishScenario as publishNativeScenario } from "@entertheblackbox/show-content/publisher";
 import { Rehearsals } from "./rehearsal/rehearsal.js";
 import { listWaitingVideos } from "./persistence/waiting-videos.js";
 import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
@@ -325,6 +326,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     engine: () => engine,
     ready: readiness.ready,
     phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
+    publishNativeShow: (scenario, channel) => publishNativeScenario(scenario, config.mediaDir, channel),
     startedAt,
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,

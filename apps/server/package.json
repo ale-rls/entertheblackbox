@@ -16,7 +16,8 @@
     "fastify": "^5.1.0",
     "pocketbase": "^0.27.3",
     "ws": "^8.18.0",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@entertheblackbox/show-content": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
