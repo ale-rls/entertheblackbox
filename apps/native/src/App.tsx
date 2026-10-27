@@ -71,8 +71,14 @@ export default function App() {
     setManifest(show); setStatus(`Ready: ${show.files.length} audio files verified`);
   }
   async function join() {
-    if (!manifest || !name.trim()) return;
+    if (connection.current || !name.trim()) return;
     const base = serverOrigin(origin);
+    setStatus('Checking latest published show');
+    // Capture this verified release for the whole session, never a stale React state value.
+    // Failure deliberately prevents admission; the saved show is not a silent fallback.
+    const latestShow = await downloadShow(base, channel, setStatus);
+    setManifest(latestShow);
+    setStatus(`Latest show ready: ${latestShow.revision.slice(0, 8)}`);
     const response = await fetch(`${base}/api/join-config`);
     if (!response.ok) throw new Error(`Server unavailable (${response.status})`);
     const config = joinConfig.parse(await response.json());
@@ -99,7 +105,7 @@ export default function App() {
         }
       },
     });
-    player.current = new ShowPlayer(manifest, c.clock, setAudioStatus);
+    player.current = new ShowPlayer(latestShow, c.clock, setAudioStatus);
     connection.current = c; setConnected(true); c.start();
   }
   async function updateApp() {
@@ -139,11 +145,12 @@ export default function App() {
       <View style={styles.row}>{(['rehearsal', 'production'] as const).map(value => <Button key={value} title={value} disabled={busy || value === channel}
         onPress={() => { setChannel(value); setManifest(null); }} />)}</View>
       <Button title="Download / update show" disabled={busy || !origin} onPress={() => void run(() => prepare(true))} />
-      <Button title="Use saved show" disabled={busy || !origin} onPress={() => void run(() => prepare(false))} />
+      <Button title="Inspect saved show" disabled={busy || !origin} onPress={() => void run(() => prepare(false))} />
       {manifest && <Text style={styles.text}>Show {manifest.scenarioVersion} · {manifest.files.length} files · {manifest.revision.slice(0, 8)}</Text>}
       <TextInput accessibilityLabel="Your name or device label" style={styles.input} value={name} onChangeText={setName} maxLength={40} editable={!busy}
         placeholder="Your name / device label" placeholderTextColor="#999" />
-      <Button title="Join & start headphones" disabled={busy || !manifest || !name.trim()} onPress={() => void run(join)} />
+      <Button title="Update show & join" disabled={busy || !origin.trim() || !name.trim()} onPress={() => void run(join)} />
+      <Text style={styles.muted}>Joining checks the latest published show and downloads missing audio. If the check fails, joining stops. The selected release stays fixed until you leave.</Text>
       <Button title="Check & install app update" disabled={busy} onPress={() => void run(updateApp)} />
       <Text style={styles.muted}>App channel: {Updates.channel ?? 'development'} · App updates and show downloads are separate.</Text>
     </> : <>
