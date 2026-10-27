@@ -630,7 +630,7 @@ describe("native show publishing", () => {
       const response = await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", headers: nativeHeaders, payload: { channel: "production", scenario: nativeScenario } });
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({ ok: true, channel: "production", revision: nativeManifest.revision, fileCount: 0 });
-      expect(publishNativeShow).toHaveBeenCalledWith(expect.objectContaining({ version: "native-test" }), "production");
+      expect(publishNativeShow).toHaveBeenCalledWith(expect.objectContaining({ version: "native-test" }), "production", undefined);
       expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "publish-native-show", detail: expect.objectContaining({ channel: "production" }) }));
     } finally { await app.close(); }
   });
@@ -666,4 +666,20 @@ describe("native show publishing", () => {
       expect((await app.inject(request)).statusCode).toBe(200);
     } finally { await app.close(); }
   });
+});
+
+it("validates and forwards native background music settings", async () => {
+  const publishNativeShow = vi.fn().mockResolvedValue(nativeManifest);
+  const { app } = setup({ lifecycle: "idle", publishNativeShow });
+  try {
+    for (const backgroundMusic of [{ src: "../bed.mp3", volume: 0.2 }, { src: "bed.mp3", volume: 0 }]) {
+      expect((await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", headers: nativeHeaders,
+        payload: { channel: "rehearsal", scenario: nativeScenario, backgroundMusic } })).statusCode).toBe(400);
+    }
+    expect(publishNativeShow).not.toHaveBeenCalled();
+    const backgroundMusic = { src: "bed.mp3", volume: 0.2 };
+    expect((await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", headers: nativeHeaders,
+      payload: { channel: "rehearsal", scenario: nativeScenario, backgroundMusic } })).statusCode).toBe(200);
+    expect(publishNativeShow).toHaveBeenCalledWith(expect.anything(), "rehearsal", backgroundMusic);
+  } finally { await app.close(); }
 });

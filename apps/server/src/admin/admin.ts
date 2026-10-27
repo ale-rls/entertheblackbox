@@ -1,4 +1,4 @@
-import { channelSchema, type ShowManifest, type ShowChannel } from "@entertheblackbox/show-content";
+import { backgroundMusicSchema, type BackgroundMusic, channelSchema, type ShowManifest, type ShowChannel } from "@entertheblackbox/show-content";
 import { scenarioSchema, validateScenario, type Scenario } from "@entertheblackbox/scenario";
 import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings } from "@entertheblackbox/protocol";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -27,7 +27,7 @@ export interface AdminDataSource {
 }
 
 export type RegisterAdminOptions = {
-  publishNativeShow?: (scenario: Scenario, channel: ShowChannel) => Promise<ShowManifest>;
+  publishNativeShow?: (scenario: Scenario, channel: ShowChannel, backgroundMusic?: BackgroundMusic) => Promise<ShowManifest>;
   registerRehearsals?: (app: FastifyInstance) => void;
   waitingVideos?: () => Promise<readonly { src: string; url: string; available: boolean }[]>;
   displaySettings?: { read: () => Promise<DisplaySettings>; write: (value: DisplaySettings) => Promise<DisplaySettings> };
@@ -367,19 +367,20 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       options.data?.audit({ action: "set-target-audience-size", at: new Date().toISOString(), detail: { targetAudienceSize } });
       return { ok: true, pending: targetAudienceSize };
     });
-    admin.post<{ Body: { channel?: unknown; scenario?: unknown } }>("/native-shows/publish", async (request, reply) => {
+    admin.post<{ Body: { channel?: unknown; scenario?: unknown; backgroundMusic?: unknown } }>("/native-shows/publish", async (request, reply) => {
       reply.header("cache-control", "no-store");
       if (!options.publishNativeShow) return reply.code(503).send({ error: "native_publishing_unavailable" });
       if (options.engine()?.lifecycleState === "active") return reply.code(409).send({ error: "show_active" });
       if (nativePublishBusy) return reply.code(409).send({ error: "publish_in_progress" });
       const channel = channelSchema.safeParse(request.body?.channel);
       const scenario = scenarioSchema.safeParse(request.body?.scenario);
-      if (!channel.success || !scenario.success) return reply.code(400).send({ error: "invalid_native_publish_request" });
+      const music = backgroundMusicSchema.optional().safeParse(request.body?.backgroundMusic);
+      if (!channel.success || !scenario.success || !music.success) return reply.code(400).send({ error: "invalid_native_publish_request" });
       const validation = validateScenario(scenario.data);
       if (!validation.ok) return reply.code(400).send({ error: "invalid_scenario", issues: validation.errors });
       nativePublishBusy = true;
       try {
-        const manifest = await options.publishNativeShow(scenario.data, channel.data);
+        const manifest = await options.publishNativeShow(scenario.data, channel.data, music.data);
         try {
           options.data?.audit({ action: "publish-native-show", at: new Date().toISOString(), detail: {
             channel: channel.data, revision: manifest.revision, scenarioVersion: manifest.scenarioVersion, fileCount: manifest.files.length,

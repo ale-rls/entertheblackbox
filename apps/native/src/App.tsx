@@ -91,9 +91,9 @@ export default function App() {
       status: value => { authorized.current = value === 'Connected'; setStatus(value); },
       ended: () => { leave(); setStatus('Show ended. Join again for the next performance.'); },
       message: message => {
-        if (message.t === 'identity') setIdentity({ name: name.trim(), color: message.color });
+        if (message.t === 'identity') { setIdentity({ name: name.trim(), color: message.color }); player.current?.startMusic(); }
         if (message.t === 'reload') setError(`Server requests compatible app content (${message.minVersion}). Leave before checking app updates.`);
-        if (message.t === 'join_rejected') { player.current?.setCue(null); setError(`Join rejected: ${message.reason}`); }
+        if (message.t === 'join_rejected') { player.current?.setEnabled(false); player.current?.setCue(null); setError(`Join rejected: ${message.reason}`); }
         if (message.t === 'snapshot' || message.t === 'phase') {
           if (!acceptsSnapshot(latest.current, message)) return;
           latest.current = message; setSnapshot(message); setVoting(null); setGroups(null);
@@ -175,7 +175,7 @@ export default function App() {
       <Button title="Pause this device" disabled={paused} onPress={() => { player.current?.setEnabled(false); setPaused(true); }} />
       <Button title="Resume at show position" onPress={() => { player.current?.setEnabled(true); setPaused(false); }} />
       <Button title="Leave show" onPress={leave} />
-      <Text style={styles.muted}>Downloaded audio keeps playing through short connection losses. New live cues need a connection. Locked-screen cue reception must be rehearsed on this device.</Text>
+      <Text style={styles.muted}>Downloaded narration and configured background music play locally. Keep the music audible during the show. New live cues need a connection. Locked-screen cue reception must be rehearsed on this device.</Text>
     </>}
   </ScrollView></SafeAreaView>;
 }

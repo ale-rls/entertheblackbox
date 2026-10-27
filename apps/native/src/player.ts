@@ -7,6 +7,10 @@ import { targetPosition, type Cue } from './cues';
 
 export class ShowPlayer {
   private player: AudioPlayer;
+  private music: AudioPlayer | null = null;
+  private musicSubscription: { remove(): void } | null = null;
+  private musicStarted = false;
+  private musicWasPlaying = false;
   private cue: Cue | null = null;
   private timer: ReturnType<typeof setInterval>;
   private seeking = false;
@@ -17,7 +21,40 @@ export class ShowPlayer {
   private status = 'Ready';
   constructor(private manifest: ShowManifest, private clock: ServerClock, private changed: (status: string) => void) {
     this.player = createAudioPlayer(null, { updateInterval: 250, keepAudioSessionActive: true });
+    const bed = manifest.backgroundMusic;
+    if (bed) {
+      const file = manifest.files.find(f => f.src === bed.src);
+      if (!file || !localAudio(file.sha256).exists) {
+        this.player.remove();
+        throw new Error(`Missing downloaded background music: ${bed.src}`);
+      }
+      this.music = createAudioPlayer({ uri: localAudio(file.sha256).uri }, { updateInterval: 250, keepAudioSessionActive: true });
+      this.music.loop = true;
+      this.music.volume = bed.volume;
+      // Keep lock-screen ownership on the continuous layer across narration changes.
+      this.music.setActiveForLockScreen(true, { title: 'Enter the Blackbox', artist: 'Show audio' },
+        { showSeekBackward: false, showSeekForward: false });
+      this.musicSubscription = this.music.addListener('playbackStatusUpdate', status => {
+        if (this.disposed || !this.musicStarted) return;
+        if (status.playing && !this.musicWasPlaying) {
+          this.enabled = true;
+          this.started = false;
+        } else if (!status.playing && this.musicWasPlaying && !status.isBuffering) {
+          // Explicit lock-screen pause or OS interruption stops narration too.
+          this.enabled = false;
+          this.player.pause();
+          this.report('Paused — use Resume at show position');
+        }
+        if (!status.isBuffering) this.musicWasPlaying = status.playing;
+      });
+    }
     this.timer = setInterval(() => { void this.tick(); }, 250);
+  }
+  startMusic() {
+    // Admission/reconnection must not override an explicit participant pause.
+    if (this.musicStarted || !this.music || this.disposed) return;
+    this.musicStarted = true;
+    if (this.enabled) this.music.play();
   }
   static async configure() {
     await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true,
@@ -35,13 +72,16 @@ export class ShowPlayer {
     if (!file || !localAudio(file.sha256).exists) { this.report(`Missing downloaded audio: ${cue.src}`); return; }
     this.cue = cue;
     this.player.replace({ uri: localAudio(file.sha256).uri });
-    this.player.setActiveForLockScreen(true, { title: 'Enter the Blackbox', artist: cue.src },
+    if (!this.music) this.player.setActiveForLockScreen(true, { title: 'Enter the Blackbox', artist: cue.src },
       { showSeekBackward: false, showSeekForward: false });
     this.report('Loading');
   }
   setEnabled(enabled: boolean) {
     this.enabled = enabled;
-    if (enabled) this.started = false;
+    if (enabled) {
+      this.started = false;
+      if (this.musicStarted) this.music?.play();
+    } else this.music?.pause();
     if (!enabled) { this.player.pause(); this.report('Paused on this device'); }
   }
   private async tick() {
@@ -76,5 +116,9 @@ export class ShowPlayer {
         state: this.status.startsWith('Playback error') || this.status.startsWith('Missing') || this.status.startsWith('Show changed') ? 'error'
           : this.player.playing ? 'playing' : !this.enabled ? 'paused' : this.status === 'Loading' ? 'loading' : 'waiting' }] };
   }
-  dispose() { this.disposed = true; ++this.generation; clearInterval(this.timer); this.player.setActiveForLockScreen(false); this.player.remove(); }
+  dispose() { this.disposed = true; ++this.generation; clearInterval(this.timer);
+    this.musicSubscription?.remove();
+    this.music?.setActiveForLockScreen(false); this.music?.remove();
+    if (!this.music) this.player.setActiveForLockScreen(false);
+    this.player.remove(); }
 }

@@ -326,7 +326,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     engine: () => engine,
     ready: readiness.ready,
     phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
-    publishNativeShow: (scenario, channel) => publishNativeScenario(scenario, config.mediaDir, channel),
+    publishNativeShow: (scenario, channel, music) => publishNativeScenario(scenario, config.mediaDir, channel, music),
     startedAt,
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,
