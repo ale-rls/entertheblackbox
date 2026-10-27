@@ -11,9 +11,25 @@ WORKDIR /app
 
 RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 
-COPY . .
+# Copy only the server/browser workspace manifests before source files. Source
+# edits then reuse this dependency layer; Expo and credits tooling are not
+# workspace members during installation and are never installed in this image.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/server/package.json ./apps/server/package.json
+COPY apps/display/package.json ./apps/display/package.json
+COPY apps/phone/package.json ./apps/phone/package.json
+COPY apps/admin/package.json ./apps/admin/package.json
+COPY apps/studio/package.json ./apps/studio/package.json
+COPY packages/protocol/package.json ./packages/protocol/package.json
+COPY packages/scenario/package.json ./packages/scenario/package.json
+COPY packages/shared/package.json ./packages/shared/package.json
+COPY packages/show-content/package.json ./packages/show-content/package.json
+COPY packages/studio-adapter/package.json ./packages/studio-adapter/package.json
+COPY packages/tool-ui/package.json ./packages/tool-ui/package.json
 
 RUN pnpm install --frozen-lockfile
+
+COPY . .
 
 # apps/admin authenticates operators against PocketBase directly from the
 # browser, so it needs PocketBase's URL baked in at build time via Vite's
@@ -71,7 +87,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 
 # tsx runs the server's TypeScript directly at runtime (no compile step),
-# so the runtime image needs the full workspace: source, node_modules
+# so the runtime image keeps workspace source, installed server/browser node_modules
 # (pnpm's symlinked structure ties packages/* into apps/server's
 # resolution), and the four built client bundles.
 COPY --from=build /app /app

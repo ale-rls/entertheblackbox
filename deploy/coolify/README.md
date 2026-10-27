@@ -254,3 +254,18 @@ Include the native-shows volume in off-server backups. Restore its entire conten
 (audio, releases, and channels) together while publishing is stopped; restore the
 matching server scenario separately. Never remove this volume during routine
 redeployment. Persistent storage is not itself a backup.
+
+## Server build dependency cache
+
+The frontend Dockerfile installs root tooling plus the server, four browser apps,
+and their shared workspace packages. Expo/React Native and credits-rendering
+packages are excluded from this installation; build native apps separately with
+EAS. Package manifests and the lockfile are copied before application source,
+so source-only edits can reuse the dependency layer. Dependency/lockfile changes,
+base-image changes, or cleared Docker caches still require a fresh installation.
+When adding a workspace dependency to these apps, add its package manifest to
+the Dockerfile's manifest-copy list before the install step.
+
+The four browser builds remain sequential. This reduces avoidable dependency
+work but does not establish the cause of a host crash or guarantee a particular
+CPU/RAM limit. Check deployment logs and host memory/disk metrics if builds fail.
