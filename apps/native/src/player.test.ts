@@ -73,9 +73,10 @@ it('pauses and resumes every layer natively on device pause', () => {
   p.setEnabled(true); expect(scheduler.resume).toHaveBeenCalledOnce();
 });
 it('mirrors lock-screen and interruption pauses from native code', () => {
-  const { status } = setup();
-  emit(true, 'remote'); expect(status).toHaveBeenLastCalledWith('Paused — use Resume at show position');
-  emit(false, 'remote'); expect(status).toHaveBeenLastCalledWith('Playing');
+  const { p, status } = setup();
+  expect(p.isPaused()).toBe(false);
+  emit(true, 'remote'); expect(p.isPaused()).toBe(true); expect(status).toHaveBeenLastCalledWith('Paused — use Resume at show position');
+  emit(false, 'remote'); expect(p.isPaused()).toBe(false); expect(status).toHaveBeenLastCalledWith('Playing');
   status.mockClear(); emit(true, 'api'); expect(status).not.toHaveBeenCalled();
 });
 it('reports native layer timing as main narration and extra music', () => {

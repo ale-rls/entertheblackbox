@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AppState, Button, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import * as Updates from 'expo-updates';
@@ -10,6 +10,8 @@ import { NativeConnection } from './connection';
 import { acceptsSnapshot, cueFromSnapshot, type Snapshot } from './cues';
 import { downloadShow, loadShow } from './content';
 import { ShowPlayer } from './player';
+import { StageCompanion } from './StageCompanion';
+import { playbackState, stageState } from './stage-state';
 import { actionPrompt } from './action-prompt';
 import { createActionAlerts, enableActionNotifications } from './notifications';
 
@@ -35,6 +37,7 @@ export default function App() {
   const alerts = useRef<ReturnType<typeof createActionAlerts> | null>(null);
   if (!alerts.current) alerts.current = createActionAlerts(() => setNotificationStatus('Could not show an alert. Keep the app open for show actions.'));
   const [paused, setPaused] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const [identity, setIdentity] = useState<{ name: string; color: string } | null>(null);
   const [clockText, setClockText] = useState('');
   const [serverNow, setServerNow] = useState(Date.now());
@@ -43,7 +46,6 @@ export default function App() {
   const latest = useRef<Snapshot | null>(null);
   const seq = useRef(0);
   const inputTime = useRef(0);
-  const pad = useRef({ width: 1, height: 1 });
   const operation = useRef(false);
   const authorized = useRef(false);
   const prompt = actionPrompt(snapshot, voting, groups, serverNow);
@@ -58,16 +60,19 @@ export default function App() {
     alerts.current?.update(null); setNotificationsEnabled(false); setAnswered(null);
     connection.current?.stop(); player.current?.dispose(); connection.current = null; player.current = null;
     latest.current = null; authorized.current = false; setSnapshot(null); setVoting(null); setGroups(null); setIdentity(null);
-    setConnected(false); setPaused(false); setStatus('Disconnected'); setAudioStatus('Audio stopped');
+    setConnected(false); setPaused(false); setPlaying(false); setError(''); setNotificationStatus(''); setStatus('Disconnected'); setAudioStatus('Audio stopped');
   }
   useEffect(() => {
     const listener = AppState.addEventListener('change', state => { if (state === 'active') connection.current?.resume(); });
     const timer = setInterval(() => {
       const c = connection.current, s = latest.current, p = player.current;
-      if (!c || !s || !p) return;
+      if (!c || !p) return;
       setServerNow(c.clock.now());
       const timing = p.timing();
+      setPlaying(playbackState(timing).playing && !p.isPaused());
+      setPaused(p.isPaused());
       setClockText(`Clock ${timing.calibrated ? 'measured' : 'waiting'} · round trip ${Math.round(timing.roundTripMs ?? 0)} ms · drift ${Math.round(timing.media[0]?.driftMs ?? 0)} ms`);
+      if (!s) return;
       c.send({ t: 'ping', v: PROTOCOL_VERSION, clientTime: Date.now(), timing: {
         sessionId: s.sessionId, phaseId: s.phase.id, phaseEpoch: s.phaseEpoch, routingEpoch: s.routingEpoch ?? 0, timing } });
     }, 1000);
@@ -130,82 +135,50 @@ export default function App() {
     connection.current = c; setConnected(true); c.start();
   }
   async function updateApp() {
+    if (connection.current) return;
     if (!Updates.isEnabled) throw new Error('EAS updates are available in a configured preview or production build.');
     setStatus('Checking app update');
     const update = await Updates.checkForUpdateAsync();
     if (!update.isAvailable) { setStatus('App is up to date'); return; }
-    await Updates.fetchUpdateAsync(); await Updates.reloadAsync();
+    setStatus('Downloading app update');
+    await Updates.fetchUpdateAsync(); setStatus('Restarting app'); await Updates.reloadAsync();
   }
   function vote(outcome: string) {
     const s = latest.current;
-    if (s && authorized.current) { acknowledgeAction('vote'); connection.current?.send({ t: 'button_vote', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, outcome }); }
+    if (s && authorized.current && view.canAct && view.voting?.method === 'phone-buttons' && !view.voting.closed) { acknowledgeAction('vote'); connection.current?.send({ t: 'button_vote', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, outcome }); }
   }
   function point(x: number, y: number) {
     const s = latest.current;
-    if (!s || !authorized.current || Date.now() - inputTime.current < 50) return;
+    if (!s || !authorized.current || !view.cursorOpen || Date.now() - inputTime.current < 50) return;
     acknowledgeAction('vote');
     inputTime.current = Date.now();
     connection.current?.send({ t: 'input', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, seq: seq.current++,
-      x: Math.max(0, Math.min(1, x / pad.current.width)), y: Math.max(0, Math.min(1, y / pad.current.height)) });
+      x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) });
   }
-  const phase = snapshot?.phase;
-  const title = phase && 'title' in phase ? phase.title : null;
-  const subtitle = phase && 'subtitles' in phase ? phase.subtitles?.filter(s => serverNow - phase.startedAt >= s.startAtMs && serverNow - phase.startedAt < s.endAtMs).map(s => s.text).join('\n') : null;
-  const rating = phase && 'rating' in phase ? phase.rating : null;
-  const ratingOpen = rating && (!rating.windows || rating.windows.some(w => serverNow - phase!.startedAt >= w.startAtMs && serverNow - phase!.startedAt < w.endAtMs));
-  const cursorOpen = phase && ((phase.kind === 'idle' || phase.kind === 'video') ||
-    (voting?.method === 'phone-cursor' && !voting.closed)) && (!('showCursors' in phase) || phase.showCursors !== false);
-  return <SafeAreaView style={styles.screen}><ScrollView contentContainerStyle={styles.content}>
-    <Text style={styles.heading}>ENTER THE BLACKBOX</Text>
-    <Text style={styles.text}>{status}</Text>
-    {!!notificationStatus && <Text style={styles.muted}>{notificationStatus}</Text>}
-    {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-    {!connected ? <>
-      <Text style={styles.label}>Venue server</Text>
-      <TextInput accessibilityLabel="Venue server" style={styles.input} value={origin} autoCapitalize="none" autoCorrect={false} editable={!busy}
-        placeholder="https://show.example.org" placeholderTextColor="#999" onChangeText={v => { setOrigin(v); setManifest(null); }} />
-      <Text style={styles.label}>Show channel: {channel}</Text>
-      <View style={styles.row}>{(['rehearsal', 'production'] as const).map(value => <Button key={value} title={value} disabled={busy || value === channel}
-        onPress={() => { setChannel(value); setManifest(null); }} />)}</View>
-      <Button title="Download / update show" disabled={busy || !origin} onPress={() => void run(() => prepare(true))} />
-      <Button title="Inspect saved show" disabled={busy || !origin} onPress={() => void run(() => prepare(false))} />
-      {manifest && <Text style={styles.text}>Show {manifest.scenarioVersion} · {manifest.files.length} files · {manifest.revision.slice(0, 8)}</Text>}
-      <TextInput accessibilityLabel="Your name or device label" style={styles.input} value={name} onChangeText={setName} maxLength={40} editable={!busy}
-        placeholder="Your name / device label" placeholderTextColor="#999" />
-      <Button title="Update show & join" disabled={busy || !origin.trim() || !name.trim()} onPress={() => void run(join)} />
-      <Text style={styles.muted}>Joining checks the latest published show and downloads missing audio. If the check fails, joining stops. The selected release stays fixed until you leave.</Text>
-      <Button title="Check & install app update" disabled={busy} onPress={() => void run(updateApp)} />
-      <Text style={styles.muted}>App channel: {Updates.channel ?? 'development'} · App updates and show downloads are separate.</Text>
-    </> : <>
-      {identity && <Text style={[styles.heading, { color: identity.color }]}>{identity.name}</Text>}
-      <Text style={styles.text}>{snapshot?.currentGroup?.label ?? 'Waiting for group'}</Text>
-      <Text style={styles.heading}>{subtitle || title || (phase?.kind === 'narration' ? phase.text : '')}</Text>
-      <Text style={styles.text}>{audioStatus}</Text><Text style={styles.muted}>{clockText}</Text>
-      {groups?.groups.map(group => <Button key={group.id} title={group.label} onPress={() => {
-        const s = latest.current; if (s && authorized.current) { acknowledgeAction('group'); connection.current?.send({ t: 'group_selection', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, groupId: group.id }); }
-      }} />)}
-      {voting && <Text style={styles.text}>{voting.question}</Text>}
-      {voting?.method === 'phone-buttons' && voting.options.map(option => <Button key={option.id} title={option.label} disabled={voting.closed} onPress={() => vote(option.id)} />)}
-      {voting?.method === 'physical' && <Text style={styles.text}>Move to your answer in the room.</Text>}
-      {cursorOpen && <View style={styles.pad} onLayout={event => { pad.current = event.nativeEvent.layout; }}
-        onStartShouldSetResponder={() => true} onMoveShouldSetResponder={() => true}
-        onResponderGrant={event => point(event.nativeEvent.locationX, event.nativeEvent.locationY)}
-        onResponderMove={event => point(event.nativeEvent.locationX, event.nativeEvent.locationY)}>
-        <Text style={styles.text}>Touch or drag to position your cursor</Text></View>}
-      {!!ratingOpen && <View style={styles.row}>{(['applause', 'boo'] as const).map(kind => <Button key={kind} title={kind} onPress={() => {
-        const s = latest.current; if (s && authorized.current) { acknowledgeAction('rating'); connection.current?.send({ t: 'reaction', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, kind }); }
-      }} />)}</View>}
-      <Button title="Pause this device" disabled={paused} onPress={() => { player.current?.setEnabled(false); setPaused(true); }} />
-      <Button title="Resume at show position" onPress={() => { player.current?.setEnabled(true); setPaused(false); }} />
-      <Button title="Leave show" onPress={leave} />
-      <Text style={styles.muted}>Downloaded narration and configured background music play locally. Keep the music audible during the show. New live cues need a connection. Locked-screen cue reception must be rehearsed on this device.</Text>
-    </>}
-  </ScrollView></SafeAreaView>;
+  const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
+  return <StageCompanion connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
+    paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
+    origin={origin} channel={channel} name={name} manifest={manifest} identity={identity} clockText={clockText}
+    notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}
+    onOrigin={value => { setOrigin(value); setManifest(null); }}
+    onChannel={value => { setChannel(value); setManifest(null); }} onName={setName}
+    onPrepare={download => void run(() => prepare(download))} onJoin={() => void run(join)}
+    onUpdate={() => void run(updateApp)} onLeave={leave}
+    onPause={() => { player.current?.setEnabled(false); setPaused(true); setPlaying(false); }}
+    onResume={() => { player.current?.setEnabled(true); setPaused(false); }}
+    onVote={vote} onPoint={point}
+    onGroup={groupId => {
+      const s = latest.current;
+      if (s && authorized.current && view.canAct) {
+        acknowledgeAction('group');
+        connection.current?.send({ t: 'group_selection', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, groupId });
+      }
+    }}
+    onReaction={kind => {
+      const s = latest.current;
+      if (s && authorized.current && view.ratingOpen) {
+        acknowledgeAction('rating');
+        connection.current?.send({ t: 'reaction', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, kind });
+      }
+    }} />;
 }
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#101014' }, content: { padding: 24, gap: 18 },
-  heading: { color: '#fff', fontSize: 24, fontWeight: '700' }, text: { color: '#eee', fontSize: 16 },
-  muted: { color: '#aaa', fontSize: 13 }, error: { color: '#ff9c9c', fontSize: 16 }, label: { color: '#eee' },
-  input: { backgroundColor: '#26262c', color: '#fff', borderRadius: 8, padding: 14, fontSize: 16 },
-  row: { flexDirection: 'row', gap: 16 }, pad: { height: 220, backgroundColor: '#30303b', alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
-});
