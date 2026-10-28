@@ -778,6 +778,32 @@ describe("PhaseEngine lifecycle", () => {
     ]);
   });
 
+  it("allows shows beyond thirty minutes and enforces the default three-hour limit", () => {
+    const startedAt = 1_000;
+    const checkpoints: PhaseCheckpoint[] = [];
+    const engine = new PhaseEngine({
+      scenario: scenarioSchema.parse({
+        version: "long-show", entryPhaseId: "long-scene", phases: [
+          { kind: "idle", id: "idle" },
+          { kind: "narration", id: "long-scene", text: "Long performance", durationMs: 4 * 60 * 60 * 1000, next: "idle" },
+        ],
+      }),
+      registry: new ParticipantRegistry(2),
+      installationId: "inst-1", roomId: "room-1", showId: "show-1",
+      displayToken: "display-secret", now: () => startedAt,
+      onCheckpoint: checkpoint => checkpoints.push(checkpoint),
+    });
+    expect(engine.adminStart(startedAt)).toEqual({ ok: true });
+    engine.tick(startedAt + 30 * 60 * 1000);
+    expect(engine.lifecycleState).toBe("active");
+    engine.tick(startedAt + 3 * 60 * 60 * 1000 - 1);
+    expect(engine.lifecycleState).toBe("active");
+    engine.tick(startedAt + 3 * 60 * 60 * 1000);
+    expect(engine.lifecycleState).toBe("idle");
+    expect(checkpoints.at(-1)?.reason).toBe("max-session-duration");
+    engine.stop();
+  });
+
   it("keeps interactive scenes running without input but enforces max duration", () => {
     const cases = [
       { label: "interactive-idle-timeout", trigger: (engine: PhaseEngine, now: number) => engine.tick(now + 100) },

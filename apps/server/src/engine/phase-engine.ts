@@ -52,7 +52,7 @@ export type PhaseEnginePolicy = {
 export const DEFAULT_PHASE_ENGINE_POLICY: PhaseEnginePolicy = {
   lobbyCountdownMs: 10_000,
   interactiveIdleTimeoutMs: 180_000,
-  maxSessionDurationMs: 1_800_000,
+  maxSessionDurationMs: 3 * 60 * 60 * 1000,
   displayDisconnectTimeoutMs: 30_000,
 };
 
