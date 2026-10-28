@@ -191,6 +191,8 @@ Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenari
 
 ## Native participant app — `apps/native`
 
+- Dark Stage companion screens separate setup/device diagnostics from live participation, with abstract header artwork, full-width cursor control, accessible directional controls, and an animated playback activity field driven by native layer state (not an amplitude meter). Respects reduced motion and stops animation in background; recovery/paused/closed-voting states retain server authority — `src/StageCompanion.tsx`, `src/stage-state.ts`. Display video remains on the shared screen; no phone image/video source exists in the current protocol.
+
 - iOS/Android system action notifications for group selection, phone voting/cursors and reaction windows; permission requested on join, tap opens the app, duplicate suppression and cleanup on answer/phase change/leave. Alerts are silent to preserve show audio. Live delivery depends on WebSocket reception; force-quit/offline delivery is not supported. Requires a new native build and locked-device acceptance — `src/action-prompt.ts`, `src/notifications.ts`.
 
 - Expo iOS/Android builds, preview/production EAS Update channels, fingerprint runtime compatibility, explicit disconnected-only updates — `app.config.ts`, `eas.json`, `src/App.tsx`

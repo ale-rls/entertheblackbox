@@ -14,6 +14,14 @@ The native participant app is in `apps/native`. The browser app remains availabl
 
 The native player does not implement the browser's optional post-show movement-retention opt-in. The server's existing timeout/default deletion policy continues to apply. There is no native streaming/live-microphone fallback or device-management service.
 
+## Stage companion screens
+
+The native UI uses a dark stage-focused layout with abstract header artwork and no footer branding. Enter a name on the welcome screen; **Device settings** contains the venue, show channel, download/inspect actions and app updates. During a session, **Device details** exposes connection/audio diagnostics without allowing content updates. Leaving returns to setup.
+
+Live scenes show the current instruction/subtitles and group, server-provided voting/group choices and reaction windows. Cursor input occupies the full screen width, with drag control and accessible direction buttons. Closed or expired votes and disconnected sessions cannot submit answers. Native lock-screen pauses are reflected in the resume control.
+
+The full-width audio field is a playback activity animation driven by the native scheduler's playing layers, including the music bed. It is not a measured waveform or a guarantee of audible output. Animation stops when paused/backgrounded and stays static with Reduce Motion enabled. Existing videos/images remain on the shared display; the current protocol has no participant-phone media source.
+
 ## First local run
 
 Use Node 22.13+ and the repo's pnpm 9.12.2. Run `pnpm install` at the repository root. Expo Go is not the acceptance environment for background playback; install a development or preview build.
