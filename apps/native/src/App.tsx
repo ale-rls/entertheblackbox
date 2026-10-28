@@ -10,6 +10,8 @@ import { NativeConnection } from './connection';
 import { acceptsSnapshot, cueFromSnapshot, type Snapshot } from './cues';
 import { downloadShow, loadShow } from './content';
 import { ShowPlayer } from './player';
+import { actionPrompt } from './action-prompt';
+import { createActionAlerts, enableActionNotifications } from './notifications';
 
 const joinConfig = z.object({ installationId: z.string().min(1), roomId: z.string().min(1) });
 type Voting = Extract<ServerToClientMessage, { t: 'voting_options' }>;
@@ -27,6 +29,11 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [voting, setVoting] = useState<Voting | null>(null);
   const [groups, setGroups] = useState<Groups | null>(null);
+  const [notificationStatus, setNotificationStatus] = useState('');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [answered, setAnswered] = useState<string | null>(null);
+  const alerts = useRef<ReturnType<typeof createActionAlerts> | null>(null);
+  if (!alerts.current) alerts.current = createActionAlerts(() => setNotificationStatus('Could not show an alert. Keep the app open for show actions.'));
   const [paused, setPaused] = useState(false);
   const [identity, setIdentity] = useState<{ name: string; color: string } | null>(null);
   const [clockText, setClockText] = useState('');
@@ -39,7 +46,16 @@ export default function App() {
   const pad = useRef({ width: 1, height: 1 });
   const operation = useRef(false);
   const authorized = useRef(false);
+  const prompt = actionPrompt(snapshot, voting, groups, serverNow);
+  useEffect(() => {
+    alerts.current?.update(connected && status === 'Connected' && notificationsEnabled && prompt?.key !== answered ? prompt : null);
+  }, [connected, status, notificationsEnabled, prompt?.key, answered]);
+  function acknowledgeAction(kind: 'group' | 'vote' | 'rating') {
+    if (!prompt || !(kind === 'rating' ? /:rating:\d+$/.test(prompt.key) : prompt.key.endsWith(`:${kind}`))) return;
+    setAnswered(prompt?.key ?? null); alerts.current?.update(null);
+  }
   function leave() {
+    alerts.current?.update(null); setNotificationsEnabled(false); setAnswered(null);
     connection.current?.stop(); player.current?.dispose(); connection.current = null; player.current = null;
     latest.current = null; authorized.current = false; setSnapshot(null); setVoting(null); setGroups(null); setIdentity(null);
     setConnected(false); setPaused(false); setStatus('Disconnected'); setAudioStatus('Audio stopped');
@@ -55,7 +71,7 @@ export default function App() {
       c.send({ t: 'ping', v: PROTOCOL_VERSION, clientTime: Date.now(), timing: {
         sessionId: s.sessionId, phaseId: s.phase.id, phaseEpoch: s.phaseEpoch, routingEpoch: s.routingEpoch ?? 0, timing } });
     }, 1000);
-    return () => { listener.remove(); clearInterval(timer); connection.current?.stop(); player.current?.dispose(); };
+    return () => { alerts.current?.update(null); listener.remove(); clearInterval(timer); connection.current?.stop(); player.current?.dispose(); };
   }, []);
   async function run(work: () => Promise<void>) {
     if (operation.current) return;
@@ -84,6 +100,11 @@ export default function App() {
     const config = joinConfig.parse(await response.json());
     const leaseKey = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${base}:${config.installationId}`);
     const lease = await SecureStore.getItemAsync(leaseKey);
+    try {
+      const enabled = await enableActionNotifications();
+      setNotificationsEnabled(enabled);
+      setNotificationStatus(enabled ? 'Show action notifications enabled' : 'Notifications are off. Enable them in device settings, or keep the app open for show actions.');
+    } catch { setNotificationStatus('Notifications unavailable. Keep the app open for show actions.'); }
     await ShowPlayer.configure();
     const c = new NativeConnection({ origin: base, ...config, name: name.trim(),
       clientVersion: process.env.EXPO_PUBLIC_SERVER_BUILD_VERSION ?? '0.0.0-dev', lease,
@@ -96,7 +117,7 @@ export default function App() {
         if (message.t === 'join_rejected') { player.current?.setEnabled(false); player.current?.setCue(null); setError(`Join rejected: ${message.reason}`); }
         if (message.t === 'snapshot' || message.t === 'phase') {
           if (!acceptsSnapshot(latest.current, message)) return;
-          latest.current = message; setSnapshot(message); setVoting(null); setGroups(null);
+          latest.current = message; setServerNow(c.clock.now()); setSnapshot(message); setVoting(null); setGroups(null);
           player.current?.setCue(cueFromSnapshot(message));
         }
         if ((message.t === 'voting_options' || message.t === 'group_selection_options') &&
@@ -117,11 +138,12 @@ export default function App() {
   }
   function vote(outcome: string) {
     const s = latest.current;
-    if (s && authorized.current) connection.current?.send({ t: 'button_vote', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, outcome });
+    if (s && authorized.current) { acknowledgeAction('vote'); connection.current?.send({ t: 'button_vote', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, outcome }); }
   }
   function point(x: number, y: number) {
     const s = latest.current;
     if (!s || !authorized.current || Date.now() - inputTime.current < 50) return;
+    acknowledgeAction('vote');
     inputTime.current = Date.now();
     connection.current?.send({ t: 'input', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, seq: seq.current++,
       x: Math.max(0, Math.min(1, x / pad.current.width)), y: Math.max(0, Math.min(1, y / pad.current.height)) });
@@ -136,6 +158,7 @@ export default function App() {
   return <SafeAreaView style={styles.screen}><ScrollView contentContainerStyle={styles.content}>
     <Text style={styles.heading}>ENTER THE BLACKBOX</Text>
     <Text style={styles.text}>{status}</Text>
+    {!!notificationStatus && <Text style={styles.muted}>{notificationStatus}</Text>}
     {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
     {!connected ? <>
       <Text style={styles.label}>Venue server</Text>
@@ -159,7 +182,7 @@ export default function App() {
       <Text style={styles.heading}>{subtitle || title || (phase?.kind === 'narration' ? phase.text : '')}</Text>
       <Text style={styles.text}>{audioStatus}</Text><Text style={styles.muted}>{clockText}</Text>
       {groups?.groups.map(group => <Button key={group.id} title={group.label} onPress={() => {
-        const s = latest.current; if (s && authorized.current) connection.current?.send({ t: 'group_selection', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, groupId: group.id });
+        const s = latest.current; if (s && authorized.current) { acknowledgeAction('group'); connection.current?.send({ t: 'group_selection', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, groupId: group.id }); }
       }} />)}
       {voting && <Text style={styles.text}>{voting.question}</Text>}
       {voting?.method === 'phone-buttons' && voting.options.map(option => <Button key={option.id} title={option.label} disabled={voting.closed} onPress={() => vote(option.id)} />)}
@@ -170,7 +193,7 @@ export default function App() {
         onResponderMove={event => point(event.nativeEvent.locationX, event.nativeEvent.locationY)}>
         <Text style={styles.text}>Touch or drag to position your cursor</Text></View>}
       {!!ratingOpen && <View style={styles.row}>{(['applause', 'boo'] as const).map(kind => <Button key={kind} title={kind} onPress={() => {
-        const s = latest.current; if (s && authorized.current) connection.current?.send({ t: 'reaction', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, kind });
+        const s = latest.current; if (s && authorized.current) { acknowledgeAction('rating'); connection.current?.send({ t: 'reaction', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, kind }); }
       }} />)}</View>}
       <Button title="Pause this device" disabled={paused} onPress={() => { player.current?.setEnabled(false); setPaused(true); }} />
       <Button title="Resume at show position" onPress={() => { player.current?.setEnabled(true); setPaused(false); }} />
