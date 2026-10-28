@@ -2,7 +2,7 @@
 
 The show server is the time authority. Every runtime cue has a server Unix-millisecond `startedAt`, a session/phase epoch, and (where applicable) `deadlineAt`. Position is `(serverNow - startedAt) / 1000`. Decision and subtitle windows are offsets from that same start. Parallel group branches share server time but have independent cue starts; transferring a participant adopts the destination cue's timestamp.
 
-Display and Phone bootstrap from snapshot arrival time, then estimate clock offset from ping/pong midpoints. Snapshot estimates include network delay; measured offsets still have uncertainty on asymmetric links. Admin samples the authenticated status request midpoint. Its integrated Show clock monitor lists active cue starts and device measurements, and reports stale observations. An elapsed cue counter is not a precomputed linear show duration: decisions and group branches change the route.
+Display and Phone bootstrap from snapshot arrival time, then estimate clock offset from ping/pong midpoints. Snapshot estimates include network delay; measured offsets still have uncertainty on asymmetric links. Admin samples the authenticated status request midpoint. Its integrated Show clock monitor lists active cue starts and device measurements, and reports stale observations. An elapsed cue counter is not a precomputed linear show duration: decisions and group branches change the route. Native app narration runs 400 ms behind its cue (start and end), so its reported elapsed time, target and drift are relative to that delayed start; video phase audio stays on the cue clock.
 
 ## App responsibilities
 

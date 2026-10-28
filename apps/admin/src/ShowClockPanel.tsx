@@ -69,7 +69,7 @@ export function ShowClockPanel({ clock, status, stale, receivedAt }: { clock: Se
     <p className="sc-tool-help">Positions are last reported browser estimates. Within tolerance means ±250 ms at that report; reports older than 6 seconds are stale. Synchronized phone audio includes estimated output latency. Stream buffering and actual headphone output are not measured.</p>
     <details><summary>Cue timesheet · {rows.length} {rows.length === 1 ? "timeline" : "timelines"}</summary><div className="clock-table-scroll"><table><thead><tr><th>Timeline</th><th>Scene</th><th>State</th><th>Cue elapsed</th></tr></thead><tbody>
       {rows.map((row) => <tr key={row.key}><td>{row.label}</td><td>{row.phaseId}</td><td>{row.state}</td><td>{row.startedAt === undefined || !clock.ready ? "—" : `${(Math.max(0, now - row.startedAt) / 1000).toFixed(1)} s`}</td></tr>)}
-    </tbody></table></div></details>
+    </tbody></table></div><p className="sc-tool-help">Native app narration starts 0.4 s after its cue so every phone plays it from the beginning; its position, target and drift are measured from that delayed start. Video scenes stay on the cue clock with the display.</p></details>
     <p><a href="/admin/?view=audio">Per-phone stream and recovery diagnostics</a></p>
   </section>;
 }

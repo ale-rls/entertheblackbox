@@ -27,6 +27,7 @@ it("renders measured device data, filters phones, and marks stopped polling stal
   await act(async () => root.render(<ShowClockPanel clock={clock} status={status} stale={false} receivedAt={10000} />));
   expect(host.querySelector('section')?.getAttribute('aria-labelledby')).toBe("show-clock-heading");
   expect(host.textContent).toContain("4.90 / 5.00 s"); expect(host.textContent).toContain("-100 ms");
+  expect(host.textContent).toContain("Native app narration starts 0.4 s after its cue");
   const select = host.querySelector("select")!;
   await act(async () => { select.value = "phone"; select.dispatchEvent(new Event("change", { bubbles: true })); });
   expect(host.textContent).not.toContain("Main display"); expect(host.textContent).toContain("Rehearsal phone");
