@@ -18,7 +18,16 @@ it("distinguishes drift, missing reports, stale clocks, and unmeasurable streams
   expect(timingHealth({ ...row, timing: null }, 0, false).label).toBe("Awaiting report");
   expect(timingHealth({ ...row, timing: { ...row.timing!, mode: "stream", media: [] } }, 0, false).label).toBe("Stream drift unmeasured");
   expect(timingHealth({ ...row, timing: { ...row.timing!, media: [{ ...row.timing!.media[0]!, driftMs: 400 }] } }, 0, false).label).toBe("Out of sync");
-  expect(timingHealth({ ...row, timing: { ...row.timing!, sampleAgeMs: 31000 } }, 0, false).label).toBe("Clock stale");
+  expect(timingHealth({ ...row, timing: { ...row.timing!, sampleAgeMs: 31000 } }, 0, false).label).toBe("Clock stale");});
+it("ignores the native app's free-running music for drift but not for failures", () => {
+  const cue = { role: "main" as const, positionMs: 4010, targetMs: 4000, driftMs: 10, state: "playing" as const };
+  const bed = { role: "extra" as const, positionMs: 1200, targetMs: null, driftMs: null, state: "playing" as const };
+  const native = (media: NonNullable<TimingMonitor["timing"]>["media"]) => ({ ...row, kind: "phone" as const, timing: { ...row.timing!, mode: "synchronized" as const, media } });
+  expect(timingHealth(native([cue, bed]), 0, false).label).toBe("Within tolerance");
+  expect(timingHealth(native([{ ...cue, state: "ended", positionMs: null, targetMs: null, driftMs: null }, bed]), 0, false).label).toBe("Cue tail");
+  expect(timingHealth({ ...native([bed]), mediaExpected: false }, 0, false).label).toBe("Clock measured");
+  expect(timingHealth(native([bed]), 0, false).label).toBe("Awaiting media");
+  expect(timingHealth(native([cue, { ...bed, state: "error" }]), 0, false).label).toBe("Audio/video error");
 });
 it("renders measured device data, filters phones, and marks stopped polling stale", async () => {
   const clock = new ServerClock(); clock.addSample(10000, 10000, 11000);
