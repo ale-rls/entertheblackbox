@@ -1,7 +1,7 @@
 {
   "configVersion": 0,
   "apple": {
-    "copyright": "2026 REPLACE_WITH_RIGHTS_HOLDER",
+    "copyright": "2026 Manus Nijhoff",
     "categories": [
       "ENTERTAINMENT"
     ],
@@ -24,9 +24,9 @@
           "participatory"
         ],
         "releaseNotes": "First release.",
-        "marketingUrl": "https://REPLACE_WITH_SHOW_WEBSITE",
-        "supportUrl": "https://REPLACE_WITH_SUPPORT_PAGE",
-        "privacyPolicyUrl": "https://REPLACE_WITH_PRIVACY_POLICY"
+        "marketingUrl": "https://manusnijhoff.nl",
+        "supportUrl": "https://manusnijhoff.nl/",
+        "privacyPolicyUrl": "https://manusnijhoff.nl/"
       }
     },
     "advisory": {

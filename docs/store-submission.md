@@ -22,11 +22,11 @@ Reviewer contact details (name, email, phone) are entered in App Store Connect o
 
 ## 2. Decisions to confirm
 
-- **Bundle ID / package name.** These are permanent once published. Local and preview builds use `space.enabler.blackbox.app` (via `APP_BUNDLE_ID`). The checked-in fallback `org.entertheblackbox.player` is a scaffold default. Recommended: `space.enabler.blackbox.app` for production too, set as `APP_BUNDLE_ID` in the EAS **production** environment, and the same ID for the App Store Connect app and the Play package.
-- **Age rating.** The answers below assume the narration and video contain none of the listed themes. Answer from the script. If the piece has, for example, mature themes, horror or strong language, change the matching `advisory` value in `store.config.json` and the Play questionnaire to match.
+- **Bundle ID / package name:** `space.enabler.blackbox.app` on both platforms (decided). It is the default in `app.config.ts`, so no `APP_BUNDLE_ID` is needed in the production environment. Create the App Store Connect app and the Play app with this ID; it is permanent once published.
+- **Age rating:** the show content is always age-appropriate (decided), so every content descriptor is **None** on both stores.
 - **Target audience.** Recommended: **18 and over** (add 16–17 if those visitors attend). Selecting any age under 13 puts the app under Google's Families policy and Apple's Kids rules.
 - **Languages.** The listing is en-US only. Add localisations (e.g. `nl-NL`, `de-DE`) under `apple.info` and in Play's listing if the audience needs them. The app UI itself is English.
-- **Rights holder.** Fill in `copyright` in `store.config.json`, and the developer/seller name on both stores.
+- **Rights holder:** Manus Nijhoff (copyright `2026 Manus Nijhoff`). Website, support and privacy policy URL: https://manusnijhoff.nl/. **That page must contain (or link directly to) the app's privacy policy and a contact route before review**, because both stores check that the privacy URL leads to an actual policy (#4).
 
 ## 3. Build and upload
 
@@ -34,7 +34,6 @@ EAS **production** environment variables. These are public configuration, not se
 
 | Variable | Value |
 | --- | --- |
-| `APP_BUNDLE_ID` | the chosen ID (see above) |
 | `EXPO_PUBLIC_SHOW_SERVER` | the HTTPS show server origin |
 | `EXPO_PUBLIC_SERVER_BUILD_VERSION` | the server's `BUILD_VERSION` |
 | `ALLOW_INSECURE_LAN` | unset (or `0`) |
@@ -71,7 +70,7 @@ eas submit --profile production --platform android --latest  # → Play internal
 
 ### Age rating (questionnaire)
 
-Answers already in `store.config.json`, pending the script check in §2:
+Answers already in `store.config.json`:
 
 - Every content descriptor (violence, sexual content, profanity, horror, mature themes, alcohol/drugs, medical, simulated gambling, contests): **None**.
 - Unrestricted web access: **No**. Gambling: **No**. Made for Kids: **No**.
@@ -155,8 +154,8 @@ Builds from `eas submit` land in TestFlight. Internal testers (the team, up to 1
 | Free or paid | **Free** |
 | Category | **Entertainment** |
 | Tags | Entertainment, Events (optional) |
-| Contact email / website | production contact; show website |
-| Privacy policy | the public URL from #4 |
+| Contact email / website | your contact email; https://manusnijhoff.nl |
+| Privacy policy | https://manusnijhoff.nl/ (with the policy from #4 on it) |
 
 ### Main store listing
 
@@ -172,10 +171,10 @@ Builds from `eas submit` land in TestFlight. Internal testers (the team, up to 1
 
 | Declaration | Answer |
 | --- | --- |
-| Privacy policy | URL from #4 |
+| Privacy policy | https://manusnijhoff.nl/ |
 | Ads | **No**, the app contains no ads |
 | App access | **All or some functionality is restricted**: add the instructions from §4 Review notes (server, demo session, "enter any name"). No username/password. |
-| Content rating (IARC) | Category **Entertainment** (closest IARC type for a performance companion). Violence, sex, language, controlled substances, gambling: **No**, pending the script check. Users can interact or exchange content: **No**, because participants only send votes and positions to the show; nothing is visible to other users as their content. Shares user location: **No**. Digital purchases: **No**. |
+| Content rating (IARC) | Category **Entertainment** (closest IARC type for a performance companion). Violence, sex, language, controlled substances, gambling: **No**. Users can interact or exchange content: **No**, because participants only send votes and positions to the show; nothing is visible to other users as their content. Shares user location: **No**. Digital purchases: **No**. |
 | Target audience and content | **18 and over** (see §2). Not designed for children. |
 | News app | **No** |
 | Government app | **No** |
@@ -223,7 +222,6 @@ INTERNET, ACCESS_NETWORK_STATE (expo-updates), FOREGROUND_SERVICE, FOREGROUND_SE
 - [ ] #203 icon/splash merged; production build made after it
 - [ ] #204 store join screen merged; screenshots taken from it
 - [ ] #205 demo session running and the review notes filled in
-- [ ] #4 privacy policy published at a public URL, with the URL in both stores
-- [ ] `REPLACE_WITH_*` placeholders in `store.config.json` filled in, `eas metadata:lint` passes
-- [ ] Age rating answers checked against the script
+- [ ] https://manusnijhoff.nl/ shows the app's privacy policy
+- [ ] `REPLACE_WITH_REVIEW_SERVER` / `REPLACE_WITH_VIDEO_LINK` filled in the review notes (#205)
 - [ ] Physical acceptance checklist in [native-player.md](native-player.md) passed on a production build from TestFlight / internal testing

@@ -53,7 +53,7 @@ EXPO_PUBLIC_SHOW_SERVER=https://YOUR_SHOW_SERVER
 EXPO_PUBLIC_SERVER_BUILD_VERSION=0.0.0-dev
 ```
 
-Choose your final bundle identifier before making a store build; the checked-in `org.entertheblackbox.player` is a scaffold default. Match `EXPO_PUBLIC_SERVER_BUILD_VERSION` to the server's `BUILD_VERSION`; the current server sends a soft reload notice on mismatch. The native app shows that notice without interrupting a performance.
+The bundle identifier is `space.enabler.blackbox.app` on both platforms (the `app.config.ts` default; `APP_BUNDLE_ID` overrides it). Match `EXPO_PUBLIC_SERVER_BUILD_VERSION` to the server's `BUILD_VERSION`; the current server sends a soft reload notice on mismatch. The native app shows that notice without interrupting a performance.
 
 Set the same values in EAS environments **development**, **preview**, and **production** (dashboard or `eas env:create --environment preview --name EXPO_PUBLIC_EAS_PROJECT_ID --value YOUR_PROJECT_UUID --visibility plaintext`, repeated for the other values/environments). These identifiers and URLs are public configuration, not secrets. Set `ALLOW_INSECURE_LAN=1` in the development and preview environments too, so their update fingerprints match their builds; leave it unset or `0` in production. Keep bundle ID, owner and project UUID consistent between each build and its updates.
 

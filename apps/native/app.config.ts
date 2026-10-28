@@ -14,7 +14,7 @@ const config: ExpoConfig = {
   updates: { checkAutomatically: 'NEVER', fallbackToCacheTimeout: 0, url: `https://u.expo.dev/${projectId}` },
   extra: { eas: { projectId } },
   ios: {
-    bundleIdentifier: process.env.APP_BUNDLE_ID ?? 'org.entertheblackbox.player',
+    bundleIdentifier: process.env.APP_BUNDLE_ID ?? 'space.enabler.blackbox.app',
     // Store builds are phone-only: no iPad review device or iPad screenshots.
     supportsTablet: !store,
     infoPlist: {
@@ -24,7 +24,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: process.env.APP_BUNDLE_ID ?? 'org.entertheblackbox.player',
+    package: process.env.APP_BUNDLE_ID ?? 'space.enabler.blackbox.app',
     // Only internal rehearsal binaries permit HTTP LAN endpoints. Store builds use HTTPS/WSS.
     permissions: ['INTERNET'],
     blockedPermissions: ['android.permission.RECORD_AUDIO', 'android.permission.READ_EXTERNAL_STORAGE', 'android.permission.WRITE_EXTERNAL_STORAGE',
