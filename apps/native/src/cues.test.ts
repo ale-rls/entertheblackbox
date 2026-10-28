@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { acceptsSnapshot, cueFromSnapshot, targetPosition, type Snapshot } from './cues';
+import { NARRATION_START_DELAY_MS, acceptsSnapshot, cueFromSnapshot, targetPosition, type Snapshot } from './cues';
 const snapshot: Snapshot = { t: 'snapshot', v: 2, sessionId: 'session', phaseEpoch: 4, serverTime: 1000,
   phoneAudioActive: true, currentGroup: { id: 'blue', label: 'Blue' },
   phase: { id: 'voice', kind: 'narration', text: 'Test', durationMs: 10000, next: 'idle', scenarioVersion: 'one',
     startedAt: 1000, deadlineAt: 11000, phoneAudioSrc: 'all.mp3', phoneAudioByGroup: { blue: 'blue.mp3' } } };
 describe('server cues', () => {
-  it('uses group audio and seeks late arrivals to the shared timeline', () => {
+  it('uses group audio, delays narration by the shared lead, and seeks late arrivals to the shared timeline', () => {
     const cue = cueFromSnapshot(snapshot)!;
     expect(cue.src).toBe('blue.mp3');
-    expect(targetPosition(cue, 5000)).toBe(4);
-    expect(targetPosition(cue, 900)).toBeNull();
-    expect(targetPosition(cue, 11000)).toBeNull();
+    expect(cue).toMatchObject({ startedAt: 1000 + NARRATION_START_DELAY_MS, endsAt: 11000 + NARRATION_START_DELAY_MS });
+    expect(targetPosition(cue, 5000 + NARRATION_START_DELAY_MS)).toBe(4);
+    expect(targetPosition(cue, 1000)).toBeNull();
+    expect(targetPosition(cue, 11000 + NARRATION_START_DELAY_MS)).toBeNull();
+  });
+  it('keeps video phase audio on the phase clock, in step with the display video', () => {
+    const video = { ...snapshot, phase: { id: 'film', kind: 'video', src: 'film.mp4', expectedDurationMs: 10000, next: 'idle',
+      scenarioVersion: 'one', startedAt: 1000, deadlineAt: 11000, phoneAudioSrc: 'film.mp3' } } as unknown as Snapshot;
+    expect(cueFromSnapshot(video)).toMatchObject({ startedAt: 1000, endsAt: 11000 });
   });
   it('stops for silent or unassigned participants', () => {
     expect(cueFromSnapshot({ ...snapshot, phoneAudioActive: false })).toBeNull();
