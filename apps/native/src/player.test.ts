@@ -89,3 +89,8 @@ it('reports native layer timing as main narration and extra music', () => {
     { role: 'extra', positionMs: 1200, targetMs: null, driftMs: null, state: 'playing' },
   ]);
 });
+it('sends explicit nulls when iOS omits empty timing fields', () => {
+  const { p } = setup({ withMusic: true });
+  scheduler.timing = [{ id: 'bed', state: 'playing', positionMs: 1200 } as unknown as typeof scheduler.timing[number]];
+  expect(p.timing().media).toEqual([{ role: 'extra', positionMs: 1200, targetMs: null, driftMs: null, state: 'playing' }]);
+});

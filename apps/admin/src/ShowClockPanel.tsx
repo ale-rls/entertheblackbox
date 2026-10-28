@@ -13,14 +13,17 @@ export function timingHealth(row: TimingMonitor, elapsed: number, stale: boolean
   if (!timing.calibrated) return { label: "Clock estimating", status: "warning" };
   if (timing.sampleAgeMs === null || timing.sampleAgeMs + row.reportAgeMs + elapsed > 30000) return { label: "Clock stale", status: "warning" };
   if (timing.mode === "stream") return { label: "Stream drift unmeasured", status: "info" };
-  if (!row.mediaExpected && !timing.media.length) return { label: "Clock measured", status: "info" };
+  // Free-running media (the native app's looping music bed) has no show-clock target, so it
+  // can fail or pause but never drift.
+  const timed = timing.media.filter((m) => m.role === "main" || m.targetMs !== null);
+  if (!row.mediaExpected && !timed.length) return { label: "Clock measured", status: "info" };
   if (timing.elapsedMs < 0) return { label: "Waiting for cue", status: "info" };
-  if (!timing.media.length) return { label: "Awaiting media", status: "warning" };
+  if (!timed.length) return { label: "Awaiting media", status: "warning" };
   const issue = timing.media.find((m) => ["error", "disabled", "loading", "seeking", "paused", "waiting"].includes(m.state));
   if (issue) return { label: `Audio/video ${issue.state}`, status: issue.state === "error" ? "danger" : "warning" };
-  if (timing.media.every((m) => m.state === "ended")) return { label: "Cue tail", status: "info" };
-  if (timing.media.some((m) => m.driftMs === null)) return { label: "Drift unmeasured", status: "info" };
-  if (timing.media.some((m) => Math.abs(m.driftMs!) > 250)) return { label: "Out of sync", status: "danger" };
+  if (timed.every((m) => m.state === "ended")) return { label: "Cue tail", status: "info" };
+  if (timed.some((m) => m.driftMs === null)) return { label: "Drift unmeasured", status: "info" };
+  if (timed.some((m) => Math.abs(m.driftMs!) > 250)) return { label: "Out of sync", status: "danger" };
   return { label: "Within tolerance", status: "success" };
 }
 
@@ -66,7 +69,7 @@ export function ShowClockPanel({ clock, status, stale, receivedAt }: { clock: Se
       </tbody></table>
       {!visible.length && <p>{monitors.length ? "No devices match this filter." : "No timing reports are available yet."}</p>}
     </div>
-    <p className="sc-tool-help">Positions are last reported browser estimates. Within tolerance means ±250 ms at that report; reports older than 6 seconds are stale. Synchronized phone audio includes estimated output latency. Stream buffering and actual headphone output are not measured.</p>
+    <p className="sc-tool-help">Positions are last reported device estimates. Native app music loops freely and is not checked for drift; a locked phone may report late while its native audio keeps playing on schedule. Within tolerance means ±250 ms at that report; reports older than 6 seconds are stale. Synchronized phone audio includes estimated output latency. Stream buffering and actual headphone output are not measured.</p>
     <details><summary>Cue timesheet · {rows.length} {rows.length === 1 ? "timeline" : "timelines"}</summary><div className="clock-table-scroll"><table><thead><tr><th>Timeline</th><th>Scene</th><th>State</th><th>Cue elapsed</th></tr></thead><tbody>
       {rows.map((row) => <tr key={row.key}><td>{row.label}</td><td>{row.phaseId}</td><td>{row.state}</td><td>{row.startedAt === undefined || !clock.ready ? "—" : `${(Math.max(0, now - row.startedAt) / 1000).toFixed(1)} s`}</td></tr>)}
     </tbody></table></div></details>

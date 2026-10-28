@@ -98,8 +98,9 @@ export class ShowPlayer {
     if (status) this.report(status);
   }
   timing(): ClockTiming {
+    // iOS records omit nil fields; the ping schema requires explicit nulls.
     const media = (role: MediaTiming['role'], layer: LayerTiming | undefined): MediaTiming[] => layer ? [{ role,
-      positionMs: layer.positionMs, targetMs: layer.targetMs, driftMs: layer.driftMs,
+      positionMs: layer.positionMs ?? null, targetMs: layer.targetMs ?? null, driftMs: layer.driftMs ?? null,
       state: !this.enabled && layer.state !== 'error' ? 'paused' : layer.state }] : [];
     const layers = AudioScheduler.getTiming();
     return { calibrated: this.clock.hasSamples, offsetMs: this.clock.offset,
