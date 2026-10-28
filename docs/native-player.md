@@ -136,7 +136,7 @@ eas submit --profile production --platform ios --latest
 eas submit --profile production --platform android --latest
 ```
 
-Submission requires your Apple/Google accounts and configured credentials. Complete the app icon/splash branding, listings, privacy policy/data disclosures, and review instructions in App Store Connect/Play Console. Provide a reachable demo venue and downloadable test show so reviewers can exercise the app. EAS upload does not itself approve or publish the app. iOS TestFlight and Android testing tracks are suitable before a public rollout.
+Submission requires your Apple/Google accounts and configured credentials. Every store answer (categories, age/content rating, privacy labels, Data safety, foreground-service declaration, review notes, listing copy) and the remaining blockers are in [store-submission.md](store-submission.md). The production profile sets `STORE_BUILD=1` (phone-only iOS, no overlay permission on Android) and pushes the iOS listing from `apps/native/store.config.json`. EAS upload does not itself approve or publish the app. iOS TestFlight and Android testing tracks are suitable before a public rollout.
 
 ## Physical acceptance checklist
 

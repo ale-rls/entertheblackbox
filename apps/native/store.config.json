@@ -1,0 +1,55 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "copyright": "2026 REPLACE_WITH_RIGHTS_HOLDER",
+    "categories": [
+      "ENTERTAINMENT"
+    ],
+    "info": {
+      "en-US": {
+        "title": "Enter the Blackbox",
+        "subtitle": "Your phone, part of the show",
+        "promoText": "Bring your phone and headphones to Enter the Blackbox. The app plays your personal audio track and lets you steer the performance together with the rest of the audience.",
+        "description": "Enter the Blackbox is the companion app for the live, participatory theatre performance of the same name. It is used on site, during a performance, together with the venue's show system.\n\nDuring the show the app:\n• plays your personal audio track through your headphones, timed to the performance and kept in sync with the rest of the room, even with your screen locked\n• lets you choose your group, vote on questions and move your cursor on the shared screen\n• tells you with a notification when it is your turn to act\n\nBefore the performance the app downloads the show's audio to your phone, so playback does not depend on the venue network.\n\nThe app needs a performance to connect to: without attending a performance of Enter the Blackbox there is nothing to play. No account, no ads, no in-app purchases.",
+        "keywords": [
+          "theatre",
+          "theater",
+          "performance",
+          "interactive",
+          "immersive",
+          "audio",
+          "live",
+          "stage",
+          "audience",
+          "participatory"
+        ],
+        "releaseNotes": "First release.",
+        "marketingUrl": "https://REPLACE_WITH_SHOW_WEBSITE",
+        "supportUrl": "https://REPLACE_WITH_SUPPORT_PAGE",
+        "privacyPolicyUrl": "https://REPLACE_WITH_PRIVACY_POLICY"
+      }
+    },
+    "advisory": {
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "gambling": false,
+      "unrestrictedWebAccess": false,
+      "kidsAgeBand": null,
+      "ageRatingOverride": "NONE",
+      "koreaAgeRatingOverride": "NONE"
+    },
+    "release": {
+      "automaticRelease": false
+    }
+  }
+}
