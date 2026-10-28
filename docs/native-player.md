@@ -61,7 +61,7 @@ EXPO_PUBLIC_SHOW_SERVER=https://YOUR_SHOW_SERVER
 EXPO_PUBLIC_SERVER_BUILD_VERSION=0.0.0-dev
 ```
 
-Choose your final bundle identifier before making a store build; the checked-in `org.entertheblackbox.player` is a scaffold default. Match `EXPO_PUBLIC_SERVER_BUILD_VERSION` to the server's `BUILD_VERSION`; the current server sends a soft reload notice on mismatch. The native app shows that notice without interrupting a performance.
+The bundle identifier is `space.enabler.blackbox.app` on both platforms (the `app.config.ts` default; `APP_BUNDLE_ID` overrides it). Match `EXPO_PUBLIC_SERVER_BUILD_VERSION` to the server's `BUILD_VERSION`; the current server sends a soft reload notice on mismatch. The native app shows that notice without interrupting a performance.
 
 Set the same values in EAS environments **development**, **preview**, and **production** (dashboard or `eas env:create --environment preview --name EXPO_PUBLIC_EAS_PROJECT_ID --value YOUR_PROJECT_UUID --visibility plaintext`, repeated for the other values/environments). These identifiers and URLs are public configuration, not secrets. Set `ALLOW_INSECURE_LAN=1` in the development and preview environments too, so their update fingerprints match their builds; leave it unset or `0` in production. Keep bundle ID, owner and project UUID consistent between each build and its updates.
 
@@ -144,7 +144,7 @@ eas submit --profile production --platform ios --latest
 eas submit --profile production --platform android --latest
 ```
 
-Submission requires your Apple/Google accounts and configured credentials. Complete the app icon/splash branding, listings, privacy policy/data disclosures, and review instructions in App Store Connect/Play Console. Provide a reachable demo venue and downloadable test show so reviewers can exercise the app. EAS upload does not itself approve or publish the app. iOS TestFlight and Android testing tracks are suitable before a public rollout.
+Submission requires your Apple/Google accounts and configured credentials. Every store answer (categories, age/content rating, privacy labels, Data safety, foreground-service declaration, review notes, listing copy) and the remaining blockers are in [store-submission.md](store-submission.md). The production profile sets `STORE_BUILD=1` (phone-only iOS, no overlay permission on Android) and pushes the iOS listing from `apps/native/store.config.json`. EAS upload does not itself approve or publish the app. iOS TestFlight and Android testing tracks are suitable before a public rollout.
 
 ## Physical acceptance checklist
 
