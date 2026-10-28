@@ -91,3 +91,21 @@ file as part of the same PR — don't let it drift into a stale snapshot.
   `SCENARIO_PATH`/`MEDIA_MANIFEST_PATH` is what selects a show locally.
 - **Rebuild clients after frontend changes** — the server serves built bundles,
   not a dev server.
+
+## Native app update preference
+
+Director decision (2026-10-28): **production EAS Update is the main delivery
+path for compatible native-app JavaScript/UI fixes.** Use the `production`
+channel and `production` EAS environment; do not default to preview updates
+or rebuilding store binaries for compatible changes.
+
+From `apps/native`, publish an authorized, verified release with
+`pnpm update:production --message 'Describe the change'`. Production builds
+subscribe to that channel. Users leave the show and tap **Check & install app
+update**; preserve explicit update checks and never reload during a performance.
+
+Native modules, Expo SDK, permissions, native configuration, or an incompatible
+runtime fingerprint still require a new production build and installation.
+Never override the fingerprint to force compatibility. Show content publishing
+and server deployment remain separate from app updates. Preparing a channel is
+not itself a request to publish an OTA release. See [the native player guide](docs/native-player.md).

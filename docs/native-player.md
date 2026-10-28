@@ -106,6 +106,24 @@ Before production, use installed builds on each supported iPhone/Android model. 
 | Compatible app JavaScript/UI fixes | EAS Update on preview/production | No |
 | Expo SDK, native modules, permissions, native config | EAS Build, then installation/store rollout | Yes |
 
+**Default release workflow (director decision, 2026-10-28):** use production
+EAS Update for compatible app JavaScript/UI changes. New production binaries
+are reserved for native/runtime changes. The `production` EAS channel is active
+and maps to the `production` branch; the production build profile already uses
+that channel and the production environment. An empty update branch is valid:
+the initial binary runs its bundled code until a compatible OTA is published.
+
+From `apps/native`, publish a verified, authorized update with:
+
+```sh
+pnpm update:production --message 'Describe the change'
+```
+
+Check the remote route with `eas channel:view production --non-interactive`.
+Do not repoint production to preview or publish a release just to initialize
+an empty branch. Keep production builds and updates on the same EAS environment
+so native configuration and runtime fingerprints match.
+
 App EAS channel names are **preview** and **production**. Show channel names are **rehearsal** and **production**, selectable independently in the app. EAS channels distribute application code; they do not publish show content.
 
 For a JavaScript update, from `apps/native`:
