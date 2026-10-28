@@ -150,3 +150,12 @@ Cue scheduling is native (see **Native audio scheduling**), but cue *reception* 
 - Rehearse the full device count on venue Wi-Fi and monitor memory, battery, packet loss and output latency. Automated JS bundles/tests do not replace this acceptance.
 
 Official references: [Expo background audio](https://docs.expo.dev/versions/v55.0.0/sdk/audio/), [internal distribution](https://docs.expo.dev/build/internal-distribution/), [runtime compatibility](https://docs.expo.dev/eas-update/runtime-versions/).
+
+
+## Action notifications before store release
+
+Build new iOS and Android binaries after adding `expo-notifications`; an OTA update alone cannot add the native module. Joining requests notification permission. Denial does not prevent participation; the app explains that it must remain open or notifications must be enabled in system settings. Alerts use generic action text (no participant names or answers) and no notification sound, to preserve show audio. Tapping the system notification opens the single-screen participant app; reconnect resumes authoritative state rather than replaying an old action.
+
+Notifications cover unanswered group selection, open phone-button/cursor votes, and each reaction window. Physical voting and idle cursor movement do not alert. Repeated snapshots do not repeat an alert; answering, closing a window, changing phase, or leaving clears the current alert. These are local notifications triggered by received live state, not remote push. They cannot deliver new cues if the OS suspends the connection, the device is offline, or the app is force-quit.
+
+On physical iPhone and Android release builds, allow notifications, join, lock the phone and trigger each action type. Check the lock screen and home-screen banner, tap to open the correct current controls, answer and verify cleanup. Repeat with permission denied, reconnects, repeated snapshots, phase changes, and expired windows. Check that narration/music remain audible, and test the venue network and device notification/Focus settings. Automated tests do not establish locked-screen delivery or store readiness.

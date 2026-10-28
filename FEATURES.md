@@ -191,6 +191,8 @@ Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenari
 
 ## Native participant app — `apps/native`
 
+- iOS/Android system action notifications for group selection, phone voting/cursors and reaction windows; permission requested on join, tap opens the app, duplicate suppression and cleanup on answer/phase change/leave. Alerts are silent to preserve show audio. Live delivery depends on WebSocket reception; force-quit/offline delivery is not supported. Requires a new native build and locked-device acceptance — `src/action-prompt.ts`, `src/notifications.ts`.
+
 - Expo iOS/Android builds, preview/production EAS Update channels, fingerprint runtime compatibility, explicit disconnected-only updates — `app.config.ts`, `eas.json`, `src/App.tsx`
 - Automatic latest-channel verification/download before every join (failed checks block admission; joined sessions pin their release), verified persistent MP3 downloads, per-group server cues, late-join seeking, pause/resume, reconnect and timing reports — `src/content.ts`, `src/cues.ts`, `src/player.ts`, `src/connection.ts`
 - Native clock-scheduled playback: cues become layers anchored to server time, started/offset/stopped and drift-corrected in Swift/Kotlin so narration plays with the screen locked; lock-screen controls, call/headphone interruptions, Android foreground media service — `packages/expo-audio-scheduler` (Expo module + config plugin), `src/player.ts`. Changes need a new EAS build.

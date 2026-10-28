@@ -26,6 +26,7 @@ const config: ExpoConfig = {
     blockedPermissions: ['android.permission.RECORD_AUDIO', 'android.permission.READ_EXTERNAL_STORAGE', 'android.permission.WRITE_EXTERNAL_STORAGE'],
   },
   plugins: [
+    'expo-notifications',
     // Native clock-scheduled playback: iOS background audio, Android media foreground service.
     '@entertheblackbox/expo-audio-scheduler',
     ['expo-secure-store', { faceIDPermission: false }],
