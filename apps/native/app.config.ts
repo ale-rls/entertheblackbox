@@ -24,6 +24,8 @@ const config: ExpoConfig = {
     },
   },
   android: {
+    icon: './assets/black-square.png',
+    adaptiveIcon: { foregroundImage: './assets/black-square.png', backgroundColor: '#000000' },
     package: process.env.APP_BUNDLE_ID ?? 'space.enabler.blackbox.app',
     // Only internal rehearsal binaries permit HTTP LAN endpoints. Store builds use HTTPS/WSS.
     permissions: ['INTERNET'],
