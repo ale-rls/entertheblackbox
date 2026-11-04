@@ -34,9 +34,30 @@ export async function loadShow(origin: string, channel: ShowChannel): Promise<Sh
   for (const entry of manifest.files) if (!await verified(localAudio(entry.sha256), entry)) return null;
   return manifest;
 }
+// Expo wraps Android transport errors in a JS Error containing the native cause.
+const interrupted = /timeout|timed out|network (?:request failed|lost|error|is unreachable)|SSLProtocolException|SocketException|UnknownHostException|ConnectException|unexpected end of stream|connection (?:reset|closed|refused|lost)|internet connection appears to be offline/i;
+async function transfer<T>(label: string, progress: (text: string) => void, read: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await read();
+    } catch (error) {
+      console.warn(`Show download: ${label}, attempt ${attempt}`, error);
+      if (!interrupted.test(String(error))) {
+        progress('Download stopped');
+        throw new Error(`Could not download ${label}. Ask the operator to check the published show and available device storage.`);
+      }
+      if (attempt === 4) {
+        progress('Download paused');
+        throw new Error(`Could not finish downloading ${label}. Check your connection and try again. Completed audio files are saved.`);
+      }
+      progress(`Connection interrupted. Retrying ${label} (attempt ${attempt + 1} of 4)…`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+    }
+  }
+}
 export async function downloadShow(origin: string, channel: ShowChannel, progress: (text: string) => void): Promise<ShowManifest> {
   ensureRoot();
-  const response = await fetch(`${origin}/media/native-shows/channels/${channel}.json?check=${Date.now()}`);
+  const response = await transfer('the show list', progress, () => fetch(`${origin}/media/native-shows/channels/${channel}.json?check=${Date.now()}`));
   if (!response.ok) throw new Error(`Show channel unavailable (${response.status}). Publish this channel on the venue server first.`);
   const manifest = await parseManifest(await response.json());
   let index = 0;
@@ -46,7 +67,12 @@ export async function downloadShow(origin: string, channel: ShowChannel, progres
     if (await verified(final, entry)) continue;
     const temporary = new File(root, `${entry.sha256}.download`);
     try {
-      await File.downloadFileAsync(mediaUrl(origin, `native-shows/audio/${entry.sha256}.mp3`), temporary, { idempotent: true });
+      const label = `audio file ${index} of ${manifest.files.length}`;
+      await transfer(label, progress, async () => {
+        if (temporary.exists) temporary.delete();
+        progress(`Downloading ${label}`);
+        await File.downloadFileAsync(mediaUrl(origin, `native-shows/audio/${entry.sha256}.mp3`), temporary, { idempotent: true });
+      });
       if (!await verified(temporary, entry)) throw new Error(`Audio verification failed: ${entry.src}`);
       if (final.exists) final.delete();
       temporary.move(final);
