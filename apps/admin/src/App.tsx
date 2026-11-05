@@ -870,7 +870,7 @@ export function App() {
           {flow?.scenes.length ? <LiveGraph flow={flow} status={status} busy={busy} onJump={requestJump} onAssign={assignGroup} /> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}
         </section>}
 
-        <CollapsibleSection id="admin-audio-heading" eyebrow="Personal audio" title="Headphone streams" status={{
+        {status.audio?.configured ? <CollapsibleSection id="admin-audio-heading" eyebrow="Personal audio" title="Headphone streams" status={{
           status: !status.audio?.configured ? "info" : (status.audio.error || Object.keys(status.audio.deliveryFailures ?? {}).length > 0) ? "danger" : "success",
           label: !status.audio?.configured ? "Not configured" : (status.audio.error || Object.keys(status.audio.deliveryFailures ?? {}).length > 0) ? "Needs attention" : "Nominal",
         }} open={audioSectionOpen} onToggle={setAudioSectionOpen}>
@@ -949,7 +949,7 @@ export function App() {
               </div>
             </details>
           </>}
-        </CollapsibleSection>
+        </CollapsibleSection> : <section className="sc-tool-panel"><h2>Native participant audio</h2><p>All participant devices use the iOS/Android app with downloaded show audio. Publish narration and background music from Studio → Publish to devices. Use the show clock monitor above to inspect device timing.</p></section>}
         <section className="sc-tool-panel" aria-labelledby="admin-participants-heading">
           <div className="admin-section-heading">
             <div><p className="sc-tool-eyebrow">Who has joined</p><h2 id="admin-participants-heading">Participants</h2></div>

@@ -1,6 +1,6 @@
 # Native player: setup, updates, and rehearsal
 
-The native participant app is in `apps/native`. The browser app remains available. Both use the same server; native devices play downloaded files instead of opening Icecast/Janus streams. No Expo or public internet connection is required during a show once the app and content are installed, provided devices can reach the venue server.
+The native participant app is in `apps/native`. It is the only supported participant client, for both audiences and all loan tablets. Browser participant routes show native-app joining instructions; Icecast/Janus streams are retired from production. Native devices play verified downloaded files. No Expo or public internet connection is required during a show once the app and content are installed, provided devices can reach the venue server.
 
 ## What is implemented
 

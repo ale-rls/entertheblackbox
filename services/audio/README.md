@@ -1,3 +1,5 @@
+> Historical browser/streaming documentation. Participant delivery is now native-only; this is not the production setup. See the repository README and docs/native-player.md.
+
 # blackbox-icecast
 
 Personal audio streams for up to 100 audience phones — one Icecast mount slot

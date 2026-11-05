@@ -1,3 +1,4 @@
+import { monitorMediaSources } from "./monitors.js";
 import type { MediaManifest, Phase, Scenario } from "./schema.js";
 
 /**
@@ -160,9 +161,9 @@ export function validateScenario(
   if (mediaManifest) {
     const known = new Set(mediaManifest.files.map((f) => f.src));
     for (const phase of scenario.phases) {
-      if (phase.kind === "idle") continue;
       const sources = [
-        ...(phase.kind === "group-branch"
+        ...monitorMediaSources(phase.monitorCues),
+        ...(phase.kind === "idle" ? [] : phase.kind === "group-branch"
           ? phase.branches.flatMap((branch) => branch.phoneAudioSrc ? [branch.phoneAudioSrc] : [])
           : [
               ...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []),

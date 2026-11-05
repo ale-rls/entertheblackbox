@@ -1,3 +1,4 @@
+import { monitorMediaSources } from "../../../../packages/scenario/src/monitors.js";
 import type { StudioProject } from "@entertheblackbox/studio-adapter";
 
 export const MEDIA_BUDGET_BYTES = 2 * 1024 * 1024 * 1024;
@@ -12,9 +13,10 @@ export function studioMediaKindForSource(src: string): StudioMediaKind {
 }
 
 export function phaseMediaSources(phase: StudioProject["scenario"]["phases"][number]): string[] {
-  if (phase.kind === "idle") return [];
-  if (phase.kind === "group-branch") return phase.branches.flatMap((branch) => branch.phoneAudioSrc ? [branch.phoneAudioSrc] : []);
-  const phone = [...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []), ...Object.values(phase.phoneAudioByGroup ?? {})];
+  const monitors = monitorMediaSources(phase.monitorCues);
+  if (phase.kind === "idle") return monitors;
+  if (phase.kind === "group-branch") return [...monitors, ...phase.branches.flatMap((branch) => branch.phoneAudioSrc ? [branch.phoneAudioSrc] : [])];
+  const phone = [...monitors, ...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []), ...Object.values(phase.phoneAudioByGroup ?? {})];
   if (phase.kind === "position-question" || phase.kind === "narration") return phone;
   return [
     ...phone,

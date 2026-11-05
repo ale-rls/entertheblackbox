@@ -205,7 +205,9 @@ export class PhaseEngine {
   private epochSequence = 0;
   private readonly paths = new Map<string, { engine: PhaseEngine; members: Set<string> }>();
   private readonly groupDisplays = new Map<string, WebSocket>();
-  /** Signage kiosks (e.g. lobby entrance screens): QR-grant-only, no phase/cursor awareness. */
+  /** Main-clock monitors have independent slots and cannot replace the projection. */
+  private readonly monitorDisplays = new Map<string, WebSocket>();
+  /** Lobby signage receives QR grants. */
   private readonly signageDisplays = new Map<string, WebSocket>();
   private readonly routingEpochs = new Map<string, number>();
   private selectionCohort = new Set<string>();
@@ -878,6 +880,7 @@ export class PhaseEngine {
 
   socketClosed(socket: WebSocket): void {
     this.timingReports.delete(socket);
+    for (const [id, display] of this.monitorDisplays) if (display === socket) this.monitorDisplays.delete(id);
     for (const { engine } of this.paths.values()) engine.socketClosed(socket);
     for (const [groupId, display] of this.groupDisplays) if (display === socket) this.groupDisplays.delete(groupId);
     for (const [signageId, display] of this.signageDisplays) if (display === socket) this.signageDisplays.delete(signageId);
@@ -934,7 +937,20 @@ export class PhaseEngine {
           this.close(socket, 1008, "invalid display credentials");
           return;
         }
-        if (message.signageId !== undefined) {
+        if (message.monitorId !== undefined) {
+          if (message.groupId !== undefined || message.signageId !== undefined) {
+            this.close(socket, 1008, "monitor cannot be a group or signage display");
+            return;
+          }
+          const previous = this.monitorDisplays.get(message.monitorId);
+          if (previous && previous !== socket) {
+            this.clients.delete(previous);
+            this.close(previous, DISPLAY_REPLACED_CLOSE_CODE, "display replaced");
+          }
+          this.monitorDisplays.set(message.monitorId, socket);
+          this.clients.add(socket);
+          this.send(socket, this.getSnapshotMessage());
+        } else if (message.signageId !== undefined) {
           this.connectSignageDisplay(socket, message.signageId);
         } else if (message.groupId !== undefined) {
           if (!this.scenario.groups?.some((group) => group.id === message.groupId)) {

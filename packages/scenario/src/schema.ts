@@ -1,3 +1,4 @@
+import { monitorCuesSchema } from "./monitors.js";
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
 import { extraAudioCombinationError, mediaCombinationError } from "./media-kind.js";
@@ -35,6 +36,7 @@ const phoneAudioByGroupSchema = z.record(groupIdSchema, phoneAudioFileSchema).op
 export const votingMethodSchema = z.enum(["physical", "phone-cursor", "phone-buttons"]);
 const outgoingCueSchema = z.string().trim().min(1).max(120);
 const phoneAudioFields = {
+  monitorCues: monitorCuesSchema.optional(),
   /** Fallback/broadcast MP3. Used for every participant without a group-specific override. */
   phoneAudioSrc: phoneAudioSrcSchema,
   /** Per-group MP3 overrides, keyed by stable authored group id. */
@@ -233,6 +235,7 @@ export const positionQuestionNextSchema = z.union([
 export const idlePhaseSchema = z.object({
   kind: z.literal("idle"),
   id: z.literal("idle"),
+  monitorCues: monitorCuesSchema.optional(),
 });
 
 /**
@@ -489,6 +492,7 @@ export const groupAssignmentSchema = z.discriminatedUnion("type", [
  * timeline resumes at `next` once every occupied group has reached it.
  */
 export const groupBranchPhaseSchema = z.object({
+  monitorCues: monitorCuesSchema.optional(),
   kind: z.literal("group-branch"),
   outgoingCues: z.array(outgoingCueSchema).max(32).optional(),
   id: phaseIdSchema,

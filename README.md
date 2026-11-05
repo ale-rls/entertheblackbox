@@ -1,16 +1,14 @@
 # Enter the Blackbox
 
-Enter the Blackbox is the runtime and visual authoring toolkit for the piece of the same name. Visitors scan a QR code, use their phones as cursors, and collectively navigate questions and video branches on a shared display.
+Enter the Blackbox is the runtime and visual authoring toolkit for the piece of the same name. All participant phones and loan tablets use the **native iOS/Android app** for downloaded audio, cursors, choices and reactions. Browser pages are installation displays, monitor screens, Studio and Admin only.
 
-Shows can also divide the audience into authored groups. A group branch can allocate people evenly, derive membership from an earlier vote, or preserve assignments made live by the operator. Each group can receive its own synchronized MP3 through participant phones while a broadcast MP3 remains available as a fallback. See [Group branching and targeted audio](docs/group-branching.md).
-
-The server is authoritative: it manages admission, room state, timed vote snapshots, branch resolution, recovery, and the operational admin API. Shows are versioned scenario graphs rather than hard-coded application flows.
+Shows are server-authoritative scenario graphs. M1–M4 each open a dedicated display page, cache verified media before the show, and follow authored cues on the main server clock. See [Monitor displays](docs/monitor-displays.md) and [Native participant setup](docs/native-player.md). TouchDesigner is no longer used to render the four monitors.
 
 ## Applications
 
 - `apps/server` — Fastify HTTP and WebSocket server, phase engine, admission, and admin API.
 - `apps/display` — fullscreen React client for the installation screen.
-- `apps/phone` — mobile React controller used by participants.
+- `apps/phone` — retired browser participant source, retained for historical tests; not served or built for production.
 - `apps/native` — Expo iOS/Android participant player with downloaded audio and EAS updates; [setup and rehearsal](docs/native-player.md).
 - `apps/admin` — protected operational interface.
 - `apps/studio` — local visual editor for importing, authoring, validating, previewing, and exporting shows.
@@ -34,8 +32,7 @@ the whole piece in one place.
   `f214a1c`, `a2b0cc4`, and `b6b3464`. It emits persistent anonymous
   GIDs with normalized floor coordinates over REST and WebSocket. Treat it as a
   read-only sensor.
-- `services/audio` — Icecast, Liquidsoap, and an authenticated bridge, for
-  personal audio to each participant's headphones.
+- `services/audio` and `services/audio-janus` — retired streaming implementations, retained as historical source; not part of production.
 
 Future TrackingBox changes should be made upstream and
 bring it down with `git subtree pull -P services/trackingbox <remote> <commit>`.
@@ -106,7 +103,6 @@ Build the three installation clients once (and rebuild them after frontend chang
 
 ```bash
 env DISPLAY_TOKEN=dev-display-token pnpm --filter @entertheblackbox/display build
-pnpm --filter @entertheblackbox/phone build
 pnpm --filter @entertheblackbox/admin build
 ```
 
@@ -120,15 +116,15 @@ Open the installation display:
 
 <http://127.0.0.1:3000/display/>
 
-No query parameters are needed: the display authenticates with its build-time token and resolves its installation/room live from the server's own `/api/status`, so the venue's one kiosk never needs to remember or type a full URL. Two query parameters open other display kiosks instead of the main one: `?group=<group-id>` opens that group's own dedicated kiosk (see [docs/group-branching.md](docs/group-branching.md)), and `?signage=<id>` opens a signage kiosk that always shows a looping video and the live join QR code, independent of the show's state (e.g. a lobby entrance screen) — configured in `/admin/` next to the other waiting videos. The server allows only one authenticated main display connection, plus one per active group and one per signage kiosk. The root page (`http://127.0.0.1:3000/`) redirects to `/phone/` instead, since most root-page visitors are participants, not the venue's one display kiosk.
+No query parameters are needed: the display authenticates with its build-time token and resolves its installation/room live from the server's own `/api/status`, so the venue's one kiosk never needs to remember or type a full URL. Two query parameters open other display kiosks instead of the main one: `?group=<group-id>` opens that group's own dedicated kiosk (see [docs/group-branching.md](docs/group-branching.md)), and `?signage=<id>` opens a signage kiosk that always shows a looping video and the live join QR code, independent of the show's state (e.g. a lobby entrance screen) — configured in `/admin/` next to the other waiting videos. The server allows only one authenticated main display connection, plus one per active group and one per signage kiosk. The root and legacy `/phone/` routes show native-app joining instructions.
 
-Participants use the stable public URL `http://127.0.0.1:3000/phone/` (or just the server root). It has no query parameters: visitors enter their name and press **Join**. The operator dashboard shows the named live roster. Joining opens a waiting lobby but never starts a show based on headcount; operators can start manually or configure one or more date-and-time starts in `/admin/`, with quick ±10 second and ±1 minute adjustments for the next start.
+Participants install the native app, select the venue server/channel and tap **Update show & join**. See [native player setup](docs/native-player.md). Existing printed QR URLs still open instructions, not a browser controller. Joining never starts a show by headcount; operators start it manually or schedule it in Admin.
 
 The server also exposes:
 
-- `/phone/` — participant controller
+- `/phone/` — native-app joining instructions (also `/` and `/phone-janus/`)
 - `/admin/` — operations interface
-- `/admin/?view=audio` — authenticated, read-only audio diagnostics; polls every 2 seconds with stream connections, playback reports, interruption counts, recovery times, and report freshness. Phone reports are state changes, not heartbeats; this page does not measure audible output or cue-to-ear latency.
+- `/display/?monitor=M1` through `M4` — authored stage monitor pages; add `&setup=1` for local cache/connection diagnostics.
 - `/healthz` and `/readyz` — health and readiness checks
 
 ### Public video phase map
@@ -163,17 +159,11 @@ env HOST=127.0.0.1 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=development SCENAR
 
 Studio drafts and exports do not automatically publish to the running installation. Restarting the server with these paths is what selects the show locally. The scenario and manifest are tracked, but the real `showtest1` videos are not; copy the matching media files into `content/media` before starting it.
 
-### Connect a physical phone
+### Connect native participant devices
 
-The installation server already serves the phone client; no second phone server is needed. Find the Mac's LAN IP (often `ipconfig getifaddr en0` on macOS), substitute it below, and start the server with a network-visible host and QR destination:
+Use the [native player guide](docs/native-player.md) to install the iOS/Android app, publish the rehearsal/production content channel, and join the matching running server. Use trusted HTTPS/WSS for production. Loan tablets use this same app. Browser audio and browser voting are retired; old QR destinations display app instructions.
 
-```bash
-env HOST=0.0.0.0 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=development PHONE_JOIN_BASE_URL=http://192.168.1.23:3000/phone/ node --import tsx apps/server/src/index.ts
-```
-
-Keep the authenticated display open on the Mac as above, then scan its QR code. The phone and Mac must be on the same Wi-Fi network, and the macOS firewall must allow incoming connections to Node.js on port 3000. Do not use `localhost` in `PHONE_JOIN_BASE_URL`: on the phone, that means the phone itself.
-
-The display prints `PHONE_JOIN_BASE_URL` at the bottom of the lobby by default and keeps a corner QR available during active play for late joining. Set `SHOW_PHONE_JOIN_BASE_URL=false` to hide the printed URL or `ALLOW_LATE_JOIN=false` to restore lobby-only admission.
+### Main display waiting content
 
 The onboarding attract playlist bundles every MP4 named `attract-*.mp4` in `apps/display/src/assets/`. The prefix matters: that directory also holds the rendered credits video and other non-lobby media, which must stay out of the playlist. Clips play in filename order, and the **first one is the A/hold clip** — it returns on every other beat, so three clips run A-B-A-C-A-B-A-C. With one clip, that file loops normally. With none, the lobby shows a static centred join QR on black.
 
@@ -208,54 +198,15 @@ Run this in a second terminal while the installation server remains running, the
 
 Studio supports graph editing, typed transitions, media diagnostics, runtime validation, branch preview, local draft recovery, versioned deployment exports, and authenticated publishing to PocketBase. A publish never interrupts an active session.
 
-For headphone narration, put MP3 files in `content/media`, refresh Studio's
-media library, select a scene, and choose the file under **Phone headphones →
-Stream narration (MP3)**. This field is independent from display video/audio:
-the server uploads the MP3 to the personal-audio bridge and injects it into
-every joined phone stream when the scene starts. Silent scenes clear any
-previous narration. Studio includes these MP3s in media validation and in its
-published media manifest.
+For headphone narration, add MP3s to the shared media library and choose each scene's **Phone headphones** content (the schema retains `phoneAudioSrc` naming for compatibility). Per-group overrides target native participants. Use **File → Publish to devices** to publish the rehearsal/production audio release, including optional background music. This does not activate the server scenario: run the matching scenario and manifest on the server before admitting devices.
 
-To exercise phone streams locally, copy `services/audio/.env.example` to
-`services/audio/.env`, set its passwords, set `BRIDGE_TOKEN`, and set
-`PUBLIC_STREAM_BASE` to a URL phones can reach, such as
-`http://192.168.1.23:8300`. Then start the stack:
+For M1–M4, select a phase and edit **Stage monitors**. Each monitor supports timed video, image, text, placeholder and black cues, using the same media library. **Preview on devices** opens isolated main/group/monitor display pages. Native participant rehearsal uses the published rehearsal channel and running server; it has no browser phone preview or stream fallback.
 
-```bash
-docker compose --env-file services/audio/.env -f services/audio/docker-compose.yml up --build
-```
-
-Start the installation server with matching audio settings:
-
-```bash
-env AUDIO_BRIDGE_URL=http://127.0.0.1:8300 \
-  AUDIO_BRIDGE_TOKEN='<same BRIDGE_TOKEN>' \
-  AUDIO_PUBLIC_URL=http://192.168.1.23:8300 \
-  ... node --import tsx apps/server/src/index.ts
-```
-
-After joining, each participant taps **Start headphones** once, waits for
-**Headphone audio is playing**. The start button disappears while playback is active. The native audio stream
-continues while locked; the Admin page reports connected, waiting, and missing
-listeners. HTTPS phone pages require an HTTPS `AUDIO_PUBLIC_URL`.
-
-See [the Studio curator guide](docs/studio-guide.md) and [runtime compatibility notes](docs/studio-compat.md).
+See [native player setup](docs/native-player.md) and [monitor display setup](docs/monitor-displays.md).
 
 ## Coolify production deployment
 
-The production replacement entry point is
-[`deploy/coolify/docker-compose.yml`](deploy/coolify/docker-compose.yml). It
-keeps the current Coolify service and volume names while replacing the old
-static frontend with the canonical server and its built phone, display, admin,
-and Studio clients. It also deploys PocketBase and the personal-audio stack.
-
-Before changing the Git repository in Coolify, back up the existing
-`pocketbase-data` volume and follow the complete environment, pruning,
-domain, and verification sequence in the
-[`Coolify replacement guide`](deploy/coolify/README.md). Phone audio is a
-required production dependency in that Compose file; missing bridge variables
-or a non-HTTPS public stream URL stop deployment instead of silently disabling
-headphones.
+Use [`deploy/coolify/docker-compose.yml`](deploy/coolify/docker-compose.yml) and the [deployment guide](deploy/coolify/README.md). Production runs frontend, realtime and PocketBase. The frontend builds display, Studio and Admin; participant devices use the native apps. Preserve the PocketBase and native-shows volumes across redeployments. Streaming containers and their environment settings are retired; historical audio volumes remain declared for preservation.
 
 ## Validate and test
 
@@ -352,28 +303,9 @@ This repository forked from the smartphonecracy production, which supplied the r
 No license has been declared yet. All rights are reserved unless a license file is added.
 
 
-### Headphone reliability checks
+### Native headphone acceptance
 
-The phone keeps one native stream across WebSocket reconnects and scene changes.
-It does not seek toward the buffered edge: downloaded audio ahead of playback is
-not a measurement of live latency, and seeking can skip narration. Unexpected
-pauses, errors, ended streams, and 15 seconds without playback progress trigger
-a fresh stream request with bounded retry backoff. A deliberate lock-screen pause
-stays paused; resume uses a fresh user gesture. Browsers can suspend background
-JavaScript, so these recovery mechanisms cannot guarantee recovery during an OS
-suspension or a network outage.
-
-Failed cue injections are reported per participant in Admin and retried every
-five seconds for the current scene only. Successful recipients are not replayed.
-Hold the show when Admin reports a delivery failure; a listener count only proves
-that a stream connection exists, not that a participant heard a cue.
-
-Before giving the audience a lock-screen instruction, rehearse the **deployed
-/phone/** route on real iOS Safari and Android devices over the venue network for
-the full show duration. Include silent gaps followed by cues, lock/unlock cycles,
-brief network loss, and explicit lock-screen pause/resume. Verify complete speech
-without skipped words and watch the bridge's stream-close reasons and Admin
-errors. Desktop unit tests do not certify locked-screen playback.
+Rehearse the full show on the actual native iOS/Android devices: download verification, silent gaps, group changes, lock/unlock, headphones, calls, network loss, pause and resume. Inspect the Admin show clock monitor. Native scheduler playback is implemented, but locked-device cue reception still requires physical acceptance. See [native player](docs/native-player.md).
 
 ### Display text and platform settings
 
