@@ -116,7 +116,7 @@ async function boot(
     });
   const runtime = await buildServer({
     config, readiness, adminData, pocketbase, ghostPool, scheduledStartTimes,
-    ...(onSessionEnded === undefined ? {} : { onSessionEnded }),
+    ...(onSessionEnded === undefined ? {} : { onSessionEnded, onPublicationEnded: onSessionEnded }),
     ...(override?.targetAudienceSize === undefined ? {} : { targetAudienceSizeOverride: override.targetAudienceSize }),
   });
   await listenWithCleanup(runtime.app, { host: config.host, port: config.port });
@@ -269,7 +269,7 @@ export async function startServer(): Promise<void> {
     if (restarting || shuttingDown) return;
     // The show may have started during the scheduler's settle delay. Check
     // again at execution time so that race cannot interrupt a new session.
-    if (runtime.engine?.lifecycleState === "active") {
+    if (runtime.engine?.lifecycleState === "active" || runtime.isPublishing()) {
       requestRestart(reason);
       return;
     }
@@ -288,7 +288,7 @@ export async function startServer(): Promise<void> {
   const restarts = createRestartScheduler(restart, isStopped);
   const restartGate = createActiveShowRestartGate(
     (reason) => restarts.schedule(reason),
-    () => runtime.engine?.lifecycleState === "active",
+    () => (runtime.engine?.lifecycleState === "active" || runtime.isPublishing()),
   );
   requestRestart = restartGate.request;
   flushDeferredRestart = restartGate.flush;

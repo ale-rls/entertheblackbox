@@ -547,6 +547,9 @@ export const phaseSchema = z.union([
 ]);
 
 const canonicalScenarioSchema = z.object({
+  /** Immutable native assets belonging to this published scenario. */
+  nativeReleaseId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  backgroundMusic: z.object({ src: z.string().min(1), volume: z.number().positive().max(1) }).optional(),
   version: z.string().min(1, "scenario version must be non-empty"),
   /** Stable group catalogue used by split nodes, targeting, and live controls. */
   groups: z.array(audienceGroupSchema).min(2, "a show with groups needs at least two groups").refine((groups) => new Set(groups.map((group) => group.id)).size === groups.length, {

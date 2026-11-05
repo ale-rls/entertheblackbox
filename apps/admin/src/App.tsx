@@ -949,7 +949,7 @@ export function App() {
               </div>
             </details>
           </>}
-        </CollapsibleSection> : <section className="sc-tool-panel"><h2>Native participant audio</h2><p>All participant devices use the iOS/Android app with downloaded show audio. Publish narration and background music from Studio → Publish to devices. Use the show clock monitor above to inspect device timing.</p></section>}
+        </CollapsibleSection> : <section className="sc-tool-panel"><h2>Native participant audio</h2><p>All participant devices use the iOS/Android app with downloaded show audio. Publish narration and background music from Studio → Publish show. Use the show clock monitor above to inspect device timing.</p></section>}
         <section className="sc-tool-panel" aria-labelledby="admin-participants-heading">
           <div className="admin-section-heading">
             <div><p className="sc-tool-eyebrow">Who has joined</p><h2 id="admin-participants-heading">Participants</h2></div>

@@ -6,7 +6,7 @@ import type { PublishedShowArtifact, PublishedShowSummary } from "../readiness.j
 import { registerAdminRoutes, type AdminDataSource, type AdminRateLimiters, type RegisterAdminOptions } from "./admin.js";
 
 function setup(options: {
-  publishNativeShow?: NonNullable<RegisterAdminOptions["publishNativeShow"]>;
+
   rateLimiters?: AdminRateLimiters;
   trustProxy?: boolean;
   now?: () => number;
@@ -407,7 +407,7 @@ describe("admin API", () => {
       payload: { showId: "draft-a", name: "Election night", scenario: { version: "1.0.0" }, mediaManifest: { files: [] } },
     });
     expect(published.statusCode).toBe(200);
-    expect(published.json()).toEqual({ ok: true, show: { showId: "draft-a", name: "Election night", version: "1.0.0", publishedAt: 5_000 } });
+    expect(published.json()).toEqual({ ok: true, deferred: true, show: { showId: "draft-a", name: "Election night", version: "1.0.0", publishedAt: 5_000 } });
     expect(publish).toHaveBeenCalledWith({ showId: "draft-a", name: "Election night", scenario: { version: "1.0.0" }, mediaManifest: { files: [] } });
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "publish-show" }));
   });
@@ -610,76 +610,40 @@ it("passes nested start and reunion scope and rejects malformed group IDs", asyn
 });
 
 
-const nativeScenario = { version: "native-test", entryPhaseId: "voice", cyclesAllowed: false,
-  phases: [{ kind: "idle", id: "idle" }, { kind: "narration", id: "voice", text: "Test", durationMs: 1000, next: "idle", phoneAudioSrc: "voice.mp3" }] };
-const nativeManifest = { format: 1 as const, revision: "a".repeat(64), scenarioVersion: "native-test", files: [] };
-const nativeHeaders = { authorization: "Bearer strong-admin-token" };
-describe("native show publishing", () => {
-  it("requires operator authentication before invoking the publisher", async () => {
-    const publishNativeShow = vi.fn().mockResolvedValue(nativeManifest);
-    const { app } = setup({ lifecycle: "idle", publishNativeShow });
+describe("unified show publication", () => {
+  const headers = { authorization: "Bearer strong-admin-token" };
+  const payload = { showId: "show", name: "Show", scenario: {}, mediaManifest: { files: [] } };
+  const summary = { showId: "show", name: "Show", version: "v1", publishedAt: 1 };
+  it("retires independent device publication", async () => {
+    const { app } = setup();
     try {
-      const response = await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", payload: { channel: "production", scenario: nativeScenario } });
-      expect(response.statusCode).toBe(401); expect(publishNativeShow).not.toHaveBeenCalled();
+      expect((await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", headers, payload: {} })).statusCode).toBe(410);
+      expect((await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", payload: {} })).statusCode).toBe(401);
     } finally { await app.close(); }
   });
-  it("publishes the validated draft and audits the chosen channel and release", async () => {
-    const publishNativeShow = vi.fn().mockResolvedValue(nativeManifest);
-    const { app, audit } = setup({ lifecycle: "idle", publishNativeShow });
-    try {
-      const response = await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", headers: nativeHeaders, payload: { channel: "production", scenario: nativeScenario } });
-      expect(response.statusCode).toBe(200);
-      expect(response.json()).toMatchObject({ ok: true, channel: "production", revision: nativeManifest.revision, fileCount: 0 });
-      expect(publishNativeShow).toHaveBeenCalledWith(expect.objectContaining({ version: "native-test" }), "production", undefined);
-      expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: "publish-native-show", detail: expect.objectContaining({ channel: "production" }) }));
-    } finally { await app.close(); }
-  });
-  it("rejects invalid channels, malformed scenarios, and broken graph targets", async () => {
-    const publishNativeShow = vi.fn().mockResolvedValue(nativeManifest);
-    const { app } = setup({ lifecycle: "idle", publishNativeShow });
-    try {
-      for (const payload of [ { channel: "../other", scenario: nativeScenario }, { channel: "production", scenario: {} },
-        { channel: "rehearsal", scenario: { ...nativeScenario, entryPhaseId: "missing" } } ]) {
-        expect((await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", headers: nativeHeaders, payload })).statusCode).toBe(400);
-      }
-      expect(publishNativeShow).not.toHaveBeenCalled();
-    } finally { await app.close(); }
-  });
-  it("blocks publication during a live show", async () => {
-    const publishNativeShow = vi.fn().mockResolvedValue(nativeManifest);
-    const { app } = setup({ lifecycle: "active", publishNativeShow });
-    try {
-      const response = await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", headers: nativeHeaders, payload: { channel: "rehearsal", scenario: nativeScenario } });
-      expect(response.statusCode).toBe(409); expect(response.json().error).toBe("show_active"); expect(publishNativeShow).not.toHaveBeenCalled();
-    } finally { await app.close(); }
-  });
-  it("rejects concurrent publications and releases the lock after failure", async () => {
+  it("serializes preparation and activation, and never activates a failed release", async () => {
     let fail!: (reason: Error) => void; let started!: () => void;
     const didStart = new Promise<void>(resolve => { started = resolve; });
-    const publishNativeShow = vi.fn().mockImplementationOnce(() => { started(); return new Promise((_resolve, reject) => { fail = reject; }); }).mockResolvedValue(nativeManifest);
-    const { app } = setup({ lifecycle: "idle", publishNativeShow });
-    const request = { method: "POST" as const, url: "/api/admin/native-shows/publish", headers: nativeHeaders, payload: { channel: "rehearsal", scenario: nativeScenario } };
+    const publish = vi.fn().mockImplementationOnce(() => { started(); return new Promise((_resolve, reject) => { fail = reject; }); }).mockResolvedValue(summary);
+    const write = vi.fn();
+    const { app } = setup({ lifecycle: "active", showConfig: { activeShowId: null, list: async () => [], readPending: async () => null, write, publish } });
+    const request = { method: "POST" as const, url: "/api/admin/publish", headers, payload };
     try {
       const first = app.inject(request); await didStart;
-      const second = await app.inject(request); expect(second.statusCode).toBe(409); expect(second.json().error).toBe("publish_in_progress");
-      fail(new Error("missing file")); expect((await first).statusCode).toBe(422);
-      expect((await app.inject(request)).statusCode).toBe(200);
+      expect((await app.inject(request)).statusCode).toBe(409);
+      fail(new Error("Missing media")); expect((await first).statusCode).toBe(422);
+      expect(write).not.toHaveBeenCalled();
+      const next = await app.inject(request);
+      expect(next.statusCode).toBe(200); expect(next.json().deferred).toBe(true);
+      expect(write).toHaveBeenCalledWith("show");
     } finally { await app.close(); }
   });
-});
-
-it("validates and forwards native background music settings", async () => {
-  const publishNativeShow = vi.fn().mockResolvedValue(nativeManifest);
-  const { app } = setup({ lifecycle: "idle", publishNativeShow });
-  try {
-    for (const backgroundMusic of [{ src: "../bed.mp3", volume: 0.2 }, { src: "bed.mp3", volume: 0 }]) {
-      expect((await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", headers: nativeHeaders,
-        payload: { channel: "rehearsal", scenario: nativeScenario, backgroundMusic } })).statusCode).toBe(400);
-    }
-    expect(publishNativeShow).not.toHaveBeenCalled();
-    const backgroundMusic = { src: "bed.mp3", volume: 0.2 };
-    expect((await app.inject({ method: "POST", url: "/api/admin/native-shows/publish", headers: nativeHeaders,
-      payload: { channel: "rehearsal", scenario: nativeScenario, backgroundMusic } })).statusCode).toBe(200);
-    expect(publishNativeShow).toHaveBeenCalledWith(expect.anything(), "rehearsal", backgroundMusic);
-  } finally { await app.close(); }
+  it("reports a saved show when automatic selection fails", async () => {
+    const { app } = setup({ showConfig: { activeShowId: null, list: async () => [], readPending: async () => null,
+      write: async () => { throw new Error("offline"); }, publish: async () => summary } });
+    try {
+      const result = await app.inject({ method: "POST", url: "/api/admin/publish", headers, payload });
+      expect(result.statusCode).toBe(503); expect(result.json().error).toBe("activation_failed");
+    } finally { await app.close(); }
+  });
 });

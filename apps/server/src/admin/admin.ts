@@ -1,5 +1,4 @@
-import { backgroundMusicSchema, type BackgroundMusic, channelSchema, type ShowManifest, type ShowChannel } from "@entertheblackbox/show-content";
-import { scenarioSchema, validateScenario, type Scenario } from "@entertheblackbox/scenario";
+import { backgroundMusicSchema, type BackgroundMusic } from "@entertheblackbox/show-content";
 import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings } from "@entertheblackbox/protocol";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { InMemoryIpRateLimiter, requestIp } from "../admission/rate-limit.js";
@@ -27,7 +26,7 @@ export interface AdminDataSource {
 }
 
 export type RegisterAdminOptions = {
-  publishNativeShow?: (scenario: Scenario, channel: ShowChannel, backgroundMusic?: BackgroundMusic) => Promise<ShowManifest>;
+  onPublishing?: (busy: boolean) => void;
   registerRehearsals?: (app: FastifyInstance) => void;
   waitingVideos?: () => Promise<readonly { src: string; url: string; available: boolean }[]>;
   displaySettings?: { read: () => Promise<DisplaySettings>; write: (value: DisplaySettings) => Promise<DisplaySettings> };
@@ -71,7 +70,7 @@ export type RegisterAdminOptions = {
     write: (showId: string) => Promise<void>;
     /** Latest immutable production artifact, optionally scoped to a show. */
     latest?: (showId?: string) => Promise<PublishedShowArtifact | null>;
-    publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown }) => Promise<PublishedShowSummary>;
+    publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown; backgroundMusic?: BackgroundMusic }) => Promise<PublishedShowSummary>;
   };
   ghostConfig?: {
     /** The ghost fill target this running process actually booted with (override, or the scenario's own value, or 0). */
@@ -125,7 +124,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
     }),
   };
   const now = options.now ?? (() => Date.now());
-  let nativePublishBusy = false;
+  let publishBusy = false;
 
   app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -367,36 +366,10 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       options.data?.audit({ action: "set-target-audience-size", at: new Date().toISOString(), detail: { targetAudienceSize } });
       return { ok: true, pending: targetAudienceSize };
     });
-    admin.post<{ Body: { channel?: unknown; scenario?: unknown; backgroundMusic?: unknown } }>("/native-shows/publish", async (request, reply) => {
-      reply.header("cache-control", "no-store");
-      if (!options.publishNativeShow) return reply.code(503).send({ error: "native_publishing_unavailable" });
-      if (options.engine()?.lifecycleState === "active") return reply.code(409).send({ error: "show_active" });
-      if (nativePublishBusy) return reply.code(409).send({ error: "publish_in_progress" });
-      const channel = channelSchema.safeParse(request.body?.channel);
-      const scenario = scenarioSchema.safeParse(request.body?.scenario);
-      const music = backgroundMusicSchema.optional().safeParse(request.body?.backgroundMusic);
-      if (!channel.success || !scenario.success || !music.success) return reply.code(400).send({ error: "invalid_native_publish_request" });
-      const validation = validateScenario(scenario.data);
-      if (!validation.ok) return reply.code(400).send({ error: "invalid_scenario", issues: validation.errors });
-      nativePublishBusy = true;
-      try {
-        const manifest = await options.publishNativeShow(scenario.data, channel.data, music.data);
-        try {
-          options.data?.audit({ action: "publish-native-show", at: new Date().toISOString(), detail: {
-            channel: channel.data, revision: manifest.revision, scenarioVersion: manifest.scenarioVersion, fileCount: manifest.files.length,
-          } });
-        } catch (error) { request.log.error({ error }, "native publication audit failed after successful promotion"); }
-        return { ok: true, channel: channel.data, revision: manifest.revision,
-          scenarioVersion: manifest.scenarioVersion, fileCount: manifest.files.length };
-      } catch (error) {
-        request.log.error({ error }, "native show publication failed");
-        return reply.code(422).send({ error: "native_publish_failed",
-          message: "Could not prepare the audio release. Check that every referenced MP3 is synced to the server and is at most 64 MiB. The channel was not updated." });
-      } finally { nativePublishBusy = false; }
-    });
-    admin.post<{ Body: { showId?: unknown; name?: unknown; scenario?: unknown; mediaManifest?: unknown; baseRecordId?: unknown; force?: unknown } }>("/publish", async (request, reply) => {
+    admin.post("/native-shows/publish", async (_request, reply) => reply.code(410).send({ error: "use_unified_publish", message: "Use Publish show in Studio. It includes native devices and every display." }));
+    admin.post<{ Body: { showId?: unknown; name?: unknown; scenario?: unknown; mediaManifest?: unknown; baseRecordId?: unknown; force?: unknown; backgroundMusic?: unknown } }>("/publish", async (request, reply) => {
       if (!options.showConfig) return reply.code(503).send({ error: "show_config_unavailable" });
-      const { showId, name, scenario, mediaManifest, baseRecordId, force } = request.body ?? {};
+      const { showId, name, scenario, mediaManifest, baseRecordId, force, backgroundMusic } = request.body ?? {};
       if (
         typeof showId !== "string" || !INSTALLATION_ID_PATTERN.test(showId)
         || typeof name !== "string" || name.trim() === ""
@@ -407,27 +380,40 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       ) {
         return reply.code(400).send({ error: "invalid_publish_request" });
       }
-      // force lets an operator explicitly overwrite production despite a
-      // stale baseline (Studio surfaces what it would overwrite first --
-      // see the stale_production_baseline branch below and App.tsx's
-      // "Publish anyway" flow). It never bypasses operator auth.
-      if (typeof baseRecordId === "string" && force !== true) {
-        if (!options.showConfig.latest) return reply.code(503).send({ error: "show_config_unavailable" });
-        const latest = await options.showConfig.latest(showId);
-        if (!latest || latest.recordId !== baseRecordId) {
-          return reply.code(409).send({
-            error: "stale_production_baseline",
-            latest: latest === null ? null : {
-              recordId: latest.recordId,
-              version: latest.version,
-              publishedAt: latest.publishedAt,
-            },
-          });
+      const music = backgroundMusicSchema.optional().safeParse(backgroundMusic);
+      if (!music.success) return reply.code(400).send({ error: "invalid_publish_request" });
+      if (publishBusy) return reply.code(409).send({ error: "publish_in_progress" });
+      publishBusy = true;
+      options.onPublishing?.(true);
+      try {
+        // force lets an operator explicitly overwrite production despite a
+        // stale baseline (Studio surfaces what it would overwrite first --
+        // see the stale_production_baseline branch below and App.tsx's
+        // "Publish anyway" flow). It never bypasses operator auth.
+        if (typeof baseRecordId === "string" && force !== true) {
+          if (!options.showConfig.latest) return reply.code(503).send({ error: "show_config_unavailable" });
+          const latest = await options.showConfig.latest(showId);
+          if (!latest || latest.recordId !== baseRecordId) {
+            return reply.code(409).send({
+              error: "stale_production_baseline",
+              latest: latest === null ? null : {
+                recordId: latest.recordId,
+                version: latest.version,
+                publishedAt: latest.publishedAt,
+              },
+            });
+          }
         }
-      }
-      const published = await options.showConfig.publish({ showId, name, scenario, mediaManifest });
-      options.data?.audit({ action: "publish-show", at: new Date().toISOString(), detail: { showId, name, ...(force === true ? { forced: true } : {}) } });
-      return { ok: true, show: published };
+        const published = await options.showConfig.publish({ showId, name, scenario, mediaManifest, ...(music.data ? { backgroundMusic: music.data } : {}) });
+        try { await options.showConfig.write(showId); }
+        catch { return reply.code(503).send({ error: "activation_failed", message: "Show saved, but automatic selection failed. Select it in Admin → Active show or retry publication." }); }
+        try { options.data?.audit({ action: "publish-show", at: new Date().toISOString(), detail: { showId, name, ...(force === true ? { forced: true } : {}) } }); }
+        catch (error) { request.log.error({ error }, "publication audit failed after successful save"); }
+        return { ok: true, show: published, deferred: options.engine()?.lifecycleState === "active" };
+      } catch (error) {
+        request.log.error({ error }, "show publication failed");
+        return reply.code(422).send({ error: "publish_failed", message: error instanceof Error ? error.message : "Could not prepare show content." });
+      } finally { publishBusy = false; options.onPublishing?.(false); }
     });
     admin.get<{ Params: { sessionId: string }; Querystring: { format?: string } }>("/sessions/:sessionId/export", async (request, reply) => {
       const result = await options.data?.exportSession(request.params.sessionId);
