@@ -19,7 +19,7 @@ An extensive map of current features and their dependencies. See [README.md](REA
 Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authored in `apps/studio`:
 
 - Phase kinds: `idle`, `video`, `narration`, `position-question`, `video-position-question`, `group-branch`
-- Narration phases: media-free display text (with per-group overrides) for drafting/validating a show graph before real video/audio assets exist, upgradeable in place to a real phone soundtrack — `packages/scenario/src/schema.ts`, display in `apps/display/src/App.tsx`, authored in Studio's Inspector
+- Narration phases (Studio: Audio + text): optional native phone audio, display text and timed M1–M4 cues, with per-group audio/text overrides; connect to a position question for an introduction before voting. Duration is authored explicitly — `packages/scenario/src/schema.ts`, display in `apps/display/src/App.tsx`, authored in Studio's Inspector
 - Position fields: four-quadrant, two-quadrant/spectrum, polygon-zones
 - Arena calibration: ellipse or perspective quad corners — `apps/display/src/components/QuadrantOverlay.tsx`
 - Resolution rules: fixed-next, or quadrant-plurality with tie handling / `kleroterion` tie-break

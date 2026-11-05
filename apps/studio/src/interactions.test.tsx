@@ -333,7 +333,7 @@ describe("Studio feedback and keyboard entry", () => {
     await act(async () => { canvas.dispatchEvent(move); });
 
     await act(async () => { button("Add").click(); });
-    await act(async () => { button("Narration (text only, no media)").click(); });
+    await act(async () => { button("Audio + text (narration)").click(); });
     await flush();
 
     const node = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="narration-"]')).at(-1)!;
@@ -646,7 +646,7 @@ describe("Studio feedback and keyboard entry", () => {
 
     expect(titlePosition.value).toBe("centered-xl");
     const compiled = Array.from(document.querySelectorAll("details"))
-      .find((item) => item.querySelector("summary")?.textContent?.includes("Compiled scenario JSON"));
+      .find((item) => item.querySelector("summary")?.textContent?.includes("Scenario JSON"));
     expect(compiled?.querySelector("pre")?.textContent).toContain('"titleLayout": "centered-xl"');
   });
 

@@ -724,7 +724,9 @@ body:has(.editor),
   font-weight: var(--sc-tool-font-weight-medium);
 }
 
-.inspector > label {
+.inspector > label,
+.inspector fieldset > .sc-tool-label,
+.inspector details > .sc-tool-label {
   margin-block-end: var(--sc-tool-space-5);
 }
 
@@ -1540,3 +1542,14 @@ body:has(.editor),
 .device-preview-connections { margin-top: 1rem; }
 .device-preview-connections canvas { display: block; }
 .device-preview-connections input { width: 100%; }
+
+/* Keep optional properties compact until the author opens them. */
+.inspector details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding-block: var(--sc-tool-space-2);
+}
+.inspector fieldset details {
+  margin-block-start: var(--sc-tool-space-3);
+  padding-block-start: var(--sc-tool-space-2);
+}

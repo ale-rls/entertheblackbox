@@ -12,7 +12,8 @@ export function MonitorEditor({ phase, onChange, onChooseMedia }: {
   const set = (id: MonitorId, cues: MonitorCue[]) => onChange({ ...phase, monitorCues: { ...phase.monitorCues, [id]: cues } });
   const check = monitorCuesSchema.safeParse(phase.monitorCues ?? {});
   return <fieldset><legend>Stage monitors</legend>
-    <p className="sc-tool-copy">M1–M4 follow the main server timeline. Times are milliseconds from this phase's start. A new cue replaces the previous one; an omitted duration holds until the next cue or phase. Unauthored screens are black. Video audio is muted; participant sound comes from the native apps.</p>
+    <p className="sc-tool-copy">Text, images or muted video on M1–M4.</p>
+    <details><summary>Cue timing help</summary><p className="sc-tool-copy">Times are milliseconds from scene start. Each cue replaces the previous one. Leave duration empty to hold until the next cue or scene. Screens without cues stay black. Monitors follow the main timeline, including during group paths.</p></details>
     {!check.success && <p className="field-error" role="alert">{check.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")}</p>}
     {MONITOR_IDS.map((id) => {
       const cues = phase.monitorCues?.[id] ?? [];
