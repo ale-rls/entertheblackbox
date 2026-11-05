@@ -58,8 +58,8 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
       {phase && <p>{phase.id} · {Math.max(0, Math.floor((now - phase.startedAt) / 1000))}s</p>}
       {state.connection !== "open" && <p>Waiting for server cues. The last received cue stays on its original clock.</p>}
       {(error || state.notice) && <p role="alert">{error || state.notice?.message}</p>}
-      {setup && <FullscreenControl />}
     </aside>}
+    <div className="display-controls"><FullscreenControl /></div>
   </main>;
 }
 

@@ -110,7 +110,7 @@ export function DevicePreview({ draft, phaseId, request, operator, onClose }: {
       <p role="status">Playing: <strong>{status.phaseId}</strong> · {status.participants} phone(s) · {status.displays} display(s)</p>
       <p><a href={displayUrl} target="_blank" rel="noreferrer">Open main display</a></p>
       <p>{["M1", "M2", "M3", "M4"].map((monitor) => <a key={monitor} href={`${displayUrl}&monitor=${monitor}&setup=1`} target="_blank" rel="noreferrer" style={{ marginRight: "1rem" }}>{monitor}</a>)}</p>
-      <p className="sc-tool-help">Participant devices use the native app only. To rehearse their audio and actions, publish the rehearsal channel using Publish to devices and run the matching server scenario. This isolated preview is for display screens.</p>
+      <p className="sc-tool-help">Participant devices use the native app only. To rehearse their audio and actions, use Publish show on a rehearsal venue server. This isolated preview is for display screens.</p>
       {status.groups.length > 0 && <details><summary>Group displays</summary>{status.groups.map((group) => <p key={group.id}><a href={`${displayUrl}&group=${encodeURIComponent(group.id)}`} target="_blank" rel="noreferrer">{group.label || group.id}</a></p>)}</details>}
       <p className="sc-tool-help">Preview links last until you end it, the server restarts, or two hours pass without triggering a phase.</p>
       <button className="sc-tool-button" disabled={busy} onClick={() => void stop()}>End device preview</button>

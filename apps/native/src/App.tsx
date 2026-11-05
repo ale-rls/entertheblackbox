@@ -20,7 +20,7 @@ type Voting = Extract<ServerToClientMessage, { t: 'voting_options' }>;
 type Groups = Extract<ServerToClientMessage, { t: 'group_selection_options' }>;
 export default function App() {
   const [origin, setOrigin] = useState(process.env.EXPO_PUBLIC_SHOW_SERVER ?? '');
-  const [channel, setChannel] = useState<ShowChannel>('rehearsal');
+  const channel: ShowChannel = 'production';
   const [name, setName] = useState('');
   const [manifest, setManifest] = useState<ShowManifest | null>(null);
   const [busy, setBusy] = useState(false);
@@ -121,6 +121,9 @@ export default function App() {
         if (message.t === 'reload') setError(`Server requests compatible app content (${message.minVersion}). Leave before checking app updates.`);
         if (message.t === 'join_rejected') { player.current?.setEnabled(false); player.current?.setCue(null); setError(`Join rejected: ${message.reason}`); }
         if (message.t === 'snapshot' || message.t === 'phase') {
+          if (message.phase.scenarioVersion !== latestShow.scenarioVersion) {
+            leave(); setError('The active show changed. Tap Update show & join to download it.'); return;
+          }
           if (!acceptsSnapshot(latest.current, message)) return;
           latest.current = message; setServerNow(c.clock.now()); setSnapshot(message); setVoting(null); setGroups(null);
           player.current?.setCue(cueFromSnapshot(message));
@@ -158,10 +161,10 @@ export default function App() {
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
   return <StageCompanion answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
     paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
-    origin={origin} channel={channel} name={name} manifest={manifest} identity={identity} clockText={clockText}
+    origin={origin} name={name} manifest={manifest} identity={identity} clockText={clockText}
     notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}
     onOrigin={value => { setOrigin(value); setManifest(null); }}
-    onChannel={value => { setChannel(value); setManifest(null); }} onName={setName}
+    onName={setName}
     onPrepare={download => void run(() => prepare(download))} onJoin={() => void run(join)}
     onUpdate={() => void run(updateApp)} onLeave={leave}
     onPause={() => { player.current?.setEnabled(false); setPaused(true); setPlaying(false); }}

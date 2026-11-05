@@ -10,7 +10,7 @@ type Props = StageInput & {
   origin: string; channel: ShowChannel; name: string; manifest: ShowManifest | null;
   identity: { name: string; color: string } | null; clockText: string; playing: boolean;
   notificationStatus: string; appChannel: string;
-  onOrigin: (value: string) => void; onChannel: (value: ShowChannel) => void; onName: (value: string) => void;
+  onOrigin: (value: string) => void; onName: (value: string) => void;
   onPrepare: (download: boolean) => void; onJoin: () => void; onUpdate: () => void; onLeave: () => void;
   onPause: () => void; onResume: () => void; onVote: (id: string) => void; onGroup: (id: string) => void;
   onReaction: (kind: 'applause' | 'boo') => void; onPoint: (x: number, y: number) => void;
@@ -160,12 +160,10 @@ export function StageCompanion(props: Props) {
           <Text style={styles.label}>Venue server</Text>
           <TextInput accessibilityLabel="Venue server" style={styles.input} value={props.origin} autoCapitalize="none" autoCorrect={false} editable={!props.busy}
             placeholder="https://show.example.org" placeholderTextColor="#999fa7" onChangeText={props.onOrigin} />
-          <Text style={styles.label}>Show channel</Text>
-          <View style={styles.row}>{(['rehearsal', 'production'] as const).map(channel => <Action key={channel} label={channel} selected={props.channel === channel} disabled={props.busy} onPress={() => props.onChannel(channel)} />)}</View>
           <Action label="Download / update show" disabled={props.busy || !props.origin.trim()} onPress={() => props.onPrepare(true)} />
           <Action label="Inspect saved show" disabled={props.busy || !props.origin.trim()} onPress={() => props.onPrepare(false)} />
           <Action label="Check & install app update" disabled={props.busy} onPress={props.onUpdate} />
-          <Text style={styles.muted}>App channel: {props.appChannel}. App updates and show downloads are separate.</Text>
+          <Text style={styles.muted}>App software: {props.appChannel}. Show content updates automatically when you join.</Text>
         </>}
         <Text style={styles.text}>{props.status}</Text>
         {props.manifest && <Text style={styles.muted}>Show {props.manifest.scenarioVersion} · {props.manifest.files.length} files · {props.manifest.revision.slice(0, 8)}</Text>}

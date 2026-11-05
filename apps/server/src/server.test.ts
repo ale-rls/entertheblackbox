@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
@@ -675,42 +676,31 @@ it("preloads only synchronized soundtracks even without a stream backend", async
 });
 
 
-it("publishes Studio native audio through the authenticated API and serves a usable channel", async () => {
+it("prepares native downloads from the running scenario without a separate publication", async () => {
   const config = await fixture();
-  await writeFile(join(config.mediaDir, "voice.mp3"), "test narration bytes");
-  const runtime = await buildServer({ config, verifyOperatorToken: async token => token === "native-operator" });
-  const scenario = { version: "native-release", entryPhaseId: "voice", cyclesAllowed: false, phases: [
-    { id: "idle", kind: "idle" },
-    { id: "voice", kind: "narration", text: "Test", durationMs: 1000, next: "idle", phoneAudioSrc: "voice.mp3" },
-  ] };
+  const runtime = await buildServer({ config });
   try {
-    const publish = await runtime.app.inject({ method: "POST", url: "/api/admin/native-shows/publish",
-      headers: { authorization: "Bearer native-operator" }, payload: { channel: "rehearsal", scenario } });
-    expect(publish.statusCode).toBe(200);
-    const channel = await runtime.app.inject({ url: "/media/native-shows/channels/rehearsal.json" });
-    expect(channel.headers["cache-control"]).toBe("no-store");
-    const release = channel.json(); expect(release.revision).toBe(publish.json().revision);
-    const audio = await runtime.app.inject({ url: `/media/native-shows/audio/${release.files[0].sha256}.mp3` });
-    expect(audio.body).toBe("test narration bytes");
-    const missing = await runtime.app.inject({ method: "POST", url: "/api/admin/native-shows/publish",
-      headers: { authorization: "Bearer native-operator" }, payload: { channel: "rehearsal", scenario: { ...scenario,
-        phases: [scenario.phases[0], { ...scenario.phases[1], phoneAudioSrc: "missing.mp3" }] } } });
-    expect(missing.statusCode).toBe(422);
-    expect((await runtime.app.inject({ url: "/media/native-shows/channels/rehearsal.json" })).json().revision).toBe(release.revision);
-    expect(runtime.engine?.getSnapshot().scenarioVersion).toBe("test-1"); // Publishing does not activate this draft.
+    const channel = await runtime.app.inject("/media/native-shows/channels/production.json");
+    expect(channel.statusCode).toBe(200);
+    expect(channel.json().scenarioVersion).toBe(runtime.engine?.getSnapshot().scenarioVersion);
+    expect((await runtime.app.inject("/media/native-shows/channels/rehearsal.json")).json()).toEqual(channel.json());
   } finally { await runtime.app.close(); }
 });
 
-it("pulls native background music from the shared media library before publishing", async () => {
+it("publishes all outputs together, syncs library music, and leaves the running version pinned", async () => {
   const config = await fixture();
+  await writeFile(join(config.mediaDir, "library-music.mp3"), "outdated song"); // Same byte count, different hash.
   await writeFile(join(config.mediaDir, "voice.mp3"), "test narration bytes");
   vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) =>
     String(input) === "https://pocketbase.example/files/library-music.mp3" ? new Response("library music") : new Response(null, { status: 404 })));
+  const saved: any[] = [];
   const pocketbase = {
     ensureAuth: vi.fn(async () => {}),
     pb: {
       collection: vi.fn(() => ({
-        getFullList: vi.fn(async () => [{ id: "rec1", src: "library-music.mp3", file: "library-music.mp3", bytes: 13 }]),
+        getFullList: vi.fn(async () => [{ id: "rec1", src: "library-music.mp3", file: "library-music.mp3", bytes: 13, hash: createHash("sha256").update("library music").digest("hex") }]),
+        getFirstListItem: vi.fn(async () => { throw new Error("none"); }),
+        create: vi.fn(async (record: unknown) => { saved.push(record); return record; }),
       })),
       files: { getURL: vi.fn(() => "https://pocketbase.example/files/library-music.mp3") },
     },
@@ -721,13 +711,18 @@ it("pulls native background music from the shared media library before publishin
     { id: "voice", kind: "narration", text: "Test", durationMs: 1000, next: "idle", phoneAudioSrc: "voice.mp3" },
   ] };
   try {
-    const publish = await runtime.app.inject({ method: "POST", url: "/api/admin/native-shows/publish",
+    const mediaManifest = { files: [["voice.mp3", "test narration bytes"], ["library-music.mp3", "library music"]].map(([src, value]) => ({ src, bytes: Buffer.byteLength(value!), hash: createHash("sha256").update(value!).digest("hex") })) };
+    const publish = await runtime.app.inject({ method: "POST", url: "/api/admin/publish",
       headers: { authorization: "Bearer any-token" },
-      payload: { channel: "rehearsal", scenario, backgroundMusic: { src: "library-music.mp3", volume: 0.3 } } });
+      payload: { showId: "music", name: "Music", scenario, mediaManifest, backgroundMusic: { src: "library-music.mp3", volume: 0.3 } } });
     expect(publish.statusCode).toBe(200);
-    const release = (await runtime.app.inject({ url: "/media/native-shows/channels/rehearsal.json" })).json();
-    expect(release.backgroundMusic).toEqual({ src: "library-music.mp3", volume: 0.3 });
-    const music = release.files.find((file: { src: string }) => file.src === "library-music.mp3");
+    const published = saved.find(record => record.scenario);
+    expect(saved).toContainEqual({ activeShowId: "music" });
+    const release = JSON.parse(await readFile(join(config.mediaDir, "native-shows/releases", `${published.scenario.nativeReleaseId}.json`), "utf8"));
+    expect(release.backgroundMusic.volume).toBe(0.3);
+    expect(release.scenarioVersion).toBe(published.scenario.version);
+    const music = release.files.find((file: { src: string }) => file.src === release.backgroundMusic.src);
     expect((await runtime.app.inject({ url: `/media/native-shows/audio/${music.sha256}.mp3` })).body).toBe("library music");
+    expect((await runtime.app.inject("/media/native-shows/channels/production.json")).json().scenarioVersion).toBe("test-1");
   } finally { await runtime.app.close(); }
 });
