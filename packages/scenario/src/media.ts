@@ -6,7 +6,9 @@ import type { MediaManifest } from "./schema.js";
  * size against the actual file and enforce the 2 GiB total budget.
  *
  * File access is injected so tests and non-Node environments can supply
- * their own stat function; `statSizeWithNodeFs` is the production default.
+ * their own stat function. The Node adapter lives in the explicit
+ * `@entertheblackbox/scenario/node` entry point so native bundlers do not
+ * attempt to resolve Node built-ins.
  */
 
 export type MediaIssue = {
@@ -58,14 +60,4 @@ export async function validateMediaManifest(
   }
 
   return { ok: errors.length === 0, errors, totalBytes };
-}
-
-/** Production stat function: resolves manifest src paths against a base directory. */
-export function statSizeWithNodeFs(baseDir: string): StatSize {
-  return async (src) => {
-    const { stat } = await import("node:fs/promises");
-    const { join } = await import("node:path");
-    const s = await stat(join(baseDir, src));
-    return s.size;
-  };
 }

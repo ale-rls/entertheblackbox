@@ -2,12 +2,12 @@ import { readFile } from "node:fs/promises";
 import {
   mediaManifestSchema,
   scenarioSchema,
-  statSizeWithNodeFs,
   validateMediaManifest,
   validateScenario,
   type MediaManifest,
   type Scenario,
 } from "@entertheblackbox/scenario";
+import { statSizeWithNodeFs } from "@entertheblackbox/scenario/node";
 import type { ServerConfig } from "./config.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 
