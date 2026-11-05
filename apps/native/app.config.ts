@@ -4,14 +4,14 @@ import type { ExpoConfig } from 'expo/config';
 const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? 'b9d7bb05-42d6-4711-9b1e-2cdfb6c21ef1';
 const config: ExpoConfig = {
   name: 'Enter the Blackbox', slug: 'enter-the-blackbox', scheme: 'entertheblackbox',
-  version: '1.0.0', orientation: 'portrait',
+  version: '1.0.0', orientation: 'portrait', icon: './assets/icon.png',
   owner: process.env.EXPO_OWNER ?? 'manusnijhoff',
   runtimeVersion: { policy: 'fingerprint' },
   // Shows never reload themselves mid-performance. Updates are requested explicitly while disconnected.
   updates: { checkAutomatically: 'NEVER', fallbackToCacheTimeout: 0, url: `https://u.expo.dev/${projectId}` },
   extra: { eas: { projectId } },
   ios: {
-    bundleIdentifier: process.env.APP_BUNDLE_ID ?? 'org.entertheblackbox.player',
+    bundleIdentifier: process.env.APP_BUNDLE_ID ?? 'space.enabler.blackbox.app',
     supportsTablet: true,
     infoPlist: {
       NSLocalNetworkUsageDescription: 'Connect to the venue show server to receive playback cues and send your choices.',
@@ -20,7 +20,8 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: process.env.APP_BUNDLE_ID ?? 'org.entertheblackbox.player',
+    package: process.env.APP_BUNDLE_ID ?? 'space.enabler.blackbox.app',
+    adaptiveIcon: { foregroundImage: './assets/icon.png', backgroundColor: '#FFFFFF' },
     // Only internal rehearsal binaries permit HTTP LAN endpoints. Store builds use HTTPS/WSS.
     permissions: ['INTERNET'],
     blockedPermissions: ['android.permission.RECORD_AUDIO', 'android.permission.READ_EXTERNAL_STORAGE', 'android.permission.WRITE_EXTERNAL_STORAGE'],
