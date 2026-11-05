@@ -191,3 +191,9 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 - Studio inspector controls, shared media-library selection and usage tracking, schema/export validation and display-preview links — `apps/studio/src/inspector/MonitorEditor.tsx`.
 - Complete manifest predownload with byte/hash verification and retries, cached Blob playback, main server clock alignment, late-join seeking and reconnect recovery — existing display `mediaStore`, `DisplayConnection`, monitor playback.
 - Local setup/readiness/error overlay (`&setup=1`); all-screen readiness does not automatically gate show start. Main timeline only; videos muted. TouchDesigner scene/question helpers removed. [Setup and acceptance](docs/monitor-displays.md).
+
+### Native foreground show mode
+
+Participants can enter an awake, black waiting screen that reveals group choice, voting, rating windows and timed subtitles. Continuous cursor voting stays visible while open. Hold the exit control for two seconds to restore device controls. Android Back is consumed during show mode; optional system screen pinning restricts Home and app switching after Android confirmation. Managed devices can allowlist the app for lock task mode. Power-button locking and Android's unpin gesture remain available. Requires a new native build containing ShowScreen; older binaries keep their existing controls.
+
+Implemented in apps/native and the ShowScreen module bundled with packages/expo-audio-scheduler.
