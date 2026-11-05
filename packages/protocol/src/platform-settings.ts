@@ -10,6 +10,7 @@ export const waitingVideoUrlSchema = z.string().max(2048).refine((value) => {
 
 /** Public display copy and waiting video settings. */
 export const displaySettingsSchema = z.object({
+  phoneSurfaceColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color").default("#000000"),
   heading: z.string().max(160),
   countdownTemplate: z.string().min(1).max(160).refine((value) => value.includes("{time}"), "Include {time} for the countdown"),
   networkInstructions: z.string().max(600),
@@ -22,6 +23,7 @@ export const displaySettingsSchema = z.object({
 }).strict();
 export type DisplaySettings = z.infer<typeof displaySettingsSchema>;
 export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
+  phoneSurfaceColor: "#000000",
   heading: "Join the show",
   countdownTemplate: "Show starts in {time}",
   networkInstructions: "Verbinde dich mit dem Besucher-WLAN {wifi} oder nutze dein eigenes mobiles Netz.",

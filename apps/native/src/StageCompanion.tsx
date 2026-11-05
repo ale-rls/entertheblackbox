@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, AppState, PanResponder, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
-import type { ShowChannel, ShowManifest } from '@entertheblackbox/show-content';
+import type { ShowManifest } from '@entertheblackbox/show-content';
 import type { StageInput } from './stage-state';
 import { stageState, showModeAction } from './stage-state';
 
 type Props = StageInput & {
   answered: string | null;
-  origin: string; channel: ShowChannel; name: string; manifest: ShowManifest | null;
+  origin: string; surfaceColor: string; name: string; manifest: ShowManifest | null;
   identity: { name: string; color: string } | null; clockText: string; playing: boolean;
   notificationStatus: string; appChannel: string;
   onOrigin: (value: string) => void; onName: (value: string) => void;
@@ -22,12 +22,6 @@ function Action({ label, onPress, disabled = false, primary = false, selected = 
     style={({ pressed }) => [styles.button, primary && styles.primary, selected && styles.selected, disabled && styles.disabled, pressed && !disabled && styles.pressed]}>
     <Text style={[styles.buttonText, primary && styles.primaryText]}>{label}</Text>
   </Pressable>;
-}
-/** Abstract artwork, intentionally replaceable without changing the screen layout. */
-function HeaderArt() {
-  return <View accessible accessibilityLabel="Stage companion" style={styles.art}>
-    {Array.from({ length: 9 }, (_, i) => <View key={i} style={[styles.artLine, { height: 16 + (4 - Math.abs(4 - i)) * 6, opacity: .25 + (4 - Math.abs(4 - i)) * .16 }]} />)}
-  </View>;
 }
 /** Playback activity, not an amplitude meter. Stops offscreen, when paused, and for reduced motion. */
 function AudioField({ playing, compact }: { playing: boolean; compact: boolean }) {
@@ -137,24 +131,21 @@ export function StageCompanion(props: Props) {
   const [selection, setSelection] = useState<string | null>(null);
   const [reaction, setReaction] = useState('');
   const screen = stageState(props);
-  const phase = props.snapshot?.phase;
   useEffect(() => { setSelection(null); setReaction(''); }, [props.snapshot?.sessionId, props.snapshot?.phaseEpoch, props.snapshot?.routingEpoch]);
   useEffect(() => { if (props.connected) setSettings(false); }, [props.connected]);
-  const subtitle = phase && 'subtitles' in phase ? phase.subtitles?.filter(s => props.now - phase.startedAt >= s.startAtMs && props.now - phase.startedAt < s.endAtMs).map(s => s.text).join('\n') : '';
-  const sceneTitle = phase && 'title' in phase ? phase.title : '';
   const normal = props.connected && props.status === 'Connected' && !props.paused && !screen.title.includes('attention');
   const rejected = props.status.startsWith('Join rejected');
   const hasChoices = !!(screen.groups?.groups.length || screen.voting || screen.ratingOpen || screen.cursorOpen);
   const needsAction = showModeAction(props, props.answered);
-  const reveal = !showMode || needsAction || (screen.canAct && !!subtitle) || !normal || !!props.error || !!modeError;
-  return <SafeAreaView style={[styles.screen, showMode && { backgroundColor: '#000' }]}>
+  const reveal = !showMode || needsAction || !normal || !!props.error || !!modeError;
+  return <SafeAreaView style={[styles.screen, showMode && { backgroundColor: props.surfaceColor }]}>
     <StatusBar hidden={showMode} barStyle="light-content" backgroundColor="#090a0b" />
     <ScrollView key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
-      {!showMode && <View style={styles.header}><HeaderArt /><View style={styles.identity}>
+      {!showMode && <View style={styles.header}><View style={styles.identity}>
         <Text style={styles.identityName}>{props.identity?.name ?? 'SETUP'}</Text>
         {props.connected && <Text style={styles.muted}>{props.snapshot?.currentGroup?.label ?? 'Waiting for group'}</Text>}
       </View></View>}
-      {reveal && <>{settings ? <View style={styles.inset}>
+      {reveal && <View style={showMode ? { backgroundColor: '#090a0b' } : undefined}>{settings ? <View style={styles.inset}>
         <Text accessibilityRole="header" style={styles.title}>Device settings</Text>
         {!props.connected && <>
           <Text style={styles.label}>Venue server</Text>
@@ -174,14 +165,12 @@ export function StageCompanion(props: Props) {
       </View> : <>
         <View style={[styles.inset, styles.copy]}>
           <Text accessibilityRole="header" style={styles.title}>{screen.title}</Text>
-          {normal && !!sceneTitle && sceneTitle !== screen.title && <Text style={styles.text}>{sceneTitle}</Text>}
-          <Text style={styles.text}>{subtitle && normal ? subtitle : screen.body}</Text>
+          <Text style={styles.text}>{screen.body}</Text>
           {(props.busy || (props.connected && props.status !== 'Connected' && !rejected)) && <ActivityIndicator color="#cad3df" accessibilityLabel={props.status} />}
           {!!props.error && <Text accessibilityRole="alert" style={styles.error}>{props.error}</Text>}
           {!!props.notificationStatus && props.notificationStatus !== 'Show action notifications enabled' && <Text style={styles.muted}>{props.notificationStatus}</Text>}
           {!props.connected && !props.busy && props.status !== 'Download a show, then join' && <Text style={styles.muted}>{props.status}</Text>}
         </View>
-        {!showMode && <AudioField playing={props.playing && !props.paused && !rejected} compact={hasChoices} />}
         {screen.cursorOpen && <CursorPad key={`${props.snapshot?.sessionId}:${props.snapshot?.phaseEpoch}:${props.snapshot?.routingEpoch}`} onPoint={props.onPoint} disabled={!screen.canAct} color={props.identity?.color ?? '#d9e4f1'} />}
         <View style={styles.inset}>
           {!props.connected ? <>
@@ -199,15 +188,16 @@ export function StageCompanion(props: Props) {
             {(props.paused || props.audioStatus.startsWith('Playback error')) && !rejected && <Action label="Resume at show position" primary onPress={props.onResume} />}
           </>}
         </View>
-      </>}</>}
+      </>}</View>}
+      {!settings && <AudioField playing={props.playing && !props.paused && !rejected} compact={showMode || hasChoices} />}
       {!!modeError && <Text accessibilityRole="alert" style={styles.error}>{modeError}</Text>}
-      {showMode && <Pressable accessibilityRole="button" accessibilityLabel="Exit show mode" accessibilityHint="Hold for two seconds" delayLongPress={2000} onLongPress={() => { setModeError(''); setShowMode(false); }} style={styles.exitMode}><Text style={styles.muted}>Hold to exit show mode</Text></Pressable>}
+      {showMode && <Pressable accessibilityRole="button" accessibilityLabel="Exit show mode" accessibilityHint="Hold for two seconds" delayLongPress={2000} onLongPress={() => { setModeError(''); setShowMode(false); }} style={[styles.exitMode, { backgroundColor: '#090a0b' }]}><Text style={styles.muted}>Hold to exit show mode</Text></Pressable>}
       {!showMode && !settings && <View style={styles.footer}>
         {props.connected ? <>
           {ShowScreen && !rejected && <>
             <Action label="Enter show mode" onPress={() => void enterShowMode()} />
             {Platform.OS === 'android' && <Action label={pinScreen ? 'Screen pinning: on' : 'Screen pinning: off'} selected={pinScreen} onPress={() => setPinScreen(!pinScreen)} />}
-            <Text style={styles.muted}>Show mode keeps the screen awake and black between actions. Hold the exit control for two seconds. Android asks you to confirm screen pinning to restrict Home and app switching.</Text>
+            <Text style={styles.muted}>Show mode keeps the screen awake between actions; the operator can set its color. Hold the exit control for two seconds. Android asks you to confirm screen pinning to restrict Home and app switching.</Text>
           </>}
           {!props.paused && !rejected && <Action label="Pause audio" onPress={props.onPause} />}
           <Action label={rejected ? 'Back to setup' : 'Leave show'} onPress={props.onLeave} />
@@ -221,8 +211,7 @@ const styles = StyleSheet.create({
   exitMode: { marginTop: 'auto', padding: 24, alignItems: 'center', minHeight: 64 },
   screen: { flex: 1, backgroundColor: '#090a0b' }, page: { flexGrow: 1, paddingBottom: 24 },
   header: { padding: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
-  art: { width: 88, height: 48, flexDirection: 'row', gap: 6, alignItems: 'center', transform: [{ skewX: '-15deg' }] },
-  artLine: { width: 2, backgroundColor: '#b9c3d0' }, identity: { flex: 1, alignItems: 'flex-end' }, identityName: { color: '#e4e5e6', fontSize: 12, letterSpacing: 1 },
+  identity: { flex: 1, alignItems: 'flex-end' }, identityName: { color: '#e4e5e6', fontSize: 12, letterSpacing: 1 },
   inset: { paddingHorizontal: 24, paddingVertical: 16, gap: 14 }, copy: { paddingTop: 32, paddingBottom: 28 },
   title: { color: '#e4e5e6', fontSize: 30, fontWeight: '500', letterSpacing: -.7 }, text: { color: '#bbc0c8', fontSize: 17, lineHeight: 25 },
   muted: { color: '#a3aab5', fontSize: 13, lineHeight: 20 }, label: { color: '#d6dbe3', fontSize: 14 }, error: { color: '#ffb8b0', fontSize: 15, lineHeight: 22 },
@@ -231,7 +220,7 @@ const styles = StyleSheet.create({
   buttonText: { color: '#e1e6ed', fontSize: 15, textAlign: 'center' }, primary: { backgroundColor: '#dce2ea', borderColor: '#dce2ea' }, primaryText: { color: '#11151b' },
   selected: { borderColor: '#dce2ea', backgroundColor: '#29323e' }, disabled: { opacity: .45 }, pressed: { opacity: .7 }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   footer: { paddingHorizontal: 24, paddingTop: 18, marginTop: 'auto', flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  audio: { height: 240, backgroundColor: '#10151c', justifyContent: 'center', overflow: 'hidden' }, audioCompact: { height: 80 },
+  audio: { height: 240, backgroundColor: '#10151c', justifyContent: 'center', overflow: 'hidden' }, audioCompact: { height: 80, backgroundColor: 'transparent' },
   bars: { flexDirection: 'row', alignItems: 'center', gap: 3 }, bar: { flex: 1, backgroundColor: '#8f9fb3', opacity: .65, borderRadius: 2 },
   audioLabel: { position: 'absolute', left: 24, bottom: 18, fontSize: 11, color: '#afbdcf', letterSpacing: 1.4 },
   pad: { height: 300, width: '100%', backgroundColor: '#11161c', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },

@@ -9,9 +9,21 @@ export type StageInput = {
 };
 export function playbackState(timing: ClockTiming) {
   return {
-    playing: timing.media.some(layer => layer.state === 'playing'),
-    paused: timing.media.some(layer => layer.state === 'paused') && !timing.media.some(layer => layer.state === 'playing'),
+    playing: timing.media.some(layer => layer.role === 'main' && layer.state === 'playing'),
+    paused: timing.media.some(layer => layer.state === 'paused') && !timing.media.some(layer => layer.role === 'main' && layer.state === 'playing'),
   };
+}
+/** Require an advancing foreground playhead; scheduler intent alone can outlive a stalled player. */
+export class PlaybackActivity {
+  private previous: { key: string; position: number } | null = null;
+  sample(timing: ClockTiming, key: string | null): boolean {
+    const main = timing.media.find(layer => layer.role === 'main');
+    const previous = this.previous;
+    this.previous = key && main?.state === 'playing' && main.positionMs !== null
+      ? { key, position: main.positionMs } : null;
+    return !!(this.previous && previous && previous.key === key &&
+      this.previous.position > previous.position && this.previous.position - previous.position < 1500);
+  }
 }
 /** Presentation priority is independent of the server-owned phase/branch selection. */
 export function stageState(s: StageInput) {
@@ -44,12 +56,12 @@ export function stageState(s: StageInput) {
   if (s.snapshot?.participantState === 'finished') return screen('Stay with the room', 'Your part is complete. Follow the main screen.');
   if (s.snapshot?.participantState === 'unassigned') return screen('Waiting for your group', 'The performance will continue here when you’re assigned.');
   if (groups && canAct) return screen('Choose your group', 'Follow the instruction in the room.');
-  if (voting) return screen(voting.closed || !active ? 'Voting has closed' : voting.question,
+  if (voting) return screen(voting.closed || !active ? 'Voting has closed' : 'Choose your answer',
     voting.closed || !active ? 'Look at the main screen for what happens next.' : voting.method === 'physical' ? 'Move to your answer in the room.' : voting.method === 'phone-cursor' ? 'Drag your cursor to your answer on the main screen.' : 'Choose your answer.');
   if (!p || p.kind === 'idle') return screen('You’re in', 'Keep your headphones on. The performance will begin shortly.');
   if (p.kind === 'video' || p.kind === 'video-position-question') return screen('Look at the screen', 'Follow the film on the main screen.');
   if (p.kind === 'group-branch') return screen('Follow your group', 'Listen to the instruction for your assigned group.');
-  if (p.kind === 'narration') return screen('Listen closely', p.text ?? 'Stay with the room.');
+  if (p.kind === 'narration') return screen('Listen closely', 'Stay with the room.');
   return screen('Stay with the room', 'Follow the main screen.');
 }
 

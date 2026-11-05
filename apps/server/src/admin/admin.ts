@@ -34,6 +34,7 @@ export type RegisterAdminOptions = {
   verifyToken: (token: string) => Promise<boolean>;
   engine: () => PhaseEngine | null;
   ready: boolean;
+  nativeAudioCoverage?: () => Promise<unknown>;
   audioStatus?: () => Promise<unknown>;
   audioMusic?: {
     sources: readonly string[] | (() => Promise<readonly string[]>);
@@ -144,6 +145,11 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
     });
 
     options.registerRehearsals?.(admin);
+    admin.get("/audio/native-coverage", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.nativeAudioCoverage) return reply.code(503).send({ error: "show_unavailable" });
+      return options.nativeAudioCoverage();
+    });
 
     admin.get("/settings/waiting-videos", async (_request, reply) => {
       reply.header("cache-control", "no-store");

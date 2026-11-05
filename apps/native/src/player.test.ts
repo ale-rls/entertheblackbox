@@ -76,7 +76,7 @@ it('mirrors lock-screen and interruption pauses from native code', () => {
   const { p, status } = setup();
   expect(p.isPaused()).toBe(false);
   emit(true, 'remote'); expect(p.isPaused()).toBe(true); expect(status).toHaveBeenLastCalledWith('Paused — use Resume at show position');
-  emit(false, 'remote'); expect(p.isPaused()).toBe(false); expect(status).toHaveBeenLastCalledWith('Playing');
+  emit(false, 'remote'); expect(p.isPaused()).toBe(false); expect(status).toHaveBeenLastCalledWith('Waiting for playback status');
   status.mockClear(); emit(true, 'api'); expect(status).not.toHaveBeenCalled();
 });
 it('reports native layer timing as main narration and extra music', () => {

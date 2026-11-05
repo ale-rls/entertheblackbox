@@ -6,7 +6,7 @@ The native participant app is in `apps/native`. It is the only supported partici
 
 - Name/device-label admission, secure participant lease storage scoped to server and installation, reconnect/backoff, heartbeat recovery, and foreground reconnection.
 - Timestamped native MP3 playback, late-join seeking, drift correction, background audio capability, lock-screen controls, device pause/resume, and stop on silent scenes/show end.
-- Per-group audio overrides, group selection, cursor positioning, phone-button votes, reactions, narration text and subtitles. The existing server chooses branches.
+- Per-group audio overrides, group selection, cursor positioning, phone-button votes, reactions. Narration text, subtitles and scene titles stay off participant screens. The existing server chooses branches.
 - Persistent downloaded audio, SHA-256 and byte-count verification, immutable releases, a release pinned to the server’s active show, and preservation of the previous selection after failed downloads.
 - Existing Admin timing telemetry via protocol pings. Download readiness is shown on the phone before joining; this scaffold does not add an Admin fleet provisioning screen.
 - Automatic latest-show preparation before every join, without silently joining on stale content after a network error.
@@ -16,11 +16,11 @@ The native player does not implement the browser's optional post-show movement-r
 
 ## Stage companion screens
 
-The native UI uses a dark stage-focused layout with abstract header artwork and no footer branding. Enter a name on the welcome screen; **Device settings** contains the venue, download/inspect actions and app updates. During a session, **Device details** exposes connection/audio diagnostics without allowing content updates. Leaving returns to setup.
+The native UI uses a dark stage-focused layout without header artwork or footer branding. Enter a name on the welcome screen; **Device settings** contains the venue, download/inspect actions and app updates. During a session, **Device details** exposes connection/audio diagnostics without allowing content updates. Leaving returns to setup.
 
-Live scenes show the current instruction/subtitles and group, server-provided voting/group choices and reaction windows. Cursor input occupies the full screen width, with drag control and accessible direction buttons. Closed or expired votes and disconnected sessions cannot submit answers. Native lock-screen pauses are reflected in the resume control.
+Live scenes show participant guidance and group, server-provided voting/group choices and reaction windows. Cursor input occupies the full screen width, with drag control and accessible direction buttons. Closed or expired votes and disconnected sessions cannot submit answers. Native lock-screen pauses are reflected in the resume control.
 
-The full-width audio field is a playback activity animation driven by the native scheduler's playing layers, including the music bed. It is not a measured waveform or a guarantee of audible output. Animation stops when paused/backgrounded and stays static with Reduce Motion enabled. Existing videos/images remain on the shared display; the current protocol has no participant-phone media source.
+The full-width audio field is a playback activity animation driven by the native scheduler's playing foreground cue, excluding the music bed. It is not a measured waveform or a guarantee of audible output. Animation stops when paused/backgrounded and stays static with Reduce Motion enabled. Existing videos/images remain on the shared display; the current protocol has no participant-phone media source.
 
 ## First local run
 
@@ -139,3 +139,7 @@ Build new iOS and Android binaries after adding `expo-notifications`; an OTA upd
 Notifications cover unanswered group selection, open phone-button/cursor votes, and each reaction window. Physical voting and idle cursor movement do not alert. Repeated snapshots do not repeat an alert; answering, closing a window, changing phase, or leaving clears the current alert. These are local notifications triggered by received live state, not remote push. They cannot deliver new cues if the OS suspends the connection, the device is offline, or the app is force-quit.
 
 On physical iPhone and Android release builds, allow notifications, join, lock the phone and trigger each action type. Check the lock screen and home-screen banner, tap to open the correct current controls, answer and verify cleanup. Repeat with permission denied, reconnects, repeated snapshots, phase changes, and expired windows. Check that narration/music remain audible, and test the venue network and device notification/Focus settings. Automated tests do not establish locked-screen delivery or store readiness.
+
+Admin → Display settings → Phone show surface sets a solid show-mode background. Connected foreground phones poll every five seconds. Black clears the color; interaction and recovery controls remain visible when needed. Deploy the server/admin change to enable saving colors.
+
+Admin → Devices → Phone audio coverage checks every scene/group against the immutable phone download with SHA-256 and byte counts. No audio assigned is distinct from a missing or corrupt file. The foreground activity visualization requires a moving native playhead and updates every 250 ms; it does not measure speaker volume or headphones.
