@@ -140,6 +140,26 @@ Notifications cover unanswered group selection, open phone-button/cursor votes, 
 
 On physical iPhone and Android release builds, allow notifications, join, lock the phone and trigger each action type. Check the lock screen and home-screen banner, tap to open the correct current controls, answer and verify cleanup. Repeat with permission denied, reconnects, repeated snapshots, phase changes, and expired windows. Check that narration/music remain audible, and test the venue network and device notification/Focus settings. Automated tests do not establish locked-screen delivery or store readiness.
 
-Admin → Display settings → Phone show surface sets a solid show-mode background. Connected foreground phones poll every five seconds. Black clears the color; interaction and recovery controls remain visible when needed. Deploy the server/admin change to enable saving colors.
+Admin → Display settings → Phone show surface sets the resting show-mode background. The server pushes it over the show WebSocket as a `surface` message stamped with an `applyAt` server time (60 ms ahead). Each device waits on its measured clock offset, so all tablets switch on the same frame. New joiners receive the current colour immediately. Black clears the color; interaction and recovery controls remain visible when needed.
+
+In show mode, text and the transparent **Hold to exit show mode** control fade out after 4 seconds without a touch, and any touch brings them back. Action prompts (votes, group choice) and problems (reconnecting, errors) never fade.
+
+### Colour instrument
+
+Admin → **Instrument** shows one tile per joined device, sorted by label (T2 before T10). Pick a colour, then:
+- **Press** a tile to light that tablet. **Release** returns it to the resting colour. A quick tap stays lit for at least 250 ms.
+- **Drag** across tiles to play them in turn.
+- **All tablets** addresses every device at once.
+- Keyboard: Space/Enter on a focused tile.
+
+Each gesture is a `POST /api/admin/surface`, scheduled on the shared clock like the resting colour. It works during a running show. Devices show colours only in show mode.
+
+### Identifying 40 tablets
+
+1. **Label the hardware.** Put a sticker T01–T40 on each tablet's back *and* its case/charger slot. Record label ↔ serial number ↔ OS in a sheet.
+2. **Set the label once.** On each tablet: Device settings → **Device label** → `T07`. The label is stored on the device (secure store), survives app updates, and is used as the device's name when it joins. The join screen then shows "This tablet: T07" instead of asking for a name.
+3. **Verify with Identify.** Join all tablets, open Admin → Instrument, and press **Identify** on each tile. That tablet flashes white for 3 s with its label in large type, so you can check that sticker and label match.
+4. **Watch for duplicates.** Admin flags two connected tablets with the same label. Fix it in that tablet's Device settings before the show.
+5. **Charging and storage order.** Store and charge tablets in label order, so a tablet that fails to join is easy to locate from the Admin grid.
 
 Admin → Devices → Phone audio coverage checks every scene/group against the immutable phone download with SHA-256 and byte counts. No audio assigned is distinct from a missing or corrupt file. The foreground activity visualization requires a moving native playhead and updates every 250 ms; it does not measure speaker volume or headphones.

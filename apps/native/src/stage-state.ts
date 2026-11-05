@@ -72,3 +72,10 @@ export function showModeAction(s: StageInput, answered: string | null) {
   const prompt = actionPrompt(s.snapshot, s.voting, s.groups, s.now);
   return state.canAct && !!prompt && (prompt.key !== answered || state.voting?.method === 'phone-cursor');
 }
+
+/** Show-mode text fades after this long without a touch. */
+export const SHOW_TEXT_IDLE_MS = 4_000;
+/** Show-mode text stays visible while an action is needed or something is wrong; otherwise it fades when idle. */
+export function showModeTextVisible(input: { showMode: boolean; needsAction: boolean; problem: boolean; idleMs: number }): boolean {
+  return !input.showMode || input.needsAction || input.problem || input.idleMs < SHOW_TEXT_IDLE_MS;
+}

@@ -491,6 +491,24 @@ export const audioBridgeChangedSchema = z.object({
   streamUrl: nonEmpty,
 });
 
+/**
+ * Native show-mode surface colour, scheduled on the shared server clock.
+ * `set` changes the base colour; `flash` overlays a colour (cleared after
+ * `holdMs`, or held until `release`); `label` asks the device to show its
+ * label large (Identify). `seq` is per-server monotonic so late or reordered
+ * messages are ignored.
+ */
+export const surfaceSchema = z.object({
+  t: z.literal("surface"),
+  v,
+  mode: z.enum(["set", "flash", "release"]),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  applyAt: timestamp,
+  seq: z.number().int().nonnegative(),
+  holdMs: z.number().int().positive().max(60_000).optional(),
+  label: z.string().min(1).max(40).optional(),
+});
+
 /** Everything a client can receive from the server. */
 export const serverToClientSchema = z.union([
   snapshotSchema,
@@ -511,6 +529,7 @@ export const serverToClientSchema = z.union([
   votingOptionsSchema,
   pongSchema,
   audioBridgeChangedSchema,
+  surfaceSchema,
 ]);
 
 // ------------------------------------------------------------------------- types
@@ -555,4 +574,5 @@ export type JoinRejectedMessage = z.infer<typeof joinRejectedSchema>;
 export type StatusMessage = z.infer<typeof statusSchema>;
 export type PongMessage = z.infer<typeof pongSchema>;
 export type AudioBridgeChangedMessage = z.infer<typeof audioBridgeChangedSchema>;
+export type SurfaceMessage = z.infer<typeof surfaceSchema>;
 export type ServerToClientMessage = z.infer<typeof serverToClientSchema>;

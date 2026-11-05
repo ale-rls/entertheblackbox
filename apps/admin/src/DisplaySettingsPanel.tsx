@@ -74,7 +74,7 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
     {!loaded ? <><p>Loading display settings…</p>{error && <button type="button" className="sc-tool-button" onClick={() => setRetry((n) => n + 1)}>Retry loading settings</button>}</> : <form onSubmit={(event) => void save(event)}>
       <fieldset disabled={busy || !configured} style={{ border: 0, padding: 0, margin: 0 }}>
         <h3>Phone show surface</h3>
-        <p className="sc-tool-help">Set the background of connected phones in show mode. Phones update within five seconds while open. Choose black to clear the color; voting and recovery controls remain available.</p>
+        <p className="sc-tool-help">Set the background of connected phones in show mode. Connected phones switch together within a fraction of a second. To play colours live, use the Instrument tab. Choose black to clear the color; voting and recovery controls remain available.</p>
         <label className="sc-tool-label">Phone surface color<input type="color" value={value.phoneSurfaceColor} onChange={(e) => edit({ phoneSurfaceColor: e.target.value })} /></label>
         <button className="sc-tool-button" type="button" onClick={() => edit({ phoneSurfaceColor: "#000000" })}>Reset phone surface to black</button>
         <label className="sc-tool-label">Join heading<input className="sc-tool-field" value={value.heading} maxLength={160} onChange={(e) => edit({ heading: e.target.value })} /></label>

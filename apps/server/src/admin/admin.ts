@@ -1,6 +1,8 @@
 import { backgroundMusicSchema, type BackgroundMusic } from "@entertheblackbox/show-content";
 import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings } from "@entertheblackbox/protocol";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { z } from "zod";
+import type { SurfaceController } from "../surface/surface.js";
 import { InMemoryIpRateLimiter, requestIp } from "../admission/rate-limit.js";
 import type { PhaseCheckpoint, PhaseEngine, TransitionResult } from "../engine/phase-engine.js";
 import type {
@@ -10,6 +12,13 @@ import type {
 } from "../movement/index.js";
 import type { PublishedShowArtifact, PublishedShowSummary } from "../readiness.js";
 import type { FinalVoteSnapshot } from "../votes/index.js";
+
+const surfaceRequestSchema = z.object({
+  target: z.union([z.literal("all"), z.array(z.string().min(1)).min(1).max(200)]),
+  mode: z.enum(["flash", "release", "identify"]),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  holdMs: z.number().int().positive().max(60_000).optional(),
+}).refine((value) => value.mode !== "flash" || value.color !== undefined, { message: "flash needs a color", path: ["color"] });
 
 export type AdminExport = { json: unknown; csv: string };
 export interface AdminDataSource {
@@ -33,6 +42,8 @@ export type RegisterAdminOptions = {
   /** Validates a bearer token against the operators auth collection. */
   verifyToken: (token: string) => Promise<boolean>;
   engine: () => PhaseEngine | null;
+  /** Native show-mode surface colour (base + instrument). */
+  surface?: Pick<SurfaceController, "setBase" | "play">;
   ready: boolean;
   nativeAudioCoverage?: () => Promise<unknown>;
   audioStatus?: () => Promise<unknown>;
@@ -151,6 +162,17 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       return options.nativeAudioCoverage();
     });
 
+    admin.post<{ Body: unknown }>("/surface", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.surface) return reply.code(503).send({ error: "surface_unavailable" });
+      const parsed = surfaceRequestSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_surface_request", issues: parsed.error.issues });
+      const { target, mode } = parsed.data;
+      const delivered = mode === "flash"
+        ? options.surface.play(target, { mode, color: parsed.data.color!, ...(parsed.data.holdMs === undefined ? {} : { holdMs: parsed.data.holdMs }) })
+        : options.surface.play(target, { mode });
+      return { ok: true, delivered };
+    });
     admin.get("/settings/waiting-videos", async (_request, reply) => {
       reply.header("cache-control", "no-store");
       if (!options.waitingVideos) return reply.code(503).send({ error: "media_library_unavailable" });
@@ -166,6 +188,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       const parsed = displaySettingsSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: "invalid_display_settings", issues: parsed.error.issues });
       const display = await options.displaySettings.write(parsed.data);
+      options.surface?.setBase(display.phoneSurfaceColor);
       options.data?.audit({ action: "set-display-settings", at: new Date().toISOString(), detail: { key: "display" } });
       return { configured: true, display };
     });
