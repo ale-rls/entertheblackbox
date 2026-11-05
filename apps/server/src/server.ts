@@ -11,6 +11,7 @@ import { basename } from "node:path";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
 import { SurfaceController } from "./surface/surface.js";
+import { SurfaceEffectRunner } from "./surface/effects.js";
 import { AudioDelivery } from "./audio/audio-delivery.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
@@ -123,6 +124,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   if (readiness.ready) audio?.prepare(readiness.scenario.phases);
   let engine: PhaseEngine | null = null;
   const surface = new SurfaceController({ recipients: () => admission.registry.values() });
+  const surfaceEffects = new SurfaceEffectRunner(surface);
   if (options.pocketbase) void readDisplaySettings(options.pocketbase).then((settings) => surface.restoreBase(settings.phoneSurfaceColor)).catch(() => { /* Black until an operator sets a colour. */ });
   const admission = options.admission ?? new AdmissionController({
     installationId: config.installationId,
@@ -337,6 +339,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     verifyToken: options.verifyOperatorToken ?? createOperatorTokenVerifier(config.pocketbase.url),
     engine: () => engine,
     surface,
+    surfaceEffects,
     ready: readiness.ready,
     phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
     onPublishing: (busy) => { publishing = busy; if (!busy) options.onPublicationEnded?.(); },
@@ -510,6 +513,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     await audio?.stop();
     clearInterval(webSocketKeepAliveInterval);
     movementConsent?.stop();
+    surfaceEffects.stop();
     tracking?.stop();
     engine?.stop();
     for (const socket of webSockets.clients) socket.terminate();

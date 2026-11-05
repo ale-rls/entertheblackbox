@@ -216,3 +216,18 @@
 .surface-tile.is-duplicate { border-color: var(--sc-tool-color-warning); }
 .surface-identify { align-self: flex-start; padding-block: var(--sc-tool-space-1); font-size: var(--sc-tool-font-size-00); }
 @media (prefers-reduced-motion: reduce) { .surface-tile { transition: none; } }
+
+/* Instrument controls, effects and keyboard hints. */
+.surface-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-4) var(--sc-tool-space-6); }
+.surface-slider { display: inline-flex; align-items: center; gap: var(--sc-tool-space-2); color: var(--sc-tool-color-text-secondary); font-size: var(--sc-tool-font-size-0); }
+.surface-slider input[type="range"] { width: min(14rem, 50vw); }
+.surface-slider .sc-tool-mono { min-width: 3.5em; color: var(--sc-tool-color-text); }
+.surface-toggles { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-4); color: var(--sc-tool-color-text-secondary); font-size: var(--sc-tool-font-size-0); }
+.surface-toggles label { display: inline-flex; align-items: center; gap: var(--sc-tool-space-2); }
+.surface-effects { display: grid; gap: var(--sc-tool-space-3); margin: 0; padding: var(--sc-tool-space-4); border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); border-radius: var(--sc-tool-radius-2); }
+.surface-effects legend { padding-inline: var(--sc-tool-space-2); color: var(--sc-tool-color-text-secondary); font-size: var(--sc-tool-font-size-0); }
+.surface-effect-kinds, .surface-effect-settings { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-3); }
+.surface-effect-kinds .sc-tool-button { width: auto; }
+.surface-effect-settings .sc-tool-button { width: auto; }
+.surface-keys kbd, .surface-key { padding: 0 .35em; border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-radius: var(--sc-tool-radius-1); font-family: var(--sc-tool-font-mono); font-size: var(--sc-tool-font-size-00); }
+.surface-key { position: absolute; top: var(--sc-tool-space-2); right: var(--sc-tool-space-2); background: var(--sc-tool-color-canvas); color: var(--sc-tool-color-text-secondary); }

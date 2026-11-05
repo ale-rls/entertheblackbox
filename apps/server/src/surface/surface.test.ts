@@ -74,3 +74,15 @@ describe("POST /api/admin/surface", () => {
     } finally { await app.close(); }
   });
 });
+
+describe("SurfaceController.paint", () => {
+  it("sends each device its own colour on one shared applyAt", () => {
+    const a = socket(), b = socket();
+    const controller = new SurfaceController({ now: () => 1_000, leadMs: 60, recipients: () => [{ clientId: "a", socket: a.socket }, { clientId: "b", socket: b.socket }] });
+    expect(controller.paint(new Map([["a", "#ff0000"], ["b", "#00ff00"]]))).toBe(2);
+    expect(a.sent[0]).toMatchObject({ mode: "flash", color: "#ff0000", applyAt: 1_060 });
+    expect(b.sent[0]).toMatchObject({ mode: "flash", color: "#00ff00", applyAt: 1_060 });
+    expect(b.sent[0]!.holdMs).toBeUndefined();
+    expect(controller.paint(new Map())).toBe(0);
+  });
+});
