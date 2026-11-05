@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRuntimeScenario } from "@entertheblackbox/studio-adapter";
+import { compileStudioGraph, parseRuntimeScenario } from "@entertheblackbox/studio-adapter";
 import scenario from "../../../../content/scenarios/dev.json";
 import manifest from "../../../../content/media-manifest.json";
 import { changePhaseKind, componentTypeForPhase, phaseIdError, phaseKindForComponentType, QUESTION_DEFAULTS, renamePhase } from "./model.js";
@@ -35,4 +35,14 @@ describe("properties inspector model", () => {
     expect(history.undo().edges).toEqual(["q1", "q2", "q3", "q4", "tie", "empty"]);
     expect(history.redo().kind).toBe("video");
   });
+});
+
+
+it("round-trips monitor media and preserves cues when the phase type changes", () => {
+  const raw = { ...scenario, phases: scenario.phases.map(phase => phase.id === "idle" ? { ...phase, monitorCues: { M1: [{ kind: "image", src: "monitor.png", startMs: 0 }] } } : phase) };
+  const project = parseRuntimeScenario(raw, { files: [...manifest.files, { src: "monitor.png", bytes: 10, hash: "test" }] });
+  const compiled = compileStudioGraph(project);
+  const idle = compiled.scenario.phases.find(phase => phase.id === "idle")!;
+  expect(idle.monitorCues?.M1?.[0]).toMatchObject({ kind: "image", src: "monitor.png" });
+  expect(changePhaseKind(idle, "narration").monitorCues).toEqual(idle.monitorCues);
 });

@@ -30,17 +30,8 @@ const envSchema = z.object({
   ALLOW_LATE_JOIN: z.enum(["true", "false"]).default("true"),
   // Absent by default: without it the server behaves exactly as it did for
   // the Frankfurt run, with the phone trackpad as the only position source.
-  JANUS_ENABLED: z.enum(["true", "false"]).optional(),
-  JANUS_BRIDGE_URL: optionalUrl,
-  JANUS_BRIDGE_TOKEN: z.preprocess((input) => input === "" ? undefined : input, z.string().min(32).optional()),
-  JANUS_PUBLIC_URL: optionalUrl,
-  JANUS_ICE_SERVERS: z.string().default("[]"),
-  AUDIO_BRIDGE_URL: z.string().url().optional(),
-  AUDIO_BRIDGE_TOKEN: z.string().min(1).optional(),
-  AUDIO_PUBLIC_URL: z.string().url().optional(),
-  REQUIRE_PHONE_AUDIO: z.enum(["true", "false"]).default("false"),
   TRACKINGBOX_URL: optionalUrl,
-  PHONE_JOIN_BASE_URL: z.string().url().default("http://localhost:5174/"),
+  PHONE_JOIN_BASE_URL: z.string().url().default("http://localhost:3000/phone/"),
   SHOW_PHONE_JOIN_BASE_URL: z.enum(["true", "false"]).default("true"),
   SCENARIO_PATH: z.string().min(1).optional(),
   MEDIA_MANIFEST_PATH: z.string().min(1).optional(),
@@ -106,13 +97,9 @@ export function loadConfig(
   env: NodeJS.ProcessEnv = process.env,
   rootDir = repoRoot,
 ): ServerConfig {
-  // A deliberate shutdown must override saved, partial or invalid Janus values.
-  // Keep validating enabled configurations so wiring errors remain visible.
-  const input = env.JANUS_ENABLED === "false"
-    ? { ...env, JANUS_BRIDGE_URL: undefined, JANUS_BRIDGE_TOKEN: undefined,
-        JANUS_PUBLIC_URL: undefined, JANUS_ICE_SERVERS: "[]" }
-    : env;
-  const parsed = envSchema.safeParse(input);
+  // Native-only participant delivery. Ignore stale stream secrets/settings left
+  // in existing deployments; they must not reactivate browser audio services.
+  const parsed = envSchema.safeParse(env);
   if (!parsed.success) {
     const details = parsed.error.issues
       .map((issue) => `${issue.path.join(".") || "environment"}: ${issue.message}`)
@@ -121,28 +108,6 @@ export function loadConfig(
   }
 
   const value = parsed.data;
-  const janusValues = [value.JANUS_BRIDGE_URL, value.JANUS_BRIDGE_TOKEN, value.JANUS_PUBLIC_URL];
-  if (janusValues.some(x => x !== undefined) && janusValues.some(x => x === undefined)) {
-    throw new ConfigError("JANUS_BRIDGE_URL, JANUS_BRIDGE_TOKEN and JANUS_PUBLIC_URL must be set together");
-  }
-  let iceServers: { urls: string | string[]; username?: string | undefined; credential?: string | undefined }[];
-  try {
-    iceServers = z.array(z.object({ urls: z.union([z.string().regex(/^(stun|stuns|turn|turns):/), z.array(z.string().regex(/^(stun|stuns|turn|turns):/)).min(1)]), username: z.string().optional(), credential: z.string().optional() })).parse(JSON.parse(value.JANUS_ICE_SERVERS));
-  } catch { throw new ConfigError("JANUS_ICE_SERVERS must be a JSON array of ICE server configurations"); }
-  if (value.NODE_ENV === "production" && value.JANUS_PUBLIC_URL && !value.JANUS_PUBLIC_URL.startsWith("https://")) {
-    throw new ConfigError("JANUS_PUBLIC_URL must use HTTPS in production");
-  }
-  const audioValues = [value.AUDIO_BRIDGE_URL, value.AUDIO_BRIDGE_TOKEN, value.AUDIO_PUBLIC_URL];
-  const configuredAudioValues = audioValues.filter((item) => item !== undefined).length;
-  if (configuredAudioValues !== 0 && configuredAudioValues !== audioValues.length) {
-    throw new ConfigError("AUDIO_BRIDGE_URL, AUDIO_BRIDGE_TOKEN, and AUDIO_PUBLIC_URL must be set together");
-  }
-  if (value.REQUIRE_PHONE_AUDIO === "true" && configuredAudioValues === 0 && !value.JANUS_BRIDGE_URL) {
-    throw new ConfigError("REQUIRE_PHONE_AUDIO=true requires AUDIO_BRIDGE_URL, AUDIO_BRIDGE_TOKEN, and AUDIO_PUBLIC_URL");
-  }
-  if (value.NODE_ENV === "production" && value.AUDIO_PUBLIC_URL && !value.AUDIO_PUBLIC_URL.startsWith("https://")) {
-    throw new ConfigError("AUDIO_PUBLIC_URL must use HTTPS in production");
-  }
   if (value.NODE_ENV === "production") {
     const joinUrl = new URL(value.PHONE_JOIN_BASE_URL);
     if (joinUrl.protocol !== "https:" || !/\/phone(?:-janus)?\/$/.test(joinUrl.pathname)) {
@@ -184,8 +149,6 @@ export function loadConfig(
     trustProxy: value.TRUST_PROXY === "true",
     allowLateJoin: value.ALLOW_LATE_JOIN === "true",
     trackingBoxUrl: value.TRACKINGBOX_URL ?? null,
-    ...(value.AUDIO_BRIDGE_URL ? { audio: { url: value.AUDIO_BRIDGE_URL, token: value.AUDIO_BRIDGE_TOKEN!, publicUrl: value.AUDIO_PUBLIC_URL! } } : {}),
-    ...(value.JANUS_BRIDGE_URL ? { janusAudio: { url: value.JANUS_BRIDGE_URL, token: value.JANUS_BRIDGE_TOKEN!, publicUrl: value.JANUS_PUBLIC_URL!, iceServers } } : {}),
     phoneJoinBaseUrl: value.PHONE_JOIN_BASE_URL,
     showPhoneJoinBaseUrl: value.SHOW_PHONE_JOIN_BASE_URL === "true",
     scenarioPath: fromRoot(value.SCENARIO_PATH, "content/scenarios/dev.json"),

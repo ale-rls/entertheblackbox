@@ -1,3 +1,4 @@
+import { monitorCuesSchema } from "./monitors.js";
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
 import { extraAudioCombinationError, mediaCombinationError } from "./media-kind.js";
@@ -35,6 +36,7 @@ const phoneAudioByGroupSchema = z.record(groupIdSchema, phoneAudioFileSchema).op
 export const votingMethodSchema = z.enum(["physical", "phone-cursor", "phone-buttons"]);
 const outgoingCueSchema = z.string().trim().min(1).max(120);
 const phoneAudioFields = {
+  monitorCues: monitorCuesSchema.optional(),
   /** Fallback/broadcast MP3. Used for every participant without a group-specific override. */
   phoneAudioSrc: phoneAudioSrcSchema,
   /** Per-group MP3 overrides, keyed by stable authored group id. */
@@ -233,6 +235,7 @@ export const positionQuestionNextSchema = z.union([
 export const idlePhaseSchema = z.object({
   kind: z.literal("idle"),
   id: z.literal("idle"),
+  monitorCues: monitorCuesSchema.optional(),
 });
 
 /**
@@ -489,6 +492,7 @@ export const groupAssignmentSchema = z.discriminatedUnion("type", [
  * timeline resumes at `next` once every occupied group has reached it.
  */
 export const groupBranchPhaseSchema = z.object({
+  monitorCues: monitorCuesSchema.optional(),
   kind: z.literal("group-branch"),
   outgoingCues: z.array(outgoingCueSchema).max(32).optional(),
   id: phaseIdSchema,
@@ -543,6 +547,9 @@ export const phaseSchema = z.union([
 ]);
 
 const canonicalScenarioSchema = z.object({
+  /** Immutable native assets belonging to this published scenario. */
+  nativeReleaseId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  backgroundMusic: z.object({ src: z.string().min(1), volume: z.number().positive().max(1) }).optional(),
   version: z.string().min(1, "scenario version must be non-empty"),
   /** Stable group catalogue used by split nodes, targeting, and live controls. */
   groups: z.array(audienceGroupSchema).min(2, "a show with groups needs at least two groups").refine((groups) => new Set(groups.map((group) => group.id)).size === groups.length, {

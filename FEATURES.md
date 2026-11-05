@@ -1,6 +1,8 @@
 # Feature inventory
 
-An extensive map of what this repo does, grouped by area, with the app(s), service(s), or package(s) each feature depends on. See [README.md](README.md) for setup and running the show; this is a reference for what exists and where it lives.
+Current production architecture: participant devices use the native iOS/Android app only. Browser pages serve the main projection, four stage monitors, signage, Studio and Admin. Retained browser/streaming source is historical and not a supported delivery path.
+
+An extensive map of current features and their dependencies. See [README.md](README.md) for setup and running the show; this is a reference for what exists and where it lives.
 
 ## Show orchestration & lifecycle
 
@@ -22,10 +24,10 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Arena calibration: ellipse or perspective quad corners — `apps/display/src/components/QuadrantOverlay.tsx`
 - Resolution rules: fixed-next, or quadrant-plurality with tie handling / `kleroterion` tie-break
 - Video/still-image phases: video or still+MP3, extra audio layer, tail hold, subtitles, applause/boo windows, skip control, cursor visibility
-- Synchronized phone-audio phases — engine in `apps/server`, playback in `apps/phone/src/SynchronizedPhoneAudio.tsx` + `lib/synchronized-audio.ts`
+- Synchronized native participant audio — engine in `apps/server`, native clock scheduler in `packages/expo-audio-scheduler`
 - Video-position-question hybrids (timed show/open/close/hide windows) — `apps/display/src/components/VideoQuestionOverlay.tsx`, `VoteCloseCountdown.tsx`
 - Group catalogue & group-branch phases (balanced/self-select/vote-derived/manual, weighted branches, reunion) — [docs/group-branching.md](docs/group-branching.md), `apps/server/src/groups/`
-- Per-phase/per-group phone narration — `apps/server/src/audio/personal-audio.ts` → `apps/phone`
+- Per-phase/per-group narration metadata — scenario snapshots → native cues in `apps/native`
 - Outgoing show-control cues — `apps/server/src/cues/feed.ts`
 - Cycle control and ghost-cursor fill target as scenario-level settings
 
@@ -35,24 +37,18 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Typed inspector per phase kind (arena ellipse/quad editors, polygon zones, timing timeline) — `apps/studio/src/inspector/*`
 - Media library (PocketBase-backed) with usage-reference tracking — `apps/studio/src/media/MediaLibraryDialog.tsx`, `pocketbase-media.ts` → **PocketBase**
 - Local media fallback/import reconciliation — `apps/studio/src/media/local.ts`
-- Device preview of the current Studio draft, stable phone/display links and QR, isolated runtime and TouchDesigner SSE cues — `apps/studio/src/preview/DevicePreview.tsx`, `apps/server/src/rehearsal/rehearsal.ts`, phone/display runtime routing
+- Device preview of the current Studio draft, stable main/group/monitor display links and isolated runtime; native rehearsal uses the active show on a venue server — `apps/studio/src/preview/DevicePreview.tsx`, `apps/server/src/rehearsal/rehearsal.ts`, phone/display runtime routing
 - Runtime validation + branch/display preview — `apps/studio/src/preview/*`
 - Diagnostics panel — `apps/studio/src/diagnostics/DiagnosticsPanel.tsx`
 - Local draft autosave/recovery — `apps/studio/src/io.ts`, `model.ts`
 - Versioned export + authenticated publish (non-disruptive to a live session) — admin `/api/admin/publish`, `apps/server/src/readiness.ts`
 - Studio↔runtime adapter — `packages/studio-adapter`
 
-## Participant experience — `apps/phone`
+## Participant experience — `apps/native`
 
-- Join flow (name entry, admission, returning-participant lease) — `apps/phone/src/App.tsx`, `lib/lease.ts`, `apps/server/src/admission/*`
-- Trackpad cursor input — `apps/phone/src/lib/trackpad.ts`
-- Realtime cursor transport — `apps/phone/src/lib/realtimeWsClient.ts` via **apps/realtime-ws-coolify**
-- Group selection UI — `apps/phone` + `apps/server/src/groups/`
-- Headphone/personal audio (survives reconnects/scene changes/lock screen, auto-recovery) — `apps/phone/src/PhoneAudio.tsx`, `lib/audio-playback.ts` → **services/audio** + `apps/server/src/audio/personal-audio.ts`
-- Synchronized local phone soundtrack — `apps/phone/src/SynchronizedPhoneAudio.tsx`, `lib/synchronized-audio.ts`
-- Soundcheck / background music delivery — admin `/audio/soundcheck`, `/audio/music`
-- Movement/position consent + opt-in recording (60s auto-delete without consent) — `apps/server/src/movement/movement-consent.ts`, `movement-recorder.ts`
-- Reaction buttons (applause/boo) — `apps/server/src/votes/rating-engine.ts`, display `CrowdReactionSounds.tsx`
+- Native iOS/Android app for both audiences and all loan tablets: identity, group choices, cursor/buttons/reactions, downloaded narration and background music. See the native section below.
+- `/`, `/phone/`, and `/phone-janus/` serve native-app joining instructions, never the retired browser controller — `apps/server/src/static.ts`.
+- Retained `apps/phone`, Icecast/Liquidsoap and Janus source/tests are historical. Environment settings cannot enable stream delivery through `loadConfig`; production Compose no longer starts these services.
 
 ## Display / installation screen — `apps/display`
 
@@ -83,8 +79,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Lobby schedule management within the combined session controls panel
 - Active show selection (published/pending, queued-until-show-ends)
 - Ghost-cursor fill-target override
-- Audio diagnostics page (`/admin/?view=audio`) — `AudioDiagnostics.tsx`
-- Headphone stream ops: roster, background music, soundcheck, local↔remote backend switch → **services/audio**
+- Native participant audio guidance and show clock diagnostics; stream controls are hidden when unconfigured. The legacy audio diagnostics page is retained as historical tooling.
 - Shared media-library picker for default, per-group, and per-signage-kiosk lobby/waiting videos (MP4/WebM, sync readiness, muted loop, live updates, black-screen override) — protocol platform settings, display `IdleAttract`, Admin `DisplaySettingsPanel`, PocketBase platform config
 - Display text editor — `DisplaySettingsPanel.tsx`
 - Participant roster + group (re)assignment
@@ -111,19 +106,14 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 ## Group branching
 
 - Group manager (catalogue, membership, balanced/manual/vote assignment, per-group paths/reunion) — `groups/group-manager.ts`
-- Per-group phone narration and independent playback position
+- Per-group native narration and independent playback position
 - Live group transfer with playback-position join — `apps/admin/src/App.tsx`, `apps/server/src/groups/`
 
 ## Audio (personal + ambient)
 
-- Janus/WebRTC personal audio (disabled in production; implementation retained) at `/phone-janus/`, sharing phone UI and show cues; private mounts, group narration, music, soundcheck, recovery with production services disabled — [services/audio-janus](services/audio-janus/README.md)
-
-- Personal audio bridge integration (Icecast/Liquidsoap) — `audio/personal-audio.ts` → **services/audio**
-- Per-scene phone narration injection with delivery-failure retry
-- Background/ambient music control (admin `/audio/music`)
-- Soundcheck tooling (admin `/audio/soundcheck`, disabled during active show)
-- Local↔remote audio backend hot-switch (venue-LAN fallback) — `services/audio/docker-compose.yml`
-- Synchronized video+phone-audio playback (lead time, offset, drift correction) — [docs/synchronized-phone-audio.md](docs/synchronized-phone-audio.md)
+- Native downloaded narration and looping background music, immutable release verification, group-targeted cues and clock-scheduled playback — `apps/native`, `packages/show-content`, `packages/expo-audio-scheduler`.
+- Main projection video/image soundtracks remain supported in `apps/display`. Stage monitor videos are muted.
+- Native cue delivery while locked requires venue acceptance on the actual devices. No browser/streaming fallback is supported.
 
 ## Camera / audience tracking (optional)
 
@@ -132,9 +122,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 ## External show control
 
-- Pre-show TouchDesigner monitor selector for a shared live join-display TOP, driven by the main idle phase — `services/trackingbox/td_scripts/scene_monitor.py`
-- Phase-driven TouchDesigner monitor messages, automatic voting-axis labels/opposite-axis question countdown, axis/zone routing, and full scene countdowns with reconnect recovery — `services/trackingbox/td_scripts/scene_monitor.py`, `docs/touchdesigner-question-monitor.md`
-- Authenticated SSE cue feed (TouchDesigner/other receivers) — `cues/feed.ts`, `GET /api/cues`, `docs/touchdesigner-production.md`, `docs/touchdesigner-question-monitor.md`
+- Authenticated SSE cue feed (TouchDesigner/other receivers) — `cues/feed.ts`, `GET /api/cues`, `docs/touchdesigner-production.md`
 - Per-phase outgoing cue authoring — `packages/scenario`, Studio
 
 ## Persistence & data (PocketBase-backed)
@@ -158,26 +146,14 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 ## Dependency shape, in short
 
 - **`apps/server`** is the hub — almost every feature above has a server-side authoritative half.
-- **`apps/display`**, **`apps/phone`**, **`apps/admin`**, **`apps/studio`** are single-purpose browser clients.
+- **`apps/display`**, **`apps/admin`**, **`apps/studio`** are browser clients. **`apps/native`** is the participant client.
 - **`apps/realtime-ws-coolify`** is required in production for live cursors.
-- **`services/audio`** and **`services/trackingbox`** are optional vendored subtrees (see README's [Services](README.md#services) section) — the show runs without either, degrading gracefully.
+- **`services/trackingbox`** supplies optional physical positions. **`services/audio`** is retained historical source and is not deployed.
 - **PocketBase** (self-hosted, not a workspace app) is required for admin login, publishing, the media library, display text, and audit/export, but not for the core in-memory show runtime itself.
 
-### Current group on phones and admin
+### Current groups and native participants
 
-- Participant snapshots include current group metadata and whether the local scene has phone audio, for initial and nested selections, transfers, and reconnects (`packages/protocol`, `apps/server`). Phones show the current group, respect hidden scene cursors, and display only the applicable audio controls. The native stream remains mounted across silent stages; normal playback displays no success banner, since playback state does not confirm audible output (`apps/phone`).
-- Admin participant labels and selectors use current membership even while a nested selection is still running on its parent timeline (`apps/admin`).
-
-### Recoverable group selection and nested controls
-
-- Admin can explicitly start chosen branches when only disconnected participants lack a choice; the panel shows disconnected blockers, and returning phones can choose a running branch. Selection timers never close an incomplete cohort; choices remain available after the nominal deadline and admin start reports missing assignments. Operator assignment works in nested selections. Late arrivals can choose a running or empty branch on their phones.
-- All group branches start together at the split and advance on the server clock, including empty groups. The first late phone or display joins the current scene with its original media offset; moving the last participant out does not end a branch. Reunion waits for every branch to finish.
-- Scoped Start and Reunion controls identify the parent group and selection scene, including a nested split that reuses a parent group ID. Phones and admin distinguish choosing, unassigned, active, and finished participants. Revisited nested selections retain the parent's cohort despite changed trade membership.
-- Legacy branch-preview audio receives a full authored selection window after a changed choice; repeated clicks on the same group do not restart it. Dedicated narration phases support phone-only group instructions after selection. Studio warns when an explicit group entry equals its reunion.
-
-- Silent phone scenes suspend native streaming and clear buffered audio while keeping the media element and listener playback intent. Scene and group changes wait for queued bridge reset/play work via registration before reconnecting, including when the stream URL is unchanged; an explicit listener pause remains paused (`apps/phone/src/PhoneAudio.tsx`).
-
-Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenario`, `apps/admin`, `apps/phone`.
+Group membership, nested selections, transfer/reconnect routing and native per-group audio remain server-authoritative. Existing browser player recovery notes describe retired implementation, not production acceptance.
 
 ## Central show timing
 
@@ -187,20 +163,37 @@ Dependencies: `apps/server` engine/admin, `packages/protocol`, `packages/scenari
 - Admin's integrated **Show clock monitor** exposes server UTC, shared/per-group cue targets, and per-display/per-phone measured positions, drift, clock offset/round trip and report freshness, with device/attention filters; native app music without a clock target is excluded from drift checks. Display `?clock=1` exposes actual media position and drift for rehearsal.
 - Timing contract, participating apps, and stream limitations: [docs/show-clock.md](docs/show-clock.md).
 
-- Phones expose a collapsible **Show timing** monitor and send authenticated timing reports every 2 seconds. Synchronized Web Audio reports output-latency-compensated estimates; stream drift is explicitly unmeasured. Reports are checked against the current session, cue epoch and participant routing epoch.
+- Native apps expose timing diagnostics and send authenticated clock/playback reports. Reports are checked against the current session, cue epoch and participant routing epoch.
 
 ## Native participant app — `apps/native`
+
+- Dark Stage companion screens separate setup/device diagnostics from live participation, with abstract header artwork, full-width cursor control, accessible directional controls, and an animated playback activity field driven by native layer state (not an amplitude meter). Respects reduced motion and stops animation in background; recovery/paused/closed-voting states retain server authority — `src/StageCompanion.tsx`, `src/stage-state.ts`. Display video remains on the shared screen; no phone image/video source exists in the current protocol.
 
 - iOS/Android system action notifications for group selection, phone voting/cursors and reaction windows; permission requested on join, tap opens the app, duplicate suppression and cleanup on answer/phase change/leave. Alerts are silent to preserve show audio. Live delivery depends on WebSocket reception; force-quit/offline delivery is not supported. Requires a new native build and locked-device acceptance — `src/action-prompt.ts`, `src/notifications.ts`.
 
 - Expo iOS/Android builds, preview/production EAS Update channels, fingerprint runtime compatibility, explicit disconnected-only updates — `app.config.ts`, `eas.json`, `src/App.tsx`
-- Automatic latest-channel verification/download before every join (failed checks block admission; joined sessions pin their release), verified persistent MP3 downloads, per-group server cues, late-join seeking, pause/resume, reconnect and timing reports — `src/content.ts`, `src/cues.ts`, `src/player.ts`, `src/connection.ts`
+- Automatic active-show verification/download before every join (failed checks block admission; joined sessions pin their release), verified persistent MP3 downloads, per-group server cues, late-join seeking, pause/resume, reconnect and timing reports — `src/content.ts`, `src/cues.ts`, `src/player.ts`, `src/connection.ts`
 - Native clock-scheduled playback: cues become layers anchored to server time, started/offset/stopped and drift-corrected in Swift/Kotlin so narration plays with the screen locked; narration runs a fixed 400 ms behind its phase so every phone starts it at 0:00 (video phase audio stays on the display clock); lock-screen controls, call/headphone interruptions, Android foreground media service — `packages/expo-audio-scheduler` (Expo module + config plugin), `src/player.ts`. Changes need a new EAS build.
 - Participant name/identity, group selection, cursor/buttons/reactions, narration/subtitles — `src/App.tsx`; existing protocol and authoritative server
 - Coolify persists published native releases and channel pointers in the frontend’s `native-shows` volume across redeployments (`deploy/coolify/docker-compose.yml`).
-- Independent rehearsal/production content channels, SHA-256 immutable audio releases and atomic server-side promotion — `packages/show-content`, `pnpm publish-native-show`; mutable channel cache policy in `apps/server/src/static.ts`
+- Unified show publication with SHA-256 immutable visual/audio assets, unique scenario versions and native releases pinned to the running show — `apps/server/src/publication.ts`, `packages/show-content`; legacy content-channel URLs alias the active release.
+- Store submission package: production profile sets `STORE_BUILD=1` (phone-only iOS, Android overlay permission removed), EAS Metadata App Store listing/age rating in `apps/native/store.config.json`, Play internal-track draft submit; all store answers and blockers in [store submission guide](docs/store-submission.md). Icon/splash, store join screen and reviewer demo session are not done yet.
 - Native lock-screen cue delivery is a physical-device acceptance requirement, not an automated guarantee; cue reception still runs in JS over the WebSocket. No fleet provisioning UI or live streaming fallback. Setup, publishing and rehearsal: [native player guide](docs/native-player.md).
 
-- **Studio native device publishing** — File → Publish to devices, operator sign-in, rehearsal/production selection, draft validation, release feedback, live-show/concurrent-request guards; `apps/studio/src/NativePublishPanel.tsx`, authenticated `POST /api/admin/native-shows/publish`, `packages/show-content` publisher. Channel publishing does not activate the server scenario.
+- **Studio → Publish show** validates and prepares all outputs, saves and selects the show automatically; active performances defer activation. One operator action for projection, M1–M4 and native devices — `apps/studio/src/App.tsx`, `/api/admin/publish`. See [publishing guide](docs/publishing.md).
 
-- Native downloaded background music: choose an MP3 from the shared media library (or pass a media path to the CLI) plus a volume; the server pulls the chosen library file into its media directory before publishing, and a looping native scheduler layer continues across narration transitions, with device pause/resume and session cleanup — `packages/show-content`, `apps/studio/src/NativePublishPanel.tsx`, `apps/server/src/server.ts` (PocketBase `media` sync), `apps/native/src/player.ts`, `packages/expo-audio-scheduler`. Locked-device cue delivery requires physical acceptance; no pocket mode.
+- Native downloaded background music: choose an MP3 from the shared media library plus a volume; the server pulls the chosen library file into its media directory before publishing, and a looping native scheduler layer continues across narration transitions, with device pause/resume and session cleanup — `packages/show-content`, `apps/studio/src/App.tsx`, `apps/server/src/server.ts` (PocketBase `media` sync), `apps/native/src/player.ts`, `packages/expo-audio-scheduler`. Locked-device cue delivery requires physical acceptance; no pocket mode.
+
+## Authored stage monitors — M1–M4
+
+- Four independent authenticated `/display/?monitor=M1` … `M4` pages; replacement affects only that monitor, never the main projection — `apps/server/src/engine/phase-engine.ts`, `apps/display/src/monitors/MonitorApp.tsx`.
+- Per-phase video, image/caption, text, placeholder and blank sequences with offsets, optional durations, fit and looping; missing screens and gaps are black — `packages/scenario/src/monitors.ts`.
+- Studio inspector controls, shared media-library selection and usage tracking, schema/export validation and display-preview links — `apps/studio/src/inspector/MonitorEditor.tsx`.
+- Complete manifest predownload with byte/hash verification and retries, cached Blob playback, main server clock alignment, late-join seeking and reconnect recovery — existing display `mediaStore`, `DisplayConnection`, monitor playback.
+- Local setup/readiness/error overlay (`&setup=1`); all-screen readiness does not automatically gate show start. Main timeline only; videos muted. TouchDesigner scene/question helpers removed. [Setup and acceptance](docs/monitor-displays.md).
+
+### Native foreground show mode
+
+Participants can enter an awake, black waiting screen that reveals group choice, voting, rating windows and timed subtitles. Continuous cursor voting stays visible while open. Hold the exit control for two seconds to restore device controls. Android Back is consumed during show mode; optional system screen pinning restricts Home and app switching after Android confirmation. Managed devices can allowlist the app for lock task mode. Power-button locking and Android's unpin gesture remain available. Requires a new native build containing ShowScreen; older binaries keep their existing controls.
+
+Implemented in apps/native and the ShowScreen module bundled with packages/expo-audio-scheduler.

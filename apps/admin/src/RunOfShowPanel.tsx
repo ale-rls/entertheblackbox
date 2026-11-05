@@ -49,8 +49,8 @@ export function RunOfShowPanel({ phoneJoinUrl }: { phoneJoinUrl: string | null }
     <div className="admin-section-heading"><h2 id="run-of-show-heading">Run of show</h2></div>
     <nav className="run-of-show-links" aria-label="Show tools">
       <a href="/studio/">Studio &amp; shows</a>
-      <a href="/admin/?view=audio">Audio diagnostics</a>
-      <a href="/phone/" target="_blank" rel="noreferrer">Test phone</a>
+      <a href="/phone/" target="_blank" rel="noreferrer">Native app joining instructions</a>
+      {["M1", "M2", "M3", "M4"].map((id) => <a key={id} href={`/display/?monitor=${id}&setup=1`} target="_blank" rel="noreferrer">{id}</a>)}
     </nav>
     <div className="admin-qr-export">
       <label className="sc-tool-label" htmlFor="admin-qr-export-url">QR code destination URL

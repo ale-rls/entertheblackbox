@@ -1,3 +1,5 @@
+> Current delivery: all participant devices use the native iOS/Android app with downloaded audio. Browser phone/streaming instructions below are historical. M1–M4 use [monitor display pages](monitor-displays.md); see [native setup](native-player.md).
+
 # Local installation operations runbook
 
 This runbook is for museum floor staff and the technical operator. Keep a

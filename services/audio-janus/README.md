@@ -1,3 +1,5 @@
+> Historical browser/streaming documentation. Participant delivery is now native-only; this is not the production setup. See the repository README and docs/native-player.md.
+
 # Janus phone audio — disabled in production
 
 The experimental `/phone-janus/` code is retained for future development.

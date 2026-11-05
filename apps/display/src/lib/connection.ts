@@ -1,3 +1,4 @@
+import type { MonitorId } from "@entertheblackbox/scenario";
 import {
   DISPLAY_REPLACED_CLOSE_CODE,
   encodeMessage,
@@ -28,6 +29,7 @@ export type DisplayConnectionOptions = {
   displayToken: string;
   groupId?: string;
   signageId?: string;
+  monitorId?: MonitorId;
   onMessage: (message: ServerToClientMessage) => void;
   onStatusChange?: (status: ConnectionStatus) => void;
   webSocketFactory?: (url: string) => WebSocket;
@@ -99,6 +101,7 @@ export class DisplayConnection {
         displayToken: this.options.displayToken,
         ...(this.options.groupId === undefined ? {} : { groupId: this.options.groupId }),
         ...(this.options.signageId === undefined ? {} : { signageId: this.options.signageId }),
+        ...(this.options.monitorId === undefined ? {} : { monitorId: this.options.monitorId }),
       });
       this.sendPing();
       this.pingTimer = setInterval(() => this.sendPing(), this.pingIntervalMs);

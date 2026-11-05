@@ -172,7 +172,7 @@ describe("Admin operations UI", () => {
     expect(requests).toContainEqual({ url: "/api/admin/status", method: "GET" });
     expect(requests.some(({ url }) => url === "/api/admin/errors")).toBe(false);
     expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 2_000);
-    expect(document.body.textContent).toContain("Authenticated");
+    expect(document.body.textContent).toContain("Operator signed in");
     expect(document.body.textContent).toContain("question-02");
     expect(document.body.textContent).toContain("118");
   });
@@ -217,8 +217,9 @@ describe("Admin operations UI", () => {
     expect(document.querySelector("#admin-connection-heading")).toBeNull();
     expect(document.querySelector("#admin-flow-heading")).toBeNull();
     const headings = [...document.querySelectorAll(".admin-grid h2")].map((node) => node.textContent);
-    expect(headings.slice(0, 2)).toEqual(["Session controls", "Run of show"]);
-    expect(document.querySelector("#admin-lobby-heading")?.closest(".sc-tool-panel")).toBe(document.querySelector("#admin-controls-heading")?.closest(".sc-tool-panel"));
+    expect(headings).toContain("Ready to start");
+    expect(document.querySelector<HTMLElement>(".admin-setup-content")?.hidden).toBe(true);
+    expect(document.querySelector("#admin-lobby-heading")?.closest(".admin-setup-content")).not.toBeNull();
   });
 
   it("shows the published flow and confirms a direct jump to any other scene", async () => {
@@ -265,7 +266,7 @@ describe("Admin operations UI", () => {
     });
     expect(document.body.textContent).toContain("Show added in 5 minutes.");
 
-    const panels = Array.from(document.querySelectorAll(".admin-grid > section"));
+    const panels = Array.from(document.querySelectorAll(".admin-grid > section:not([hidden])"));
     expect(panels[0]?.querySelector("#admin-controls-heading")).not.toBeNull();
   });
 
@@ -385,15 +386,15 @@ describe("Admin operations UI", () => {
     failStatus = true;
     await act(async () => { poll(); });
     await flush();
-    expect(document.body.textContent).toContain("Last status received");
+    expect(document.body.textContent).toContain("Updates stale");
     expect(document.body.textContent).toContain("Showing the last received status");
     expect(document.body.textContent).toContain("question-02");
 
     failStatus = false;
     await act(async () => { poll(); });
     await flush();
-    expect(document.body.textContent).toContain("Authenticated");
-    expect(document.body.textContent).toContain("Authenticated");
+    expect(document.body.textContent).toContain("Operator signed in");
+    expect(document.body.textContent).toContain("Operator signed in");
     expect(document.body.textContent).not.toContain("Status stale");
     expect(document.querySelector('[role="alert"]')).toBeNull();
   });
@@ -448,34 +449,20 @@ describe("Admin operations UI", () => {
   });
 });
 
-it("plays and stops background music while the show is active", async () => {
+it("separates device, display and setup views and remembers selection", async () => {
   localStorage.setItem("admin-token", "operator-token");
-  const { mock, requests } = createAdminFetch({ status: { ...activeStatus, audio: {
-    configured: true, players: [], soundcheckSources: ["music.mp3"], backgroundMusic: null,
-  } } });
-  // Real fetch() defaults a plain string body's Content-Type to text/plain,
-  // which Fastify then leaves unparsed instead of JSON -- so every music
-  // request must set this header explicitly. See #133.
-  const musicContentType = () => {
-    const calls = mock.mock.calls.filter(([input]) => String(input).endsWith("/audio/music"));
-    return new Headers(calls.at(-1)?.[1]?.headers).get("content-type");
-  };
-  await renderApp();
-  expect(button("Play / apply music").disabled).toBe(true);
-  const select = document.querySelector('[aria-label="Background music"] select') as HTMLSelectElement;
-  await act(async () => {
-    select.value = "music.mp3";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  expect(button("Play / apply music").disabled).toBe(false);
-  await act(async () => button("Play / apply music").click());
-  await flush();
-  expect(JSON.parse(requests.find(r => r.url.endsWith("/audio/music"))!.body!)).toEqual({ src: "music.mp3", volume: 0.2 });
-  expect(musicContentType()).toBe("application/json");
-  await act(async () => button("Stop music").click());
-  await flush();
-  expect(JSON.parse(requests.filter(r => r.url.endsWith("/audio/music")).at(-1)!.body!)).toEqual({ src: null, volume: 0.2 });
-  expect(musicContentType()).toBe("application/json");
+  createAdminFetch(); await renderApp();
+  expect(document.querySelector<HTMLElement>(".admin-session-panel")?.hidden).toBe(false);
+  await act(async () => button("Displays").click());
+  expect(document.querySelector<HTMLElement>(".admin-display-content")?.hidden).toBe(false);
+  expect(document.querySelector<HTMLElement>(".admin-session-panel")?.hidden).toBe(true);
+  expect(document.querySelector('.admin-display-content')?.textContent).toContain("Not reported");
+  expect(localStorage.getItem("admin-view")).toBe("displays");
+  await act(async () => button("Devices").click());
+  expect(document.querySelector("#show-clock-heading")).not.toBeNull();
+  expect(document.body.textContent).not.toContain("Play / apply music");
+  await act(async () => button("Setup").click());
+  expect(document.querySelector<HTMLElement>(".admin-setup-content")?.hidden).toBe(false);
 });
 
 it("offers scoped start and scoped reunion for nested splits", async () => {
@@ -513,4 +500,17 @@ it("offers explicit recovery when disconnected people block a nested selection",
   expect(recover.disabled).toBe(false);
   await act(async () => recover.click()); await flush();
   expect(requests).toContainEqual({ url: "/api/admin/groups/start-paths", method: "POST", body: JSON.stringify({ groupId: "ki", expectedPhaseId: "roles", expectedEpoch: 5, skipDisconnected: true }) });
+});
+
+it("nests subgroup lanes and keeps completed paths disabled", async () => {
+  localStorage.setItem("admin-token", "operator-secret");
+  createAdminFetch({ flow: { entryPhaseId: "split", scenes: [{ id: "split", kind: "group-branch", title: "Split", routes: [] }] },
+    status: { ...activeStatus, phaseId: "split", groupPathsStarted: true, groupPaths: [
+      { groupId: "parent", parentGroupId: null, label: "Parent", color: null, memberIds: [], phaseId: "roles", phaseTitle: "Roles", phaseEpoch: 2, done: false, state: "split" },
+      { groupId: "child", parentGroupId: "parent", label: "Child", color: null, memberIds: ["p"], phaseId: "done", phaseTitle: "Reunion", phaseEpoch: 3, done: true, state: "finished" },
+    ] } });
+  await renderApp();
+  expect(document.querySelector(".admin-group-lane .admin-nested-groups .admin-group-lane")?.textContent).toContain("Child");
+  expect(button("Child — finished").disabled).toBe(true);
+  expect(button("Finish subgroups of Parent").disabled).toBe(false);
 });

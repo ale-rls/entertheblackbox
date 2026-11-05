@@ -1,4 +1,8 @@
-import { publishScenario as publishNativeScenario } from "@entertheblackbox/show-content/publisher";
+import { preparePublication } from "./publication.js";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { showManifestSchema } from "@entertheblackbox/show-content";
+import { prepareScenario as prepareNativeScenario } from "@entertheblackbox/show-content/publisher";
 import { Rehearsals } from "./rehearsal/rehearsal.js";
 import { listWaitingVideos } from "./persistence/waiting-videos.js";
 import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
@@ -49,10 +53,12 @@ export type BuildServerOptions = {
   webSocketKeepAliveIntervalMs?: number;
   movementConsentTimeoutMs?: number;
   /** Notifies the process host after an active session has safely reached idle. */
+  onPublicationEnded?: () => void;
   onSessionEnded?: (event: { reason: string; sessionId: string; endedAt: number }) => void;
 };
 
 export type ServerRuntime = {
+  isPublishing: () => boolean;
   app: FastifyInstance;
   config: ServerConfig;
   readiness: ScenarioReadiness;
@@ -67,6 +73,7 @@ export type ServerRuntime = {
 export async function buildServer(options: BuildServerOptions = {}): Promise<ServerRuntime> {
   const config = options.config ?? loadConfig();
   const readiness = options.readiness ?? (await loadScenarioReadiness(config));
+  let publishing = false;
   const startedAt = Date.now();
   const app = Fastify({ logger: config.nodeEnv !== "test" });
   const rehearsals = new Rehearsals(config, (error) => app.log.error({ error }, "rehearsal failed"));
@@ -326,11 +333,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     engine: () => engine,
     ready: readiness.ready,
     phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
-    publishNativeShow: async (scenario, channel, music) => {
-      // Background music is chosen from the media library, so pull it down before the release is hashed.
-      if (music && options.pocketbase) await syncMediaFromPocketbase(options.pocketbase, config.mediaDir, music.src);
-      return publishNativeScenario(scenario, config.mediaDir, channel, music);
-    },
+    onPublishing: (busy) => { publishing = busy; if (!busy) options.onPublicationEnded?.(); },
     startedAt,
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,
@@ -388,7 +391,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         readPending: async () => (await readServerConfigOverride(options.pocketbase!))?.activeShowId ?? null,
         write: (showId) => writeActiveShowId(options.pocketbase!, showId),
         latest: (showId) => getLatestPublishedShow(options.pocketbase!, showId),
-        publish: (record) => publishShow(options.pocketbase!, record),
+        publish: async (record) => {
+          await syncMediaFromPocketbase(options.pocketbase!, config.mediaDir);
+          const prepared = await preparePublication(record.scenario, record.mediaManifest, config.mediaDir, record.backgroundMusic);
+          return publishShow(options.pocketbase!, { ...record, ...prepared });
+        },
       },
       ghostConfig: {
         active: options.targetAudienceSizeOverride
@@ -402,7 +409,20 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     }),
   });
 
-  registerMediaRoutes(app, config.mediaDir);
+  // Compatibility URLs both resolve to the running scenario, never an independently promoted channel.
+  let nativeManifest: Promise<import("@entertheblackbox/show-content").ShowManifest> | undefined;
+  registerMediaRoutes(app, config.mediaDir, async () => {
+    if (!readiness.ready) throw new Error("No active show");
+    nativeManifest ??= (async () => {
+      const scenario = readiness.scenario;
+      const manifest = scenario.nativeReleaseId
+        ? showManifestSchema.parse(JSON.parse(await readFile(resolve(config.mediaDir, "native-shows", "releases", `${scenario.nativeReleaseId}.json`), "utf8")))
+        : await prepareNativeScenario(scenario, config.mediaDir, scenario.backgroundMusic);
+      if (manifest.scenarioVersion !== scenario.version) throw new Error("Native release does not match active show");
+      return manifest;
+    })().catch(error => { nativeManifest = undefined; throw error; });
+    return nativeManifest;
+  });
   registerBundleRoutes(app, config.bundleDirs);
 
   app.server.on("upgrade", (request, socket, head) => {
@@ -481,5 +501,5 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     await new Promise<void>((resolve) => webSockets.close(() => resolve()));
   });
 
-  return { app, config, readiness, webSockets, admission, engine, rehearsals, tracking, startedAt };
+  return { isPublishing: () => publishing, app, config, readiness, webSockets, admission, engine, rehearsals, tracking, startedAt };
 }

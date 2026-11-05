@@ -1,3 +1,4 @@
+import type { MediaTarget } from "./inspector/MonitorEditor.js";
 import { DevicePreview } from "./preview/DevicePreview.js";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import PocketBase from "pocketbase";
@@ -23,7 +24,6 @@ import { refreshDraftLocalMedia, runtimeMediaManifest, type MediaManifest } from
 import { PocketbaseMediaLibrary } from "./media/pocketbase-media.js";
 import { MediaLibraryDialog, type MediaLibraryRow } from "./media/MediaLibraryDialog.js";
 import { studioMediaKindForSource, type StudioMediaKind } from "./media/library.js";
-import { NativePublishPanel } from "./NativePublishPanel.js";
 import { productionDraftFromArtifact, type PublishedProductionArtifact } from "./production.js";
 import { projectPreviewUrl, storeProjectPreview } from "./preview/project-preview.js";
 import "@entertheblackbox/tool-ui/styles.css";
@@ -125,7 +125,7 @@ export function App() {
   const [showDiagnostics, setShowDiagnostics] = useState(true);
   const [localManifest, setLocalManifest] = useState<MediaManifest>();
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
-  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; target: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc"; mediaKind: Exclude<StudioMediaKind, "unknown">; trigger: HTMLButtonElement | null }>();
+  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; target: MediaTarget; mediaKind: Exclude<StudioMediaKind, "unknown">; trigger: HTMLButtonElement | null }>();
   const [mediaUploading, setMediaUploading] = useState(false);
   const [importFeedback, setImportFeedback] = useState<InlineFeedback>();
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
@@ -133,7 +133,7 @@ export function App() {
   const [devicePreviewDraftId, setDevicePreviewDraftId] = useState<string | null>(null);
   const [devicePreviewRequest, setDevicePreviewRequest] = useState(0);
   const [publishOpen, setPublishOpen] = useState(false);
-  const [publishTarget, setPublishTarget] = useState<"server" | "devices">("server");
+  const [publishMusic, setPublishMusic] = useState({ src: "", volume: 0.2 });
   const [productionImportOpen, setProductionImportOpen] = useState(false);
   const [publishForm, setPublishForm] = useState({ showId: "", name: "" });
   const [publishing, setPublishing] = useState(false);
@@ -403,7 +403,7 @@ export function App() {
     setMediaPicker(undefined);
     setMediaLibraryOpen(true);
   };
-  const openMediaPicker = (phaseId: string, target: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement | null = null) => {
+  const openMediaPicker = (phaseId: string, target: MediaTarget, mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement | null = null) => {
     setMediaLibraryOpen(false);
     setMediaPicker({ phaseId, target, mediaKind, trigger });
   };
@@ -564,6 +564,13 @@ export function App() {
   const selectMedia = (row: MediaLibraryRow) => {
     if (!draft || !mediaPicker) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === mediaPicker.phaseId);
+    if (phase && typeof mediaPicker.target === "object") {
+      const { monitorId, cueIndex } = mediaPicker.target;
+      const cues = phase.monitorCues?.[monitorId] ?? [];
+      updatePhase({ ...phase, monitorCues: { ...phase.monitorCues, [monitorId]: cues.map((cue, index) => index === cueIndex && (cue.kind === "image" || cue.kind === "video") ? { ...cue, src: row.src } : cue) } });
+      closeMediaPicker();
+      return;
+    }
     if (phase && phase.kind !== "idle" && phase.kind !== "group-branch" && mediaPicker.target === "phoneAudioSrc") {
       updatePhase({ ...phase, phoneAudioSrc: row.src });
       closeMediaPicker();
@@ -874,8 +881,8 @@ export function App() {
       setExportFeedback({ status: "danger", message: `Deployment export failed: ${detail} Review Diagnostics, resolve the reported issues, and try again.` });
     }
   };
-  const openPublish = (target: "server" | "devices" = "server") => {
-    setPublishTarget(target);
+  const openPublish = () => {
+    setPublishMusic(draft.project.scenario.backgroundMusic ?? { src: "", volume: 0.2 });
     setPublishFeedback(undefined);
     setSignInFeedback(undefined);
     setStaleConflict(undefined);
@@ -902,7 +909,7 @@ export function App() {
         body: JSON.stringify({
           showId: publishForm.showId,
           name: publishForm.name,
-          scenario: artifacts["scenario.json"],
+          scenario: { ...artifacts["scenario.json"], backgroundMusic: publishMusic.src ? publishMusic : undefined },
           mediaManifest: artifacts["media-manifest.json"],
           ...(draft.document.productionBaseline === undefined
             ? {}
@@ -912,21 +919,22 @@ export function App() {
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null) as
-          { error?: string; latest?: { recordId: string; version: string; publishedAt: number } | null } | null;
+          { error?: string; message?: string; latest?: { recordId: string; version: string; publishedAt: number } | null } | null;
         if (body?.error === "stale_production_baseline") {
           setStaleConflict({ latest: body.latest ?? null });
           throw new Error("Production changed after this draft was created. Review what's currently live below, then publish anyway to overwrite it, or import the latest production show and reapply your changes instead.");
         }
         throw new Error(body?.error === "invalid_publish_request"
           ? "Show ID must be letters, numbers, - or _ only, and Name can't be empty."
-          : `Publish failed (${response.status}).`);
+          : body?.message ?? `Publish failed (${response.status}).`);
       }
+      const result = await response.json() as { deferred?: boolean };
       setStaleConflict(undefined);
       setPublishFeedback({
         status: "success",
-        message: showLifecycle === "active"
+        message: result.deferred
           ? `Published "${publishForm.name}". The running show was not interrupted; production will reload after it ends.`
-          : `Published "${publishForm.name}". It goes live automatically within moments -- pick it in /admin's Active show panel first if another show is currently pinned as active.`,
+          : `Published "${publishForm.name}". Main display, monitors and native devices now share this publication. It becomes active within moments; devices download it when they join.`,
       });
     } catch (error) {
       setPublishFeedback({
@@ -948,7 +956,8 @@ export function App() {
   const mediaPickerPhase = mediaPicker
     ? draft.project.scenario.phases.find((phase) => phase.id === mediaPicker.phaseId)
     : undefined;
-  const mediaPickerSelectedSrc = mediaPicker?.target === "phoneAudioSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
+  const monitorPickerCue = mediaPicker && typeof mediaPicker.target === "object" ? mediaPickerPhase?.monitorCues?.[mediaPicker.target.monitorId]?.[mediaPicker.target.cueIndex] : undefined;
+  const mediaPickerSelectedSrc = monitorPickerCue && "src" in monitorPickerCue ? monitorPickerCue.src : mediaPicker?.target === "phoneAudioSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
     ? mediaPickerPhase.phoneAudioSrc ?? ""
     : mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
     ? mediaPicker?.target === "audioSrc"
@@ -979,8 +988,7 @@ export function App() {
         { separator: true },
         { label: "Export files", onSelect: () => Object.entries(exportArtifacts(draft)).forEach(([name, value]) => download(name, value)), disabled: blocked },
         { label: "Export for deployment", onSelect: exportDeployment, disabled: blocked },
-        { label: "Publish to PocketBase…", onSelect: () => openPublish(), disabled: blocked },
-        { label: "Publish to devices…", onSelect: () => openPublish("devices"), disabled: blocked },
+        { label: "Publish show…", onSelect: () => openPublish(), disabled: blocked },
         { label: "Save backup", onSelect: () => download(`${draft.name}.studio-backup.json`, exportBackup(draft)) },
         { separator: true },
         { label: "Close show", onSelect: closeShow },
@@ -1026,8 +1034,8 @@ export function App() {
       {exportFeedback && <Feedback id="studio-export-feedback" className="menubar-feedback" feedback={exportFeedback} />}
       <DevicePreview key={draft.id} draft={draft} phaseId={selectedPhase?.id} request={devicePreviewDraftId === draft.id ? devicePreviewRequest : 0} operator={operatorPb} onClose={() => setDevicePreviewRequest(0)} />
       {publishOpen && <div className="sc-tool-panel publish-panel" role="dialog" aria-labelledby="publish-heading">
-        <p className="sc-tool-eyebrow" id="publish-heading">{publishTarget === "devices" ? "Publish to devices" : "Publish to PocketBase"}</p>
-        {showLifecycle === "active" && publishTarget === "server" && <LiveShowWarning />}
+        <p className="sc-tool-eyebrow" id="publish-heading">Publish show</p>
+        {showLifecycle === "active" && <LiveShowWarning />}
         {operatorEmail === null ? <>
           <p className="sc-tool-help">Sign in with your operator credentials (the same ones used for /admin). Stays signed in on this device for 30 days.</p>
           <form onSubmit={(event) => void signIn(event)}>
@@ -1045,9 +1053,7 @@ export function App() {
           {signInFeedback && <Feedback id="studio-signin-feedback" className="menubar-feedback" feedback={signInFeedback} />}
         </> : <>
           <p className="sc-tool-help">Signed in as {operatorEmail}. Publishing only works when Studio is served from apps/server. <button className="sc-tool-button" data-sc-tool-variant="quiet" type="button" onClick={signOut}>Sign out</button></p>
-          {publishTarget === "devices" ? <NativePublishPanel key={draft.id} token={operatorPb.authStore.token}
-            exportScenario={() => exportArtifacts(draft)["scenario.json"]}
-            musicSources={(localManifest?.files ?? []).map((file) => file.src).filter((src) => studioMediaKindForSource(src) === "audio")} active={showLifecycle === "active"} onClose={() => setPublishOpen(false)} /> : <>
+          <p className="sc-tool-help">One publication for the main display, M1–M4 monitors and native apps. All referenced media is checked and prepared before the show is saved and selected. A running performance keeps its current version until it ends.</p>
           <form onSubmit={(event) => void publishDraft(event)}>
             <label className="sc-tool-label" htmlFor="publish-show-id">Show ID
               <input id="publish-show-id" className="sc-tool-field sc-tool-mono" value={publishForm.showId} onChange={(event) => setPublishForm((form) => ({ ...form, showId: event.target.value }))} />
@@ -1055,6 +1061,15 @@ export function App() {
             <label className="sc-tool-label" htmlFor="publish-name">Name
               <input id="publish-name" className="sc-tool-field" value={publishForm.name} onChange={(event) => setPublishForm((form) => ({ ...form, name: event.target.value }))} />
             </label>
+            <label className="sc-tool-label">Background music
+              <select className="sc-tool-field" value={publishMusic.src} onChange={event => setPublishMusic(value => ({ ...value, src: event.target.value }))}>
+                <option value="">No background music</option>
+                {(localManifest?.files ?? []).filter(file => studioMediaKindForSource(file.src) === "audio").map(file => <option key={file.src} value={file.src}>{file.src}</option>)}
+              </select>
+            </label>
+            {publishMusic.src && <label className="sc-tool-label">Music volume
+              <input className="sc-tool-field" type="number" min="0.01" max="1" step="0.01" value={publishMusic.volume} onChange={event => setPublishMusic(value => ({ ...value, volume: Number(event.target.value) }))} />
+            </label>}
             <div className="publish-panel-actions">
               <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => setPublishOpen(false)}>Cancel</button>
               <button className="sc-tool-button" data-sc-tool-variant="primary" type="submit" disabled={publishing || !publishForm.showId || !publishForm.name}>{publishing ? "Publishing…" : "Publish"}</button>
@@ -1073,7 +1088,6 @@ export function App() {
                 {publishing ? "Publishing…" : "Publish anyway, overwrite production"}
               </button>
             </div>
-          </>}
           </>}
         </>}
       </div>}
