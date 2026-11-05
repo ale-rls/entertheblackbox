@@ -203,3 +203,5 @@ Implemented in apps/native and the ShowScreen module bundled with packages/expo-
 - Admin **Instrument** tab: tablets as a playable colour grid (press/hold/drag, All pad) and per-tablet **Identify** flash — `apps/admin/src/SurfaceInstrument.tsx`, `POST /api/admin/surface`
 - Native device label (T01–T40) stored on the device and used as the join name; show-mode text fades after 4 s idle — `apps/native/src/App.tsx`, `apps/native/src/StageCompanion.tsx`
 - Admin phone audio coverage audits every phase/group assignment against immutable downloaded bytes, distinguishing unassigned, unpublished, missing and corrupt audio; device timing separately reports runtime playback.
+
+- Optional `monitorGroupId` makes M1–M4 follow that audience’s independent path, clears cues while it waits, and returns to the shared timeline at reunion — scenario schema/validation and server phase engine.

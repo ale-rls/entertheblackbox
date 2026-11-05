@@ -70,6 +70,9 @@ export function validateScenario(
 
   const byId = new Map<string, Phase>();
   const groupIds = new Set((scenario.groups ?? []).map((group) => group.id));
+  if (scenario.monitorGroupId !== undefined && !groupIds.has(scenario.monitorGroupId)) errors.push({
+    severity: "error", code: "unknown-group", message: `monitorGroupId references unknown group "${scenario.monitorGroupId}"`,
+  });
   for (const phase of scenario.phases) {
     if (byId.has(phase.id)) {
       errors.push({

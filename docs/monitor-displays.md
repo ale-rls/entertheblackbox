@@ -43,7 +43,9 @@ Countdowns can be authored as timed text cues or video; there is no automatic
 question countdown/axis-routing helper. Ensure the main phase lasts long enough
 for its monitor cues. A phase transition always cancels its remaining cues.
 
-**Timing owner:** these monitors follow the main server timeline only. Group
+**Timing owner:** monitors follow the main server timeline by default. Set scenario `monitorGroupId` to a declared audience group to follow its independent scene clock instead, including reconnects and operator jumps. While that path waits for reunion, screens clear; at reunion they follow the shared scene again. This requires a server build supporting `monitorGroupId`.
+
+Without this setting, group
 audio may run independently, but monitor cues on an independent group path do
 not drive these four screens. Put shared screen cues on main phases and use
 group-targeted narration there when a common question/monitor clock is needed.
