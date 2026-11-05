@@ -1016,7 +1016,7 @@ export function App() {
         { label: "Video phase", onSelect: () => addPhase("video") },
         { label: "Video + synchronized phone audio", onSelect: () => addPhase("synchronized-video") },
         { label: "Image + MP3 phase", onSelect: () => addPhase("image-audio") },
-        { label: "Narration (text only, no media)", onSelect: () => addPhase("narration") },
+        { label: "Audio + text (narration)", onSelect: () => addPhase("narration") },
         { label: "Position question", onSelect: () => addPhase("position-question") },
         { label: "Video + position vote", onSelect: () => addPhase("video-position-question") },
         { label: "Image + MP3 + position vote", onSelect: () => addPhase("image-audio-position-question") },
