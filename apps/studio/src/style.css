@@ -76,11 +76,24 @@ body:has(.editor),
   color: var(--sc-tool-color-warning);
 }
 
-.live-show-warning-compact {
-  max-width: 25rem;
-  flex: 0 1 auto;
-  margin: 0;
-  padding-block: var(--sc-tool-space-2);
+.live-show-badge {
+  flex: 0 0 auto;
+  padding: var(--sc-tool-space-1) var(--sc-tool-space-3);
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-warning);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sc-tool-color-warning) 14%, transparent);
+  color: var(--sc-tool-color-warning);
+  font-family: var(--sc-tool-font-mono);
+  font-size: var(--sc-tool-font-size-00);
+  font-weight: var(--sc-tool-font-weight-medium);
+  letter-spacing: var(--sc-tool-letter-spacing-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.live-show-badge::before {
+  content: "● ";
 }
 
 .home article {
@@ -119,7 +132,11 @@ body:has(.editor),
 
 /* Editor shell */
 .editor {
-  --studio-inspector-width: 20rem;
+  --studio-inspector-width: 27.5rem;
+  /* Studio-only contrast: a darker canvas under lighter nodes and panels. */
+  --studio-canvas: color-mix(in srgb, var(--sc-tool-color-canvas) 55%, black);
+  --studio-node-surface: var(--sc-tool-color-surface-3);
+  --studio-panel-surface: var(--sc-tool-color-surface-2);
   position: relative;
   display: grid;
   width: 100%;
@@ -128,7 +145,7 @@ body:has(.editor),
   min-height: 0;
   grid-template: auto minmax(0, 1fr) auto / minmax(0, 1fr) var(--studio-inspector-width);
   overflow: hidden;
-  background: var(--sc-tool-color-canvas);
+  background: var(--studio-canvas);
 }
 
 .editor.no-inspector {
@@ -150,7 +167,35 @@ body:has(.editor),
   gap: var(--sc-tool-space-1);
   padding: var(--sc-tool-space-2) var(--sc-tool-space-4);
   border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
-  background: var(--sc-tool-color-surface-1);
+  background: var(--studio-panel-surface);
+}
+
+.menubar .publish-action {
+  flex: 0 0 auto;
+  margin-inline-start: var(--sc-tool-space-2);
+  padding-inline: var(--sc-tool-space-6);
+  border-color: white;
+  background: white;
+  color: var(--sc-tool-color-canvas);
+  font-weight: var(--sc-tool-font-weight-medium);
+}
+
+.menubar .publish-action:hover:not(:disabled) {
+  background: var(--sc-tool-color-text-secondary);
+}
+
+.menubar .publish-action:disabled {
+  border-color: var(--sc-tool-color-rule);
+  background: var(--sc-tool-color-surface-3);
+  color: var(--sc-tool-color-text-muted);
+  cursor: not-allowed;
+}
+
+.menubar .publish-issues {
+  flex: 0 0 auto;
+  color: var(--sc-tool-color-warning);
+  font-family: var(--sc-tool-font-mono);
+  font-size: var(--sc-tool-font-size-00);
 }
 
 .publish-panel {
@@ -430,11 +475,11 @@ body:has(.editor),
 }
 
 .canvas .react-flow {
-  background: var(--sc-tool-color-canvas);
+  background: var(--studio-canvas);
 }
 
 .canvas .react-flow__background pattern circle {
-  fill: var(--sc-tool-color-rule);
+  fill: var(--sc-tool-color-surface-3);
 }
 
 .canvas .react-flow__edge-path {
@@ -499,10 +544,18 @@ body:has(.editor),
 /* Graph nodes and ports */
 .studio-node {
   min-width: 11rem;
+  max-width: 18rem;
   overflow: visible;
+  border-color: var(--sc-tool-color-rule-strong);
+  background: var(--studio-node-surface);
+  box-shadow: var(--sc-tool-shadow-1);
 }
 
 .studio-node .node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sc-tool-space-3);
   padding: var(--sc-tool-space-3) var(--sc-tool-space-5);
   border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
   color: var(--sc-tool-color-text-secondary);
@@ -517,13 +570,26 @@ body:has(.editor),
   padding: var(--sc-tool-space-5);
 }
 
+.studio-node .node-warning {
+  color: var(--sc-tool-color-warning);
+  font-family: var(--sc-tool-font-sans);
+  font-size: var(--sc-tool-font-size-1);
+  line-height: 1;
+  cursor: help;
+}
+
+/* Long narration text is clamped; the full text is in the title tooltip and the inspector. */
 .studio-node .node-title {
+  display: -webkit-box;
   max-width: 15rem;
   overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
   color: var(--sc-tool-color-text);
   font-size: var(--sc-tool-font-size-1);
   line-height: var(--sc-tool-line-height-ui);
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .studio-node .node-title.muted {
@@ -550,7 +616,7 @@ body:has(.editor),
 .studio-node.marker {
   min-width: 8rem;
   border-style: dashed;
-  background: var(--sc-tool-color-surface-1);
+  background: var(--studio-panel-surface);
   box-shadow: none;
 }
 
@@ -621,9 +687,29 @@ body:has(.editor),
 .inspector {
   min-width: 0;
   overflow: auto;
+  grid-column: 2;
+  grid-row: 2;
   padding: var(--sc-tool-space-5);
   border-inline-start: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
-  background: var(--sc-tool-color-surface-1);
+  background: var(--studio-panel-surface);
+}
+
+/* Drag handle on the inspector's left edge; overlaps the same grid cell. */
+.inspector-resizer {
+  z-index: 5;
+  width: 8px;
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+  margin-inline-start: -4px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.inspector-resizer:hover,
+.inspector-resizer:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--sc-tool-color-action) 45%, transparent);
 }
 
 .inspector h2 {
@@ -633,7 +719,7 @@ body:has(.editor),
   margin: calc(-1 * var(--sc-tool-space-5)) calc(-1 * var(--sc-tool-space-5)) var(--sc-tool-space-6);
   padding: var(--sc-tool-space-5);
   border-block-end: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule);
-  background: var(--sc-tool-color-surface-1);
+  background: var(--studio-panel-surface);
   font-size: var(--sc-tool-font-size-4);
   font-weight: var(--sc-tool-font-weight-medium);
 }
@@ -1118,7 +1204,7 @@ body:has(.editor),
   grid-column: 1 / -1;
   overflow: hidden;
   border-block-start: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
-  background: var(--sc-tool-color-surface-1);
+  background: var(--studio-panel-surface);
 }
 
 .diagnostics.is-collapsed {
@@ -1387,6 +1473,10 @@ body:has(.editor),
   .diagnostics {
     grid-column: 1;
     max-height: min(11rem, 28dvh);
+  }
+
+  .inspector-resizer {
+    display: none;
   }
 
   .diagnostics table {
