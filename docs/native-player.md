@@ -147,12 +147,25 @@ In show mode, text and the transparent **Hold to exit show mode** control fade o
 ### Colour instrument
 
 Admin → **Instrument** shows one tile per joined device, sorted by label (T2 before T10). Pick a colour, then:
-- **Press** a tile to light that tablet. **Release** returns it to the resting colour. A quick tap stays lit for at least 250 ms.
-- **Drag** across tiles to play them in turn.
+- **Press** a tile to light that tablet. **Release** returns it to the resting colour. A quick tap stays lit for at least 250 ms; pressing the same tile again within that time is not cut off.
+- **Drag** across tiles to play them in turn. Several fingers (or keys) play chords.
 - **All tablets** addresses every device at once.
-- Keyboard: Space/Enter on a focused tile.
+- **Colour while playing:** picking a swatch (or a colour key) recolours every held or latched tablet at once, without lifting.
+- **Dimmer** scales every colour sent from the instrument, including effects.
+- **Latch:** a tap toggles a tablet on, the next tap toggles it off. **Release all** (Esc) returns every tablet to the resting colour.
 
-Each gesture is a `POST /api/admin/surface`, scheduled on the shared clock like the resting colour. It works during a running show. Devices show colours only in show mode.
+Keyboard play (on by default, ignored while typing in a text field) maps the first 40 tablets in label order onto four rows of ten — `1`…`0` = T01–T10, `Q`…`P` = T11–T20, `A`…`;` = T21–T30, `Z`…`/` = T31–T40 — by physical key position, so it works on AZERTY/QWERTZ too. Each tile shows its key. `Space` = all tablets, `Shift`+`1`…`9` or `←`/`→` = colour, `↑`/`↓` = dimmer, `Esc` = stop the effect and release all.
+
+Each gesture is a `POST /api/admin/surface`, scheduled on the shared clock like the resting colour. Admin sends them one at a time, in order, so a release can never overtake its press. It works during a running show. Devices show colours only in show mode.
+
+**Effects** run on the server (`POST /api/admin/surface/effect`), not in the browser: the server renders a frame every 50 ms and sends each changed tablet its colour on one shared `applyAt`, so the effect stays in lockstep across devices. Every tablet's colour is resent once a second, so a tablet that reconnects catches up. Effects play across connected tablets in label order:
+- **Chase** — one tablet at a time, with a short tail, cycling through every tablet once per cycle.
+- **Breathe** — every tablet dims up and down together.
+- **Wave** — a brightness wave travels from the first label to the last.
+- **Gradient wave** — a wave blending between the colour and a second colour.
+- **Rainbow** — the hue circle travels across the tablets.
+
+Colour, second colour, dimmer, cycle time (0.3–10 s) and the tablet list update the running effect live without restarting its phase. The tiles in Admin preview the effect. Playing a tile during an effect is not exclusive: the effect repaints that tablet on its next colour change (at once for breathe/wave/rainbow, within a second at most). Stop the effect to play tiles on their own. Stopping returns every tablet to the resting colour. The effect math lives in `packages/shared/src/surfaceEffects.ts`.
 
 ### Identifying 40 tablets
 

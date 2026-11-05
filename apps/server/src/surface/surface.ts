@@ -56,6 +56,15 @@ export class SurfaceController {
     return this.deliver(target, () => ({ mode: "flash", color: play.color, ...(play.holdMs === undefined ? {} : { holdMs: play.holdMs }) }));
   }
 
+  /**
+   * Per-device colours sharing one applyAt (effect frames). Held until the
+   * next paint or a release. Returns how many devices were reached.
+   */
+  paint(colors: ReadonlyMap<string, string>): number {
+    if (colors.size === 0) return 0;
+    return this.deliver([...colors.keys()], (recipient) => ({ mode: "flash", color: colors.get(recipient.clientId)! }));
+  }
+
   private deliver(target: SurfaceTarget, build: (recipient: Recipient) => Pick<SurfaceMessage, "mode" | "color" | "holdMs" | "label">): number {
     const wanted = target === "all" ? null : new Set(target);
     // One applyAt per gesture keeps every addressed device in lockstep.

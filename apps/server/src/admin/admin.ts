@@ -3,6 +3,8 @@ import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings }
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { SurfaceController } from "../surface/surface.js";
+import type { SurfaceEffectRunner } from "../surface/effects.js";
+import { SURFACE_EFFECT_KINDS, SURFACE_EFFECT_MAX_PERIOD_MS, SURFACE_EFFECT_MIN_PERIOD_MS } from "@entertheblackbox/shared";
 import { InMemoryIpRateLimiter, requestIp } from "../admission/rate-limit.js";
 import type { PhaseCheckpoint, PhaseEngine, TransitionResult } from "../engine/phase-engine.js";
 import type {
@@ -19,6 +21,22 @@ const surfaceRequestSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   holdMs: z.number().int().positive().max(60_000).optional(),
 }).refine((value) => value.mode !== "flash" || value.color !== undefined, { message: "flash needs a color", path: ["color"] });
+
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const surfaceEffectRequestSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("start"),
+    effect: z.object({
+      kind: z.enum(SURFACE_EFFECT_KINDS),
+      color: hexColor,
+      color2: hexColor,
+      periodMs: z.number().int().min(SURFACE_EFFECT_MIN_PERIOD_MS).max(SURFACE_EFFECT_MAX_PERIOD_MS),
+      brightness: z.number().min(0).max(1),
+    }),
+    order: z.array(z.string().min(1)).max(200),
+  }),
+  z.object({ action: z.literal("stop") }),
+]);
 
 export type AdminExport = { json: unknown; csv: string };
 export interface AdminDataSource {
@@ -44,6 +62,8 @@ export type RegisterAdminOptions = {
   engine: () => PhaseEngine | null;
   /** Native show-mode surface colour (base + instrument). */
   surface?: Pick<SurfaceController, "setBase" | "play">;
+  /** Programmed instrument effects (chase, breathe, waves). */
+  surfaceEffects?: Pick<SurfaceEffectRunner, "start" | "stop" | "state">;
   ready: boolean;
   nativeAudioCoverage?: () => Promise<unknown>;
   audioStatus?: () => Promise<unknown>;
@@ -172,6 +192,21 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         ? options.surface.play(target, { mode, color: parsed.data.color!, ...(parsed.data.holdMs === undefined ? {} : { holdMs: parsed.data.holdMs }) })
         : options.surface.play(target, { mode });
       return { ok: true, delivered };
+    });
+    admin.get("/surface/effect", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.surfaceEffects) return reply.code(503).send({ error: "surface_unavailable" });
+      return { running: options.surfaceEffects.state, serverNow: Date.now() };
+    });
+    admin.post<{ Body: unknown }>("/surface/effect", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.surfaceEffects) return reply.code(503).send({ error: "surface_unavailable" });
+      const parsed = surfaceEffectRequestSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_surface_effect", issues: parsed.error.issues });
+      const delivered = parsed.data.action === "start"
+        ? options.surfaceEffects.start(parsed.data.effect, parsed.data.order)
+        : options.surfaceEffects.stop();
+      return { ok: true, delivered, running: options.surfaceEffects.state, serverNow: Date.now() };
     });
     admin.get("/settings/waiting-videos", async (_request, reply) => {
       reply.header("cache-control", "no-store");
