@@ -1,3 +1,4 @@
+import { nativeAudioCoverage } from './admin/native-audio.js';
 import { preparePublication } from "./publication.js";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -337,6 +338,15 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     startedAt,
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,
+    nativeAudioCoverage: async () => {
+      if (!readiness.ready) throw new Error('No active show');
+      const scenario = readiness.scenario;
+      const manifest = scenario.nativeReleaseId
+        ? showManifestSchema.parse(JSON.parse(await readFile(resolve(config.mediaDir, 'native-shows/releases', `${scenario.nativeReleaseId}.json`), 'utf8')))
+        : await prepareNativeScenario(scenario, config.mediaDir, scenario.backgroundMusic);
+      if (manifest.scenarioVersion !== scenario.version) throw new Error('Native release does not match active show');
+      return nativeAudioCoverage(scenario, manifest, config.mediaDir);
+    },
     audioStatus: async () => {
       const status = audio ? await audio.status() : { configured: false, players: [] };
       return {

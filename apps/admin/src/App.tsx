@@ -1,3 +1,4 @@
+import { NativeAudioCoverage } from './NativeAudioCoverage.js';
 import { SceneTiming } from "./SceneTiming.js";
 import { GroupSelectionStart } from "./GroupSelectionStart.js";
 import type { TimingMonitor } from "@entertheblackbox/protocol";
@@ -705,6 +706,7 @@ export function App() {
 
       </div>
 
+      {connectedToken && (activeTab === "devices" || audioOnly) && <NativeAudioCoverage key={connectedToken} token={connectedToken} />}
       {status && (activeTab === "devices" || audioOnly) && <ShowClockPanel clock={clock} status={status} stale={statusStale} receivedAt={statusReceivedAt} />}
 
       {!connectionAuthenticated && <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">

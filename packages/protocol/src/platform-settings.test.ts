@@ -3,7 +3,7 @@ import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, resolveSignageVideoUrl
 
 describe("waiting display settings", () => {
   it("loads existing saved text without requiring a migration", () => {
-    const { waitingVideoUrl, groupWaitingVideoUrls, signageVideoUrls, ...legacy } = DEFAULT_DISPLAY_SETTINGS;
+    const { phoneSurfaceColor, waitingVideoUrl, groupWaitingVideoUrls, signageVideoUrls, ...legacy } = DEFAULT_DISPLAY_SETTINGS;
     expect(displaySettingsSchema.parse(legacy)).toEqual(DEFAULT_DISPLAY_SETTINGS);
   });
   it("isolates group overrides, inherits the default, and permits explicit black screens", () => {

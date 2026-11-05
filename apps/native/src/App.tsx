@@ -5,13 +5,13 @@ import * as SecureStore from 'expo-secure-store';
 import * as Updates from 'expo-updates';
 import { z } from 'zod';
 import { serverOrigin, type ShowChannel, type ShowManifest } from '@entertheblackbox/show-content';
-import { PROTOCOL_VERSION, type ServerToClientMessage } from '@entertheblackbox/protocol';
+import { displaySettingsSchema, PROTOCOL_VERSION, type ServerToClientMessage } from '@entertheblackbox/protocol';
 import { NativeConnection } from './connection';
 import { acceptsSnapshot, cueFromSnapshot, type Snapshot } from './cues';
 import { downloadShow, loadShow } from './content';
 import { ShowPlayer } from './player';
 import { StageCompanion } from './StageCompanion';
-import { playbackState, stageState } from './stage-state';
+import { PlaybackActivity, stageState } from './stage-state';
 import { actionPrompt } from './action-prompt';
 import { createActionAlerts, enableActionNotifications } from './notifications';
 
@@ -21,6 +21,7 @@ type Groups = Extract<ServerToClientMessage, { t: 'group_selection_options' }>;
 export default function App() {
   const [origin, setOrigin] = useState(process.env.EXPO_PUBLIC_SHOW_SERVER ?? '');
   const channel: ShowChannel = 'production';
+  const [surfaceColor, setSurfaceColor] = useState('#000000');
   const [name, setName] = useState('');
   const [manifest, setManifest] = useState<ShowManifest | null>(null);
   const [busy, setBusy] = useState(false);
@@ -42,6 +43,7 @@ export default function App() {
   const [clockText, setClockText] = useState('');
   const [serverNow, setServerNow] = useState(Date.now());
   const connection = useRef<NativeConnection | null>(null);
+  const activity = useRef(new PlaybackActivity());
   const player = useRef<ShowPlayer | null>(null);
   const latest = useRef<Snapshot | null>(null);
   const seq = useRef(0);
@@ -64,20 +66,46 @@ export default function App() {
   }
   useEffect(() => {
     const listener = AppState.addEventListener('change', state => { if (state === 'active') connection.current?.resume(); });
+    const playbackTimer = setInterval(() => {
+      const p = player.current;
+      const cue = latest.current ? cueFromSnapshot(latest.current) : null;
+      setPlaying(!!p && activity.current.sample(p.timing(), cue?.key ?? null) && !p.isPaused());
+    }, 250);
     const timer = setInterval(() => {
       const c = connection.current, s = latest.current, p = player.current;
       if (!c || !p) return;
       setServerNow(c.clock.now());
       const timing = p.timing();
-      setPlaying(playbackState(timing).playing && !p.isPaused());
       setPaused(p.isPaused());
       setClockText(`Clock ${timing.calibrated ? 'measured' : 'waiting'} · round trip ${Math.round(timing.roundTripMs ?? 0)} ms · drift ${Math.round(timing.media[0]?.driftMs ?? 0)} ms`);
       if (!s) return;
       c.send({ t: 'ping', v: PROTOCOL_VERSION, clientTime: Date.now(), timing: {
         sessionId: s.sessionId, phaseId: s.phase.id, phaseEpoch: s.phaseEpoch, routingEpoch: s.routingEpoch ?? 0, timing } });
     }, 1000);
-    return () => { alerts.current?.update(null); listener.remove(); clearInterval(timer); connection.current?.stop(); player.current?.dispose(); };
+    return () => { alerts.current?.update(null); listener.remove(); clearInterval(playbackTimer); clearInterval(timer); connection.current?.stop(); player.current?.dispose(); };
   }, []);
+  useEffect(() => {
+    setSurfaceColor('#000000');
+    if (!connected) return;
+    let stopped = false;
+    let pending = false;
+    const abort = new AbortController();
+    const refresh = async () => {
+      if (pending || AppState.currentState !== 'active') return;
+      pending = true;
+      try {
+        const response = await fetch(`${serverOrigin(origin)}/api/display-settings`, { signal: abort.signal });
+        if (!response.ok) return;
+        const settings = displaySettingsSchema.safeParse(await response.json());
+        if (!stopped && settings.success) setSurfaceColor(settings.data.phoneSurfaceColor);
+      } catch { /* Keep the last surface during temporary connection loss. */ }
+      finally { pending = false; }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 5000);
+    const listener = AppState.addEventListener('change', state => { if (state === 'active') void refresh(); });
+    return () => { stopped = true; abort.abort(); clearInterval(timer); listener.remove(); };
+  }, [connected, origin]);
   async function run(work: () => Promise<void>) {
     if (operation.current) return;
     operation.current = true; setBusy(true); setError('');
@@ -161,7 +189,7 @@ export default function App() {
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
   return <StageCompanion answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
     paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
-    origin={origin} name={name} manifest={manifest} identity={identity} clockText={clockText}
+    surfaceColor={surfaceColor} origin={origin} name={name} manifest={manifest} identity={identity} clockText={clockText}
     notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}
     onOrigin={value => { setOrigin(value); setManifest(null); }}
     onName={setName}

@@ -167,7 +167,7 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 
 ## Native participant app — `apps/native`
 
-- Dark Stage companion screens separate setup/device diagnostics from live participation, with abstract header artwork, full-width cursor control, accessible directional controls, and an animated playback activity field driven by native layer state (not an amplitude meter). Respects reduced motion and stops animation in background; recovery/paused/closed-voting states retain server authority — `src/StageCompanion.tsx`, `src/stage-state.ts`. Display video remains on the shared screen; no phone image/video source exists in the current protocol.
+- Dark Stage companion screens separate setup/device diagnostics from live participation, without internal narration, subtitles, scene titles or header artwork, with full-width cursor control, accessible directional controls, and an animated playback activity field driven only by foreground cue playback (background music excluded; not an amplitude meter). Respects reduced motion and stops animation in background; recovery/paused/closed-voting states retain server authority — `src/StageCompanion.tsx`, `src/stage-state.ts`. Display video remains on the shared screen; no phone image/video source exists in the current protocol.
 
 - iOS/Android system action notifications for group selection, phone voting/cursors and reaction windows; permission requested on join, tap opens the app, duplicate suppression and cleanup on answer/phase change/leave. Alerts are silent to preserve show audio. Live delivery depends on WebSocket reception; force-quit/offline delivery is not supported. Requires a new native build and locked-device acceptance — `src/action-prompt.ts`, `src/notifications.ts`.
 
@@ -197,3 +197,6 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 Participants can enter an awake, black waiting screen that reveals group choice, voting, rating windows and timed subtitles. Continuous cursor voting stays visible while open. Hold the exit control for two seconds to restore device controls. Android Back is consumed during show mode; optional system screen pinning restricts Home and app switching after Android confirmation. Managed devices can allowlist the app for lock task mode. Power-button locking and Android's unpin gesture remain available. Requires a new native build containing ShowScreen; older binaries keep their existing controls.
 
 Implemented in apps/native and the ShowScreen module bundled with packages/expo-audio-scheduler.
+
+- Admin display settings can set a validated solid color for native show mode; open connected phones refresh every five seconds, retaining action and recovery controls.
+- Admin phone audio coverage audits every phase/group assignment against immutable downloaded bytes, distinguishing unassigned, unpublished, missing and corrupt audio; device timing separately reports runtime playback.
