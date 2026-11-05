@@ -1595,3 +1595,41 @@ it("accepts timing only from current authenticated devices and invalidates it on
   engine.socketClosed(display as unknown as WebSocket);
   expect(engine.timingMonitors[0]?.connected).toBe(false); engine.stop();
 });
+
+
+describe("authored stage monitor connections", () => {
+  const join = (engine: PhaseEngine, socket: MockSocket, monitorId: "M1" | "M2" | "M3" | "M4", token = "display-secret") => engine.handleClientMessage({
+    t: "display_join", v: 2, clientVersion: "test", installationId: "inst-1", roomId: "room-1", displayToken: token, monitorId,
+  }, socket as unknown as WebSocket);
+  it("keeps four monitors independent of the main display and restores elapsed time", () => {
+    let now = 1000;
+    const authored = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map(phase => phase.id === "intro" ? { ...phase, monitorCues: { M1: [{ kind: "text", text: "Question", startMs: 0 }] } } : phase) });
+    const { engine } = setup({ now: () => now, testScenario: authored });
+    const main = new MockSocket();
+    connectDisplay(engine, main as unknown as WebSocket);
+    const screens = [new MockSocket(), new MockSocket(), new MockSocket(), new MockSocket()];
+    screens.forEach((socket, i) => join(engine, socket, ["M1", "M2", "M3", "M4"][i] as "M1"));
+    expect(main.closes).toEqual([]);
+    expect(engine.adminStart(now).ok).toBe(true);
+    for (const screen of screens) expect(screen.sent.filter(message => message.t === "phase").at(-1)?.phase).toMatchObject({ id: "intro", startedAt: 1000, monitorCues: { M1: [{ text: "Question" }] } });
+    now = 1050;
+    const replacement = new MockSocket();
+    join(engine, replacement, "M2");
+    expect(screens[1]!.closes).toHaveLength(1);
+    expect(screens[0]!.closes).toHaveLength(0);
+    expect(main.closes).toHaveLength(0);
+    expect(replacement.sent.at(-1)).toMatchObject({ t: "snapshot", serverTime: 1050, phase: { startedAt: 1000 } });
+    engine.tick(1100);
+    expect(replacement.sent.filter(message => message.t === "phase").at(-1)?.phase.id).toBe("question");
+  });
+  it("rejects invalid credentials and mixed display roles", () => {
+    const { engine } = setup({ now: () => 0 });
+    const socket = new MockSocket();
+    join(engine, socket, "M1", "wrong");
+    expect(socket.sent).toEqual([]);
+    expect(socket.closes[0]?.code).toBe(1008);
+    const mixed = new MockSocket();
+    engine.handleClientMessage({ t: "display_join", v: 2, clientVersion: "test", installationId: "inst-1", roomId: "room-1", displayToken: "display-secret", monitorId: "M1", groupId: "ki" }, mixed as unknown as WebSocket);
+    expect(mixed.closes[0]?.code).toBe(1008);
+  });
+});

@@ -1,3 +1,4 @@
+import type { MediaTarget } from "./inspector/MonitorEditor.js";
 import { DevicePreview } from "./preview/DevicePreview.js";
 import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import PocketBase from "pocketbase";
@@ -125,7 +126,7 @@ export function App() {
   const [showDiagnostics, setShowDiagnostics] = useState(true);
   const [localManifest, setLocalManifest] = useState<MediaManifest>();
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
-  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; target: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc"; mediaKind: Exclude<StudioMediaKind, "unknown">; trigger: HTMLButtonElement | null }>();
+  const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; target: MediaTarget; mediaKind: Exclude<StudioMediaKind, "unknown">; trigger: HTMLButtonElement | null }>();
   const [mediaUploading, setMediaUploading] = useState(false);
   const [importFeedback, setImportFeedback] = useState<InlineFeedback>();
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
@@ -403,7 +404,7 @@ export function App() {
     setMediaPicker(undefined);
     setMediaLibraryOpen(true);
   };
-  const openMediaPicker = (phaseId: string, target: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement | null = null) => {
+  const openMediaPicker = (phaseId: string, target: MediaTarget, mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement | null = null) => {
     setMediaLibraryOpen(false);
     setMediaPicker({ phaseId, target, mediaKind, trigger });
   };
@@ -564,6 +565,13 @@ export function App() {
   const selectMedia = (row: MediaLibraryRow) => {
     if (!draft || !mediaPicker) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === mediaPicker.phaseId);
+    if (phase && typeof mediaPicker.target === "object") {
+      const { monitorId, cueIndex } = mediaPicker.target;
+      const cues = phase.monitorCues?.[monitorId] ?? [];
+      updatePhase({ ...phase, monitorCues: { ...phase.monitorCues, [monitorId]: cues.map((cue, index) => index === cueIndex && (cue.kind === "image" || cue.kind === "video") ? { ...cue, src: row.src } : cue) } });
+      closeMediaPicker();
+      return;
+    }
     if (phase && phase.kind !== "idle" && phase.kind !== "group-branch" && mediaPicker.target === "phoneAudioSrc") {
       updatePhase({ ...phase, phoneAudioSrc: row.src });
       closeMediaPicker();
@@ -948,7 +956,8 @@ export function App() {
   const mediaPickerPhase = mediaPicker
     ? draft.project.scenario.phases.find((phase) => phase.id === mediaPicker.phaseId)
     : undefined;
-  const mediaPickerSelectedSrc = mediaPicker?.target === "phoneAudioSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
+  const monitorPickerCue = mediaPicker && typeof mediaPicker.target === "object" ? mediaPickerPhase?.monitorCues?.[mediaPicker.target.monitorId]?.[mediaPicker.target.cueIndex] : undefined;
+  const mediaPickerSelectedSrc = monitorPickerCue && "src" in monitorPickerCue ? monitorPickerCue.src : mediaPicker?.target === "phoneAudioSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
     ? mediaPickerPhase.phoneAudioSrc ?? ""
     : mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
     ? mediaPicker?.target === "audioSrc"

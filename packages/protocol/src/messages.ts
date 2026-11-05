@@ -1,3 +1,4 @@
+import { monitorIdSchema } from "@entertheblackbox/scenario";
 import { z } from "zod";
 import {
   audienceGroupSchema,
@@ -185,6 +186,8 @@ export const phoneToServerSchema = z.discriminatedUnion("t", [
 
 export const displayJoinSchema = z.object({
   t: z.literal("display_join"),
+  /** Dedicated main-timeline monitor; never occupies the main display slot. */
+  monitorId: monitorIdSchema.optional(),
   /** Omit for the main display. Group displays only render that group's path. */
   groupId: z.string().min(1).optional(),
   /**

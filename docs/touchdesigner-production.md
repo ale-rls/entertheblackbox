@@ -1,4 +1,6 @@
-# Production monitor labels
+# External show-control cue feed
+
+M1–M4 are rendered by [monitor display pages](monitor-displays.md), not TouchDesigner. The authenticated SSE feed remains available for lighting and other external show control. The receiver instructions below describe that optional integration only.
 
 The server already pushes complete question fields, including labels, through
 `https://bb-frontend.enabler.space/api/cues`. Redeploying this server source
@@ -29,17 +31,10 @@ receiver Text DAT, run it again to reload the full source. Do not use the old
 `mod('td_receive_production')` callbacks alongside this loader.
 Network reads run in a background thread; only the frame callback updates DATs.
 
-For the complete four-monitor setup, continue with
-[Question, scene, and join monitors](touchdesigner-question-monitor.md#four-monitor-scenes-and-full-countdowns).
-It uses the receiver above with `scene_monitor.py` and a private `monitor_config`
-DAT for automatic axis switching, countdowns without zero, scene messages, and
-pre-show join-screen routing. Use that guide's Text TOP and Switch TOP bindings.
-
 ### Optional labels-only outputs
 
 The expressions below are for fixed labels-only outputs; they do not switch
-the opposite axis to question text or countdowns. Do not use them in place of
-`scene_monitor.text` for the complete four-monitor setup.
+the opposite axis to question text or countdowns. They are external receiver metadata; the browser monitors do not use these expressions.
 
 The labels table contains `key, timeline, slot, text, phase_id`.
 For a horizontal spectrum on timeline `ki`, use these Python expressions in
@@ -81,8 +76,7 @@ Expect an immediate `data:` snapshot, phase events when the show advances,
 and heartbeat comments every 15 seconds. A 401 means the token is missing or
 incorrect. Reconnect after redeploy should produce a new boot ID.
 
-For all monitor output modes and the venue verification checklist, see
-[Question, scene, and join monitors](touchdesigner-question-monitor.md).
+For monitor output and venue verification, see [Monitor displays](monitor-displays.md).
 
 ## Studio device preview
 

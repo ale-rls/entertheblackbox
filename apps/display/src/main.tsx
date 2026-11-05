@@ -1,3 +1,4 @@
+import { monitorIdSchema } from "@entertheblackbox/scenario";
 import { createRoot } from "react-dom/client";
 import { resolveInstallationFromWindow } from "./lib/resolveInstallation.js";
 import "./style.css";
@@ -7,7 +8,7 @@ async function bootstrap(): Promise<void> {
   // module-level config sees the resolved installation/room -- see
   // resolveInstallation.ts.
   await resolveInstallationFromWindow();
-  const { App } = await import("./App.js");
+
 
   // App-shell-only service worker (plan §9); media stays app-controlled.
   if ("serviceWorker" in navigator) {
@@ -16,7 +17,17 @@ async function bootstrap(): Promise<void> {
     });
   }
 
-  createRoot(document.getElementById("root")!).render(<App />);
+  const root = createRoot(document.getElementById("root")!);
+  const requestedMonitor = new URLSearchParams(location.search).get("monitor");
+  if (requestedMonitor !== null) {
+    const parsed = monitorIdSchema.safeParse(requestedMonitor);
+    if (!parsed.success) { root.render(<main>Unknown monitor. Choose M1, M2, M3 or M4.</main>); return; }
+    const { MonitorApp } = await import("./monitors/MonitorApp.js");
+    root.render(<MonitorApp monitorId={parsed.data} />);
+  } else {
+    const { App } = await import("./App.js");
+    root.render(<App />);
+  }
 }
 
 void bootstrap();

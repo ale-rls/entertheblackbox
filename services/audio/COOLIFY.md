@@ -1,3 +1,5 @@
+> Historical browser/streaming documentation. Participant delivery is now native-only; this is not the production setup. See the repository README and docs/native-player.md.
+
 # Coolify deployment
 
 This stack is the public personal-audio service. Only the `bridge` service is

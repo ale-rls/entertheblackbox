@@ -1,3 +1,4 @@
+import { MonitorEditor, type MediaTarget } from "./MonitorEditor.js";
 import { useEffect, useState } from "react";
 import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import type { Arena } from "../../../../packages/shared/src/index.js";
@@ -15,7 +16,7 @@ type Props = {
   localMedia: Array<{ src: string; durationMs?: number; previewUrl?: string }>;
   onRename: (nextId: string) => void;
   onChange: (phase: Phase) => void;
-  onChooseMedia: (phaseId: string, target: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
+  onChooseMedia: (phaseId: string, target: MediaTarget, mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
   onComponentTypeChange: (type: AuthorableComponentType, trigger: HTMLSelectElement) => void;
   onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
   onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x-split" | "two-quadrant-x-spectrum" | "two-quadrant-y-split" | "two-quadrant-y-spectrum" | "three-candidate-zones", trigger: HTMLSelectElement) => void;
@@ -89,6 +90,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   };
 
   return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2>
+    <MonitorEditor phase={phase} onChange={onChange} onChooseMedia={onChooseMedia} />
     <label className="sc-tool-label">{label("Runtime ID", "id")}<input className="sc-tool-field" aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
     {phase.kind !== "idle" && <label className="sc-tool-label">{label("Component type", "kind + media")}<select className="sc-tool-select" value={componentTypeForPhase(phase)} onChange={(event) => onComponentTypeChange(event.target.value as AuthorableComponentType, event.currentTarget)}>
@@ -104,7 +106,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
     {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
     {(phase.kind === "video" || phase.kind === "video-position-question") && <>
       {phase.kind === "video" && phase.phoneAudioMode === "synchronized" && <>
-        <p className="sc-tool-copy field-hint">The display page plays muted video. Phones download the matching MP3 and play against the shared show clock. Keep phones open and enable synchronized audio before the scene.</p>
+        <p className="sc-tool-copy field-hint">The display page plays muted video. Phones download the matching MP3 and play against the shared show clock. Native apps prepare the soundtrack before joining and follow the server clock.</p>
         {number("Preparation interval (ms)", "syncLeadMs", phase.syncLeadMs ?? 3000, (syncLeadMs) => onChange({ ...phase, syncLeadMs: Math.max(1000, Math.min(30000, syncLeadMs)) }))}
         <label className="sc-tool-label">Picture timing adjustment (ms)<input className="sc-tool-field" type="number" min="-2000" max="2000" value={phase.syncVideoOffsetMs ?? 0} onChange={(event) => onChange({ ...phase, syncVideoOffsetMs: Math.max(-2000, Math.min(2000, Number(event.target.value) || 0)) })} /></label>
         <p className="sc-tool-copy field-hint">Positive values delay the picture; negative values advance it. Calibrate using the actual display and headphones. Existing extra display audio is muted for this mode.</p>
@@ -253,7 +255,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       <p className="sc-tool-copy field-hint">Connect each group output to its own next scene. Connect Rejoin to the shared scene where everyone meets again. The main display stays black during selection and group paths. Groups arriving early wait; the shared scene starts once all occupied paths finish.</p>
     </fieldset>}
     {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone headphones</legend>
-      {mediaPicker(phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? "Synchronized phone soundtrack (MP3)" : "Phone stream narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}
+      {mediaPicker(phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? "Synchronized phone soundtrack (MP3)" : "Native app narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}
       {phase.phoneAudioSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, phoneAudioSrc: undefined })}>Remove phone narration</button>}
       {(project.scenario.groups ?? []).map((group) => text(
         `${group.label} override (MP3)`,

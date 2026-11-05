@@ -1,271 +1,42 @@
-# Coolify replacement deployment
+# Coolify production deployment
 
-This is the production Compose entry point for replacing the current
-`enter-the-blackbox` Coolify Git resource with this canonical repository. It
-deploys the installation server and its four browser bundles, PocketBase, the
-personal-audio stack and the low-latency realtime cursor
-relay as one Coolify Compose resource.
+The production stack runs `frontend` (server, display/monitors, Studio and Admin),
+`realtime`, and `pocketbase`. Participant devices use the native iOS/Android app
+with downloaded audio. Browser participant clients and Icecast/Liquidsoap/Janus
+services are retired.
 
-The Compose project name, public service names, and volume names deliberately
-match the current resource:
+## Deploy
 
-| Existing name | New implementation | Internal port |
-|---|---|---:|
-| `frontend` | canonical Fastify server plus phone/display/admin/Studio | 80 |
-| `realtime` | room-scoped, batched cursor relay | 9001 |
-| `pocketbase` | canonical PocketBase image and migrations | 8090 |
-| `bridge` | authenticated audio control and public phone streams | 8090 |
-| `icecast` | private stream origin | 8000 |
-| `liquidsoap` | private continuous encoders | 1234 |
-| `pocketbase-data` | existing PocketBase database and uploaded files | — |
-| `audio-data` | uploaded narration cache | — |
+1. Use the repository root as the Compose project directory and
+   `deploy/coolify/docker-compose.yml` as the Compose file.
+2. Configure variables from `.env.example`: public HTTPS PocketBase/frontend,
+   WSS relay, installation identity, distinct display/join secrets and existing
+   PocketBase credentials. `PHONE_JOIN_BASE_URL` still ends in `/phone/`; that
+   address now displays native-app joining instructions for printed QR codes.
+3. Assign public domains to frontend (port 80), realtime (9001) and PocketBase
+   (8090). Keep existing PocketBase and native-shows volumes.
+4. Deploy, then check `/healthz`, `/readyz`, `/admin/` and `/studio/` on frontend.
+5. Publish the matching native show channel and run the corresponding server
+   scenario. Channel publishing alone does not activate a scenario.
+6. Open the main display and [four monitor pages](../../docs/monitor-displays.md).
+   Wait for verified downloads on every screen and native participant device.
+   Rehearse with the actual devices and network.
 
-Keeping those names prevents a Git-repository replacement from silently
-creating a new database volume. The frontend continues on port 80, so its
-existing Coolify domain can remain attached to `frontend`. Never delete or
-recreate `pocketbase-data` during the switch.
+## Migration from streaming delivery
 
-## Before replacing the repository
+Stop/remove old `icecast`, `liquidsoap`, `bridge`, and any Janus containers through
+Coolify when deploying the new stack. Remove their domains and unused secrets.
+Do not delete existing volumes as part of this change: historical audio volumes
+remain declared for preservation, but no running service mounts them. The server
+ignores legacy streaming environment variables, including stale saved values.
+The default production build no longer builds or serves `apps/phone`.
 
-1. Back up the current `pocketbase-data` volume in Coolify and verify the
-   backup completed.
-2. Record the four public domains for `frontend`, `realtime`, `pocketbase`, and
-   `bridge`. Keep their internal ports at 80, 9001, 8090, and 8090 respectively.
-3. Copy [`deploy/coolify/.env.example`](.env.example) into the Coolify
-   environment editor. Replace every placeholder and use the current
-   PocketBase superuser credentials.
-4. Set the realtime relay's public `wss://` URL as `REALTIME_WS_URL`. The relay
-   is built from `apps/realtime-ws-coolify` by this Compose resource.
-5. In Coolify's Advanced build settings, enable **Include Source Commit in
-   Build**. This keeps the server and browser build version tied to each
-   deployed commit.
-6. Change the resource's Git repository and branch, leaving its persistent
-   volumes and domains attached. Set the Compose file to
-   `/deploy/coolify/docker-compose.yml` and deploy.
+The native-shows volume is mounted at `/app/content/media/native-shows`. Back it
+up with PocketBase. It contains immutable downloaded-audio releases and atomic
+rehearsal/production channel pointers; it must survive container replacement.
+See [native player setup and acceptance](../../docs/native-player.md).
 
-PocketBase applies the canonical migrations on startup. They add the Studio,
-installation, movement, and media collections alongside the legacy
-collections; they do not delete the legacy production collections. The audio
-volume is a cache and can be rebuilt by the server, but retaining it makes the
-first restart faster.
-
-## Admin and Show Studio
-
-Admin and Show Studio are built into the `frontend` image and served by the
-same Fastify service as the phone and display clients. Do not create separate
-Coolify services or domains for them. Replace `https://play.example.org` below
-with the public domain attached to `frontend`:
-
-| Interface | URL | Purpose |
-|---|---|---|
-| Operator admin | `https://play.example.org/admin/` | Monitor the installation, select the active published show, schedule show starts, and control a live session |
-| Show Studio | `https://play.example.org/studio/` | Create, validate, preview, and publish versioned shows and their media |
-| PocketBase dashboard | `https://pb.example.org/_/` | Superuser-only database and operator-account administration |
-
-Both operator interfaces authenticate against PocketBase's `operators`
-collection. They use the public PocketBase address supplied as
-`VITE_POCKETBASE_URL`; it must be reachable from the operator's browser and
-must use HTTPS in production. After changing that value, rebuild the
-`frontend` image because the address is embedded in both browser bundles at
-build time.
-
-PocketBase superuser credentials are only supplied to the server at runtime
-through `POCKETBASE_ADMIN_EMAIL` and `POCKETBASE_ADMIN_PASSWORD`. They are not
-valid operator-panel credentials and are not embedded in either browser
-bundle.
-
-### Provision the first operator
-
-After PocketBase starts and applies its migrations, open
-`https://pb.example.org/_/`, sign in as the existing PocketBase superuser, open
-the `operators` collection, and create a record with an email, password, the
-`operator` role, and `verified` enabled. There is deliberately no public
-operator signup.
-
-Alternatively, run the repository provisioning script from a trusted machine
-that has Bash, curl, and Python 3:
-
-```bash
-POCKETBASE_URL=https://pb.example.org \
-POCKETBASE_ADMIN_EMAIL=superuser@example.org \
-POCKETBASE_ADMIN_PASSWORD='the-existing-superuser-password' \
-pocketbase/scripts/create-operator.sh operator@example.org 'a-long-unique-password'
-```
-
-Use that operator email and password to sign in to both `/admin/` and
-`/studio/`. The admin panel writes schedules and active-show selections through
-the authenticated `/api/admin/*` server API; Show Studio publishes through the
-same API and stores its shared media in PocketBase. The server uses its
-internal `http://pocketbase:8090` connection for privileged persistence.
-
-## Required environment
-
-Coolify must define every value in this table. Compose rejects an incomplete
-configuration before building containers, and the server rejects incomplete
-or insecure phone-audio settings again at startup.
-
-| Variable | Scope | Requirement |
-|---|---|---|
-| `VITE_POCKETBASE_URL` | build | public PocketBase `https://` URL |
-| `REALTIME_WS_URL` | build | public `realtime` service `wss://` URL |
-| `PHONE_JOIN_BASE_URL` | runtime | public frontend URL ending in `/phone/` or `/phone-janus/` |
-| `PUBLIC_STREAM_BASE` | runtime | public bridge `https://` URL; also handed to phones |
-| `ICECAST_HOSTNAME` | runtime | audio hostname only, without scheme/path/port |
-| `INSTALLATION_ID` | runtime | stable installation identifier |
-| `DISPLAY_TOKEN` | build + runtime | same long value in both contexts; Compose wires both |
-| `JOIN_GRANT_SECRET` | runtime secret | long random participant-lease signing secret |
-| `BRIDGE_TOKEN` | runtime secret | long random server-to-bridge bearer token |
-| `ICECAST_SOURCE_PASSWORD` | runtime secret | unique long random value |
-| `ICECAST_ADMIN_PASSWORD` | runtime secret | different long random value |
-| `POCKETBASE_ADMIN_EMAIL` | runtime secret | existing PocketBase superuser email |
-| `POCKETBASE_ADMIN_PASSWORD` | runtime secret | existing PocketBase superuser password |
-
-Keep secrets as runtime-only Coolify variables. `DISPLAY_TOKEN` is the one
-intentional exception because the authenticated display bundle needs it at
-build time. With **Include Source Commit in Build** enabled, `SOURCE_COMMIT`
-is supplied by Coolify and becomes the shared server/client build version
-automatically.
-
-Optional variables and their defaults are listed in `.env.example`. Omit an
-optional variable from Coolify to accept its Compose default. Set
-`TRACKINGBOX_URL` only when the deployed server can actually reach that URL;
-otherwise leave it absent.
-
-## Prune obsolete variables
-
-Remove these from the current Coolify resource after copying the new required
-set. They belonged to the old static frontend, venue runner, or local Compose
-workflow and are ignored or replaced here:
-
-- `VITE_AUDIO_STREAM_BASE`
-- `AUDIO_BRIDGE_URL`, `AUDIO_BRIDGE_TOKEN`, `AUDIO_PUBLIC_URL`
-- `POCKETBASE_URL`
-- `AUDIO_DIR`, `BEDS_DIR`
-- `ICECAST_PUBLIC_PORT`, `BRIDGE_PUBLIC_PORT`
-- `BUILD_VERSION`, `HOST`, `PORT`, `NODE_ENV`, `TRUST_PROXY`
-- `REQUIRE_PHONE_AUDIO`
-
-The combined Compose file sets internal service URLs, fixed container values,
-and `REQUIRE_PHONE_AUDIO=true` itself. Do not add a public domain to `icecast`
-or `liquidsoap`.
-
-## Recommended domain assignment
-
-Assign these values in Coolify's domain fields. The port suffix selects the
-container target; it is not part of the browser-visible HTTPS/WSS address.
-
-| Service | Coolify domain field | Public value used by clients |
-|---|---|---|
-| `frontend` | `https://bb-frontend.enabler.space` | `https://bb-frontend.enabler.space` |
-| `realtime` | `https://bb-realtime.enabler.space:9001` | `wss://bb-realtime.enabler.space` |
-| `pocketbase` | `https://bb-pocketbase.enabler.space:8090` | `https://bb-pocketbase.enabler.space` |
-| `bridge` | `https://bb-bridge.enabler.space:8090` | `https://bb-bridge.enabler.space` |
-| `icecast` | none | internal only: `icecast:8000` |
-| `liquidsoap` | none | internal only: `liquidsoap:1234` |
-
-Keep the available `bb-icecast.enabler.space` and
-`bb-liquidsoap.enabler.space` hostnames unassigned. They are not required by
-the public architecture.
-
-## Post-deploy checks
-
-Run these before opening admission:
-
-```bash
-curl https://play.example.org/healthz
-curl https://play.example.org/readyz
-curl -fsS -o /dev/null https://play.example.org/admin/
-curl -fsS -o /dev/null https://play.example.org/studio/
-curl https://realtime.example.org/health
-curl https://pb.example.org/api/health
-curl https://audio.example.org/health
-curl -H "Authorization: Bearer $BRIDGE_TOKEN" https://audio.example.org/status
-```
-
-`healthz` proves the process is alive. `readyz` must return 200 only after a
-show has been published from Studio and its media has synchronized from
-PocketBase. The two silent curl checks confirm that the frontend image contains
-the Admin and Studio bundles. Sign in to `/studio/`, publish the production
-show, then sign in to `/admin/`, select it under **Active show**, and add a
-future time under **Lobby schedule**. Finally, verify a real phone can join, tap
-**Start headphones**, hear a cue, lock its screen, and hear a later cue. The
-real-phone check is required because container health checks cannot prove
-mobile background playback.
-
-If deployment fails, keep the old containers and volume, correct the reported
-missing variable or health check, and redeploy. Do not create a fresh
-PocketBase volume as a recovery step.
-
-## Personal audio too slow over the deployed bridge
-
-`frontend` stays on this Coolify deployment; only the Icecast/Liquidsoap
-bridge needs to move closer to the audience. See
-[`services/audio/README.md`](../../services/audio/README.md#keeping-appsserver-remote-while-audio-runs-at-the-venue)
-for the recommended Tailscale-based setup and the Admin control that switches
-to it live, with no redeploy of this stack.
-
-## Janus disabled
-
-Janus services have been removed from the production Compose configuration.
-The frontend's Janus settings are explicitly empty, so saved Coolify variables
-cannot enable Janus polling, cue uploads or registration. Icecast remains active.
-Use `/phone/`; set `PHONE_JOIN_BASE_URL` back to the frontend URL ending in
-`/phone/` if it was changed during the trial.
-
-Stop any existing `janus-liquidsoap`, `janus-bridge`, `janus-web` and `janus`
-containers in Coolify before redeploying. Removed services can remain as orphan
-containers depending on deployment cleanup; verify all four are stopped after
-redeploy. Keep `liquidsoap`, `bridge`, `icecast` and their volumes. The unused
-`janus-audio` and `janus-beds` volumes are retained to preserve data. Remove the
-old Janus domain assignment if Coolify still lists it.
-
-### Frontend startup with saved Janus variables
-
-Production Compose sets `JANUS_ENABLED=false`. This explicitly ignores all
-Janus connection and ICE settings before validation, including old partial
-Coolify values. Deploy this server version for the switch to take effect.
-For an older server reporting that Janus settings must be set together, remove
-all three `JANUS_BRIDGE_URL`, `JANUS_BRIDGE_TOKEN` and `JANUS_PUBLIC_URL` runtime
-entries and deploy the shutdown Compose definition. Keep Icecast `AUDIO_*`
-settings. Restarting an old container alone does not update its environment.
-
-## Native show storage
-
-The frontend mounts the named `native-shows` volume at
-`/app/content/media/native-shows`. Published audio, immutable release manifests,
-and rehearsal/production channel pointers survive frontend container replacement.
-Coolify creates the volume from the Compose definition on deployment; no manual
-storage entry is required. Reload the Compose configuration if needed and review
-the parsed frontend mount under Persistent Storage before deploying.
-
-This path assumes the default `MEDIA_DIR=/app/content/media`. If overriding
-`MEDIA_DIR`, adjust the mount destination to its `native-shows` subdirectory.
-PocketBase continues to hold source media; its existing volume stays unchanged.
-
-Before the first deployment with this mount, back up any native releases already
-published into the current frontend container. Do not rely on container-local
-files surviving replacement. Restore those files into the new volume, or publish
-the intended channels again from Studio after the matching media has synchronized.
-
-Verify persistence outside a performance: publish a rehearsal channel, record the
-revision from `/media/native-shows/channels/rehearsal.json`, redeploy the frontend,
-and check that the same revision and its referenced audio remain available.
-Include the native-shows volume in off-server backups. Restore its entire contents
-(audio, releases, and channels) together while publishing is stopped; restore the
-matching server scenario separately. Never remove this volume during routine
-redeployment. Persistent storage is not itself a backup.
-
-## Server build dependency cache
-
-The frontend Dockerfile installs root tooling plus the server, four browser apps,
-and their shared workspace packages. Expo/React Native and credits-rendering
-packages are excluded from this installation; build native apps separately with
-EAS. Package manifests and the lockfile are copied before application source,
-so source-only edits can reuse the dependency layer. Dependency/lockfile changes,
-base-image changes, or cleared Docker caches still require a fresh installation.
-When adding a workspace dependency to these apps, add its package manifest to
-the Dockerfile's manifest-copy list before the install step.
-
-The four browser builds remain sequential. This reduces avoidable dependency
-work but does not establish the cause of a host crash or guarantee a particular
-CPU/RAM limit. Check deployment logs and host memory/disk metrics if builds fail.
+Display tokens are baked into the display build and must match server runtime.
+After rebuilding, refresh displays so their service-worker shell is current.
+Production uses HTTPS/WSS. No container health check proves audible native
+playback or physical monitor synchronization; those require a venue rehearsal.

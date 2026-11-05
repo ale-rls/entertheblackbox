@@ -77,7 +77,7 @@ async function fixture(invalidScenario = false) {
       ],
     }),
   );
-  for (const role of ["display", "phone", "admin"]) {
+  for (const role of ["display", "admin"]) {
     const dist = join(root, role, "dist");
     await mkdir(dist, { recursive: true });
     await writeFile(join(dist, "index.html"), `<h1>${role}</h1>`);
@@ -190,7 +190,7 @@ describe("HTTP readiness and bundles", () => {
     const status = (await runtime.app.inject({ url: "/api/status" })).json();
     expect(status).toMatchObject({ ready: true, showLifecycle: "idle", scenarioVersion: "test-1" });
     expect(status).not.toHaveProperty("displayToken");
-    for (const role of ["display", "phone", "admin"]) {
+    for (const role of ["display", "admin"]) {
       const response = await runtime.app.inject({ url: `/${role}/` });
       expect(response.statusCode).toBe(200);
       expect(response.body).toContain(`<h1>${role}</h1>`);
