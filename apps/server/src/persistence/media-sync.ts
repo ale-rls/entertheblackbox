@@ -1,19 +1,20 @@
+import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, rename, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import type { PocketBaseClient } from "./pocketbase-client.js";
 
-type MediaRecord = { id: string; src: string; bytes: number; file: string };
+type MediaRecord = { id: string; src: string; bytes: number; hash?: string; file: string };
 
 /**
  * Mirrors PocketBase's `media` collection -- Studio's upload target from
  * any environment, see media/pocketbase-media.ts on the Studio side --
  * down into the local media directory apps/server already serves from and
  * validates against (readiness.ts's statSizeWithNodeFs). Only downloads
- * files that are missing or the wrong size, and never deletes local files
+ * files that are missing, the wrong size or have a changed hash, and never deletes local files
  * PocketBase doesn't know about, so dropping a file into that directory by
  * hand keeps working exactly as before if this sync is ever turned off.
  */
@@ -29,7 +30,9 @@ export async function syncMediaFromPocketbase(client: PocketBaseClient, mediaDir
     if (!record.src || record.src !== basename(record.src)) continue;
     const target = join(mediaDir, record.src);
     const current = await stat(target).catch(() => null);
-    if (current?.isFile() && current.size === record.bytes) continue;
+    if (current?.isFile() && current.size === record.bytes) {
+      if (!record.hash || createHash("sha256").update(await readFile(target)).digest("hex") === record.hash) continue;
+    }
 
     const url = client.pb.files.getURL(record, record.file);
     const response = await fetch(url);

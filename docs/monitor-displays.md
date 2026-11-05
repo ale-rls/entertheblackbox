@@ -71,8 +71,8 @@ monitor; show start is not automatically blocked on all four screens.
 The setup overlay shows cache progress, connection, phase and elapsed time.
 Use its fullscreen control or browser kiosk mode. Remove `setup=1` for the show;
 errors/disconnection remain visible. Refresh after a new deployment to replace
-the service-worker shell. A scenario-version change revalidates media; use a new
-version whenever published content changes. Studio display preview creates its
+the service-worker shell. A scenario-version change revalidates media; publication assigns a new
+version automatically. Studio display preview creates its
 own revision and includes direct M1–M4 links.
 
 Each ID has its own authenticated connection. Reopening M2 replaces only M2,
@@ -97,3 +97,5 @@ does not make show control independent of the server.
 
 The general `/api/cues` feed and tracking integration remain available for
 lighting or other external systems. They are not required by the monitor pages.
+
+Publish through Studio **File → Publish show…**. Monitors, main display and native devices share that publication; no monitor release is required. Asset paths and scenario versions are assigned automatically. See [publishing.md](publishing.md).
