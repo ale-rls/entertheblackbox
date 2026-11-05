@@ -197,6 +197,7 @@ const serverMessages: ServerToClientMessage[] = [
   { t: "voting_options", v: 2, sessionId: "s1", phaseEpoch: 3, method: "phone-buttons", question: "Choose", options: [{ id: "min", label: "No" }, { id: "max", label: "Yes" }] },
   { t: "pong", v: 2, echoClientTime: 4, serverTime: 5 },
   { t: "audio_bridge_changed", v: 2, streamUrl: "https://audio.example/stream/c1" },
+  { t: "surface", v: 2, mode: "flash", color: "#ff00aa", applyAt: 1_700_000_000_060, seq: 3, holdMs: 250, label: "T07" },
 ];
 
 describe("round-trips", () => {

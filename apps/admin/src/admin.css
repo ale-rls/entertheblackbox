@@ -199,3 +199,20 @@
 .admin-nested-groups { display:grid; gap:12px; margin-top:16px; }
 .admin-nested-groups .admin-group-lane { border-top-width:1px; }
 .admin-group-reunion .sc-tool-button { width:auto; justify-self:start; }
+
+/* Colour instrument: one tile per tablet, played by pressing and dragging. */
+.surface-instrument { display: grid; gap: var(--sc-tool-space-5); }
+.surface-palette { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-3); }
+.surface-swatch { width: 2.5rem; height: 2.5rem; border: var(--sc-tool-border-emphasis) solid var(--sc-tool-color-rule-strong); border-radius: 50%; cursor: pointer; }
+.surface-swatch[aria-checked="true"] { outline: 3px solid var(--sc-tool-color-focus-on-dark); outline-offset: 2px; }
+.surface-custom { display: inline-flex; align-items: center; gap: var(--sc-tool-space-2); color: var(--sc-tool-color-text-secondary); font-size: var(--sc-tool-font-size-0); }
+.surface-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: var(--sc-tool-space-3); touch-action: none; user-select: none; -webkit-user-select: none; }
+.surface-tile { position: relative; display: flex; min-height: 6.5rem; flex-direction: column; justify-content: space-between; gap: var(--sc-tool-space-2); padding: var(--sc-tool-space-4); border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-radius: var(--sc-tool-radius-2); background: var(--sc-tool-color-surface-2); color: var(--sc-tool-color-text); text-align: start; text-shadow: 0 0 6px var(--sc-tool-color-canvas); cursor: pointer; transition: background-color 60ms linear; }
+.surface-tile strong { font-family: var(--sc-tool-font-mono); font-size: var(--sc-tool-font-size-3); }
+.surface-tile span { color: var(--sc-tool-color-text-secondary); font-size: var(--sc-tool-font-size-00); }
+.surface-tile:focus-visible { outline: 3px solid var(--sc-tool-color-focus-on-dark); outline-offset: 2px; }
+.surface-tile-all { grid-column: 1 / -1; min-height: 4rem; justify-content: center; }
+.surface-tile.is-disconnected { opacity: .4; cursor: not-allowed; }
+.surface-tile.is-duplicate { border-color: var(--sc-tool-color-warning); }
+.surface-identify { align-self: flex-start; padding-block: var(--sc-tool-space-1); font-size: var(--sc-tool-font-size-00); }
+@media (prefers-reduced-motion: reduce) { .surface-tile { transition: none; } }

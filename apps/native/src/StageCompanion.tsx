@@ -3,14 +3,15 @@ import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, 
 import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
 import type { ShowManifest } from '@entertheblackbox/show-content';
 import type { StageInput } from './stage-state';
-import { stageState, showModeAction } from './stage-state';
+import { stageState, showModeAction, showModeTextVisible, SHOW_TEXT_IDLE_MS } from './stage-state';
+import { contrastText } from './surface';
 
 type Props = StageInput & {
   answered: string | null;
-  origin: string; surfaceColor: string; name: string; manifest: ShowManifest | null;
+  origin: string; surface: { color: string; label?: string }; name: string; deviceLabel: string; manifest: ShowManifest | null;
   identity: { name: string; color: string } | null; clockText: string; playing: boolean;
   notificationStatus: string; appChannel: string;
-  onOrigin: (value: string) => void; onName: (value: string) => void;
+  onOrigin: (value: string) => void; onName: (value: string) => void; onDeviceLabel: (value: string) => void;
   onPrepare: (download: boolean) => void; onJoin: () => void; onUpdate: () => void; onLeave: () => void;
   onPause: () => void; onResume: () => void; onVote: (id: string) => void; onGroup: (id: string) => void;
   onReaction: (kind: 'applause' | 'boo') => void; onPoint: (x: number, y: number) => void;
@@ -137,17 +138,46 @@ export function StageCompanion(props: Props) {
   const rejected = props.status.startsWith('Join rejected');
   const hasChoices = !!(screen.groups?.groups.length || screen.voting || screen.ratingOpen || screen.cursorOpen);
   const needsAction = showModeAction(props, props.answered);
-  const reveal = !showMode || needsAction || !normal || !!props.error || !!modeError;
-  return <SafeAreaView style={[styles.screen, showMode && { backgroundColor: props.surfaceColor }]}>
+  const problem = !normal || !!props.error || !!modeError;
+  const reveal = !showMode || needsAction || problem;
+  // Show-mode text fades after a few idle seconds; any touch brings it back.
+  const [lastTouch, setLastTouch] = useState(Date.now());
+  const [idle, setIdle] = useState(false);
+  const textOpacity = useRef(new Animated.Value(1)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => {});
+    const motion = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => motion.remove();
+  }, []);
+  useEffect(() => {
+    setIdle(false);
+    if (!showMode) return;
+    const timer = setTimeout(() => setIdle(true), SHOW_TEXT_IDLE_MS);
+    return () => clearTimeout(timer);
+  }, [showMode, lastTouch]);
+  const textVisible = showModeTextVisible({ showMode, needsAction, problem, idleMs: idle ? SHOW_TEXT_IDLE_MS : 0 });
+  useEffect(() => {
+    if (reduceMotion) { textOpacity.setValue(textVisible ? 1 : 0); return; }
+    const animation = Animated.timing(textOpacity, { toValue: textVisible ? 1 : 0, duration: textVisible ? 200 : 800, useNativeDriver: true });
+    animation.start(); return () => animation.stop();
+  }, [textVisible, reduceMotion, textOpacity]);
+  const surfaceText = contrastText(props.surface.color);
+  return <SafeAreaView style={[styles.screen, showMode && { backgroundColor: props.surface.color }]}
+    onStartShouldSetResponderCapture={() => { if (showMode) setLastTouch(Date.now()); return false; }}>
     <StatusBar hidden={showMode} barStyle="light-content" backgroundColor="#090a0b" />
     <ScrollView key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
       {!showMode && <View style={styles.header}><View style={styles.identity}>
         <Text style={styles.identityName}>{props.identity?.name ?? 'SETUP'}</Text>
         {props.connected && <Text style={styles.muted}>{props.snapshot?.currentGroup?.label ?? 'Waiting for group'}</Text>}
       </View></View>}
-      {reveal && <View style={showMode ? { backgroundColor: '#090a0b' } : undefined}>{settings ? <View style={styles.inset}>
+      {reveal && <Animated.View style={showMode ? { backgroundColor: '#090a0b', opacity: textOpacity } : undefined}>{settings ? <View style={styles.inset}>
         <Text accessibilityRole="header" style={styles.title}>Device settings</Text>
         {!props.connected && <>
+          <Text style={styles.label}>Device label</Text>
+          <TextInput accessibilityLabel="Device label" style={styles.input} value={props.deviceLabel} autoCapitalize="characters" autoCorrect={false} maxLength={40} editable={!props.busy}
+            placeholder="e.g. T07 — matches the sticker on this tablet" placeholderTextColor="#999fa7" onChangeText={props.onDeviceLabel} />
+          <Text style={styles.muted}>Saved on this device and used as its name in the show. Admin sorts and identifies tablets by this label.</Text>
           <Text style={styles.label}>Venue server</Text>
           <TextInput accessibilityLabel="Venue server" style={styles.input} value={props.origin} autoCapitalize="none" autoCorrect={false} editable={!props.busy}
             placeholder="https://show.example.org" placeholderTextColor="#999fa7" onChangeText={props.onOrigin} />
@@ -174,10 +204,12 @@ export function StageCompanion(props: Props) {
         {screen.cursorOpen && <CursorPad key={`${props.snapshot?.sessionId}:${props.snapshot?.phaseEpoch}:${props.snapshot?.routingEpoch}`} onPoint={props.onPoint} disabled={!screen.canAct} color={props.identity?.color ?? '#d9e4f1'} />}
         <View style={styles.inset}>
           {!props.connected ? <>
-            <Text style={styles.label}>Your name / device label</Text>
-            <TextInput accessibilityLabel="Your name or device label" style={styles.input} value={props.name} onChangeText={props.onName} maxLength={40} editable={!props.busy} placeholder="e.g. Alex" placeholderTextColor="#999fa7" />
+            {props.deviceLabel.trim() ? <Text style={styles.label}>This tablet: {props.deviceLabel.trim()}</Text> : <>
+              <Text style={styles.label}>Your name / device label</Text>
+              <TextInput accessibilityLabel="Your name or device label" style={styles.input} value={props.name} onChangeText={props.onName} maxLength={40} editable={!props.busy} placeholder="e.g. Alex" placeholderTextColor="#999fa7" />
+            </>}
             {!props.origin.trim() && <Text style={styles.muted}>Set the venue server in Device settings to join.</Text>}
-            <Action label={props.error ? 'Try joining again' : 'Prepare & join'} primary disabled={props.busy || !props.origin.trim() || !props.name.trim()} onPress={props.onJoin} />
+            <Action label={props.error ? 'Try joining again' : 'Prepare & join'} primary disabled={props.busy || !props.origin.trim() || !(props.deviceLabel.trim() || props.name.trim())} onPress={props.onJoin} />
             <Text style={styles.muted}>Joining checks the latest show and prepares your audio.</Text>
           </> : <>
             {screen.groups?.groups.map(group => <Action key={group.id} label={group.label} selected={screen.groups?.selectedGroupId === group.id} disabled={!screen.canAct} onPress={() => props.onGroup(group.id)} />)}
@@ -188,10 +220,14 @@ export function StageCompanion(props: Props) {
             {(props.paused || props.audioStatus.startsWith('Playback error')) && !rejected && <Action label="Resume at show position" primary onPress={props.onResume} />}
           </>}
         </View>
-      </>}</View>}
-      {!settings && <AudioField playing={props.playing && !props.paused && !rejected} compact={showMode || hasChoices} />}
+      </>}</Animated.View>}
+      {!settings && <Animated.View style={showMode ? { opacity: textOpacity } : undefined}><AudioField playing={props.playing && !props.paused && !rejected} compact={showMode || hasChoices} /></Animated.View>}
       {!!modeError && <Text accessibilityRole="alert" style={styles.error}>{modeError}</Text>}
-      {showMode && <Pressable accessibilityRole="button" accessibilityLabel="Exit show mode" accessibilityHint="Hold for two seconds" delayLongPress={2000} onLongPress={() => { setModeError(''); setShowMode(false); }} style={[styles.exitMode, { backgroundColor: '#090a0b' }]}><Text style={styles.muted}>Hold to exit show mode</Text></Pressable>}
+      {showMode && <Animated.View style={[styles.exitWrap, { opacity: textOpacity }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Exit show mode" accessibilityHint="Hold for two seconds" delayLongPress={2000} onLongPress={() => { setModeError(''); setShowMode(false); }} style={styles.exitMode}>
+          <Text style={[styles.exitText, { color: surfaceText }]}>Hold to exit show mode</Text>
+        </Pressable>
+      </Animated.View>}
       {!showMode && !settings && <View style={styles.footer}>
         {props.connected ? <>
           {ShowScreen && !rejected && <>
@@ -205,10 +241,16 @@ export function StageCompanion(props: Props) {
         </> : <Action label="Device settings" disabled={props.busy} onPress={() => setSettings(true)} />}
       </View>}
     </ScrollView>
+    {showMode && !!props.surface.label && <View pointerEvents="none" style={styles.identify} accessibilityLiveRegion="polite">
+      <Text adjustsFontSizeToFit numberOfLines={1} style={[styles.identifyText, { color: surfaceText }]}>{props.surface.label}</Text>
+    </View>}
   </SafeAreaView>;
 }
 const styles = StyleSheet.create({
-  exitMode: { marginTop: 'auto', padding: 24, alignItems: 'center', minHeight: 64 },
+  exitWrap: { marginTop: 'auto' }, exitMode: { padding: 24, alignItems: 'center', minHeight: 64, backgroundColor: 'transparent' },
+  exitText: { fontSize: 13, lineHeight: 20, opacity: .55 },
+  identify: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: 24 },
+  identifyText: { fontSize: 220, fontWeight: '700', letterSpacing: -4 },
   screen: { flex: 1, backgroundColor: '#090a0b' }, page: { flexGrow: 1, paddingBottom: 24 },
   header: { padding: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
   identity: { flex: 1, alignItems: 'flex-end' }, identityName: { color: '#e4e5e6', fontSize: 12, letterSpacing: 1 },

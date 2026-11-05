@@ -545,6 +545,17 @@ describe("WebSocket lifecycle", () => {
     client.close();
   });
 
+  it("welcomes a joining phone with the current surface colour on the WebSocket", async () => {
+    const runtime = await buildServer({ config: await fixture() });
+    runtimes.push(runtime);
+    const client = await openWebSocket(await listen(runtime));
+    const messages: Array<{ t: string; mode?: string; color?: string }> = [];
+    client.on("message", (raw) => messages.push(JSON.parse(raw.toString())));
+    await joinParticipant(client, runtime);
+    await vi.waitFor(() => expect(messages).toContainEqual(expect.objectContaining({ t: "surface", mode: "set", color: "#000000" })));
+    client.close();
+  });
+
   it("terminates an unresponsive participant and frees its registry connection slot", async () => {
     const runtime = await buildServer({
       config: await fixture(),

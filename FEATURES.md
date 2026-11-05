@@ -199,5 +199,7 @@ Participants can enter an awake, black waiting screen that reveals group choice,
 
 Implemented in apps/native and the ShowScreen module bundled with packages/expo-audio-scheduler.
 
-- Admin display settings can set a validated solid color for native show mode; open connected phones refresh every five seconds, retaining action and recovery controls.
+- Admin display settings set the resting native show-mode colour, pushed over the WebSocket and applied on the shared clock (`surface` message) — `apps/server/src/surface/surface.ts`, `apps/native/src/surface.ts`
+- Admin **Instrument** tab: tablets as a playable colour grid (press/hold/drag, All pad) and per-tablet **Identify** flash — `apps/admin/src/SurfaceInstrument.tsx`, `POST /api/admin/surface`
+- Native device label (T01–T40) stored on the device and used as the join name; show-mode text fades after 4 s idle — `apps/native/src/App.tsx`, `apps/native/src/StageCompanion.tsx`
 - Admin phone audio coverage audits every phase/group assignment against immutable downloaded bytes, distinguishing unassigned, unpublished, missing and corrupt audio; device timing separately reports runtime playback.

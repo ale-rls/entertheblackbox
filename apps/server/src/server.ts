@@ -10,6 +10,7 @@ import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
 import { basename } from "node:path";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
+import { SurfaceController } from "./surface/surface.js";
 import { AudioDelivery } from "./audio/audio-delivery.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
@@ -121,6 +122,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   audio?.start();
   if (readiness.ready) audio?.prepare(readiness.scenario.phases);
   let engine: PhaseEngine | null = null;
+  const surface = new SurfaceController({ recipients: () => admission.registry.values() });
+  if (options.pocketbase) void readDisplaySettings(options.pocketbase).then((settings) => surface.restoreBase(settings.phoneSurfaceColor)).catch(() => { /* Black until an operator sets a colour. */ });
   const admission = options.admission ?? new AdmissionController({
     installationId: config.installationId,
     roomId: config.roomId,
@@ -135,6 +138,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     onParticipantJoin: (participant, socket) => {
       groups?.ensureParticipant(participant.clientId);
       engine?.participantJoined(socket, participant);
+      surface.welcome(socket);
     },
     onSocketClosed: (socket) => engine?.socketClosed(socket),
     onMessageError: (error) => {
@@ -332,6 +336,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     registerRehearsals: (admin) => rehearsals.registerAdmin(admin),
     verifyToken: options.verifyOperatorToken ?? createOperatorTokenVerifier(config.pocketbase.url),
     engine: () => engine,
+    surface,
     ready: readiness.ready,
     phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
     onPublishing: (busy) => { publishing = busy; if (!busy) options.onPublicationEnded?.(); },

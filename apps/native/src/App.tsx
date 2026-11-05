@@ -5,7 +5,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Updates from 'expo-updates';
 import { z } from 'zod';
 import { serverOrigin, type ShowChannel, type ShowManifest } from '@entertheblackbox/show-content';
-import { displaySettingsSchema, PROTOCOL_VERSION, type ServerToClientMessage } from '@entertheblackbox/protocol';
+import { PROTOCOL_VERSION, type ServerToClientMessage, type SurfaceMessage } from '@entertheblackbox/protocol';
 import { NativeConnection } from './connection';
 import { acceptsSnapshot, cueFromSnapshot, type Snapshot } from './cues';
 import { downloadShow, loadShow } from './content';
@@ -14,6 +14,9 @@ import { StageCompanion } from './StageCompanion';
 import { PlaybackActivity, stageState } from './stage-state';
 import { actionPrompt } from './action-prompt';
 import { createActionAlerts, enableActionNotifications } from './notifications';
+import { applySurface, expireSurface, initialSurface, surfaceDelay, visibleSurface } from './surface';
+
+const DEVICE_LABEL_KEY = 'deviceLabel';
 
 const joinConfig = z.object({ installationId: z.string().min(1), roomId: z.string().min(1) });
 type Voting = Extract<ServerToClientMessage, { t: 'voting_options' }>;
@@ -21,8 +24,9 @@ type Groups = Extract<ServerToClientMessage, { t: 'group_selection_options' }>;
 export default function App() {
   const [origin, setOrigin] = useState(process.env.EXPO_PUBLIC_SHOW_SERVER ?? '');
   const channel: ShowChannel = 'production';
-  const [surfaceColor, setSurfaceColor] = useState('#000000');
+  const [surface, setSurface] = useState(initialSurface);
   const [name, setName] = useState('');
+  const [deviceLabel, setDeviceLabel] = useState('');
   const [manifest, setManifest] = useState<ShowManifest | null>(null);
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -50,6 +54,35 @@ export default function App() {
   const inputTime = useRef(0);
   const operation = useRef(false);
   const authorized = useRef(false);
+  const surfaceGeneration = useRef(0);
+  const surfaceTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  function later(work: () => void, delayMs: number) {
+    const generation = surfaceGeneration.current;
+    const timer = setTimeout(() => { surfaceTimers.current.delete(timer); if (generation === surfaceGeneration.current) work(); }, delayMs);
+    surfaceTimers.current.add(timer);
+  }
+  function resetSurface() {
+    surfaceGeneration.current += 1;
+    for (const timer of surfaceTimers.current) clearTimeout(timer);
+    surfaceTimers.current.clear();
+    setSurface(initialSurface);
+  }
+  /** Apply on the shared server clock so every tablet switches on the same frame. */
+  function scheduleSurface(message: SurfaceMessage, c: NativeConnection) {
+    later(() => {
+      setSurface(view => applySurface(view, message, Date.now()));
+      if (message.mode === 'flash' && message.holdMs !== undefined) later(() => setSurface(view => expireSurface(view, Date.now())), message.holdMs);
+    }, surfaceDelay(message.applyAt, c.clock.now(), c.clock.hasSamples));
+  }
+  useEffect(() => {
+    void SecureStore.getItemAsync(DEVICE_LABEL_KEY).then(value => { if (value) setDeviceLabel(value); }).catch(() => { /* Unlabelled until set. */ });
+  }, []);
+  function saveDeviceLabel(value: string) {
+    const label = value.slice(0, 40);
+    setDeviceLabel(label);
+    void (label.trim() ? SecureStore.setItemAsync(DEVICE_LABEL_KEY, label.trim()) : SecureStore.deleteItemAsync(DEVICE_LABEL_KEY)).catch(() => setError('Could not save the device label'));
+  }
+  const joinName = (deviceLabel.trim() || name).trim();
   const prompt = actionPrompt(snapshot, voting, groups, serverNow);
   useEffect(() => {
     alerts.current?.update(connected && status === 'Connected' && notificationsEnabled && prompt?.key !== answered ? prompt : null);
@@ -60,7 +93,7 @@ export default function App() {
   }
   function leave() {
     alerts.current?.update(null); setNotificationsEnabled(false); setAnswered(null);
-    connection.current?.stop(); player.current?.dispose(); connection.current = null; player.current = null;
+    connection.current?.stop(); player.current?.dispose(); connection.current = null; player.current = null; resetSurface();
     latest.current = null; authorized.current = false; setSnapshot(null); setVoting(null); setGroups(null); setIdentity(null);
     setConnected(false); setPaused(false); setPlaying(false); setError(''); setNotificationStatus(''); setStatus('Disconnected'); setAudioStatus('Audio stopped');
   }
@@ -84,28 +117,6 @@ export default function App() {
     }, 1000);
     return () => { alerts.current?.update(null); listener.remove(); clearInterval(playbackTimer); clearInterval(timer); connection.current?.stop(); player.current?.dispose(); };
   }, []);
-  useEffect(() => {
-    setSurfaceColor('#000000');
-    if (!connected) return;
-    let stopped = false;
-    let pending = false;
-    const abort = new AbortController();
-    const refresh = async () => {
-      if (pending || AppState.currentState !== 'active') return;
-      pending = true;
-      try {
-        const response = await fetch(`${serverOrigin(origin)}/api/display-settings`, { signal: abort.signal });
-        if (!response.ok) return;
-        const settings = displaySettingsSchema.safeParse(await response.json());
-        if (!stopped && settings.success) setSurfaceColor(settings.data.phoneSurfaceColor);
-      } catch { /* Keep the last surface during temporary connection loss. */ }
-      finally { pending = false; }
-    };
-    void refresh();
-    const timer = setInterval(() => void refresh(), 5000);
-    const listener = AppState.addEventListener('change', state => { if (state === 'active') void refresh(); });
-    return () => { stopped = true; abort.abort(); clearInterval(timer); listener.remove(); };
-  }, [connected, origin]);
   async function run(work: () => Promise<void>) {
     if (operation.current) return;
     operation.current = true; setBusy(true); setError('');
@@ -120,7 +131,7 @@ export default function App() {
     setManifest(show); setStatus(`Ready: ${show.files.length} audio files verified`);
   }
   async function join() {
-    if (connection.current || !name.trim()) return;
+    if (connection.current || !joinName) return;
     const base = serverOrigin(origin);
     setStatus('Checking latest published show');
     // Capture this verified release for the whole session, never a stale React state value.
@@ -139,13 +150,14 @@ export default function App() {
       setNotificationStatus(enabled ? 'Show action notifications enabled' : 'Notifications are off. Enable them in device settings, or keep the app open for show actions.');
     } catch { setNotificationStatus('Notifications unavailable. Keep the app open for show actions.'); }
     await ShowPlayer.configure();
-    const c = new NativeConnection({ origin: base, ...config, name: name.trim(),
+    const c = new NativeConnection({ origin: base, ...config, name: joinName,
       clientVersion: process.env.EXPO_PUBLIC_SERVER_BUILD_VERSION ?? '0.0.0-dev', lease,
       saveLease: value => { void (value ? SecureStore.setItemAsync(leaseKey, value) : SecureStore.deleteItemAsync(leaseKey)).catch(() => setError('Could not save this device identity')); },
       status: value => { authorized.current = value === 'Connected'; setStatus(value); },
       ended: () => { leave(); setStatus('Show ended. Join again for the next performance.'); },
       message: message => {
-        if (message.t === 'identity') { setIdentity({ name: name.trim(), color: message.color }); player.current?.startMusic(); }
+        if (message.t === 'identity') { resetSurface(); setIdentity({ name: joinName, color: message.color }); player.current?.startMusic(); }
+        if (message.t === 'surface') scheduleSurface(message, c);
         if (message.t === 'reload') setError(`Server requests compatible app content (${message.minVersion}). Leave before checking app updates.`);
         if (message.t === 'join_rejected') { player.current?.setEnabled(false); player.current?.setCue(null); setError(`Join rejected: ${message.reason}`); }
         if (message.t === 'snapshot' || message.t === 'phase') {
@@ -189,7 +201,7 @@ export default function App() {
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
   return <StageCompanion answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
     paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
-    surfaceColor={surfaceColor} origin={origin} name={name} manifest={manifest} identity={identity} clockText={clockText}
+    surface={visibleSurface(surface)} origin={origin} name={name} deviceLabel={deviceLabel} onDeviceLabel={saveDeviceLabel} manifest={manifest} identity={identity} clockText={clockText}
     notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}
     onOrigin={value => { setOrigin(value); setManifest(null); }}
     onName={setName}
