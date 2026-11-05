@@ -783,13 +783,15 @@ describe("Studio feedback and keyboard entry", () => {
 });
 
 
-it("opens device publishing from File and requires operator sign-in", async () => {
+it("opens one show publication from File and requires operator sign-in", async () => {
   localStorage.clear();
   await render(<App />);
   await act(async () => { button("New show").click(); });
   await act(async () => { button("File").click(); });
-  await act(async () => { button("Publish to devices…").click(); });
-  expect(document.querySelector("#publish-heading")?.textContent).toBe("Publish to devices");
+  await act(async () => { button("Publish show…").click(); });
+  expect(document.querySelector("#publish-heading")?.textContent).toBe("Publish show");
   expect(document.querySelector("#publish-email")).not.toBeNull();
   expect(document.querySelector("#native-show-channel")).toBeNull();
+  expect(document.body.textContent).not.toContain("Publish to devices…");
+  expect(document.body.textContent).not.toContain("Publish to PocketBase…");
 });

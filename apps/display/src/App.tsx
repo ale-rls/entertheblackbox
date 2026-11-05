@@ -198,7 +198,7 @@ export function App() {
     };
   }, [connection.clock, cursorField, state.resolution]);
 
-  const media = useMedia(undefined, rehearsalId() ? state.sessionId ?? "" : "");
+  const media = useMedia(undefined, rehearsalId() ? state.sessionId ?? "" : state.phase?.scenarioVersion ?? "");
   const phase = state.phase;
   const isIdle = phase === null || phase.kind === "idle";
   const waitingVideoUrl = resolveWaitingVideoUrl(displaySettings, config.groupId);
