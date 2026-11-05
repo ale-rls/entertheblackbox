@@ -170,6 +170,8 @@ export type AdminFlow = {
  * phaseId stays pinned to the group-branch scene for the whole time these
  * run, so this is the only way an operator can see where each group is. */
 export type AdminGroupPathStatus = {
+  parentGroupId: string | null;
+  deadlineAt: number | null;
   state: "choosing" | "active" | "finished" | "split" | "empty";
   pendingAssignments: number;
   pendingDisconnectedAssignments: number;
@@ -662,6 +664,8 @@ export class PhaseEngine {
   get groupPaths(): AdminGroupPathStatus[] {
     const rows = [...this.paths.entries()].flatMap(([groupId, { engine, members }]) => [{
       groupId,
+      parentGroupId: this.path?.timelineId ?? null,
+      deadlineAt: engine.deadlineAt,
       pendingAssignments: engine.pendingGroupAssignments.length,
       pendingDisconnectedAssignments: engine.pendingDisconnectedGroupAssignments.length,
       state: engine.pathDone ? "finished" as const : engine.pathsStarted ? "split" as const : engine.currentPhase().kind === "group-branch" ? "choosing" as const : "active" as const,

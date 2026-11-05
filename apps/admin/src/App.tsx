@@ -1,9 +1,9 @@
+import { SceneTiming } from "./SceneTiming.js";
 import { GroupSelectionStart } from "./GroupSelectionStart.js";
 import type { TimingMonitor } from "@entertheblackbox/protocol";
 import { ServerClock } from "@entertheblackbox/shared";
 import { ShowClockPanel } from "./ShowClockPanel.js";
 import { DisplaySettingsPanel } from "./DisplaySettingsPanel.js";
-import { AudioMediaLibrary } from "./AudioMediaLibrary.js";
 import { RunOfShowPanel } from "./RunOfShowPanel.js";
 import { LiveGraph } from "./LiveGraph.js";
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
@@ -51,6 +51,8 @@ export type Status = {
   pendingDisconnectedGroupAssignments?: string[];
   groupPathsStarted: boolean;
   groupPaths: Array<{
+    parentGroupId?: string | null;
+    deadlineAt?: number | null;
     groupId: string;
     startedAt?: number;
     memberIds: string[];
@@ -103,13 +105,7 @@ async function api(path: string, token: string, init?: RequestInit): Promise<Res
   return response;
 }
 
-function formatDuration(milliseconds: number): string {
-  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds].map((part) => String(part).padStart(2, "0")).join(":");
-}
+
 
 function showLabel(showId: string | null, shows: PublishedShow[]): string {
   if (!showId) return "—";
@@ -119,14 +115,6 @@ function showLabel(showId: string | null, shows: PublishedShow[]): string {
 
 function StatusLabel({ status, children }: { status: ToolStatus; children: ReactNode }) {
   return <span className="sc-tool-status" data-sc-tool-status={status}><StatusIcon status={status} /><span>{children}</span></span>;
-}
-
-function OperationRow({ label, status, value, detail }: { label: string; status: ToolStatus; value: string; detail: string }) {
-  return <div className="admin-operation-row">
-    <div className="admin-operation-label"><StatusIcon status={status} /><span>{label}</span></div>
-    <strong className="sc-tool-mono">{value}</strong>
-    <span>{detail}</span>
-  </div>;
 }
 
 /** A dashboard panel that can be collapsed once it isn't the operator's immediate focus. Keeps the same eyebrow/heading/status-label header used by the always-expanded sections. */
@@ -248,6 +236,11 @@ function sceneKindLabel(kind: FlowScene["kind"]): string {
 }
 
 export function App() {
+  const [activeTab, setActiveTab] = useState(() => {
+    try { const saved = localStorage.getItem("admin-view"); return ["show", "devices", "displays", "setup"].includes(saved ?? "") ? saved! : "show"; } catch { return "show"; }
+  });
+  const selectTab = (tab: string) => { setActiveTab(tab); try { localStorage.setItem("admin-view", tab); } catch {} };
+
   const clock = useRef(new ServerClock()).current;
   const audioOnly = new URLSearchParams(window.location.search).get("view") === "audio";
   const [statusReceivedAt, setStatusReceivedAt] = useState<number | null>(null);
@@ -280,42 +273,15 @@ export function App() {
   const [lobbyInfo, setLobbyInfo] = useState<LobbyInfo | null>(null);
   const [newStartTime, setNewStartTime] = useState("");
   const [savingLobby, setSavingLobby] = useState(false);
-  const [soundcheckSource, setSoundcheckSource] = useState("");
-  const [soundcheckTarget, setSoundcheckTarget] = useState("");
-  const [soundchecking, setSoundchecking] = useState(false);
-  const [localBridgeUrl, setLocalBridgeUrl] = useState("");
-  const [localBridgeToken, setLocalBridgeToken] = useState("");
-  const [localPublicUrl, setLocalPublicUrl] = useState("");
-  const [localNetworkLabel, setLocalNetworkLabel] = useState("");
-  const [musicSource, setMusicSource] = useState("");
-  const [musicVolume, setMusicVolume] = useState(20);
-  const [settingMusic, setSettingMusic] = useState(false);
-  const setBackgroundMusic = async (stop = false) => {
-    setSettingMusic(true);
-    try {
-      const response = await api("audio/music", connectedToken, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ src: stop ? null : musicSource, volume: musicVolume / 100 }),
-      });
-      if (!response.ok) throw new Error(await response.text());
-      await refresh();
-      setFeedback({ status: "success", message: stop ? "Background music stopped." : "Background music started on all streams." });
-    } catch (error) {
-      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not change music." });
-    } finally { setSettingMusic(false); }
-  };
-  const [switchingAudioBackend, setSwitchingAudioBackend] = useState(false);
   // Collapsible dashboard sections: default open/closed is decided once, the
   // first time live status arrives, then left entirely to the operator's own
   // clicks -- re-deciding it on every 2s poll would fight manual toggles.
   const [showSectionOpen, setShowSectionOpen] = useState(false);
   const [ghostsSectionOpen, setGhostsSectionOpen] = useState(false);
-  const [audioSectionOpen, setAudioSectionOpen] = useState(false);
   const collapsibleDefaultsSet = useRef(false);
   useEffect(() => {
     if (collapsibleDefaultsSet.current || !status) return;
     collapsibleDefaultsSet.current = true;
-    setAudioSectionOpen(Boolean(status.audio?.error) || Object.keys(status.audio?.deliveryFailures ?? {}).length > 0);
   }, [status]);
   const statusRef = useRef<Status | null>(null);
   const confirmTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -479,46 +445,6 @@ export function App() {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not adjust the next start." });
     } finally {
       setSavingLobby(false);
-    }
-  };
-
-  const soundcheck = async (action: "play" | "stop") => {
-    setSoundchecking(true);
-    setFeedback(null);
-    try {
-      const response = await api("audio/soundcheck", connectedToken, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, ...(action === "play" ? { src: soundcheckSource } : {}), ...(soundcheckTarget ? { participantId: soundcheckTarget } : {}) }),
-      });
-      const result = await response.json() as { affected: number };
-      setFeedback({ status: "success", message: `${action === "play" ? "Soundcheck started on" : "Audio stopped on"} ${result.affected} phone${result.affected === 1 ? "" : "s"}.` });
-      await refresh();
-    } catch (error) {
-      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Soundcheck failed." });
-    } finally {
-      setSoundchecking(false);
-    }
-  };
-
-  const switchAudioBackend = async (mode: "remote" | "local") => {
-    setSwitchingAudioBackend(true);
-    setFeedback(null);
-    try {
-      const response = await api("audio/bridge", connectedToken, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mode === "remote" ? { mode } : {
-          mode, url: localBridgeUrl, token: localBridgeToken, publicUrl: localPublicUrl, label: localNetworkLabel,
-        }),
-      });
-      const result = await response.json() as { backend: string; label?: string };
-      setFeedback({ status: "success", message: mode === "remote" ? "Switched back to the remote audio backend." : `Switched to local audio backend “${result.label}”.` });
-      await refresh();
-    } catch (error) {
-      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not switch the audio backend." });
-    } finally {
-      setSwitchingAudioBackend(false);
     }
   };
 
@@ -739,41 +665,47 @@ export function App() {
   const isActive = status?.lifecycle === "active";
   const canStart = Boolean(status && !isActive);
   const canReturnToIdle = Boolean(status?.lifecycle && status.lifecycle !== "idle");
-  const busy = workingAction !== null;
+  const busy = workingAction !== null || statusStale || Boolean(connectionError);
   const currentScene = status ? flow?.scenes.find((scene) => scene.id === status.phaseId) : undefined;
   const inGroupBranch = currentScene?.kind === "group-branch";
   const sceneTitle = (id: string): string => id === "idle" ? "End" : flow?.scenes.find((scene) => scene.id === id)?.title ?? id;
   const skipLabel = currentScene?.kind === "video" && currentScene.routes[0] ? `Next scene → ${sceneTitle(currentScene.routes[0].target)}` : "Skip current phase";
-  const playbackStatus: ToolStatus = status?.displayPlaybackIssue?.status === "stalled" ? "warning" : status?.displayPlaybackIssue ? "danger" : "success";
   // Once a session has authenticated cleanly, the connection form collapses
   // to a corner chip -- it reappears automatically on connectionError (token
   // expiry, a failed request) so re-authenticating is never more than one
   // glance away, without permanently occupying primary dashboard space.
   const connectionAuthenticated = Boolean(status) && !connectionError;
 
+  const renderGroup = (path: Status["groupPaths"][number], ancestors: string[] = []): ReactNode => (<div className="admin-group-lane" key={`${path.groupId}:${path.phaseEpoch}`}><h3>{path.label}</h3><p>{path.memberIds.length} {path.memberIds.length === 1 ? "participant" : "participants"} · {path.state === "choosing" ? "Choosing" : path.done ? "Waiting at reunion" : path.state === "empty" ? "Empty" : path.state === "split" ? "Subgroups running" : "Running"}</p><h4>{path.phaseTitle}</h4><SceneTiming clock={clock} startedAt={path.startedAt} deadlineAt={path.deadlineAt} stale={statusStale} finished={path.done} />
+                {path.state === "choosing" ? <GroupSelectionStart label={`Start groups for ${path.label}`} pending={path.pendingAssignments ?? 0} disconnected={path.pendingDisconnectedAssignments ?? 0} disabled={busy} onStart={(skip) => void startGroupPaths(path.groupId, path.phaseId, path.phaseEpoch, skip)} />
+                  : path.state === "split" ? <button className="sc-tool-button" type="button" disabled={busy} onClick={(event) => requestConfirmation("reunion", event.currentTarget, path)}>Finish subgroups of {path.label}</button>
+                  : <button className="sc-tool-button" data-sc-tool-variant={path.done ? "secondary" : "primary"} type="button" disabled={path.done || path.state === "empty" || path.acceptingParticipants === false || busy} onClick={() => void skipPhase(path.groupId, path.label)}>
+                  {path.state === "empty" ? `${path.label} — empty, available to join` : path.done ? `${path.label} — finished` : `Next scene for ${path.label} — ${path.memberIds.length} ${path.memberIds.length === 1 ? "person" : "people"}`}
+                </button>}
+                <span>{path.state === "choosing" ? "" : path.done ? "At the reunion point, waiting on the other groups" : `Currently on “${path.phaseTitle}”`}</span>
+              <div className="admin-nested-groups">{status?.groupPaths.filter(child => child.parentGroupId === path.groupId && !ancestors.includes(child.groupId) && child.groupId !== path.groupId).map(child => renderGroup(child, [...ancestors, path.groupId]))}</div></div>);
+
   return <div data-sc-tool-density="standard" data-sc-tool-root>
     <main className="admin-app">
       <div className="admin-topbar">
         <header className="admin-header">
-          <div><p className="sc-tool-eyebrow">Live installation / operator console</p><h1>{audioOnly ? "Audio diagnostics" : "Operations"}</h1></div>
+          <div><h1>{audioOnly ? "Audio diagnostics" : "Operations"}</h1></div>
           <div className="admin-header-chrome">
             {audioOnly && <a className="admin-back-link" href="/admin/">Back to operations</a>}
-            {connectionAuthenticated && <span className="admin-connection-chip">
-              <StatusLabel status={statusStale ? "warning" : "success"}>{statusStale ? "Last status received" : "Authenticated"}</StatusLabel>
-              <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={signOut}>Sign out</button>
-            </span>}
+
           </div>
         </header>
         {status && <div className="admin-status-bar" aria-label="Operational status">
-          <OperationRow label="Server" status={status.healthy && status.ready ? "success" : status.healthy ? "warning" : "danger"} value={status.healthy && status.ready ? "READY" : "NOT READY"} detail={`uptime ${formatDuration(status.uptimeMs)}`} />
-          <OperationRow label="Display" status={status.displayConnected ? "success" : "danger"} value={status.displayConnected ? "CONNECTED" : "DISCONNECTED"} detail={status.displayConnected && status.displayHeartbeatAgeMs !== null ? `heartbeat ${status.displayHeartbeatAgeMs} ms ago` : "no heartbeat available"} />
-          <OperationRow label="Video playback" status={playbackStatus} value={status.displayPlaybackIssue ? status.displayPlaybackIssue.status.toUpperCase() : "CLEAR"} detail={status.displayPlaybackIssue ? `${status.displayPlaybackIssue.mediaId}: ${status.displayPlaybackIssue.detail ?? "no browser detail"}` : "no active playback issue"} />
-          <OperationRow label="Participants" status={status.connectedParticipants > 0 ? "info" : "warning"} value={String(status.connectedParticipants)} detail="currently connected" />
-          <OperationRow label="Session" status={isActive ? "success" : "info"} value={(status.lifecycle ?? "unavailable").toUpperCase()} detail={status.sessionId ? `session ${status.sessionId}` : "no session ID"} />
+          <StatusLabel status={isActive ? "success" : "info"}>{status.lifecycle ?? "Unavailable"}</StatusLabel>
+          <span>{connectionAuthenticated ? "Operator signed in" : "Operator disconnected"}</span>{connectionAuthenticated && <button className="sc-tool-button" type="button" onClick={signOut}>Sign out</button>}
+          <button className="sc-tool-button" onClick={() => selectTab("devices")}>{status.connectedParticipants} participants</button>
+          <StatusLabel status={statusStale ? "warning" : status.ready ? "success" : "danger"}>{statusStale ? "Updates stale" : status.ready ? "Server connected" : "Server not ready"}</StatusLabel>
         </div>}
+        {!audioOnly && <nav className="admin-tabs" aria-label="Admin views">{["show", "devices", "displays", "setup"].map(tab => <button key={tab} className="sc-tool-button" aria-pressed={activeTab === tab} onClick={() => selectTab(tab)}>{tab[0]!.toUpperCase() + tab.slice(1)}</button>)}</nav>}
+
       </div>
 
-      {status && <ShowClockPanel clock={clock} status={status} stale={statusStale} receivedAt={statusReceivedAt} />}
+      {status && (activeTab === "devices" || audioOnly) && <ShowClockPanel clock={clock} status={status} stale={statusStale} receivedAt={statusReceivedAt} />}
 
       {!connectionAuthenticated && <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
         <div className="admin-section-heading">
@@ -793,41 +725,38 @@ export function App() {
         {connectionError && <p className="sc-tool-feedback admin-feedback" data-sc-tool-status={statusStale ? "warning" : "danger"} role="alert"><StatusIcon status={statusStale ? "warning" : "danger"} /><span>{connectionError}{statusStale ? " Showing the last received status." : ""}</span></p>}
       </section>}
 
+      {status?.displayPlaybackIssue && <p className="sc-tool-feedback" role="alert">Video playback · {status.displayPlaybackIssue.status.toUpperCase()} · {status.displayPlaybackIssue.mediaId}: {status.displayPlaybackIssue.detail}</p>}
+      {showsInfo?.pending && showsInfo.pending !== showsInfo.active && <p className="sc-tool-feedback">Show selection queued: {showLabel(showsInfo.pending, showsInfo.shows)}. {isActive ? "The current performance finishes first." : "Waiting for activation."}</p>}
       {feedback && <div className="sc-tool-feedback admin-page-feedback" data-sc-tool-status={feedback.status} role={feedback.status === "danger" ? "alert" : "status"}><StatusIcon status={feedback.status} /><span>{feedback.message}</span></div>}
 
       {!status ? <section className="sc-tool-panel admin-empty-state" aria-live="polite">
         <p className="sc-tool-eyebrow">Operational data</p>
         <h2>{refreshing ? "Loading live status…" : "Connect to load live status"}</h2>
         <p className="sc-tool-copy">No operational values are shown until the admin API authenticates this browser session.</p>
-      </section> : audioOnly ? <AudioDiagnostics status={status} receivedAt={statusReceivedAt} failed={Boolean(connectionError)} /> : <div className="admin-grid">
-        <section className="sc-tool-panel admin-session-panel" aria-labelledby="admin-controls-heading">
-          <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">{status.sessionId ? `Session ${status.sessionId}` : "No active session"}</p><h2 ref={controlsHeadingRef} id="admin-controls-heading" tabIndex={-1}>Session controls</h2></div><StatusLabel status={isActive ? "success" : "info"}>{status.lifecycle ?? "Unavailable"}</StatusLabel></div>
+      </section> : audioOnly ? <AudioDiagnostics status={status} receivedAt={statusReceivedAt} failed={Boolean(connectionError)} /> : <div className="admin-grid" data-admin-tab={activeTab}>
+        <section hidden={activeTab !== "displays"} className="sc-tool-panel admin-display-content"><h2>Displays</h2><p>Open each output on its screen and enter fullscreen there.</p><div className="admin-display-links">{[{ id: "Main projection", url: "/display/", reported: status.displayConnected ? "Connected" : "Disconnected" }, ...["M1", "M2", "M3", "M4"].map(id => ({ id, url: `/display/?monitor=${id}&setup=1`, reported: "Not reported" })), ...(status.groups ?? []).map(group => ({ id: group.label, url: `/display/?group=${encodeURIComponent(group.id)}`, reported: "Not reported" }))].map(output => <div key={output.id}><strong>{output.id}</strong><span>{output.reported}</span><a href={output.url} target="_blank" rel="noreferrer">Open display ↗</a></div>)}</div></section>
+        <section hidden={activeTab !== "show"} className="sc-tool-panel admin-session-panel" aria-labelledby="admin-controls-heading">
+          <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">{status.sessionId ? `Session ${status.sessionId}` : "No active session"}</p><h2 ref={controlsHeadingRef} id="admin-controls-heading" tabIndex={-1}>{isActive ? sceneTitle(status.phaseId ?? "idle") : "Ready to start"}</h2></div><StatusLabel status={isActive ? "success" : "info"}>{status.lifecycle ?? "Unavailable"}</StatusLabel></div>
           <div className="admin-session-layout">
           <div>
-          <dl className="admin-session-facts">
-            <div><dt>Current phase</dt><dd className="sc-tool-mono">{status.phaseId ?? "—"}</dd></div>
-            <div><dt>Epoch</dt><dd className="sc-tool-mono">{status.phaseEpoch ?? "—"}</dd></div>
-            <div><dt>Lifecycle</dt><dd className="sc-tool-mono">{status.lifecycle ?? "—"}</dd></div>
-          </dl>
+          {!status.groupPathsStarted && <SceneTiming clock={clock} startedAt={status.phaseTiming?.startedAt} deadlineAt={status.phaseTiming?.deadlineAt} stale={statusStale} />}
           <div className="admin-control-list">
-            <div><button className="sc-tool-button" data-sc-tool-variant={isActive ? "secondary" : "primary"} type="button" disabled={!canStart || busy} onClick={() => void control("start")}>Start show</button><span>{isActive ? "Unavailable while active" : "Begin a new live session"}</span></div>
+            <div hidden={isActive}><button className="sc-tool-button" data-sc-tool-variant={isActive ? "secondary" : "primary"} type="button" disabled={!canStart || busy} onClick={() => void control("start")}>Start show</button><span>{isActive ? "Unavailable while active" : "Begin a new live session"}</span></div>
             {inGroupBranch ? (status.groupPathsStarted ? <>
-              {status.groupPaths.map((path) => <div key={`${path.groupId}:${path.phaseEpoch}`}>
-                {path.state === "choosing" ? <GroupSelectionStart label={`Start groups for ${path.label}`} pending={path.pendingAssignments ?? 0} disconnected={path.pendingDisconnectedAssignments ?? 0} disabled={busy} onStart={(skip) => void startGroupPaths(path.groupId, path.phaseId, path.phaseEpoch, skip)} />
-                  : path.state === "split" ? <button className="sc-tool-button" type="button" disabled={busy} onClick={(event) => requestConfirmation("reunion", event.currentTarget, path)}>Finish subgroups of {path.label}</button>
-                  : <button className="sc-tool-button" data-sc-tool-variant={path.done ? "secondary" : "primary"} type="button" disabled={path.done || path.state === "empty" || path.acceptingParticipants === false || busy} onClick={() => void skipPhase(path.groupId, path.label)}>
-                  {path.state === "empty" ? `${path.label} — empty, available to join` : path.done ? `${path.label} — finished` : `Next scene for ${path.label} — ${path.memberIds.length} ${path.memberIds.length === 1 ? "person" : "people"}`}
-                </button>}
-                <span>{path.state === "choosing" ? "" : path.done ? "At the reunion point, waiting on the other groups" : `Currently on “${path.phaseTitle}”`}</span>
-              </div>)}
-              <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={busy} onClick={(event) => requestConfirmation("reunion", event.currentTarget)}>Bring all groups to reunion</button><span>Explicitly ends unfinished branches, with confirmation</span></div>
+              {status.groupPaths.filter(path => !path.parentGroupId || !status.groupPaths.some(parent => parent.groupId === path.parentGroupId)).map(path => renderGroup(path))}
+              <div className="admin-group-reunion"><h3>Shared reunion</h3><p>{[...new Set(status.groupPaths.map(path => path.reunionPhaseId).filter((id): id is string => Boolean(id)))].map(sceneTitle).join(" · ")}</p><p>{status.groupPaths.filter(path => path.done).length} / {status.groupPaths.length} paths finished. The shared timeline resumes when occupied paths finish.</p><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={busy} onClick={(event) => requestConfirmation("reunion", event.currentTarget)}>Bring all groups to reunion</button><span>Explicitly ends unfinished branches, with confirmation</span></div>
             </> : <div><GroupSelectionStart label="Start group paths" pending={status.pendingGroupAssignments?.length ?? 0} disconnected={status.pendingDisconnectedGroupAssignments?.length ?? 0} disabled={!isActive || busy} onStart={(skip) => void startGroupPaths(undefined, undefined, undefined, skip)} /></div>)
               : <div><button className="sc-tool-button" data-sc-tool-variant={isActive ? "primary" : "secondary"} type="button" disabled={!isActive || busy} onClick={() => void skipPhase()}>{skipLabel}</button><span>{isActive ? "Server validates phase support" : "Available during an active show"}</span></div>}
-            <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
+            <details className="admin-other-actions"><summary>Other show actions</summary>            <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
             <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={!canReturnToIdle || busy} onClick={(event) => requestConfirmation("idle", event.currentTarget)}>Return to idle</button><span>Stop the current show</span></div>
+</details>
           </div>
           </div>
-          <section className="admin-session-schedule" aria-labelledby="admin-lobby-heading">
+
+          </div>
+        </section>
+
+        <div hidden={activeTab !== "setup"} className="admin-setup-content">          <section className="admin-session-schedule" aria-labelledby="admin-lobby-heading">
             <div className="admin-section-heading"><h3 id="admin-lobby-heading">Lobby schedule</h3><StatusLabel status={lobbyInfo?.nextStartAt ? "info" : "warning"}>{lobbyInfo?.nextStartAt ? "Scheduled" : "Manual start"}</StatusLabel></div>
           <div className="admin-next-start">
             <span>Next start</span>
@@ -855,102 +784,20 @@ export function App() {
               <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={savingLobby} onClick={() => void saveLobbyTimes(lobbyInfo!.startTimes.filter((time) => time !== startAt), "Start time removed.")}>Remove</button>
             </li>)}
           </ol> : <p className="sc-tool-copy">The lobby waits until an operator presses Start show.</p>}
-          </section>
-          </div>
-        </section>
+          </section><RunOfShowPanel phoneJoinUrl={status.phoneJoinUrl} /></div>
 
-        <RunOfShowPanel phoneJoinUrl={status.phoneJoinUrl} />
-
-        {isActive && <section className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
+        {isActive && <section hidden={activeTab !== "show"} className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
           <div className="admin-section-heading">
             <div><p className="sc-tool-eyebrow">Live show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Scene navigator</h2></div>
             <StatusLabel status={isActive && !status.groupPathsStarted ? "success" : "info"}>{status.groupPathsStarted ? "Groups running" : isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
           </div>
-          <p className="sc-tool-copy admin-flow-intro">The published show graph with live group locations. Select a scene to inspect its participants or move a group.</p>
-          {flow?.scenes.length ? <LiveGraph flow={flow} status={status} busy={busy} onJump={requestJump} onAssign={assignGroup} /> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}
+          <ol className="admin-scene-list">{flow?.scenes.filter(scene => scene.id === status.phaseId || flow.scenes.find(current => current.id === status.phaseId)?.routes.some(route => route.target === scene.id)).map(scene => <li key={scene.id}><span>{scene.id === status.phaseId ? "Current" : "Next route"}</span><strong>{scene.title}</strong></li>)}</ol>
+          <details><summary>Full graph &amp; jump</summary>
+          {flow?.scenes.length ? <LiveGraph flow={flow} status={status} busy={busy} onJump={requestJump} onAssign={assignGroup} /> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}</details>
         </section>}
 
-        {status.audio?.configured ? <CollapsibleSection id="admin-audio-heading" eyebrow="Personal audio" title="Headphone streams" status={{
-          status: !status.audio?.configured ? "info" : (status.audio.error || Object.keys(status.audio.deliveryFailures ?? {}).length > 0) ? "danger" : "success",
-          label: !status.audio?.configured ? "Not configured" : (status.audio.error || Object.keys(status.audio.deliveryFailures ?? {}).length > 0) ? "Needs attention" : "Nominal",
-        }} open={audioSectionOpen} onToggle={setAudioSectionOpen}>
-          {audioSectionOpen && <AudioMediaLibrary url={POCKETBASE_URL} onSelect={(src) => { setMusicSource(src); const panel = document.getElementById("admin-background-music") as HTMLDetailsElement | null; if (panel) { panel.open = true; panel.scrollIntoView?.({ block: "nearest" }); } }} />}
-          <p><a href="/admin/?view=audio">Open live audio diagnostics →</a></p>
-          {!status.audio?.configured ? <p>Audio bridge is not configured.</p> : <>
-            <p>Active backend: <strong>{status.audio.backend === "local" ? status.audio.backendLabel ?? "Local" : "Remote"}</strong></p>
-            {status.audio.error && <p role="alert">{status.audio.error}</p>}
-            {Object.keys(status.audio.deliveryFailures ?? {}).length > 0 && <p role="alert">
-              Narration delivery failed for {Object.keys(status.audio.deliveryFailures ?? {}).join(", ")}. Retrying automatically; hold the show until resolved.
-            </p>}
-            {status.audio.poll_age_s == null || status.audio.poll_age_s > 15 ? <p role="alert">Listener status is unavailable or stale.</p> : null}
-            <p className="admin-audio-roster-summary">
-              {status.audio.players.length} phone{status.audio.players.length === 1 ? "" : "s"} registered
-              {" · "}{status.audio.players.filter((player) => player.connected).length} with a listener
-              {status.audio.players.some((player) => player.flagged) && <> · <strong>{status.audio.players.filter((player) => player.flagged).length} need attention</strong></>}
-            </p>
-            <p className="sc-tool-help">A stream connection does not confirm audible playback. See <a href="/admin/?view=audio">Manage audio →</a> for per-phone detail.</p>
-            <details id="admin-background-music" className="admin-collapsible">
-              <summary>Background music{status.audio.backgroundMusic ? ` — ${status.audio.backgroundMusic.src}` : " — stopped"}</summary>
-              <div className="admin-connection-form" aria-label="Background music">
-                <p>Loops underneath narration on all phone streams, including phones joining later.</p>
-                <p>{status.audio.backgroundMusic ? `Selected: ${status.audio.backgroundMusic.src} (${Math.round(status.audio.backgroundMusic.volume * 100)}%)` : "Music stopped"}</p>
-                <label>Music track<select className="sc-tool-field" value={musicSource} onChange={(event) => setMusicSource(event.target.value)}>
-                  <option value="">Choose MP3…</option>
-                  {musicSource && !(status.audio.soundcheckSources ?? []).includes(musicSource) && <option value={musicSource}>{musicSource}</option>}
-                  {(status.audio.soundcheckSources ?? []).map((src) => <option key={src} value={src}>{src}</option>)}
-                </select></label>
-                <label>Music volume: {musicVolume}%<input type="range" min="0" max="100" value={musicVolume} onChange={(event) => setMusicVolume(Number(event.target.value))} /></label>
-                <button className="sc-tool-button" type="button" disabled={settingMusic || !musicSource} onClick={() => void setBackgroundMusic()}>Play / apply music</button>
-                <button className="sc-tool-button" type="button" disabled={settingMusic} onClick={() => void setBackgroundMusic(true)}>Stop music</button>
-                <p className="sc-tool-help">Choose any MP3 from the media library above. Stream buffering delays audible changes by a few seconds.</p>
-              </div>
-            </details>
-            <details className="admin-collapsible">
-              <summary>Phone audio soundcheck</summary>
-              <div className="admin-connection-form" aria-label="Phone audio soundcheck">
-                <label className="sc-tool-label"><span>Test MP3</span><select className="sc-tool-select" value={soundcheckSource} onChange={(event) => setSoundcheckSource(event.target.value)}>
-                  <option value="">Choose authored audio…</option>
-                  {(status.audio.soundcheckSources ?? []).map((src) => <option key={src} value={src}>{src}</option>)}
-                </select></label>
-                <label className="sc-tool-label"><span>Send to</span><select className="sc-tool-select" value={soundcheckTarget} onChange={(event) => setSoundcheckTarget(event.target.value)}>
-                  <option value="">All registered phones</option>
-                  {status.audio.players.map((player) => <option key={player.player_id} value={player.player_id}>{player.name ?? player.player_id}</option>)}
-                </select></label>
-                <div className="admin-control-list">
-                  <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={soundchecking || !soundcheckSource || isActive} onClick={() => void soundcheck("play")}>Play on phone</button><span>{isActive ? "Disabled while a show is active" : "Interrupts current phone audio"}</span></div>
-                  <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={soundchecking || isActive} onClick={() => void soundcheck("stop")}>Stop phone audio</button><span>Resets the selected phone stream</span></div>
-                </div>
-                {(status.audio.soundcheckSources?.length ?? 0) === 0 && <p className="sc-tool-help">No MP3 files are present in the active show’s published media manifest.</p>}
-              </div>
-            </details>
-            <details className="admin-collapsible">
-              <summary>Local audio backend{status.audio.backend === "local" ? ` — active (${status.audio.backendLabel ?? "Local"})` : ""}</summary>
-              <div className="admin-audio-backend-form" aria-label="Local audio backend">
-                <p className="sc-tool-help">If Icecast/Liquidsoap feels laggy over the network, start the local rig (<code>services/audio</code>, <code>make up</code>) on this or another machine on the venue LAN, then switch to it here. One machine, two addresses below: this server reaches it one way, audience phones reach it another. If this server is remote, those are almost always <em>different</em> URLs, even though both point at the same box.</p>
-                <div className="admin-audio-backend-fields">
-                  <label className="sc-tool-label">
-                    <span>Control URL — reached by this server</span>
-                    <input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. http://100.x.y.z:8300 (Tailscale) if this server is remote" value={localBridgeUrl} onChange={(event) => setLocalBridgeUrl(event.target.value)} />
-                    <span className="sc-tool-help">Wherever this process actually runs. A private LAN IP only works here if this server is also on that LAN.</span>
-                  </label>
-                  <label className="sc-tool-label"><span>Bridge token</span><input className="sc-tool-field sc-tool-mono" type="password" value={localBridgeToken} onChange={(event) => setLocalBridgeToken(event.target.value)} /></label>
-                  <label className="sc-tool-label">
-                    <span>Stream URL — reached by audience phones</span>
-                    <input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. http://192.168.1.42:8300 (venue LAN)" value={localPublicUrl} onChange={(event) => setLocalPublicUrl(event.target.value)} />
-                    <span className="sc-tool-help">Usually the bridge machine's plain venue-LAN address — not a VPN/tailnet address, phones aren't on that network.</span>
-                  </label>
-                  <label className="sc-tool-label"><span>Network label</span><input className="sc-tool-field sc-tool-mono" type="text" placeholder="e.g. Stage-LAN (5GHz)" value={localNetworkLabel} onChange={(event) => setLocalNetworkLabel(event.target.value)} /></label>
-                </div>
-                {localBridgeUrl && localPublicUrl && localBridgeUrl === localPublicUrl && <p className="sc-tool-validation" role="alert">Control URL and Stream URL are identical. That's only correct if this server and audience phones are on the exact same network — if this server runs remotely, double-check you haven't pasted the same address into both.</p>}
-                <div className="admin-control-list">
-                  <div><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" disabled={switchingAudioBackend || !localBridgeUrl || !localBridgeToken || !localPublicUrl || !localNetworkLabel} onClick={() => void switchAudioBackend("local")}>Test &amp; switch to local</button><span>Health-checks the control URL first; nothing changes if it fails. Does not confirm phones can reach the stream URL.</span></div>
-                  {status.audio.backend === "local" && <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={switchingAudioBackend} onClick={() => void switchAudioBackend("remote")}>Switch back to remote</button><span>Returns to the deployment's default backend</span></div>}
-                </div>
-              </div>
-            </details>
-          </>}
-        </CollapsibleSection> : <section className="sc-tool-panel"><h2>Native participant audio</h2><p>All participant devices use the iOS/Android app with downloaded show audio. Publish narration and background music from Studio → Publish to devices. Use the show clock monitor above to inspect device timing.</p></section>}
-        <section className="sc-tool-panel" aria-labelledby="admin-participants-heading">
+        <section hidden={activeTab !== "devices"} className="sc-tool-panel admin-device-content"><h2>Native participant audio</h2><p>All participant devices use the iOS/Android app with downloaded show audio. Publish narration and background music from Studio. Use the device timing monitor to inspect device timing.</p></section>
+        <section hidden={activeTab !== "devices"} className="sc-tool-panel admin-device-content" aria-labelledby="admin-participants-heading">
           <div className="admin-section-heading">
             <div><p className="sc-tool-eyebrow">Who has joined</p><h2 id="admin-participants-heading">Participants</h2></div>
             <span className="sc-tool-mono admin-section-count">{status.connectedParticipants} connected</span>
@@ -970,10 +817,11 @@ export function App() {
         </section>
 
 
-        <CollapsibleSection id="admin-show-heading" eyebrow="Which content is live" title="Active show" open={showSectionOpen} onToggle={setShowSectionOpen}>
+        <div hidden={activeTab !== "setup"} className="admin-setup-content"><CollapsibleSection id="admin-show-heading" eyebrow="Which content is live" title="Active show" open={showSectionOpen} onToggle={setShowSectionOpen}>
           <dl className="admin-session-facts">
             <div><dt>Currently running</dt><dd className="sc-tool-mono">{showLabel(showsInfo?.active ?? null, showsInfo?.shows ?? [])}</dd></div>
-            {showsInfo?.pending && <div><dt>Applying</dt><dd className="sc-tool-mono">{showLabel(showsInfo.pending, showsInfo.shows)}</dd></div>}
+            {status?.displayPlaybackIssue && <p className="sc-tool-feedback" role="alert">Video playback · {status.displayPlaybackIssue.status.toUpperCase()} · {status.displayPlaybackIssue.mediaId}: {status.displayPlaybackIssue.detail}</p>}
+      {showsInfo?.pending && <div><dt>Applying</dt><dd className="sc-tool-mono">{showLabel(showsInfo.pending, showsInfo.shows)}</dd></div>}
           </dl>
           {showsInfo && showsInfo.shows.length === 0
             ? <p className="sc-tool-copy">No shows have been published to PocketBase yet.</p>
@@ -1005,7 +853,7 @@ export function App() {
           <p className="sc-tool-help">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghosts and defers to whatever the published show sets. While a show is running, the change waits until that show ends.</p>
         </CollapsibleSection>
 
-        {connectedToken && <DisplaySettingsDisclosure token={connectedToken} />}
+        {connectedToken && <DisplaySettingsDisclosure token={connectedToken} />}</div>
 
       </div>}
     </main>
