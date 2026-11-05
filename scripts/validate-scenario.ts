@@ -21,10 +21,10 @@ import { resolve } from "node:path";
 import {
   mediaManifestSchema,
   scenarioSchema,
-  statSizeWithNodeFs,
   validateMediaManifest,
   validateScenario,
 } from "../packages/scenario/src/index.js";
+import { statSizeWithNodeFs } from "../packages/scenario/src/node.js";
 
 type Line = { severity: "error" | "warning"; message: string };
 

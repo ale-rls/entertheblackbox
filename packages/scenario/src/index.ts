@@ -81,7 +81,7 @@ export type {
 export { validateScenario } from "./validate.js";
 export type { ScenarioIssue, ValidationResult } from "./validate.js";
 
-export { statSizeWithNodeFs, validateMediaManifest } from "./media.js";
+export { validateMediaManifest } from "./media.js";
 export type { MediaIssue, StatSize } from "./media.js";
 export { extraAudioCombinationError, mediaCombinationError, mediaKindForSource } from "./media-kind.js";
 export type { MediaKind } from "./media-kind.js";
