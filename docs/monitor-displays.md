@@ -69,7 +69,9 @@ Budget disk space on each screen accordingly. Readiness is local to each
 monitor; show start is not automatically blocked on all four screens.
 
 The setup overlay shows cache progress, connection, phase and elapsed time.
-Use its fullscreen control or browser kiosk mode. Remove `setup=1` for the show;
+Every monitor page has an **Enter fullscreen** button in the top-right corner,
+including without `setup=1`. It hides in fullscreen and returns when you exit
+(for example with Escape). Browser kiosk mode is also supported. Remove `setup=1` for the show;
 errors/disconnection remain visible. Refresh after a new deployment to replace
 the service-worker shell. A scenario-version change revalidates media; use a new
 version whenever published content changes. Studio display preview creates its
