@@ -209,6 +209,7 @@ export class PhaseEngine {
   private readonly groupDisplays = new Map<string, WebSocket>();
   /** Main-clock monitors have independent slots and cannot replace the projection. */
   private readonly monitorDisplays = new Map<string, WebSocket>();
+  private lastMonitorEpoch: number | undefined;
   /** Lobby signage receives QR grants. */
   private readonly signageDisplays = new Map<string, WebSocket>();
   private readonly routingEpochs = new Map<string, number>();
@@ -774,6 +775,7 @@ export class PhaseEngine {
         for (const { engine } of this.paths.values()) engine.tick(now);
         if ([...this.paths.values()].every(({ engine }) => engine.pathDone)) this.advanceTo(phase.next, now, "group-branch-complete");
       }
+      this.updateGroupMonitors(now);
       return;
     }
 
@@ -1887,8 +1889,29 @@ export class PhaseEngine {
     });
   }
 
+  private monitorSnapshot(now = this.now()): Extract<ServerToClientMessage, { t: "snapshot" }> {
+    const groupId = this.scenario.monitorGroupId;
+    const path = groupId === undefined ? undefined : this.pathForGroup(groupId);
+    const snapshot = (path ?? this).getSnapshotMessage(now);
+    // A finished path must not replay the split scene's old monitor cues.
+    return path?.pathDone ? { ...snapshot, phase: { ...snapshot.phase, monitorCues: undefined } } : snapshot;
+  }
+
+  private updateGroupMonitors(now: number): void {
+    if (this.scenario.monitorGroupId === undefined || this.monitorDisplays.size === 0) return;
+    const snapshot = this.monitorSnapshot(now);
+    if (snapshot.phaseEpoch === this.lastMonitorEpoch) return;
+    this.lastMonitorEpoch = snapshot.phaseEpoch;
+    for (const socket of this.monitorDisplays.values()) this.send(socket, { ...snapshot, t: "phase" });
+  }
+
   private send(socket: WebSocket, message: ServerToClientMessage): void {
     if (!isOpen(socket)) return;
+    if (this.scenario.monitorGroupId !== undefined && (message.t === "snapshot" || message.t === "phase")
+      && [...this.monitorDisplays.values()].includes(socket)) {
+      socket.send(encodeMessage({ ...this.monitorSnapshot(message.serverTime), t: message.t }));
+      return;
+    }
     const id = this.participantIds.get(socket);
     if (id !== undefined && (message.t === "snapshot" || message.t === "phase")) {
       const groupId = this.groupSelection?.current(id) ?? null;

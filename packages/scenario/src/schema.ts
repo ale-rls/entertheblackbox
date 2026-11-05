@@ -555,6 +555,8 @@ const canonicalScenarioSchema = z.object({
   groups: z.array(audienceGroupSchema).min(2, "a show with groups needs at least two groups").refine((groups) => new Set(groups.map((group) => group.id)).size === groups.length, {
     message: "group ids must be unique",
   }).optional(),
+  /** Stage monitors follow this group while its independent path is active. */
+  monitorGroupId: groupIdSchema.optional(),
   /** Optional balanced assignment performed as the audience joins the lobby. */
   initialGroupIds: z.array(groupIdSchema).min(2).refine((ids) => new Set(ids).size === ids.length, {
     message: "initial group ids must be unique",
