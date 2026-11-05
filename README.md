@@ -157,7 +157,7 @@ The normal command loads the default development show. To run `showtest1`, stop 
 env HOST=127.0.0.1 PORT=3000 BUILD_VERSION=0.0.0-dev NODE_ENV=development SCENARIO_PATH=content/scenarios/showtest1.json MEDIA_MANIFEST_PATH=content/media-manifests/showtest1.json node --import tsx apps/server/src/index.ts
 ```
 
-Saving/exporting a draft does not change the installation. Use Studio → File → Publish show to publish and select it. The paths above apply to file-based development tooling. The scenario and manifest are tracked, but the real `showtest1` videos are not; copy the matching media files into `content/media` before starting it.
+Saving/exporting a draft does not change the installation. Use the top-right **Publish** button in Studio to publish and select it. The paths above apply to file-based development tooling. The scenario and manifest are tracked, but the real `showtest1` videos are not; copy the matching media files into `content/media` before starting it.
 
 ### Connect native participant devices
 
@@ -198,9 +198,9 @@ Run this in a second terminal while the installation server remains running, the
 
 Studio supports graph editing, typed transitions, media diagnostics, runtime validation, branch preview, local draft recovery, versioned deployment exports, and authenticated publishing to PocketBase. A publish never interrupts an active session.
 
-For headphone narration, add MP3s to the shared media library and choose each scene's **Phone headphones** content (the schema retains `phoneAudioSrc` naming for compatibility). Per-group overrides target native participants. Use **File → Publish show** to prepare all media, including optional background music, and automatically select one version for the server and devices.
+For headphone narration, add MP3s to the shared media library and choose each scene's **Phone headphones** content (the schema retains `phoneAudioSrc` naming for compatibility). Per-group overrides target native participants. Use the top-right **Publish** button to prepare all media, including optional background music, and automatically select one version for the server and devices.
 
-For M1–M4, select a phase and edit **Stage monitors**. Each monitor supports timed video, image, text, placeholder and black cues, using the same media library. **Preview on devices** opens isolated main/group/monitor display pages. Native participant rehearsal uses the active show on a venue server; it has no browser phone preview or stream fallback.
+For M1–M4, select a phase and edit **Stage monitors**. Each monitor supports timed video, image, text, placeholder and black cues, using the same media library. Native participant rehearsal uses the active show on a venue server; it has no browser phone preview or stream fallback.
 
 See [native player setup](docs/native-player.md) and [monitor display setup](docs/monitor-displays.md).
 
@@ -332,4 +332,4 @@ as a failure and never silently replaced with an in-memory save.
 
 ### Publishing show content
 
-Use Studio **File → Publish show…** once for projection, M1–M4 monitors and native devices. It validates media and automatically selects the version; a running performance finishes first. See [publishing.md](docs/publishing.md). App software updates are needed only for software changes, not each show publication.
+Use Studio's top-right **Publish** button once for projection, M1–M4 monitors and native devices. It validates media and automatically selects the version; a running performance finishes first. See [publishing.md](docs/publishing.md). App software updates are needed only for software changes, not each show publication.

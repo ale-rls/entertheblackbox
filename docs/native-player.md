@@ -26,7 +26,7 @@ The full-width audio field is a playback activity animation driven by the native
 
 Use Node 22.13+ and the repo's pnpm 9.12.2. Run `pnpm install` at the repository root. Expo Go is not the acceptance environment for background playback; install a development or preview build.
 
-1. Open Studio on the venue server, upload the referenced media and choose **File → Publish show…**. This publishes and selects one version for all displays and native devices. See [the unified publishing guide](publishing.md).
+1. Open Studio on the venue server, upload the referenced media and click **Publish** (top right of the Studio editor). This publishes and selects one version for all displays and native devices. See [the unified publishing guide](publishing.md).
 2. In the app enter the venue server and your name, then tap **Update show & join**. Every join verifies/downloads the active show's audio before admission. Cached verified files are reused; failed checks block joining. **Download / update show** prepares devices ahead of time. **Inspect saved show** checks the saved copy, but joining still requires a fresh check.
 3. Start and operate the show through Admin. Test two differently assigned devices before adding the fleet.
 
@@ -66,7 +66,7 @@ Install the Android APK and registered-device iOS build using EAS's links. Regis
 
 ## Publish directly from Studio
 
-Use **File → Publish show…** in Studio served by the venue server. It validates and prepares all referenced media, native audio and optional background music before saving and selecting the show. A running performance retains its version until it ends. The separate device publishing action is retired. See [publishing.md](publishing.md) for activation and failure behavior.
+Use **Publish** (top right) in Studio served by the venue server. It validates and prepares all referenced media, native audio and optional background music before saving and selecting the show. A running performance retains its version until it ends. The separate device publishing action is retired. See [publishing.md](publishing.md) for activation and failure behavior.
 
 ### Background music
 

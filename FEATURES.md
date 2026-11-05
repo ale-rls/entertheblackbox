@@ -37,9 +37,10 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Typed inspector per phase kind (arena ellipse/quad editors, polygon zones, timing timeline) — `apps/studio/src/inspector/*`
 - Media library (PocketBase-backed) with usage-reference tracking — `apps/studio/src/media/MediaLibraryDialog.tsx`, `pocketbase-media.ts` → **PocketBase**
 - Local media fallback/import reconciliation — `apps/studio/src/media/local.ts`
-- Device preview of the current Studio draft, stable main/group/monitor display links and isolated runtime; native rehearsal uses the active show on a venue server — `apps/studio/src/preview/DevicePreview.tsx`, `apps/server/src/rehearsal/rehearsal.ts`, phone/display runtime routing
+- Device preview (isolated runtime with main/group/monitor display links) — **no longer reachable from the Studio editor**; module and server route remain — `apps/studio/src/preview/DevicePreview.tsx`, `apps/server/src/rehearsal/rehearsal.ts`
 - Runtime validation + branch/display preview — `apps/studio/src/preview/*`
-- Diagnostics panel — `apps/studio/src/diagnostics/DiagnosticsPanel.tsx`
+- Diagnostics panel (collapsed by default) — `apps/studio/src/diagnostics/DiagnosticsPanel.tsx`
+- Missing-media warning badge on graph nodes; resizable properties panel (width remembered per browser) — `apps/studio/src/canvas/nodes.tsx`, `apps/studio/src/App.tsx`
 - Local draft autosave/recovery — `apps/studio/src/io.ts`, `model.ts`
 - Versioned export + authenticated publish (non-disruptive to a live session) — admin `/api/admin/publish`, `apps/server/src/readiness.ts`
 - Studio↔runtime adapter — `packages/studio-adapter`
@@ -180,7 +181,7 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 - Store submission package: production profile sets `STORE_BUILD=1` (phone-only iOS, Android overlay permission removed), EAS Metadata App Store listing/age rating in `apps/native/store.config.json`, Play internal-track draft submit; all store answers and blockers in [store submission guide](docs/store-submission.md). Icon/splash, store join screen and reviewer demo session are not done yet.
 - Native lock-screen cue delivery is a physical-device acceptance requirement, not an automated guarantee; cue reception still runs in JS over the WebSocket. No fleet provisioning UI or live streaming fallback. Setup, publishing and rehearsal: [native player guide](docs/native-player.md).
 
-- **Studio → Publish show** validates and prepares all outputs, saves and selects the show automatically; active performances defer activation. One operator action for projection, M1–M4 and native devices — `apps/studio/src/App.tsx`, `/api/admin/publish`. See [publishing guide](docs/publishing.md).
+- **Studio → Publish** (top-right primary action, disabled while diagnostics block it) validates and prepares all outputs, saves and selects the show automatically; active performances defer activation. One operator action for projection, M1–M4 and native devices — `apps/studio/src/App.tsx`, `/api/admin/publish`. See [publishing guide](docs/publishing.md).
 
 - Native downloaded background music: choose an MP3 from the shared media library plus a volume; the server pulls the chosen library file into its media directory before publishing, and a looping native scheduler layer continues across narration transitions, with device pause/resume and session cleanup — `packages/show-content`, `apps/studio/src/App.tsx`, `apps/server/src/server.ts` (PocketBase `media` sync), `apps/native/src/player.ts`, `packages/expo-audio-scheduler`. Locked-device cue delivery requires physical acceptance; no pocket mode.
 

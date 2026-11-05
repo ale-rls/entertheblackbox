@@ -90,9 +90,9 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   };
 
   return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2>
-    <MonitorEditor phase={phase} onChange={onChange} onChooseMedia={onChooseMedia} />
     <label className="sc-tool-label">{label("Runtime ID", "id")}<input className="sc-tool-field" aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
+    <MonitorEditor phase={phase} onChange={onChange} onChooseMedia={onChooseMedia} />
     {phase.kind !== "idle" && <label className="sc-tool-label">{label("Component type", "kind + media")}<select className="sc-tool-select" value={componentTypeForPhase(phase)} onChange={(event) => onComponentTypeChange(event.target.value as AuthorableComponentType, event.currentTarget)}>
       <option value="video">Video</option>
       <option value="synchronized-video">Video + synchronized phone audio</option>

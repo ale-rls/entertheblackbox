@@ -585,20 +585,43 @@ describe("Studio feedback and keyboard entry", () => {
     expect(Array.from(document.querySelectorAll("button")).some((item) => item.textContent === "Preview")).toBe(false);
   });
 
-  it("offers a display preview from the selected phase in the top bar", async () => {
+  it("keeps preview actions out of the top bar and offers Publish at the top right", async () => {
     await render(<App />);
     await act(async () => { button("New show").click(); });
-    expect(Array.from(document.querySelectorAll("a")).some((item) => item.textContent === "Preview from here")).toBe(false);
-
     await act(async () => { button("Add").click(); });
     await act(async () => { button("Video phase").click(); });
     await act(async () => { button("Cancel").click(); });
-    const preview = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).find((item) => item.textContent === "Preview from here")!;
-    await act(async () => { preview.click(); });
 
-    expect(preview.href).toMatch(/\/preview\.html\?preview=/);
-    expect(preview.target).toBe("_blank");
-    expect(preview.rel).toBe("noreferrer");
+    const menubarText = document.querySelector(".menubar")?.textContent ?? "";
+    expect(menubarText).not.toContain("Preview on devices");
+    expect(menubarText).not.toContain("Preview from here");
+    const publish = document.querySelector<HTMLButtonElement>(".menubar .publish-action")!;
+    expect(publish.textContent).toBe("Publish");
+    expect(publish.getAttribute("data-sc-tool-variant")).toBe("primary");
+  });
+
+  it("disables Publish while diagnostics block it and badges nodes with missing media", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Video phase").click(); });
+    await act(async () => { button("Cancel").click(); });
+
+    expect(document.querySelector<HTMLButtonElement>(".menubar .publish-action")!.disabled).toBe(true);
+    expect(document.querySelector(".menubar .publish-issues")?.textContent).toMatch(/^\d+ issues?$/);
+    const warning = document.querySelector(".studio-node .node-warning");
+    expect(warning?.getAttribute("aria-label")).toBe("Missing media: media/new-video.mp4");
+  });
+
+  it("removes retired export and publish items from the File menu", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("File").click(); });
+    const items = Array.from(document.querySelectorAll("[role=menuitem]")).map((item) => item.textContent);
+    expect(items).not.toContain("Export files");
+    expect(items).not.toContain("Export for deployment");
+    expect(items).not.toContain("Publish show…");
+    expect(items).toContain("Save backup");
   });
 
   it("offers the centered XL title option for video phases", async () => {
@@ -701,11 +724,6 @@ describe("Studio feedback and keyboard entry", () => {
     await act(async () => { button("New show").click(); });
 
     const content = document.querySelector<HTMLElement>("#bottom-panel-content")!;
-    const collapse = button("Collapse panel");
-    expect(collapse.getAttribute("aria-expanded")).toBe("true");
-    expect(content.hidden).toBe(false);
-
-    await act(async () => { collapse.click(); });
     expect(content.hidden).toBe(true);
     expect(document.querySelector(".diagnostics")?.classList.contains("is-collapsed")).toBe(true);
     expect(button("Expand panel").getAttribute("aria-expanded")).toBe("false");
@@ -713,6 +731,9 @@ describe("Studio feedback and keyboard entry", () => {
     await act(async () => { button("Expand panel").click(); });
     expect(content.hidden).toBe(false);
     expect(button("Collapse panel").getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => { button("Collapse panel").click(); });
+    expect(content.hidden).toBe(true);
   });
 
   it("acknowledges every acknowledgement-required diagnostic at once", async () => {
@@ -783,12 +804,11 @@ describe("Studio feedback and keyboard entry", () => {
 });
 
 
-it("opens one show publication from File and requires operator sign-in", async () => {
+it("opens one show publication from the top-right Publish action and requires operator sign-in", async () => {
   localStorage.clear();
   await render(<App />);
   await act(async () => { button("New show").click(); });
-  await act(async () => { button("File").click(); });
-  await act(async () => { button("Publish show…").click(); });
+  await act(async () => { document.querySelector<HTMLButtonElement>(".menubar .publish-action")!.click(); });
   expect(document.querySelector("#publish-heading")?.textContent).toBe("Publish show");
   expect(document.querySelector("#publish-email")).not.toBeNull();
   expect(document.querySelector("#native-show-channel")).toBeNull();

@@ -1,6 +1,5 @@
 import type { MediaTarget } from "./inspector/MonitorEditor.js";
-import { DevicePreview } from "./preview/DevicePreview.js";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import PocketBase from "pocketbase";
 import { addEdge, Background, ReactFlow, type Connection, type Edge, type Node, useEdgesState, useNodesState } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -15,17 +14,15 @@ import { changePhaseKind, componentTypeForPhase, isImageAudioComponentType, phas
 import { Inspector } from "./inspector/Inspector.js";
 import { SessionHistory } from "./inspector/history.js";
 import { DiagnosticsPanel } from "./diagnostics/DiagnosticsPanel.js";
-import { diagnostics, exportBlocked } from "./diagnostics/diagnostics.js";
-import { assembleDeploymentPackage } from "./export/deployment.js";
+import { diagnosticKey, diagnostics, exportBlocked } from "./diagnostics/diagnostics.js";
 import { Menu } from "./chrome/Menu.js";
 import { ConfirmationDialog, type ConfirmationDetails } from "./chrome/ConfirmationDialog.js";
 import { SaveStatus } from "./chrome/SaveStatus.js";
 import { refreshDraftLocalMedia, runtimeMediaManifest, type MediaManifest } from "./media/local.js";
 import { PocketbaseMediaLibrary } from "./media/pocketbase-media.js";
 import { MediaLibraryDialog, type MediaLibraryRow } from "./media/MediaLibraryDialog.js";
-import { studioMediaKindForSource, type StudioMediaKind } from "./media/library.js";
+import { phaseMediaSources, studioMediaKindForSource, type StudioMediaKind } from "./media/library.js";
 import { productionDraftFromArtifact, type PublishedProductionArtifact } from "./production.js";
-import { projectPreviewUrl, storeProjectPreview } from "./preview/project-preview.js";
 import "@entertheblackbox/tool-ui/styles.css";
 import "./style.css";
 
@@ -39,11 +36,28 @@ const download = (name: string, value: unknown) => {
 type InlineFeedback = { status: "info" | "success" | "danger"; message: string };
 type ShowLifecycle = "idle" | "lobby" | "active";
 
+const LIVE_SHOW_DETAIL = "Draft saves are safe; publishing and shared-media changes will apply after the show ends.";
+
 function LiveShowWarning({ compact = false }: { compact?: boolean }) {
-  return <p className={`live-show-warning${compact ? " live-show-warning-compact" : ""}`} role="status">
-    <strong>Live show running.</strong> Draft saves are safe; publishing and shared-media changes will apply after the show ends.
+  if (compact) return <span className="live-show-badge" role="status" title={`Live show running. ${LIVE_SHOW_DETAIL}`}>Live show</span>;
+  return <p className="live-show-warning" role="status">
+    <strong>Live show running.</strong> {LIVE_SHOW_DETAIL}
   </p>;
 }
+
+const INSPECTOR_WIDTH_KEY = "studio.inspectorWidth";
+const INSPECTOR_MIN_WIDTH = 320;
+const INSPECTOR_DEFAULT_WIDTH = 440;
+const clampInspectorWidth = (width: number) =>
+  Math.round(Math.min(Math.max(width, INSPECTOR_MIN_WIDTH), Math.max(INSPECTOR_MIN_WIDTH, window.innerWidth * 0.6)));
+const storedInspectorWidth = () => {
+  try {
+    const stored = Number(localStorage.getItem(INSPECTOR_WIDTH_KEY));
+    return Number.isFinite(stored) && stored > 0 ? stored : INSPECTOR_DEFAULT_WIDTH;
+  } catch {
+    return INSPECTOR_DEFAULT_WIDTH;
+  }
+};
 
 const componentTypeLabel: Record<AuthorableComponentType, string> = {
   video: "video",
@@ -122,16 +136,14 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string>();
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
   const [showInspector, setShowInspector] = useState(false);
-  const [showDiagnostics, setShowDiagnostics] = useState(true);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [inspectorWidth, setInspectorWidth] = useState(storedInspectorWidth);
   const [localManifest, setLocalManifest] = useState<MediaManifest>();
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
   const [mediaPicker, setMediaPicker] = useState<{ phaseId: string; target: MediaTarget; mediaKind: Exclude<StudioMediaKind, "unknown">; trigger: HTMLButtonElement | null }>();
   const [mediaUploading, setMediaUploading] = useState(false);
   const [importFeedback, setImportFeedback] = useState<InlineFeedback>();
   const [graphFeedback, setGraphFeedback] = useState<InlineFeedback>();
-  const [exportFeedback, setExportFeedback] = useState<InlineFeedback>();
-  const [devicePreviewDraftId, setDevicePreviewDraftId] = useState<string | null>(null);
-  const [devicePreviewRequest, setDevicePreviewRequest] = useState(0);
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishMusic, setPublishMusic] = useState({ src: "", volume: 0.2 });
   const [productionImportOpen, setProductionImportOpen] = useState(false);
@@ -858,29 +870,15 @@ export function App() {
 
   const currentDiagnostics = diagnostics(draft.project);
   const invalidNodeIds = new Set(currentDiagnostics.filter((item) => item.severity === "error" && item.phaseId).map((item) => item.phaseId));
+  const knownMedia = new Set(draft.project.manifest.files.map((file) => file.src));
+  const missingMediaByPhase = new Map(draft.project.scenario.phases.map((phase) => [phase.id, [...new Set(phaseMediaSources(phase).filter((src) => !knownMedia.has(src)))]]));
   const visibleNodes = nodes.map((node) => {
     const phase = draft.project.scenario.phases.find((phase) => phase.id === node.id);
-    return { ...node, ...(phase ? { data: nodeDataForPhase(phase, draft.project.scenario.groups) } : {}),
+    const missingMedia = missingMediaByPhase.get(node.id);
+    return { ...node, ...(phase ? { data: { ...nodeDataForPhase(phase, draft.project.scenario.groups), ...(missingMedia?.length ? { missingMedia } : {}) } } : {}),
       ...(invalidNodeIds.has(node.id) ? { className: [node.className, "invalid"].filter(Boolean).join(" ") } : {}) };
   });
   const blocked = exportBlocked(currentDiagnostics, acknowledged);
-  const exportDeployment = () => {
-    setExportFeedback(undefined);
-    try {
-      const deployment = assembleDeploymentPackage(draft, acknowledged, { generatedAt: new Date().toISOString(), studioBuild: "0.0.1" });
-      for (const [name, value] of Object.entries(deployment.files)) {
-        if (name === "README.txt") {
-          const url = URL.createObjectURL(new Blob([value as string], { type: "text/plain" }));
-          const link = Object.assign(document.createElement("a"), { href: url, download: `${deployment.packageName}-${name}` });
-          link.click(); URL.revokeObjectURL(url);
-        } else download(`${deployment.packageName}-${name}`, value);
-      }
-      setExportFeedback({ status: "success", message: `Exported deployment package for “${draft.name}”.` });
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : "The package could not be assembled.";
-      setExportFeedback({ status: "danger", message: `Deployment export failed: ${detail} Review Diagnostics, resolve the reported issues, and try again.` });
-    }
-  };
   const openPublish = () => {
     setPublishMusic(draft.project.scenario.backgroundMusic ?? { src: "", volume: 0.2 });
     setPublishFeedback(undefined);
@@ -966,18 +964,35 @@ export function App() {
         ? mediaPickerPhase.extraAudioSrc ?? ""
         : mediaPickerPhase.src
     : "";
-  const selectedPhase = draft.project.scenario.phases.find((phase) => phase.id === selectedId);
-  const preparePreviewFromSelected = (event: ReactMouseEvent<HTMLAnchorElement>) => {
-    if (!selectedPhase) return;
-    try {
-      const token = storeProjectPreview(draft.name, draft.project, selectedPhase.id);
-      event.currentTarget.href = projectPreviewUrl(token);
-    } catch (error) {
-      event.preventDefault();
-      setGraphFeedback({ status: "danger", message: `Preview could not be opened: ${error instanceof Error ? error.message : "The browser could not prepare the preview."}` });
-    }
+  const resizeInspector = (width: number) => {
+    const next = clampInspectorWidth(width);
+    setInspectorWidth(next);
+    try { localStorage.setItem(INSPECTOR_WIDTH_KEY, String(next)); } catch { /* Width is a per-browser convenience. */ }
   };
-  return <main ref={editorRef} tabIndex={-1} className={`editor${showInspector ? "" : " no-inspector"}${showDiagnostics ? "" : " no-diagnostics"}`} data-sc-tool-density="compact" data-sc-tool-root>
+  const startInspectorResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const move = (moveEvent: PointerEvent) => resizeInspector(window.innerWidth - moveEvent.clientX);
+    const stop = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", stop);
+      handle.removeEventListener("pointercancel", stop);
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+  };
+  const keyboardResizeInspector = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = event.shiftKey ? 64 : 16;
+    if (event.key === "ArrowLeft") resizeInspector(inspectorWidth + step);
+    else if (event.key === "ArrowRight") resizeInspector(inspectorWidth - step);
+    else if (event.key === "Home") resizeInspector(INSPECTOR_DEFAULT_WIDTH);
+    else return;
+    event.preventDefault();
+  };
+  const blockingCount = currentDiagnostics.filter((item) => item.severity === "error" || (item.acknowledgementRequired && !acknowledged.has(diagnosticKey(item)))).length;
+  return <main ref={editorRef} tabIndex={-1} className={`editor${showInspector ? "" : " no-inspector"}${showDiagnostics ? "" : " no-diagnostics"}`} style={showInspector ? { "--studio-inspector-width": `${clampInspectorWidth(inspectorWidth)}px` } as CSSProperties : undefined} data-sc-tool-density="compact" data-sc-tool-root>
     <header className="menubar">
       <Menu label="File" items={[
         { label: "New show", onSelect: createShow },
@@ -986,9 +1001,6 @@ export function App() {
         { label: "Media library…", onSelect: openMediaLibrary },
         { label: "Duplicate", onSelect: () => duplicate(draft) },
         { separator: true },
-        { label: "Export files", onSelect: () => Object.entries(exportArtifacts(draft)).forEach(([name, value]) => download(name, value)), disabled: blocked },
-        { label: "Export for deployment", onSelect: exportDeployment, disabled: blocked },
-        { label: "Publish show…", onSelect: () => openPublish(), disabled: blocked },
         { label: "Save backup", onSelect: () => download(`${draft.name}.studio-backup.json`, exportBackup(draft)) },
         { separator: true },
         { label: "Close show", onSelect: closeShow },
@@ -1022,17 +1034,15 @@ export function App() {
       <input aria-label="Show name" className="sc-tool-field show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
       <SaveStatus status={status} />
       {showLifecycle === "active" && <LiveShowWarning compact />}
-      {selectedPhase && <button className="sc-tool-button" data-sc-tool-variant="primary" onClick={() => { setDevicePreviewDraftId(draft.id); setDevicePreviewRequest((value) => value + 1); }}>Preview on devices</button>}
-      {selectedPhase && <a className="sc-tool-button" data-sc-tool-variant="primary" href="preview.html" target="_blank" rel="noreferrer" onClick={preparePreviewFromSelected}>Preview from here</a>}
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/display/" target="_blank" rel="noreferrer">Display</a>
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/admin/" target="_blank" rel="noreferrer">Admin</a>
+      {blocked && <button className="sc-tool-button publish-issues" data-sc-tool-variant="quiet" type="button" onClick={() => setShowDiagnostics(true)}>{blockingCount} issue{blockingCount === 1 ? "" : "s"}</button>}
+      <button className="sc-tool-button publish-action" data-sc-tool-variant="primary" type="button" disabled={blocked} title={blocked ? "Resolve errors and acknowledge warnings in Diagnostics before publishing." : "Publish this show to the main display, M1–M4 monitors and native devices."} onClick={openPublish}>Publish</button>
       <input ref={importInputRef} aria-label="Import show or backup" hidden multiple type="file" accept="application/json,text/plain,.json,.txt" onChange={(event) => {
         void importFiles(event.currentTarget.files);
         event.currentTarget.value = "";
       }} />
       {importFeedback && <Feedback id="studio-import-feedback" className="menubar-feedback" feedback={importFeedback} />}
-      {exportFeedback && <Feedback id="studio-export-feedback" className="menubar-feedback" feedback={exportFeedback} />}
-      <DevicePreview key={draft.id} draft={draft} phaseId={selectedPhase?.id} request={devicePreviewDraftId === draft.id ? devicePreviewRequest : 0} operator={operatorPb} onClose={() => setDevicePreviewRequest(0)} />
       {publishOpen && <div className="sc-tool-panel publish-panel" role="dialog" aria-labelledby="publish-heading">
         <p className="sc-tool-eyebrow" id="publish-heading">Publish show</p>
         {showLifecycle === "active" && <LiveShowWarning />}
@@ -1105,6 +1115,7 @@ export function App() {
       </div>}
     </header>
     <section ref={canvasRef} onMouseMove={(event) => { canvasPointerRef.current = { x: event.clientX, y: event.clientY }; }} aria-label="Scenario graph" className="canvas sc-tool-graph-canvas">{graphFeedback && <Feedback id="studio-graph-feedback" className="canvas-feedback" feedback={graphFeedback} />}<ReactFlow nodes={visibleNodes} edges={edges} nodeTypes={nodeTypes} minZoom={0.15} onPaneClick={() => { setSelectedId(undefined); setShowInspector(true); }} onNodeClick={(_, node) => { setSelectedId(node.id); setShowInspector(true); }} onNodeDragStop={(_, node, movedNodes) => saveMovedNodes([...movedNodes, node])} onSelectionDragStop={(_, movedNodes) => saveMovedNodes(movedNodes)} onConnect={connect} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onEdgesDelete={(deleted) => { const ids = new Set(deleted.map((edge) => edge.id)); const next = edges.filter((edge) => !ids.has(edge.id)); setEdges(next); persistGraph(next); }} onNodesDelete={(deleted) => { const removed = new Set(deleted.map((node) => node.id)); const nextNodes = nodes.filter((node) => !removed.has(node.id)); const nodeIds = new Set(nextNodes.map((node) => node.id)); const nextEdges = pruneEdges(edges, nodeIds); setEdges(nextEdges); const phases = draft.project.scenario.phases.filter((phase) => !removed.has(phase.id)) as Draft["project"]["scenario"]["phases"]; saveCanvas({ ...draft, project: { ...draft.project, scenario: { ...draft.project.scenario, phases } } }, nextNodes, nextEdges); }} defaultViewport={draft.document.viewport} onMoveEnd={(event, viewport) => { if (event) saveCanvas({ ...draft, document: { ...draft.document, viewport } }); }}><Background /></ReactFlow></section>
+    {showInspector && <div className="inspector-resizer" role="separator" aria-orientation="vertical" aria-label="Resize properties panel" aria-valuemin={INSPECTOR_MIN_WIDTH} aria-valuenow={clampInspectorWidth(inspectorWidth)} tabIndex={0} onPointerDown={startInspectorResize} onKeyDown={keyboardResizeInspector} onDoubleClick={() => resizeInspector(INSPECTOR_DEFAULT_WIDTH)} />}
     <Inspector project={draft.project} selectedId={selectedId} localMedia={localManifest?.files ?? []} onRename={renameSelected} onChange={updatePhase} onChooseMedia={openMediaPicker} onComponentTypeChange={changeSelectedComponentType} onTransitionChange={changeTransition} onQuestionLayoutChange={changeQuestionLayout} onTargetAudienceSizeChange={updateTargetAudienceSize} onGroupsChange={updateGroups} />
     <DiagnosticsPanel project={draft.project} acknowledged={acknowledged} collapsed={!showDiagnostics} onToggle={() => setShowDiagnostics((value) => !value)} onAcknowledge={(key) => setAcknowledged((current) => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; })} onAcknowledgeAll={(keys) => setAcknowledged((current) => new Set([...current, ...keys]))} onFocus={(id) => { setSelectedId(id); setShowInspector(true); }} />
     {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={draft.project} feedback={importFeedback} uploading={mediaUploading} showActive={showLifecycle === "active"} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}

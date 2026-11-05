@@ -100,4 +100,4 @@ does not make show control independent of the server.
 The general `/api/cues` feed and tracking integration remain available for
 lighting or other external systems. They are not required by the monitor pages.
 
-Publish through Studio **File → Publish show…**. Monitors, main display and native devices share that publication; no monitor release is required. Asset paths and scenario versions are assigned automatically. See [publishing.md](publishing.md).
+Publish with the top-right **Publish** button in Studio. Monitors, main display and native devices share that publication; no monitor release is required. Asset paths and scenario versions are assigned automatically. See [publishing.md](publishing.md).
