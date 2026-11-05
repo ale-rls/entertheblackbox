@@ -159,7 +159,7 @@ export default function App() {
       x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) });
   }
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
-  return <StageCompanion connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
+  return <StageCompanion answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
     paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
     origin={origin} name={name} manifest={manifest} identity={identity} clockText={clockText}
     notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}

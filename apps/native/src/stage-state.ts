@@ -1,5 +1,6 @@
 import type { ClockTiming } from '@entertheblackbox/protocol';
 import type { Snapshot } from './cues';
+import { actionPrompt } from './action-prompt';
 import type { Groups, Voting } from './action-prompt';
 
 export type StageInput = {
@@ -50,4 +51,12 @@ export function stageState(s: StageInput) {
   if (p.kind === 'group-branch') return screen('Follow your group', 'Listen to the instruction for your assigned group.');
   if (p.kind === 'narration') return screen('Listen closely', p.text ?? 'Stay with the room.');
   return screen('Stay with the room', 'Follow the main screen.');
+}
+
+
+/** Cursor voting remains interactive after its first movement. Other answers dismiss the prompt. */
+export function showModeAction(s: StageInput, answered: string | null) {
+  const state = stageState(s);
+  const prompt = actionPrompt(s.snapshot, s.voting, s.groups, s.now);
+  return state.canAct && !!prompt && (prompt.key !== answered || state.voting?.method === 'phone-cursor');
 }

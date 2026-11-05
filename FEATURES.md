@@ -192,4 +192,8 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 - Complete manifest predownload with byte/hash verification and retries, cached Blob playback, main server clock alignment, late-join seeking and reconnect recovery — existing display `mediaStore`, `DisplayConnection`, monitor playback.
 - Local setup/readiness/error overlay (`&setup=1`); all-screen readiness does not automatically gate show start. Main timeline only; videos muted. TouchDesigner scene/question helpers removed. [Setup and acceptance](docs/monitor-displays.md).
 
-- Admin focused console: persisted Show / Devices / Displays / Setup navigation, consolidated status, server-clock scene timing, parallel group lanes and reunion status, scoped group controls, full graph on demand, and native-only operational controls. Missing monitor telemetry is labelled explicitly; fullscreen is entered on each display. Legacy read-only audio diagnostics remain available at `?view=audio`.
+### Native foreground show mode
+
+Participants can enter an awake, black waiting screen that reveals group choice, voting, rating windows and timed subtitles. Continuous cursor voting stays visible while open. Hold the exit control for two seconds to restore device controls. Android Back is consumed during show mode; optional system screen pinning restricts Home and app switching after Android confirmation. Managed devices can allowlist the app for lock task mode. Power-button locking and Android's unpin gesture remain available. Requires a new native build containing ShowScreen; older binaries keep their existing controls.
+
+Implemented in apps/native and the ShowScreen module bundled with packages/expo-audio-scheduler.

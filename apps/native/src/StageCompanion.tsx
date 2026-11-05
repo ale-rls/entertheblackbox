@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, Animated, AppState, PanResponder, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
-import type { ShowManifest } from '@entertheblackbox/show-content';
+import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, AppState, PanResponder, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
+import type { ShowChannel, ShowManifest } from '@entertheblackbox/show-content';
 import type { StageInput } from './stage-state';
-import { stageState } from './stage-state';
+import { stageState, showModeAction } from './stage-state';
 
 type Props = StageInput & {
-  origin: string; name: string; manifest: ShowManifest | null;
+  answered: string | null;
+  origin: string; channel: ShowChannel; name: string; manifest: ShowManifest | null;
   identity: { name: string; color: string } | null; clockText: string; playing: boolean;
   notificationStatus: string; appChannel: string;
   onOrigin: (value: string) => void; onName: (value: string) => void;
@@ -93,6 +95,44 @@ function CursorPad({ onPoint, disabled, color }: { onPoint: Props['onPoint']; di
   </View>;
 }
 export function StageCompanion(props: Props) {
+  const [showMode, setShowMode] = useState(false);
+  const [modeError, setModeError] = useState('');
+  const [pinScreen, setPinScreen] = useState(false);
+  const modeBusy = useRef(false);
+  const mounted = useRef(true);
+  const connected = useRef(props.connected);
+  connected.current = props.connected;
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  async function enterShowMode() {
+    if (modeBusy.current || !ShowScreen) return;
+    modeBusy.current = true;
+    setModeError('');
+    try {
+      await ShowScreen.setActive(true);
+      if (!mounted.current || !connected.current) {
+        await ShowScreen.setActive(false);
+        return;
+      }
+      setShowMode(true);
+      if (pinScreen && Platform.OS === 'android') {
+        try { await ShowScreen.pin(); }
+        catch { setModeError('Screen pinning unavailable. Hold Exit show mode to return to device controls.'); }
+      }
+    } catch { setModeError('Could not keep the screen awake. Try entering show mode again.'); }
+    finally { modeBusy.current = false; }
+  }
+  useEffect(() => {
+    if (!showMode) return;
+    const back = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => {
+      back.remove();
+      void ShowScreen?.setActive(false).catch(() => setModeError('Could not release screen pinning. Use Android’s unpin gesture.'));
+    };
+  }, [showMode]);
+  useEffect(() => { if (!props.connected) setShowMode(false); }, [props.connected]);
   const [settings, setSettings] = useState(false);
   const [selection, setSelection] = useState<string | null>(null);
   const [reaction, setReaction] = useState('');
@@ -105,14 +145,16 @@ export function StageCompanion(props: Props) {
   const normal = props.connected && props.status === 'Connected' && !props.paused && !screen.title.includes('attention');
   const rejected = props.status.startsWith('Join rejected');
   const hasChoices = !!(screen.groups?.groups.length || screen.voting || screen.ratingOpen || screen.cursorOpen);
-  return <SafeAreaView style={styles.screen}>
-    <StatusBar barStyle="light-content" backgroundColor="#090a0b" />
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
-      <View style={styles.header}><HeaderArt /><View style={styles.identity}>
+  const needsAction = showModeAction(props, props.answered);
+  const reveal = !showMode || needsAction || (screen.canAct && !!subtitle) || !normal || !!props.error || !!modeError;
+  return <SafeAreaView style={[styles.screen, showMode && { backgroundColor: '#000' }]}>
+    <StatusBar hidden={showMode} barStyle="light-content" backgroundColor="#090a0b" />
+    <ScrollView key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
+      {!showMode && <View style={styles.header}><HeaderArt /><View style={styles.identity}>
         <Text style={styles.identityName}>{props.identity?.name ?? 'SETUP'}</Text>
         {props.connected && <Text style={styles.muted}>{props.snapshot?.currentGroup?.label ?? 'Waiting for group'}</Text>}
-      </View></View>
-      {settings ? <View style={styles.inset}>
+      </View></View>}
+      {reveal && <>{settings ? <View style={styles.inset}>
         <Text accessibilityRole="header" style={styles.title}>Device settings</Text>
         {!props.connected && <>
           <Text style={styles.label}>Venue server</Text>
@@ -139,7 +181,7 @@ export function StageCompanion(props: Props) {
           {!!props.notificationStatus && props.notificationStatus !== 'Show action notifications enabled' && <Text style={styles.muted}>{props.notificationStatus}</Text>}
           {!props.connected && !props.busy && props.status !== 'Download a show, then join' && <Text style={styles.muted}>{props.status}</Text>}
         </View>
-        <AudioField playing={props.playing && !props.paused && !rejected} compact={hasChoices} />
+        {!showMode && <AudioField playing={props.playing && !props.paused && !rejected} compact={hasChoices} />}
         {screen.cursorOpen && <CursorPad key={`${props.snapshot?.sessionId}:${props.snapshot?.phaseEpoch}:${props.snapshot?.routingEpoch}`} onPoint={props.onPoint} disabled={!screen.canAct} color={props.identity?.color ?? '#d9e4f1'} />}
         <View style={styles.inset}>
           {!props.connected ? <>
@@ -157,9 +199,16 @@ export function StageCompanion(props: Props) {
             {(props.paused || props.audioStatus.startsWith('Playback error')) && !rejected && <Action label="Resume at show position" primary onPress={props.onResume} />}
           </>}
         </View>
-      </>}
-      {!settings && <View style={styles.footer}>
+      </>}</>}
+      {!!modeError && <Text accessibilityRole="alert" style={styles.error}>{modeError}</Text>}
+      {showMode && <Pressable accessibilityRole="button" accessibilityLabel="Exit show mode" accessibilityHint="Hold for two seconds" delayLongPress={2000} onLongPress={() => { setModeError(''); setShowMode(false); }} style={styles.exitMode}><Text style={styles.muted}>Hold to exit show mode</Text></Pressable>}
+      {!showMode && !settings && <View style={styles.footer}>
         {props.connected ? <>
+          {ShowScreen && !rejected && <>
+            <Action label="Enter show mode" onPress={() => void enterShowMode()} />
+            {Platform.OS === 'android' && <Action label={pinScreen ? 'Screen pinning: on' : 'Screen pinning: off'} selected={pinScreen} onPress={() => setPinScreen(!pinScreen)} />}
+            <Text style={styles.muted}>Show mode keeps the screen awake and black between actions. Hold the exit control for two seconds. Android asks you to confirm screen pinning to restrict Home and app switching.</Text>
+          </>}
           {!props.paused && !rejected && <Action label="Pause audio" onPress={props.onPause} />}
           <Action label={rejected ? 'Back to setup' : 'Leave show'} onPress={props.onLeave} />
           <Action label="Device details" onPress={() => setSettings(true)} />
@@ -169,6 +218,7 @@ export function StageCompanion(props: Props) {
   </SafeAreaView>;
 }
 const styles = StyleSheet.create({
+  exitMode: { marginTop: 'auto', padding: 24, alignItems: 'center', minHeight: 64 },
   screen: { flex: 1, backgroundColor: '#090a0b' }, page: { flexGrow: 1, paddingBottom: 24 },
   header: { padding: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
   art: { width: 88, height: 48, flexDirection: 'row', gap: 6, alignItems: 'center', transform: [{ skewX: '-15deg' }] },
