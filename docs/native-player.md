@@ -175,4 +175,20 @@ Colour, second colour, dimmer, cycle time (0.3–10 s) and the tablet list updat
 4. **Watch for duplicates.** Admin flags two connected tablets with the same label. Fix it in that tablet's Device settings before the show.
 5. **Charging and storage order.** Store and charge tablets in label order, so a tablet that fails to join is easy to locate from the Admin grid.
 
+### Video wall
+
+Admin → **Wall** turns the tablets into one screen. Each wall position (A1 = top-left as the audience sees it, rows are letters, columns numbers) plays its own pre-cut slice of the video, in sync on the shared clock.
+
+**Requires a native build that includes `expo-video`.** It is a native module, so it ships in a new store/dev build, not an EAS Update. Older apps ignore wall messages and keep showing their surface colour.
+
+1. **Measure.** In the slice calculator, enter columns × rows, one tablet's *visible* screen size in mm as mounted, the gap between the screens of neighbouring tablets (both bezels plus spacing), the tablet's resolution, and the master video's size and frame rate. Choose **Fill** (wall fully covered, master edges cropped) or **Fit** (whole master visible, black around it). Save the layout.
+2. **Cut the slices.** The calculator lists, per position, the crop rectangle in master pixels, the export size, and Premiere settings: a sequence of that frame size with the master at the given **Scale** and **Position** (Motion, default centre anchor). It also gives an ffmpeg command per slice and a CSV slice sheet. The video behind the gaps is left out, so lines stay straight across the bezels. Load a reference video or still to check the cut on the preview (it stays on your computer). Export every slice as H.264 MP4 at the master frame rate and length, keyframe every second, audio not needed.
+3. **Upload** the slices in Studio → Media library, named `<clip>__<position>.mp4` (e.g. `ocean__B3.mp4`; clip names use letters, digits and dashes). Admin → Wall lists each clip with how many positions it covers.
+4. **Assign tablets.** Under Wall positions, pick the tablet label for each position, or **Fill in label order** (T01 → A1, T02 → A2, …). Use **Identify** to check a tablet hangs where you think. Save.
+5. **Play.** Put the tablets in show mode. **Load on tablets**: each tablet downloads its slice, checks size and SHA-256, and preloads the first frame (the surface colour stays visible). When the positions show **Ready**, press **Play**: all tablets start 1.5 s later on the shared clock. **Restart** starts again from the top, **Cue to start** returns to the first frame, **Stop** clears the wall back to the surface colour. **Loop** applies live.
+
+While playing, each tablet compares its position with the shared clock four times a second: small drift is pulled in by nudging the playback rate (up to ±5 %), and anything more than 0.3 s off is fixed with a seek. Admin shows each position's drift. A tablet that rejoins mid-clip gets the current state and seeks straight to the right point. Slices are stored on the tablet by hash, so reloading the same clip is instant; older slices are deleted.
+
+Not yet measured: start accuracy and drift on the venue tablets and network, and how long 40 tablets take to download a slice. Try 2–4 tablets first.
+
 Admin → Devices → Phone audio coverage checks every scene/group against the immutable phone download with SHA-256 and byte counts. No audio assigned is distinct from a missing or corrupt file. The foreground activity visualization requires a moving native playhead and updates every 250 ms; it does not measure speaker volume or headphones.

@@ -3,6 +3,8 @@ import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings }
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { SurfaceController } from "../surface/surface.js";
+import type { VideoWallController, WallClip } from "../wall/wall.js";
+import { wallLayoutSchema } from "@entertheblackbox/protocol";
 import type { SurfaceEffectRunner } from "../surface/effects.js";
 import { SURFACE_EFFECT_KINDS, SURFACE_EFFECT_MAX_PERIOD_MS, SURFACE_EFFECT_MIN_PERIOD_MS } from "@entertheblackbox/shared";
 import { InMemoryIpRateLimiter, requestIp } from "../admission/rate-limit.js";
@@ -38,6 +40,14 @@ const surfaceEffectRequestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("stop") }),
 ]);
 
+const wallCommandSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("load"), clip: z.string().min(1).max(100) }),
+  z.object({ action: z.literal("play"), leadMs: z.number().int().min(200).max(10_000).optional() }),
+  z.object({ action: z.literal("cue") }),
+  z.object({ action: z.literal("stop") }),
+  z.object({ action: z.literal("loop"), loop: z.boolean() }),
+]);
+
 export type AdminExport = { json: unknown; csv: string };
 export interface AdminDataSource {
   recentErrors(): Promise<readonly unknown[]>;
@@ -62,6 +72,12 @@ export type RegisterAdminOptions = {
   engine: () => PhaseEngine | null;
   /** Native show-mode surface colour (base + instrument). */
   surface?: Pick<SurfaceController, "setBase" | "play">;
+  /** Tablet video wall (Admin → Wall). */
+  wall?: {
+    controller: Pick<VideoWallController, "snapshot" | "setLayout" | "load" | "play" | "cue" | "stop" | "setLoop">;
+    clips: () => Promise<WallClip[]>;
+    saveLayout: (layout: z.infer<typeof wallLayoutSchema>) => Promise<z.infer<typeof wallLayoutSchema>>;
+  };
   /** Programmed instrument effects (chase, breathe, waves). */
   surfaceEffects?: Pick<SurfaceEffectRunner, "start" | "stop" | "state">;
   ready: boolean;
@@ -191,6 +207,40 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       const delivered = mode === "flash"
         ? options.surface.play(target, { mode, color: parsed.data.color!, ...(parsed.data.holdMs === undefined ? {} : { holdMs: parsed.data.holdMs }) })
         : options.surface.play(target, { mode });
+      return { ok: true, delivered };
+    });
+    admin.get("/wall", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.wall) return reply.code(503).send({ error: "wall_unavailable" });
+      const clips = await options.wall.clips().catch(() => null);
+      return { ...options.wall.controller.snapshot(), clips, clipsError: clips === null ? "Media library unavailable" : undefined };
+    });
+    admin.put<{ Body: unknown }>("/wall/layout", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.wall) return reply.code(503).send({ error: "wall_unavailable" });
+      const parsed = wallLayoutSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_wall_layout", issues: parsed.error.issues });
+      const layout = await options.wall.saveLayout(parsed.data);
+      const delivered = options.wall.controller.setLayout(layout);
+      options.data?.audit({ action: "set-wall-layout", at: new Date().toISOString(), detail: { key: "video-wall" } });
+      return { ok: true, layout, delivered };
+    });
+    admin.post<{ Body: unknown }>("/wall", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.wall) return reply.code(503).send({ error: "wall_unavailable" });
+      const parsed = wallCommandSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_wall_command", issues: parsed.error.issues });
+      const wall = options.wall.controller;
+      const command = parsed.data;
+      if (command.action === "load") {
+        const result = await wall.load(command.clip);
+        return result.ok ? result : reply.code(404).send(result);
+      }
+      if (command.action === "play") {
+        const result = wall.play(command.leadMs);
+        return result.ok ? result : reply.code(409).send(result);
+      }
+      const delivered = command.action === "cue" ? wall.cue() : command.action === "stop" ? wall.stop() : wall.setLoop(command.loop);
       return { ok: true, delivered };
     });
     admin.get("/surface/effect", async (_request, reply) => {

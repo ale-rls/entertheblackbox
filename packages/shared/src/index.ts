@@ -336,3 +336,5 @@ export { ServerClock } from "./serverClock.js";
 export { followMediaClock } from "./mediaClock.js";
 
 export * from "./surfaceEffects.js";
+
+export * from "./videoWall.js";

@@ -5,16 +5,21 @@ import * as SecureStore from 'expo-secure-store';
 import * as Updates from 'expo-updates';
 import { z } from 'zod';
 import { serverOrigin, type ShowChannel, type ShowManifest } from '@entertheblackbox/show-content';
-import { PROTOCOL_VERSION, type ServerToClientMessage, type SurfaceMessage } from '@entertheblackbox/protocol';
+import { PROTOCOL_VERSION, type ServerToClientMessage, type SurfaceMessage, type WallMessage } from '@entertheblackbox/protocol';
 import { NativeConnection } from './connection';
 import { acceptsSnapshot, cueFromSnapshot, type Snapshot } from './cues';
-import { downloadShow, loadShow } from './content';
+import { downloadShow, downloadWallSlice, loadShow } from './content';
 import { ShowPlayer } from './player';
 import { StageCompanion } from './StageCompanion';
 import { PlaybackActivity, stageState } from './stage-state';
 import { actionPrompt } from './action-prompt';
 import { createActionAlerts, enableActionNotifications } from './notifications';
 import { applySurface, expireSurface, initialSurface, surfaceDelay, visibleSurface } from './surface';
+import { acceptWall, wallStatus, type WallPlayback, type WallSliceState } from './wall';
+import { WallVideo } from './WallVideo';
+
+/** Resend a playing tablet's drift this often, so Admin sees it live. */
+const WALL_DRIFT_REPORT_MS = 2_000;
 
 const DEVICE_LABEL_KEY = 'deviceLabel';
 
@@ -46,6 +51,12 @@ export default function App() {
   const [identity, setIdentity] = useState<{ name: string; color: string } | null>(null);
   const [clockText, setClockText] = useState('');
   const [serverNow, setServerNow] = useState(Date.now());
+  const [wall, setWall] = useState<WallMessage | null>(null);
+  const [wallSlice, setWallSlice] = useState<WallSliceState>({ state: 'idle' });
+  const [wallPlayback, setWallPlayback] = useState<WallPlayback | null>(null);
+  const [showMode, setShowMode] = useState(false);
+  const joinedOrigin = useRef('');
+  const wallReported = useRef({ key: '', at: 0 });
   const connection = useRef<NativeConnection | null>(null);
   const activity = useRef(new PlaybackActivity());
   const player = useRef<ShowPlayer | null>(null);
@@ -94,6 +105,7 @@ export default function App() {
   function leave() {
     alerts.current?.update(null); setNotificationsEnabled(false); setAnswered(null);
     connection.current?.stop(); player.current?.dispose(); connection.current = null; player.current = null; resetSurface();
+    setWall(null); setWallPlayback(null);
     latest.current = null; authorized.current = false; setSnapshot(null); setVoting(null); setGroups(null); setIdentity(null);
     setConnected(false); setPaused(false); setPlaying(false); setError(''); setNotificationStatus(''); setStatus('Disconnected'); setAudioStatus('Audio stopped');
   }
@@ -150,6 +162,7 @@ export default function App() {
       setNotificationStatus(enabled ? 'Show action notifications enabled' : 'Notifications are off. Enable them in device settings, or keep the app open for show actions.');
     } catch { setNotificationStatus('Notifications unavailable. Keep the app open for show actions.'); }
     await ShowPlayer.configure();
+    joinedOrigin.current = base;
     const c = new NativeConnection({ origin: base, ...config, name: joinName,
       clientVersion: process.env.EXPO_PUBLIC_SERVER_BUILD_VERSION ?? '0.0.0-dev', lease,
       saveLease: value => { void (value ? SecureStore.setItemAsync(leaseKey, value) : SecureStore.deleteItemAsync(leaseKey)).catch(() => setError('Could not save this device identity')); },
@@ -158,6 +171,7 @@ export default function App() {
       message: message => {
         if (message.t === 'identity') { resetSurface(); setIdentity({ name: joinName, color: message.color }); player.current?.startMusic(); }
         if (message.t === 'surface') scheduleSurface(message, c);
+        if (message.t === 'wall') setWall(current => acceptWall(current, message));
         if (message.t === 'reload') setError(`Server requests compatible app content (${message.minVersion}). Leave before checking app updates.`);
         if (message.t === 'join_rejected') { player.current?.setEnabled(false); player.current?.setCue(null); setError(`Join rejected: ${message.reason}`); }
         if (message.t === 'snapshot' || message.t === 'phase') {
@@ -198,10 +212,34 @@ export default function App() {
     connection.current?.send({ t: 'input', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, seq: seq.current++,
       x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) });
   }
+  // Video wall: fetch this tablet's slice whenever the loaded clip changes.
+  const slice = wall?.clip ?? null;
+  useEffect(() => {
+    if (!slice) { setWallSlice({ state: 'idle' }); setWallPlayback(null); return; }
+    let cancelled = false;
+    setWallSlice({ state: 'downloading' }); setWallPlayback(null);
+    downloadWallSlice(joinedOrigin.current, slice)
+      .then(uri => { if (!cancelled) setWallSlice({ state: 'ready', uri }); })
+      .catch((reason: unknown) => { if (!cancelled) setWallSlice({ state: 'error', detail: reason instanceof Error ? reason.message.slice(0, 300) : 'Download failed' }); });
+    return () => { cancelled = true; };
+  }, [slice?.sha256, slice?.url]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Tell the server (and Admin) how this tablet is doing: on every change, and periodically while playing.
+  useEffect(() => {
+    const report = wallStatus(slice?.id ?? null, wallSlice, showMode, wallPlayback);
+    const key = `${report.clip}|${report.state}|${report.detail ?? ''}`;
+    const now = Date.now();
+    if (key === wallReported.current.key && (report.state !== 'playing' || now - wallReported.current.at < WALL_DRIFT_REPORT_MS)) return;
+    wallReported.current = { key, at: now };
+    connection.current?.send({ t: 'wall_status', v: PROTOCOL_VERSION, ...report });
+  }, [slice?.id, wallSlice, showMode, wallPlayback]); // eslint-disable-line react-hooks/exhaustive-deps
+  const wallLayer = wall?.clip && wallSlice.state === 'ready' && wallSlice.uri
+    ? <WallVideo key={wallSlice.uri} uri={wallSlice.uri} startAt={wall.startAt} loop={wall.loop}
+      serverNow={() => connection.current?.clock.now() ?? Date.now()} onPlayback={setWallPlayback} />
+    : null;
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
   return <StageCompanion answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
     paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
-    surface={visibleSurface(surface)} origin={origin} name={name} deviceLabel={deviceLabel} onDeviceLabel={saveDeviceLabel} manifest={manifest} identity={identity} clockText={clockText}
+    surface={visibleSurface(surface)} wall={wallLayer} wallVisible={!!wallLayer && wall?.startAt != null} onShowMode={setShowMode} origin={origin} name={name} deviceLabel={deviceLabel} onDeviceLabel={saveDeviceLabel} manifest={manifest} identity={identity} clockText={clockText}
     notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}
     onOrigin={value => { setOrigin(value); setManifest(null); }}
     onName={setName}

@@ -173,7 +173,22 @@ export const buttonVoteSchema = z.object({
   outcome: nonEmpty,
 });
 
+/**
+ * Native tablet → server: video wall progress, so Admin can see which
+ * tablets have their slice and how far each is from the shared clock.
+ */
+export const wallStatusSchema = z.object({
+  t: z.literal("wall_status"),
+  v,
+  clip: z.string().min(1).max(100).nullable(),
+  state: z.enum(["idle", "downloading", "ready", "playing", "ended", "error"]),
+  /** Playback position minus the expected position, in milliseconds (positive = ahead). */
+  driftMs: z.number().finite().optional(),
+  detail: z.string().max(300).optional(),
+});
+
 export const phoneToServerSchema = z.discriminatedUnion("t", [
+  wallStatusSchema,
   joinSchema,
   inputSchema,
   pingSchema,
@@ -249,6 +264,7 @@ export const displayToServerSchema = z.discriminatedUnion("t", [
 
 /** Everything the server can receive over a socket. */
 export const clientToServerSchema = z.discriminatedUnion("t", [
+  wallStatusSchema,
   joinSchema,
   inputSchema,
   pingSchema,
@@ -509,6 +525,29 @@ export const surfaceSchema = z.object({
   label: z.string().min(1).max(40).optional(),
 });
 
+/**
+ * Video wall state for one device (each tablet gets its own slice). `clip`
+ * null = no wall clip (show the surface colour). `startAt` null = loaded and
+ * paused on the first frame; otherwise playback position is
+ * (serverNow − startAt), on the shared server clock. Idempotent: the latest
+ * `seq` wins, and joining devices receive the current state.
+ */
+export const wallSchema = z.object({
+  t: z.literal("wall"),
+  v,
+  seq: z.number().int().nonnegative(),
+  clip: z.object({
+    id: z.string().min(1).max(100),
+    slot: z.string().regex(/^[A-Z][0-9]{1,2}$/),
+    /** Same-origin path of this device's slice, e.g. /media/ocean__A1.mp4 */
+    url: z.string().startsWith("/").max(500),
+    bytes: z.number().int().positive(),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  }).nullable(),
+  startAt: timestamp.nullable(),
+  loop: z.boolean(),
+});
+
 /** Everything a client can receive from the server. */
 export const serverToClientSchema = z.union([
   snapshotSchema,
@@ -530,6 +569,7 @@ export const serverToClientSchema = z.union([
   pongSchema,
   audioBridgeChangedSchema,
   surfaceSchema,
+  wallSchema,
 ]);
 
 // ------------------------------------------------------------------------- types
@@ -575,4 +615,6 @@ export type StatusMessage = z.infer<typeof statusSchema>;
 export type PongMessage = z.infer<typeof pongSchema>;
 export type AudioBridgeChangedMessage = z.infer<typeof audioBridgeChangedSchema>;
 export type SurfaceMessage = z.infer<typeof surfaceSchema>;
+export type WallMessage = z.infer<typeof wallSchema>;
+export type WallStatusMessage = z.infer<typeof wallStatusSchema>;
 export type ServerToClientMessage = z.infer<typeof serverToClientSchema>;
