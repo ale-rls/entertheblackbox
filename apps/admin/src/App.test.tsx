@@ -210,6 +210,55 @@ describe("Admin operations UI", () => {
     expect(document.activeElement).toBe(restartTrigger);
   });
 
+  it("restarts the captured shared scene with session and epoch guards", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    const live = { ...activeStatus };
+    const { requests } = createAdminFetch({ status: live });
+    await renderApp();
+    expect(button("Restart show").closest("details")).toBeNull();
+    expect(button("Return to idle").closest("details")).toBeNull();
+    const trigger = button("Restart current scene");
+    await act(async () => { trigger.click(); });
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("reset its timer and clear its current vote");
+    expect(requests.some(r => r.method === "POST")).toBe(false);
+    // A later status must not retarget an already-open confirmation.
+    live.phaseId = "intro"; live.phaseEpoch = 8;
+    await act(async () => { button("Restart scene").click(); });
+    await flush();
+    expect(requests).toContainEqual({ url: "/api/admin/jump", method: "POST", body: JSON.stringify({ phaseId: "question-02", expectedPhaseId: "question-02", expectedEpoch: 7, sessionId: "5H7D-A2" }) });
+    expect(document.body.textContent).toContain("Restarted “Choose a position”.");
+  });
+
+  it("restarts only the selected running group and disables finished paths", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    const { requests } = createAdminFetch({
+      flow: { ...sceneFlow, scenes: [...sceneFlow.scenes, { id: "split", kind: "group-branch", title: "Split", routes: [] }] },
+      status: { ...activeStatus, phaseId: "split", groupPathsStarted: true, groupPaths: [
+        { groupId: "a", memberIds: ["p1"], phaseId: "question-02", phaseEpoch: 12, done: false, label: "Actors", color: "#f00", phaseTitle: "Choose a position", state: "active" },
+        { groupId: "b", memberIds: ["p2"], phaseId: "intro", phaseEpoch: 13, done: true, label: "Builders", color: "#0f0", phaseTitle: "Opening film", state: "finished" },
+      ] },
+    });
+    await renderApp();
+    expect(button("Restart scene for Builders").disabled).toBe(true);
+    expect(document.body.textContent).not.toContain("Restart current scene");
+    await act(async () => { button("Restart scene for Actors").click(); });
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Other group paths keep running");
+    await act(async () => { button("Restart scene").click(); });
+    await flush();
+    expect(requests.filter(r => r.method === "POST")).toEqual([{ url: "/api/admin/jump", method: "POST", body: JSON.stringify({ phaseId: "question-02", groupId: "a", expectedPhaseId: "question-02", expectedEpoch: 12, sessionId: "5H7D-A2" }) }]);
+  });
+
+  it("reports a refused scene restart without claiming success", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    createAdminFetch({ rejectAction: "jump" });
+    await renderApp();
+    await act(async () => { button("Restart current scene").click(); });
+    await act(async () => { button("Restart scene").click(); });
+    await flush();
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("server refused this action");
+    expect(document.body.textContent).not.toContain("Restarted “");
+  });
+
   it("keeps idle operations focused on session controls and scheduling", async () => {
     localStorage.setItem("admin-token", "operator-secret");
     createAdminFetch({ status: { ...activeStatus, lifecycle: "idle" } });
