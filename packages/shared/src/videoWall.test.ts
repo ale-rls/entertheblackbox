@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  wallCropFraction, wallVideoFrame,
   DEFAULT_WALL_LAYOUT, duplicateWallLabels, parseWallSliceFileName, wallCorrection, wallFfmpegCommand, wallPlaybackPosition,
   wallSlicePlan, wallSlotForLabel, wallSlotIds, type WallLayout,
 } from "./videoWall.js";
@@ -91,5 +92,28 @@ describe("wall playback timing", () => {
     const wrap = wallCorrection(9.95, 0.05, 10, true);
     expect(wrap.drift).toBeCloseTo(-0.1);
     expect(wrap.seek).toBe(false);
+  });
+});
+
+describe("uncut video cropping", () => {
+  it("gives each position its region of the frame as fractions, matching the slice calculator", () => {
+    // Same 2×2 layout on a small 340×200 video: exactly 1 px per mm.
+    expect(wallCropFraction(layout, 340, 200, "B2")).toEqual({ x: 180 / 340, y: 110 / 200, w: 160 / 340, h: 90 / 200 });
+    const plan = wallSlicePlan(layout);
+    const big = wallCropFraction(layout, 3400, 2000, "A2")!;
+    expect(big.x * 3400).toBeCloseTo(plan.slices[1]!.crop.x);
+    expect(big.w * 3400).toBeCloseTo(plan.slices[1]!.crop.w);
+    expect(wallCropFraction(layout, 340, 200, "C1")).toBeNull();
+    expect(wallCropFraction(layout, 340, 200, "A3")).toBeNull();
+    expect(wallCropFraction(layout, 0, 200, "A1")).toBeNull();
+  });
+
+  it("sizes the enlarged video so the region fills the tablet", () => {
+    const crop = wallCropFraction(layout, 340, 200, "B2")!;
+    const frame = wallVideoFrame(crop, 1600, 900);
+    expect(frame.width).toBeCloseTo(3400);
+    expect(frame.height).toBeCloseTo(2000);
+    expect(frame.left).toBeCloseTo(-1800);
+    expect(frame.top).toBeCloseTo(-1100);
   });
 });

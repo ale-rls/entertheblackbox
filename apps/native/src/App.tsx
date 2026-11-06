@@ -234,7 +234,7 @@ export default function App() {
     connection.current?.send({ t: 'wall_status', v: PROTOCOL_VERSION, ...report });
   }, [slice?.id, wallSlice, showMode, wallPlayback]); // eslint-disable-line react-hooks/exhaustive-deps
   const wallLayer = wall?.clip && wallSlice.state === 'ready' && wallSlice.uri
-    ? <WallVideo key={wallSlice.uri} uri={wallSlice.uri} startAt={wall.startAt} loop={wall.loop}
+    ? <WallVideo key={wallSlice.uri} uri={wallSlice.uri} slot={wall.clip.slot} region={wall.clip.region} startAt={wall.startAt} loop={wall.loop}
       serverNow={() => connection.current?.clock.now() ?? Date.now()} onPlayback={setWallPlayback} />
     : null;
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });

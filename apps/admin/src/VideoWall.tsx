@@ -6,7 +6,9 @@ import {
 
 type DeviceStatus = { clip: string | null; state: "idle" | "downloading" | "ready" | "playing" | "ended" | "error"; driftMs?: number; detail?: string; at: number };
 type Device = { clientId: string; name: string; slot: string | null; connected: boolean; status?: DeviceStatus };
-type Clip = { id: string; slices: Record<string, { src: string; bytes: number }> };
+type Clip =
+  | { id: string; kind: "sliced"; slices: Record<string, { src: string; bytes: number }> }
+  | { id: string; kind: "whole"; file: { src: string; bytes: number } };
 export type WallSnapshot = {
   layout: WallLayout;
   state: { clip: string | null; startAt: number | null; loop: boolean };
@@ -124,10 +126,15 @@ export function VideoWall({ token }: { token: string }) {
         <label className="sc-tool-label">Clip
           <select className="sc-tool-field" value={pickedClip} onChange={(event) => setSelectedClip(event.target.value)} disabled={clips.length === 0}>
             {clips.length === 0 && <option value="">No wall clips in the media library</option>}
-            {clips.map((clip) => {
-              const have = slotIds.filter((slot) => clip.slices[slot]).length;
-              return <option key={clip.id} value={clip.id}>{clip.id} ({have}/{slotIds.length} positions)</option>;
-            })}
+            {clips.some((clip) => clip.kind === "sliced") && <optgroup label="Pre-cut slices">
+              {clips.filter((clip) => clip.kind === "sliced").map((clip) => {
+                const have = slotIds.filter((slot) => clip.kind === "sliced" && clip.slices[slot]).length;
+                return <option key={clip.id} value={clip.id}>{clip.id} ({have}/{slotIds.length} positions)</option>;
+              })}
+            </optgroup>}
+            {clips.some((clip) => clip.kind === "whole") && <optgroup label="Whole video (cut on the tablets)">
+              {clips.filter((clip) => clip.kind === "whole").map((clip) => <option key={clip.id} value={clip.id}>{clip.id}</option>)}
+            </optgroup>}
           </select>
         </label>
         <button type="button" className="sc-tool-button" data-sc-tool-variant={loaded === pickedClip ? "secondary" : "primary"} disabled={!pickedClip} onClick={() => void command({ action: "load", clip: pickedClip }, `Loaded ${pickedClip}`)}>{loaded === pickedClip ? "Reload" : "Load on tablets"}</button>
@@ -138,7 +145,8 @@ export function VideoWall({ token }: { token: string }) {
       </div>
       {loadedClip && <MissingSlices clip={loadedClip} slots={slotIds} />}
       {!loadedClip && pickedClip && clips.find((clip) => clip.id === pickedClip) && <MissingSlices clip={clips.find((clip) => clip.id === pickedClip)!} slots={slotIds} />}
-      <p className="sc-tool-help">Upload slices in Studio → Media library, named <code>&lt;clip&gt;__&lt;position&gt;.mp4</code> (for example <code>ocean__A1.mp4</code>). The calculator below lists the exact names.</p>
+      {clips.find((clip) => clip.id === pickedClip)?.kind === "whole" && <p className="sc-tool-feedback" data-sc-tool-status="info">Whole video: every tablet downloads the full file and shows its own part of the grid, using the saved layout. Fine for smaller videos; for a large master, pre-cut slices are lighter on the tablets.</p>}
+      <p className="sc-tool-help">Any MP4 in Studio → Media library can play as a whole video. For pre-cut slices, upload them named <code>&lt;clip&gt;__&lt;position&gt;.mp4</code> (for example <code>ocean__A1.mp4</code>); the calculator below lists the exact names.</p>
     </section>
 
     <WallMap snapshot={snapshot} draft={draft} dirty={dirty} edit={edit} onSave={() => void saveLayout()} token={token} clip={loaded} />
@@ -147,6 +155,7 @@ export function VideoWall({ token }: { token: string }) {
 }
 
 function MissingSlices({ clip, slots }: { clip: Clip; slots: string[] }) {
+  if (clip.kind !== "sliced") return null;
   const missing = slots.filter((slot) => !clip.slices[slot]);
   if (missing.length === 0) return null;
   return <p className="sc-tool-feedback" data-sc-tool-status="warning">{clip.id} has no slice for {missing.join(", ")}. Those tablets keep their surface colour.</p>;
@@ -212,8 +221,9 @@ function SliceCalculator({ layout, edit, dirty, onSave, defaultClip }: {
 }) {
   const [clip, setClip] = useState(defaultClip);
   const [input, setInput] = useState("master.mov");
-  const [reference, setReference] = useState<{ url: string; video: boolean } | null>(null);
+  const [reference, setReference] = useState<{ url: string; video: boolean; width?: number; height?: number } | null>(null);
   const [copied, setCopied] = useState("");
+  const pendingSize = useRef(false);
   useEffect(() => () => { if (reference) URL.revokeObjectURL(reference.url); }, [reference]);
   const valid = layout.cols >= 1 && layout.rows >= 1 && layout.screen.widthMm > 0 && layout.screen.heightMm > 0 && layout.source.widthPx > 0 && layout.source.heightPx > 0;
   const plan = useMemo(() => valid ? wallSlicePlan(layout) : null, [layout, valid]);
@@ -256,14 +266,22 @@ function SliceCalculator({ layout, edit, dirty, onSave, defaultClip }: {
     {!plan ? <p className="sc-tool-feedback" data-sc-tool-status="warning">Enter positive sizes to see the slices.</p> : <>
       <p className="sc-tool-help sc-tool-mono">Wall {plan.wallMm.width} × {plan.wallMm.height} mm · {plan.pxPerMm.toFixed(2)} master px per mm · slice {plan.slices[0]!.crop.w} × {plan.slices[0]!.crop.h} master px{plan.slices[0]!.crop.w > layout.screen.widthPx ? "" : ` (tablet shows ${layout.screen.widthPx} px wide: ${(layout.screen.widthPx / plan.slices[0]!.crop.w).toFixed(1)}× upscaled)`}</p>
       <div className="video-wall-row">
-        <label className="sc-tool-label">Reference video or still (stays on this computer)
+        <label className="sc-tool-label">Reference video or still: sets the master size (stays on this computer)
           <input className="sc-tool-field" type="file" accept="video/*,image/*" onChange={(event) => {
             const file = event.target.files?.[0];
+            pendingSize.current = !!file;
             setReference(file ? { url: URL.createObjectURL(file), video: file.type.startsWith("video/") } : null);
           }} />
         </label>
       </div>
-      <SlicePreview layout={layout} plan={plan} reference={reference} />
+      {reference?.width && reference.height && (reference.width !== layout.source.widthPx || reference.height !== layout.source.heightPx)
+        ? <p className="sc-tool-feedback" data-sc-tool-status="warning">The reference is {reference.width} × {reference.height} px but the master size is set to {layout.source.widthPx} × {layout.source.heightPx}. The crops and Premiere values are for the master size. <button type="button" className="sc-tool-button video-wall-copy" onClick={() => set((l) => ({ ...l, source: { ...l.source, widthPx: reference.width!, heightPx: reference.height! } }))}>Use {reference.width} × {reference.height}</button></p>
+        : null}
+      <SlicePreview layout={layout} plan={plan} reference={reference} onSize={(width, height) => {
+        setReference((current) => current && (current.width !== width || current.height !== height) ? { ...current, width, height } : current);
+        // A freshly chosen reference sets the master size, so the numbers match the real file.
+        if (pendingSize.current) { pendingSize.current = false; set((l) => ({ ...l, source: { ...l.source, widthPx: width, heightPx: height } })); }
+      }} />
       <div className="video-wall-row">
         <label className="sc-tool-label">Clip name (file names)
           <input className="sc-tool-field sc-tool-mono" value={clip} onChange={(event) => setClip(event.target.value)} aria-invalid={!clipValid} />
@@ -310,7 +328,9 @@ function SliceRow({ slice, layout, clip, input, copy }: { slice: WallSlice; layo
 }
 
 /** The master frame with each tablet's slice drawn on it; gaps and cropped-away areas are darkened. */
-function SlicePreview({ layout, plan, reference }: { layout: WallLayout; plan: ReturnType<typeof wallSlicePlan>; reference: { url: string; video: boolean } | null }) {
+function SlicePreview({ layout, plan, reference, onSize }: {
+  layout: WallLayout; plan: ReturnType<typeof wallSlicePlan>; reference: { url: string; video: boolean } | null; onSize: (width: number, height: number) => void;
+}) {
   const { widthPx: sw, heightPx: sh } = layout.source;
   const x0 = Math.min(0, plan.wallPx.x), y0 = Math.min(0, plan.wallPx.y);
   const vw = Math.max(sw, plan.wallPx.x + plan.wallPx.w) - x0, vh = Math.max(sh, plan.wallPx.y + plan.wallPx.h) - y0;
@@ -320,8 +340,8 @@ function SlicePreview({ layout, plan, reference }: { layout: WallLayout; plan: R
   return <div className="video-wall-preview" style={{ aspectRatio: `${vw} / ${vh}` }}>
     <div className="video-wall-preview-frame" style={frame}>
       {reference && (reference.video
-        ? <video src={reference.url} muted loop autoPlay playsInline />
-        : <img src={reference.url} alt="" />)}
+        ? <video src={reference.url} muted loop autoPlay playsInline onLoadedMetadata={(event) => { const v = event.currentTarget; if (v.videoWidth && v.videoHeight) onSize(v.videoWidth, v.videoHeight); }} />
+        : <img src={reference.url} alt="" onLoad={(event) => { const i = event.currentTarget; if (i.naturalWidth && i.naturalHeight) onSize(i.naturalWidth, i.naturalHeight); }} />)}
     </div>
     <svg viewBox={`${x0} ${y0} ${vw} ${vh}`} role="img" aria-label={`Master frame with ${plan.slices.length} tablet slices`}>
       <path d={outside} fillRule="evenodd" className="video-wall-preview-hidden" />

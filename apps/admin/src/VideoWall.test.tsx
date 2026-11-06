@@ -14,7 +14,7 @@ const snapshot = (overrides: Partial<WallSnapshot> = {}): WallSnapshot => ({
     { clientId: "c2", name: "T02", slot: null, connected: true },
   ],
   serverNow: 0,
-  clips: [{ id: "ocean", slices: { A1: { src: "ocean__A1.mp4", bytes: 1 } } }],
+  clips: [{ id: "ocean", kind: "sliced", slices: { A1: { src: "ocean__A1.mp4", bytes: 1 } } }, { id: "intro.mp4", kind: "whole", file: { src: "intro.mp4", bytes: 2 } }],
   ...overrides,
 });
 
@@ -94,6 +94,33 @@ describe("VideoWall", () => {
     });
     expect(host.querySelectorAll(".video-wall-table tbody tr")).toHaveLength(4);
     expect(host.textContent).toContain("ocean__B2.mp4");
+    expect(button("Save layout").disabled).toBe(false);
+  });
+
+  it("offers uncut videos, which need no slices", async () => {
+    await render();
+    expect([...host.querySelectorAll("optgroup")].map((group) => group.label)).toEqual(["Pre-cut slices", "Whole video (cut on the tablets)"]);
+    const select = host.querySelector<HTMLSelectElement>("select.sc-tool-field")!;
+    await act(async () => { select.value = "intro.mp4"; select.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(host.textContent).toContain("every tablet downloads the full file");
+    expect(host.textContent).not.toContain("has no slice");
+    await act(async () => { button("Load on tablets").click(); });
+    expect(posts()[0]).toEqual(["/api/admin/wall", { action: "load", clip: "intro.mp4" }]);
+  });
+
+  it("takes the master size from the reference video so crops match the real file", async () => {
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:reference", revokeObjectURL: () => {} }));
+    await render();
+    const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const file = new File(["x"], "small.mp4", { type: "video/mp4" });
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    const video = host.querySelector<HTMLVideoElement>(".video-wall-preview video")!;
+    Object.defineProperty(video, "videoWidth", { value: 1280 });
+    Object.defineProperty(video, "videoHeight", { value: 720 });
+    await act(async () => { video.dispatchEvent(new Event("loadedmetadata")); });
+    const field = (name: string) => [...host.querySelectorAll<HTMLLabelElement>("label")].find((label) => label.textContent?.startsWith(name))!.querySelector("input")!.value;
+    expect([field("Master width"), field("Master height")]).toEqual(["1280", "720"]);
     expect(button("Save layout").disabled).toBe(false);
   });
 });

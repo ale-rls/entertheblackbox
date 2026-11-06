@@ -24,10 +24,11 @@ const media = [
 ];
 
 describe("wallClipsFromMedia", () => {
-  it("groups <clip>__<slot>.mp4 files and skips unhashed or unrelated media", () => {
-    expect(wallClipsFromMedia(media)).toEqual([
-      { id: "fire", slices: { A1: { src: "fire__A1.mp4", bytes: 30, sha256: hash("c") } } },
-      { id: "ocean", slices: { A1: { src: "ocean__A1.mp4", bytes: 10, sha256: hash("a") }, A2: { src: "ocean__A2.mp4", bytes: 20, sha256: hash("b") } } },
+  it("groups <clip>__<slot>.mp4 slices, offers other MP4s uncut, and skips unhashed or non-video media", () => {
+    expect(wallClipsFromMedia([...media, { src: "still.png", bytes: 5, hash: hash("e") }])).toEqual([
+      { id: "fire", kind: "sliced", slices: { A1: { src: "fire__A1.mp4", bytes: 30, sha256: hash("c") } } },
+      { id: "intro.mp4", kind: "whole", file: { src: "intro.mp4", bytes: 40, sha256: hash("d") } },
+      { id: "ocean", kind: "sliced", slices: { A1: { src: "ocean__A1.mp4", bytes: 10, sha256: hash("a") }, A2: { src: "ocean__A2.mp4", bytes: 20, sha256: hash("b") } } },
     ]);
   });
 });
@@ -59,6 +60,17 @@ describe("VideoWallController", () => {
     expect(closed.sent).toHaveLength(0);
     expect(ensureLocal.mock.calls.map(([src]) => src)).toEqual(["ocean__A1.mp4", "ocean__A2.mp4"]);
     expect(await wall.load("nope")).toEqual({ ok: false, error: "unknown_clip" });
+  });
+
+  it("sends every tablet the same uncut video with the wall geometry to crop its own region", async () => {
+    const { wall, t1, t2, spare, ensureLocal } = setup();
+    expect(await wall.load("intro.mp4")).toEqual({ ok: true, delivered: 3 });
+    expect(ensureLocal.mock.calls.map(([src]) => src)).toEqual(["intro.mp4"]);
+    const region = { cols: 2, rows: 1, screenWidthMm: DEFAULT_WALL_LAYOUT.screen.widthMm, screenHeightMm: DEFAULT_WALL_LAYOUT.screen.heightMm,
+      gapXMm: DEFAULT_WALL_LAYOUT.gapMm.x, gapYMm: DEFAULT_WALL_LAYOUT.gapMm.y, fit: "fill", sourceWidthPx: 3840, sourceHeightPx: 2160 };
+    expect(t1.sent[0]!.clip).toEqual({ id: "intro.mp4", slot: "A1", url: "/media/intro.mp4", bytes: 40, sha256: hash("d"), region });
+    expect(t2.sent[0]!.clip).toMatchObject({ slot: "A2", url: "/media/intro.mp4", region });
+    expect(spare.sent[0]!.clip).toBeNull();
   });
 
   it("plays on a shared start time, cues, loops, stops, and welcomes late joiners with the current state", async () => {
@@ -108,7 +120,7 @@ describe("/api/admin/wall", () => {
     try {
       expect((await app.inject({ method: "GET", url: "/api/admin/wall" })).statusCode).toBe(401);
       const state = (await app.inject({ method: "GET", url: "/api/admin/wall", headers })).json();
-      expect(state.clips.map((clip: { id: string }) => clip.id)).toEqual(["fire", "ocean"]);
+      expect(state.clips.map((clip: { id: string }) => clip.id)).toEqual(["fire", "intro.mp4", "ocean"]);
 
       for (const payload of [{ ...DEFAULT_WALL_LAYOUT, cols: 0 }, { ...DEFAULT_WALL_LAYOUT, slots: { a1: "T01" } }, { ...DEFAULT_WALL_LAYOUT, extra: 1 }]) {
         expect((await app.inject({ method: "PUT", url: "/api/admin/wall/layout", headers, payload })).statusCode).toBe(400);
