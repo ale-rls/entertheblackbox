@@ -9,6 +9,16 @@
  */
 
 export type WallFit = "fill" | "fit";
+/**
+ * How each tablet hangs. The native app is portrait-locked, so a tablet
+ * mounted in landscape rotates the wall video itself. "landscape-cw": the
+ * tablet was turned a quarter turn clockwise from upright portrait.
+ */
+export type WallMount = "portrait" | "landscape-cw" | "landscape-ccw";
+export const WALL_MOUNTS: readonly WallMount[] = ["portrait", "landscape-cw", "landscape-ccw"];
+
+/** Degrees to rotate the video on the device's portrait screen so it looks upright on the wall. */
+export const wallMountRotation = (mount: WallMount): 0 | 90 | -90 => mount === "landscape-cw" ? -90 : mount === "landscape-ccw" ? 90 : 0;
 
 export type WallLayout = {
   cols: number;
@@ -21,6 +31,8 @@ export type WallLayout = {
   source: { widthPx: number; heightPx: number; fps: number };
   /** fill: the wall is covered, source edges are cropped. fit: the whole source is visible, the rest is black. */
   fit: WallFit;
+  /** Orientation of every tablet on the wall. `screen` is measured as mounted. */
+  mount: WallMount;
   /** Wall position → tablet label (e.g. "B3" → "T07"). */
   slots: Record<string, string>;
 };
@@ -28,14 +40,47 @@ export type WallLayout = {
 export const WALL_MAX_COLS = 20;
 export const WALL_MAX_ROWS = 20;
 
-/** 10.9" iPad (2360×1640) in landscape, ~25 mm between screens, 4K master. */
+/**
+ * Tablet presets for the slice calculator. Visible area is computed from the
+ * nominal diagonal and resolution (square pixels); gaps are the body minus
+ * the visible area, i.e. tablets touching edge to edge without cases.
+ * Measure one tablet and add any case or spacing.
+ */
+export type WallTabletPreset = { id: string; name: string; screen: WallLayout["screen"]; gapMm: WallLayout["gapMm"]; mount: WallMount };
+
+/** Lenovo Tab M7 (3rd Gen) TB-7306F: 7" 1024×600 panel, body 176.2 × 102.3 mm. */
+const LENOVO_M7 = { longMm: 153.4, shortMm: 89.9, longPx: 1024, shortPx: 600, bodyLongMm: 176.2, bodyShortMm: 102.3 };
+const m7Landscape = { widthMm: LENOVO_M7.longMm, heightMm: LENOVO_M7.shortMm, widthPx: LENOVO_M7.longPx, heightPx: LENOVO_M7.shortPx };
+const m7LandscapeGap = { x: Math.round((LENOVO_M7.bodyLongMm - LENOVO_M7.longMm) * 10) / 10, y: Math.round((LENOVO_M7.bodyShortMm - LENOVO_M7.shortMm) * 10) / 10 };
+export const WALL_TABLET_PRESETS: readonly WallTabletPreset[] = [
+  { id: "lenovo-m7-landscape-cw", name: "Lenovo Tab M7 (3rd Gen) · landscape, turned clockwise", screen: m7Landscape, gapMm: m7LandscapeGap, mount: "landscape-cw" },
+  { id: "lenovo-m7-landscape-ccw", name: "Lenovo Tab M7 (3rd Gen) · landscape, turned counter-clockwise", screen: m7Landscape, gapMm: m7LandscapeGap, mount: "landscape-ccw" },
+  { id: "lenovo-m7-portrait", name: "Lenovo Tab M7 (3rd Gen) · portrait",
+    screen: { widthMm: LENOVO_M7.shortMm, heightMm: LENOVO_M7.longMm, widthPx: LENOVO_M7.shortPx, heightPx: LENOVO_M7.longPx },
+    gapMm: { x: m7LandscapeGap.y, y: m7LandscapeGap.x }, mount: "portrait" },
+];
+
+/** The preset a layout matches exactly, if any. */
+export function wallTabletPreset(layout: Pick<WallLayout, "screen" | "gapMm" | "mount">): WallTabletPreset | null {
+  return WALL_TABLET_PRESETS.find((preset) => preset.mount === layout.mount
+    && preset.screen.widthMm === layout.screen.widthMm && preset.screen.heightMm === layout.screen.heightMm
+    && preset.screen.widthPx === layout.screen.widthPx && preset.screen.heightPx === layout.screen.heightPx
+    && preset.gapMm.x === layout.gapMm.x && preset.gapMm.y === layout.gapMm.y) ?? null;
+}
+
+/**
+ * Venue default: 36 Lenovo Tab M7 in landscape, 6 × 6 (about 1034 × 601 mm,
+ * close to 16:9), leaving spares out of 40. 1080p master: these tablets
+ * should not be asked to decode 4K.
+ */
 export const DEFAULT_WALL_LAYOUT: WallLayout = {
-  cols: 4,
-  rows: 3,
-  screen: { widthMm: 226.5, heightMm: 157.4, widthPx: 2360, heightPx: 1640 },
-  gapMm: { x: 25, y: 25 },
-  source: { widthPx: 3840, heightPx: 2160, fps: 25 },
+  cols: 6,
+  rows: 6,
+  screen: m7Landscape,
+  gapMm: m7LandscapeGap,
+  source: { widthPx: 1920, heightPx: 1080, fps: 25 },
   fit: "fill",
+  mount: "landscape-cw",
   slots: {},
 };
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   wallCropFraction, wallVideoFrame,
-  DEFAULT_WALL_LAYOUT, duplicateWallLabels, parseWallSliceFileName, wallCorrection, wallFfmpegCommand, wallPlaybackPosition,
+  DEFAULT_WALL_LAYOUT, duplicateWallLabels, wallMountRotation, wallTabletPreset, WALL_TABLET_PRESETS, parseWallSliceFileName, wallCorrection, wallFfmpegCommand, wallPlaybackPosition,
   wallSlicePlan, wallSlotForLabel, wallSlotIds, type WallLayout,
 } from "./videoWall.js";
 
@@ -12,6 +12,7 @@ const layout: WallLayout = {
   gapMm: { x: 20, y: 20 },
   source: { widthPx: 3400, heightPx: 2000, fps: 25 },
   fit: "fill",
+  mount: "portrait",
   slots: { A1: "T01", A2: "t02 ", B1: "T03", B2: "T01", Z9: "T09" },
 };
 
@@ -70,7 +71,7 @@ describe("slice calculator", () => {
 
   it("has a sane default layout", () => {
     const plan = wallSlicePlan(DEFAULT_WALL_LAYOUT);
-    expect(plan.slices).toHaveLength(12);
+    expect(plan.slices).toHaveLength(36);
     expect(plan.slices.every((s) => s.export.widthPx % 2 === 0 && s.export.heightPx % 2 === 0)).toBe(true);
   });
 });
@@ -115,5 +116,26 @@ describe("uncut video cropping", () => {
     expect(frame.height).toBeCloseTo(2000);
     expect(frame.left).toBeCloseTo(-1800);
     expect(frame.top).toBeCloseTo(-1100);
+  });
+});
+
+describe("Lenovo Tab M7 preset and mounting", () => {
+  it("defaults the venue wall to 6 × 6 landscape Lenovo Tab M7, close to 16:9, 1080p master", () => {
+    expect(DEFAULT_WALL_LAYOUT.screen).toEqual({ widthMm: 153.4, heightMm: 89.9, widthPx: 1024, heightPx: 600 });
+    expect(DEFAULT_WALL_LAYOUT.gapMm).toEqual({ x: 22.8, y: 12.4 });
+    const plan = wallSlicePlan(DEFAULT_WALL_LAYOUT);
+    expect(plan.wallMm).toEqual({ width: 1034.4, height: 601.4 });
+    expect(plan.slices).toHaveLength(36);
+    // A 1080p master gives ~300 px slices per tablet; exported at crop size.
+    expect(plan.slices[0]!.export.widthPx).toBeLessThanOrEqual(1024);
+    expect(wallTabletPreset(DEFAULT_WALL_LAYOUT)?.id).toBe("lenovo-m7-landscape-cw");
+  });
+
+  it("swaps width and height for portrait, and rotates landscape-mounted tablets", () => {
+    const portrait = WALL_TABLET_PRESETS.find((p) => p.mount === "portrait")!;
+    expect(portrait.screen).toEqual({ widthMm: 89.9, heightMm: 153.4, widthPx: 600, heightPx: 1024 });
+    expect(portrait.gapMm).toEqual({ x: 12.4, y: 22.8 });
+    expect([wallMountRotation("portrait"), wallMountRotation("landscape-cw"), wallMountRotation("landscape-ccw")]).toEqual([0, -90, 90]);
+    expect(wallTabletPreset({ ...DEFAULT_WALL_LAYOUT, gapMm: { x: 30, y: 12.4 } })).toBeNull();
   });
 });

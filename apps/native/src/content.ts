@@ -89,6 +89,17 @@ export async function downloadShow(origin: string, channel: ShowChannel, progres
 
 const wallRoot = new Directory(Paths.document, 'wall');
 /**
+ * SHA-256 here reads the whole file into memory. The venue tablets (Lenovo
+ * Tab M7, 2 GB RAM) can't afford that for a large uncut video, so above this
+ * size a wall file is checked by exact byte count only.
+ */
+export const WALL_HASH_LIMIT_BYTES = 48 * 1024 * 1024;
+export const wallVerification = (bytes: number): 'sha256' | 'size' => bytes <= WALL_HASH_LIMIT_BYTES ? 'sha256' : 'size';
+async function wallVerified(file: File, slice: { bytes: number; sha256: string }) {
+  if (!file.exists || file.size !== slice.bytes) return false;
+  return wallVerification(slice.bytes) === 'size' || await digest(file) === slice.sha256;
+}
+/**
  * Download and verify this tablet's video wall slice (size and SHA-256), kept
  * by hash so a re-load of the same clip is instant. Other slices are deleted
  * to free storage once the new one verifies.
@@ -96,15 +107,14 @@ const wallRoot = new Directory(Paths.document, 'wall');
 export async function downloadWallSlice(origin: string, slice: { url: string; bytes: number; sha256: string }): Promise<string> {
   wallRoot.create({ intermediates: true, idempotent: true });
   const final = new File(wallRoot, `${slice.sha256}.mp4`);
-  const expected = { bytes: slice.bytes, sha256: slice.sha256 } as ShowManifest['files'][number];
-  if (!await verified(final, expected)) {
+  if (!await wallVerified(final, slice)) {
     const temporary = new File(wallRoot, `${slice.sha256}.download`);
     try {
       await transfer('the video wall slice', () => {}, async () => {
         if (temporary.exists) temporary.delete();
         await File.downloadFileAsync(`${origin}${slice.url}`, temporary, { idempotent: true });
       });
-      if (!await verified(temporary, expected)) throw new Error('Video wall slice verification failed. Check the uploaded file in the media library.');
+      if (!await wallVerified(temporary, slice)) throw new Error('Video wall slice verification failed. Check the uploaded file in the media library.');
       if (final.exists) final.delete();
       temporary.move(final);
     } catch (error) { if (temporary.exists) temporary.delete(); throw error; }

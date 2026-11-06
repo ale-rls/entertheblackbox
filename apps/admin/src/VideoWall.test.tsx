@@ -4,6 +4,27 @@ import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_WALL_LAYOUT } from "@entertheblackbox/shared";
 import { slotState, sliceSheetCsv, VideoWall, type WallSnapshot } from "./VideoWall.js";
+import { wallUploadName } from "./wallUpload.js";
+
+const uploads = vi.hoisted(() => [] as Array<{ name: string; src: string }>);
+vi.mock("./wallUpload.js", async (original) => ({
+  ...await original<typeof import("./wallUpload.js")>(),
+  uploadWallVideo: async (_url: string, _token: string, file: File, src: string) => {
+    if (src.startsWith("fail")) throw new Error("Network down");
+    uploads.push({ name: file.name, src });
+  },
+}));
+
+describe("wallUploadName", () => {
+  it("keeps slice and whole-video names and prefixes per-position exports with the clip", () => {
+    expect(wallUploadName("ocean__B3.mp4", "")).toEqual({ src: "ocean__B3.mp4", kind: "slice" });
+    expect(wallUploadName("b3.mp4", "ocean")).toEqual({ src: "ocean__B3.mp4", kind: "slice" });
+    expect(wallUploadName("A12.MP4", "ocean")).toEqual({ src: "ocean__A12.mp4", kind: "slice" });
+    expect(wallUploadName("A1.mp4", "")).toHaveProperty("error");
+    expect(wallUploadName("intro film.mp4", "")).toEqual({ src: "intro film.mp4", kind: "whole" });
+    expect(wallUploadName("still.png", "")).toHaveProperty("error");
+  });
+});
 
 const layout = { ...DEFAULT_WALL_LAYOUT, cols: 2, rows: 1, slots: { A1: "T01" } };
 const snapshot = (overrides: Partial<WallSnapshot> = {}): WallSnapshot => ({
@@ -54,7 +75,7 @@ describe("VideoWall", () => {
     host = document.createElement("div"); document.body.append(host); root = createRoot(host);
   });
   afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
-  const render = async () => { await act(async () => root.render(<VideoWall token="operator" />)); await act(async () => {}); };
+  const render = async () => { await act(async () => root.render(<VideoWall token="operator" pocketbaseUrl="http://pb.test" />)); await act(async () => {}); };
   const button = (text: string) => [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === text)!;
   const posts = () => request.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "POST").map(([url, init]) => [url, JSON.parse(String((init as RequestInit).body))]);
 
@@ -111,7 +132,7 @@ describe("VideoWall", () => {
   it("takes the master size from the reference video so crops match the real file", async () => {
     vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:reference", revokeObjectURL: () => {} }));
     await render();
-    const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const input = [...host.querySelectorAll<HTMLLabelElement>("label")].find((label) => label.textContent?.startsWith("Reference"))!.querySelector("input")!;
     const file = new File(["x"], "small.mp4", { type: "video/mp4" });
     Object.defineProperty(input, "files", { value: [file], configurable: true });
     await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
@@ -122,5 +143,37 @@ describe("VideoWall", () => {
     const field = (name: string) => [...host.querySelectorAll<HTMLLabelElement>("label")].find((label) => label.textContent?.startsWith(name))!.querySelector("input")!.value;
     expect([field("Master width"), field("Master height")]).toEqual(["1280", "720"]);
     expect(button("Save layout").disabled).toBe(false);
+  });
+
+  it("uploads whole videos and per-position slices into the media library from the Wall tab", async () => {
+    uploads.length = 0;
+    await render();
+    const clip = [...host.querySelectorAll<HTMLLabelElement>("label")].find((label) => label.textContent?.startsWith("Clip name for slices"))!.querySelector("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(clip, "ocean");
+      clip.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const input = [...host.querySelectorAll<HTMLInputElement>('input[type="file"]')].find((el) => el.multiple)!;
+    const files = [new File(["a"], "A1.mp4"), new File(["b"], "intro.mp4"), new File(["c"], "notes.txt")];
+    Object.defineProperty(input, "files", { value: files, configurable: true });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    await act(async () => {});
+    expect(uploads).toEqual([{ name: "A1.mp4", src: "ocean__A1.mp4" }, { name: "intro.mp4", src: "intro.mp4" }]);
+    const list = host.querySelector(".video-wall-upload-list")!.textContent!;
+    expect(list).toContain("A1.mp4 → ocean__A1.mp4");
+    expect(list).toContain("Uploaded");
+    expect(list).toContain("only MP4 videos");
+  });
+
+  it("applies the Lenovo Tab M7 preset and mounting", async () => {
+    await render();
+    const tablet = [...host.querySelectorAll<HTMLLabelElement>("label")].find((label) => label.textContent?.startsWith("Tablet"))!.querySelector("select")!;
+    await act(async () => { tablet.value = "lenovo-m7-portrait"; tablet.dispatchEvent(new Event("change", { bubbles: true })); });
+    const field = (name: string) => [...host.querySelectorAll<HTMLLabelElement>("label")].find((label) => label.textContent?.startsWith(name))!.querySelector("input")!.value;
+    expect([field("Screen width"), field("Screen height"), field("Gap across"), field("Gap down")]).toEqual(["89.9", "153.4", "12.4", "22.8"]);
+    const mount = [...host.querySelectorAll<HTMLLabelElement>("label")].find((label) => label.textContent?.startsWith("Mounting"))!.querySelector("select")!;
+    expect(mount.value).toBe("portrait");
+    await act(async () => { mount.value = "landscape-ccw"; mount.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(tablet.value).toBe("custom");
   });
 });

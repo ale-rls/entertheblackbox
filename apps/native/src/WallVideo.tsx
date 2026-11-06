@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { syncWallPlayer, wallViewFrame, type WallPlayback, type WallRegion } from './wall';
+import { syncWallPlayer, wallRotatedBox, wallViewFrame, type WallPlayback, type WallRegion } from './wall';
 
 /** Correction loop interval; the start itself is scheduled to the millisecond. */
 const SYNC_MS = 250;
@@ -13,9 +13,11 @@ const SYNC_MS = 250;
  * Preloaded and held on the first frame until `startAt` on the shared server
  * clock, then kept in step by `syncWallPlayer`.
  */
-export function WallVideo({ uri, slot, region, startAt, loop, serverNow, onPlayback }: {
+export function WallVideo({ uri, slot, region, rotation, startAt, loop, serverNow, onPlayback }: {
   uri: string;
   slot: string;
+  /** For tablets mounted in landscape: the app stays portrait, the video turns. */
+  rotation?: 0 | 90 | -90 | undefined;
   region?: WallRegion | undefined;
   startAt: number | null;
   loop: boolean;
@@ -58,12 +60,15 @@ export function WallVideo({ uri, slot, region, startAt, loop, serverNow, onPlayb
     const start = delay >= 0 && delay < 60_000 ? setTimeout(tick, delay) : undefined;
     return () => { clearInterval(interval); if (start) clearTimeout(start); };
   }, [player, startAt]); // eslint-disable-line react-hooks/exhaustive-deps
-  const frame = wallViewFrame(region, slot, videoSize, screen);
+  const box = screen ? wallRotatedBox(screen, rotation) : null;
+  const frame = box ? wallViewFrame(region, slot, videoSize, box.screen) : null;
   // Before the start, the surface colour shows through; the player is already loaded.
   return <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.clip, { opacity: startAt === null ? 0 : 1 }]}
     onLayout={event => { const { width, height } = event.nativeEvent.layout; setScreen({ width, height }); }}>
-    {(!region || frame) && <VideoView player={player} nativeControls={false} contentFit="fill" pointerEvents="none"
-      style={frame ? { position: 'absolute', ...frame } : StyleSheet.absoluteFill} />}
+    {box && (!region || frame) && <View style={[styles.clip, { position: 'absolute', ...box.style }]}>
+      <VideoView player={player} nativeControls={false} contentFit="fill" pointerEvents="none"
+        style={frame ? { position: 'absolute', ...frame } : StyleSheet.absoluteFill} />
+    </View>}
   </View>;
 }
 

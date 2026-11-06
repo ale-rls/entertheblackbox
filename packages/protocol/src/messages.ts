@@ -573,6 +573,8 @@ export const wallSchema = z.object({
     url: z.string().startsWith("/").max(500),
     bytes: z.number().int().positive(),
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    /** Degrees to rotate the video on the (portrait-locked) device, for tablets mounted in landscape. */
+    rotation: z.union([z.literal(0), z.literal(90), z.literal(-90)]).optional(),
     /**
      * Present when `url` is the whole, uncut video: the device crops its own
      * slot out of it using this wall geometry (see wallCropFraction). The

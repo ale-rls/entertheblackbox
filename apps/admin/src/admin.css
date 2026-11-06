@@ -259,3 +259,9 @@
 .video-wall-table th, .video-wall-table td { padding: var(--sc-tool-space-2) var(--sc-tool-space-3); border-bottom: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); text-align: start; white-space: nowrap; }
 .video-wall-table th { color: var(--sc-tool-color-text-secondary); font-weight: 500; }
 .video-wall-howto ol { margin: var(--sc-tool-space-2) 0 0; padding-inline-start: 1.25rem; display: grid; gap: var(--sc-tool-space-2); }
+.video-wall-upload { display: grid; gap: var(--sc-tool-space-2); }
+.video-wall-upload-list { display: grid; gap: var(--sc-tool-space-1); margin: 0; padding: 0; list-style: none; font-size: var(--sc-tool-font-size-0); }
+.video-wall-upload-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--sc-tool-space-3); padding: var(--sc-tool-space-1) var(--sc-tool-space-2); border-left: 3px solid var(--sc-tool-color-rule-strong); }
+.video-wall-upload-list li[data-state="done"] { border-left-color: var(--sc-tool-color-success); }
+.video-wall-upload-list li[data-state="error"] { border-left-color: var(--sc-tool-color-danger); }
+.video-wall-upload-list li[data-state="uploading"] { border-left-color: var(--sc-tool-color-info); }

@@ -117,3 +117,10 @@ it('recovers from a TLS read failure and discards the partial file before retryi
     vi.useRealTimers();
   }
 });
+
+it('hashes small wall files and checks only the size of large ones on low-memory tablets', async () => {
+  const { wallVerification, WALL_HASH_LIMIT_BYTES } = await import('./content');
+  expect(wallVerification(10 * 1024 * 1024)).toBe('sha256');
+  expect(wallVerification(WALL_HASH_LIMIT_BYTES)).toBe('sha256');
+  expect(wallVerification(WALL_HASH_LIMIT_BYTES + 1)).toBe('size');
+});

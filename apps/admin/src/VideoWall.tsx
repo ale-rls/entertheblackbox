@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  duplicateWallLabels, WALL_CLIP_NAME, WALL_MAX_COLS, WALL_MAX_ROWS, wallFfmpegCommand, wallSliceFileName, wallSlicePlan, wallSlotIds,
-  type WallLayout, type WallSlice,
+  duplicateWallLabels, WALL_CLIP_NAME, WALL_MAX_COLS, WALL_MAX_ROWS, WALL_TABLET_PRESETS, wallFfmpegCommand, wallSliceFileName, wallSlicePlan, wallSlotIds,
+  wallTabletPreset, type WallLayout, type WallMount, type WallSlice,
 } from "@entertheblackbox/shared";
+import { uploadWallVideo, wallUploadName } from "./wallUpload.js";
 
 type DeviceStatus = { clip: string | null; state: "idle" | "downloading" | "ready" | "playing" | "ended" | "error"; driftMs?: number; detail?: string; at: number };
 type Device = { clientId: string; name: string; slot: string | null; connected: boolean; status?: DeviceStatus };
@@ -53,7 +54,7 @@ export function sliceSheetCsv(layout: WallLayout, clip: string): string {
  * Admin → Wall: the tablet video wall. Layout and slice calculator (slices are
  * cut by hand in an editor), tablet-to-position assignment, and synced playback.
  */
-export function VideoWall({ token }: { token: string }) {
+export function VideoWall({ token, pocketbaseUrl }: { token: string; pocketbaseUrl: string }) {
   const [snapshot, setSnapshot] = useState<WallSnapshot | null>(null);
   const [draft, setDraft] = useState<WallLayout | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -146,11 +147,63 @@ export function VideoWall({ token }: { token: string }) {
       {loadedClip && <MissingSlices clip={loadedClip} slots={slotIds} />}
       {!loadedClip && pickedClip && clips.find((clip) => clip.id === pickedClip) && <MissingSlices clip={clips.find((clip) => clip.id === pickedClip)!} slots={slotIds} />}
       {clips.find((clip) => clip.id === pickedClip)?.kind === "whole" && <p className="sc-tool-feedback" data-sc-tool-status="info">Whole video: every tablet downloads the full file and shows its own part of the grid, using the saved layout. Fine for smaller videos; for a large master, pre-cut slices are lighter on the tablets.</p>}
-      <p className="sc-tool-help">Any MP4 in Studio → Media library can play as a whole video. For pre-cut slices, upload them named <code>&lt;clip&gt;__&lt;position&gt;.mp4</code> (for example <code>ocean__A1.mp4</code>); the calculator below lists the exact names.</p>
+      <WallUpload token={token} pocketbaseUrl={pocketbaseUrl} defaultClip={pickedClip && !pickedClip.endsWith(".mp4") ? pickedClip : ""} onUploaded={(clip) => { if (clip) setSelectedClip(clip); void refresh().catch(() => {}); }} />
     </section>
 
     <WallMap snapshot={snapshot} draft={draft} dirty={dirty} edit={edit} onSave={() => void saveLayout()} token={token} clip={loaded} />
     <SliceCalculator layout={draft} edit={edit} dirty={dirty} onSave={() => void saveLayout()} defaultClip={pickedClip || "clip"} />
+  </div>;
+}
+
+type UploadRow = { name: string; src?: string; state: "waiting" | "uploading" | "done" | "error"; detail?: string };
+
+/** Upload whole videos or slices straight into the media library (the same one Studio uses). */
+function WallUpload({ token, pocketbaseUrl, defaultClip, onUploaded }: { token: string; pocketbaseUrl: string; defaultClip: string; onUploaded: (clip: string | null) => void }) {
+  const [clip, setClip] = useState(defaultClip);
+  const [rows, setRows] = useState<UploadRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const upload = async (files: File[]) => {
+    const planned = files.map((file) => ({ file, target: wallUploadName(file.name, clip) }));
+    setRows(planned.map(({ file, target }) => "error" in target
+      ? { name: file.name, state: "error", detail: target.error }
+      : { name: file.name, src: target.src, state: "waiting" }));
+    setBusy(true);
+    let lastClip: string | null = null;
+    for (const [index, { file, target }] of planned.entries()) {
+      if ("error" in target) continue;
+      const mark = (patch: Partial<UploadRow>) => setRows((current) => current.map((row, i) => i === index ? { ...row, ...patch } : row));
+      mark({ state: "uploading" });
+      try {
+        await uploadWallVideo(pocketbaseUrl, token, file, target.src);
+        mark({ state: "done" });
+        lastClip = target.kind === "whole" ? target.src : target.src.split("__")[0]!;
+      } catch (reason) {
+        mark({ state: "error", detail: reason instanceof Error ? reason.message : "Upload failed" });
+      }
+    }
+    setBusy(false);
+    onUploaded(lastClip);
+  };
+  return <div className="video-wall-upload">
+    <div className="video-wall-row">
+      <label className="sc-tool-label">Upload videos or slices
+        <input className="sc-tool-field" type="file" accept="video/mp4,.mp4" multiple disabled={busy} onChange={(event) => {
+          const files = [...(event.target.files ?? [])];
+          event.target.value = "";
+          if (files.length) void upload(files);
+        }} />
+      </label>
+      <label className="sc-tool-label">Clip name for slices named A1.mp4, A2.mp4…
+        <input className="sc-tool-field sc-tool-mono" value={clip} placeholder="ocean" onChange={(event) => setClip(event.target.value)} />
+      </label>
+    </div>
+    <p className="sc-tool-help">A plain MP4 plays as a whole video, cut on the tablets. Slices named <code>ocean__A1.mp4</code> keep their name; slices exported as <code>A1.mp4</code>, <code>B3.mp4</code>… get the clip name in front. Uploading a name that already exists replaces it. Files also appear in Studio → Media library.</p>
+    {rows.length > 0 && <ul className="video-wall-upload-list">
+      {rows.map((row, index) => <li key={`${row.name}-${index}`} data-state={row.state}>
+        <span className="sc-tool-mono">{row.src && row.src !== row.name ? `${row.name} → ${row.src}` : row.name}</span>
+        <span>{row.state === "waiting" ? "Waiting" : row.state === "uploading" ? "Uploading…" : row.state === "done" ? "Uploaded" : row.detail ?? "Failed"}</span>
+      </li>)}
+    </ul>}
   </div>;
 }
 
@@ -243,8 +296,24 @@ function SliceCalculator({ layout, edit, dirty, onSave, defaultClip }: {
       <div><p className="sc-tool-eyebrow">Cut slices in Premiere or similar</p><h2 id="wall-calc-heading">Slice calculator</h2></div>
       <button type="button" className="sc-tool-button" data-sc-tool-variant="primary" disabled={!dirty} onClick={onSave}>{dirty ? "Save layout" : "Saved"}</button>
     </div>
-    <p className="sc-tool-help">Measure the visible screen area of one tablet as mounted, and the distance between the screens of neighbouring tablets (both bezels plus any spacing). The parts of the video behind those gaps are left out, so lines stay straight across the wall.</p>
+    <p className="sc-tool-help">Pick the tablet, or measure the visible screen area of one tablet as mounted and the distance between the screens of neighbouring tablets (both bezels plus any spacing). The parts of the video behind those gaps are left out, so lines stay straight across the wall. The Lenovo preset assumes tablets touching edge to edge without cases: add case thickness and spacing to the gaps. The app stays in portrait, so for landscape mounting the tablets turn the video; if it shows upside down, switch the turning direction.</p>
     <div className="video-wall-fields">
+      <label className="sc-tool-label">Tablet
+        <select className="sc-tool-field" value={wallTabletPreset(layout)?.id ?? "custom"} onChange={(event) => {
+          const preset = WALL_TABLET_PRESETS.find((candidate) => candidate.id === event.target.value);
+          if (preset) set((l) => ({ ...l, screen: preset.screen, gapMm: preset.gapMm, mount: preset.mount }));
+        }}>
+          {WALL_TABLET_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.name}</option>)}
+          <option value="custom">Custom (values below)</option>
+        </select>
+      </label>
+      <label className="sc-tool-label">Mounting
+        <select className="sc-tool-field" value={layout.mount} onChange={(event) => set((l) => ({ ...l, mount: event.target.value as WallMount }))}>
+          <option value="portrait">Portrait (upright)</option>
+          <option value="landscape-cw">Landscape, turned clockwise</option>
+          <option value="landscape-ccw">Landscape, turned counter-clockwise</option>
+        </select>
+      </label>
       <NumberField label="Columns" value={layout.cols} min={1} max={WALL_MAX_COLS} onChange={(cols) => set((l) => ({ ...l, cols: Math.min(WALL_MAX_COLS, Math.max(1, Math.round(cols))) }))} />
       <NumberField label="Rows" value={layout.rows} min={1} max={WALL_MAX_ROWS} onChange={(rows) => set((l) => ({ ...l, rows: Math.min(WALL_MAX_ROWS, Math.max(1, Math.round(rows))) }))} />
       <NumberField label="Screen width" unit="mm" step={0.1} value={layout.screen.widthMm} onChange={(widthMm) => set((l) => ({ ...l, screen: { ...l.screen, widthMm } }))} />

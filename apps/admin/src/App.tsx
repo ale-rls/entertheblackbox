@@ -718,7 +718,7 @@ export function App() {
 
       {connectedToken && (activeTab === "devices" || audioOnly) && <NativeAudioCoverage key={connectedToken} token={connectedToken} />}
       {connectedToken && status && activeTab === "instrument" && !audioOnly && <SurfaceInstrument token={connectedToken} participants={status.participants} />}
-      {connectedToken && activeTab === "wall" && !audioOnly && <VideoWall key={connectedToken} token={connectedToken} />}
+      {connectedToken && activeTab === "wall" && !audioOnly && <VideoWall key={connectedToken} token={connectedToken} pocketbaseUrl={POCKETBASE_URL} />}
       {status && (activeTab === "devices" || audioOnly) && <ShowClockPanel clock={clock} status={status} stale={statusStale} receivedAt={statusReceivedAt} />}
 
       {!connectionAuthenticated && <section className="sc-tool-panel admin-connection" aria-labelledby="admin-connection-heading">
