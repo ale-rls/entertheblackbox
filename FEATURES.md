@@ -206,3 +206,5 @@ Implemented in apps/native and the ShowScreen module bundled with packages/expo-
 - Admin phone audio coverage audits every phase/group assignment against immutable downloaded bytes, distinguishing unassigned, unpublished, missing and corrupt audio; device timing separately reports runtime playback.
 
 - Optional `monitorGroupId` makes M1–M4 follow that audience’s independent path, clears cues while it waits, and returns to the shared timeline at reunion — scenario schema/validation and server phase engine.
+
+- Studio phone audio uses the same audio-filtered library picker for default tracks, audience-specific replacements and group-selection audio; explicit default/silence states and removal controls explain what each audience hears — Studio Inspector and media picker.

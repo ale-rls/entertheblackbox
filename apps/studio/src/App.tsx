@@ -576,7 +576,14 @@ export function App() {
   const selectMedia = (row: MediaLibraryRow) => {
     if (!draft || !mediaPicker) return;
     const phase = draft.project.scenario.phases.find((item) => item.id === mediaPicker.phaseId);
-    if (phase && typeof mediaPicker.target === "object") {
+    if (phase && typeof mediaPicker.target === "object" && "groupId" in mediaPicker.target) {
+      const { groupId } = mediaPicker.target;
+      if (phase.kind === "group-branch") updatePhase({ ...phase, branches: phase.branches.map(branch => branch.groupId === groupId ? { ...branch, phoneAudioSrc: row.src } : branch) });
+      else if (phase.kind !== "idle") updatePhase({ ...phase, phoneAudioByGroup: { ...phase.phoneAudioByGroup, [groupId]: row.src } });
+      closeMediaPicker();
+      return;
+    }
+    if (phase && typeof mediaPicker.target === "object" && "monitorId" in mediaPicker.target) {
       const { monitorId, cueIndex } = mediaPicker.target;
       const cues = phase.monitorCues?.[monitorId] ?? [];
       updatePhase({ ...phase, monitorCues: { ...phase.monitorCues, [monitorId]: cues.map((cue, index) => index === cueIndex && (cue.kind === "image" || cue.kind === "video") ? { ...cue, src: row.src } : cue) } });
@@ -954,8 +961,14 @@ export function App() {
   const mediaPickerPhase = mediaPicker
     ? draft.project.scenario.phases.find((phase) => phase.id === mediaPicker.phaseId)
     : undefined;
-  const monitorPickerCue = mediaPicker && typeof mediaPicker.target === "object" ? mediaPickerPhase?.monitorCues?.[mediaPicker.target.monitorId]?.[mediaPicker.target.cueIndex] : undefined;
-  const mediaPickerSelectedSrc = monitorPickerCue && "src" in monitorPickerCue ? monitorPickerCue.src : mediaPicker?.target === "phoneAudioSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
+  const monitorPickerCue = mediaPicker && typeof mediaPicker.target === "object" && "monitorId" in mediaPicker.target ? mediaPickerPhase?.monitorCues?.[mediaPicker.target.monitorId]?.[mediaPicker.target.cueIndex] : undefined;
+  const groupPickerTarget = mediaPicker && typeof mediaPicker.target === "object" && "groupId" in mediaPicker.target ? mediaPicker.target : undefined;
+  const groupPickerSrc = groupPickerTarget && mediaPickerPhase && mediaPickerPhase.kind !== "idle"
+    ? mediaPickerPhase.kind === "group-branch"
+      ? mediaPickerPhase.branches.find(branch => branch.groupId === groupPickerTarget.groupId)?.phoneAudioSrc ?? ""
+      : mediaPickerPhase.phoneAudioByGroup?.[groupPickerTarget.groupId] ?? ""
+    : undefined;
+  const mediaPickerSelectedSrc = groupPickerSrc !== undefined ? groupPickerSrc : monitorPickerCue && "src" in monitorPickerCue ? monitorPickerCue.src : mediaPicker?.target === "phoneAudioSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
     ? mediaPickerPhase.phoneAudioSrc ?? ""
     : mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
     ? mediaPicker?.target === "audioSrc"

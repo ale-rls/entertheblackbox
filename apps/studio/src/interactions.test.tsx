@@ -340,6 +340,49 @@ describe("Studio feedback and keyboard entry", () => {
     expect(node.style.transform).toContain("translate(650px,320px)");
   });
 
+  it("picks group audio without changing the default or other groups, and restores fallback on removal", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "default.mp3", bytes: 100, hash: "default" },
+      { src: "group.mp3", bytes: 100, hash: "group" },
+      { src: "film.mp4", bytes: 100, hash: "film" },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Group branching moment").click(); });
+    await act(async () => { document.querySelector<HTMLElement>('.react-flow__node[data-id^="group-branch-"]')!.click(); });
+    const pick = async (selector: string, src: string) => {
+      await act(async () => { document.querySelector<HTMLButtonElement>(selector)!.click(); });
+      const dialog = document.querySelector('[role="dialog"]')!;
+      expect(dialog.textContent).not.toContain("film.mp4");
+      const row = Array.from(dialog.querySelectorAll('.media-row')).find(row => row.textContent?.includes(src))!;
+      await act(async () => { row.querySelector<HTMLButtonElement>('button')!.click(); });
+      await flush();
+    };
+    await pick('button[aria-label*="Group A · selection audio"]', 'group.mp3');
+    const compiled = () => JSON.parse(document.querySelector('.inspector pre')!.textContent!);
+    expect(compiled().phases.find((p: {kind: string}) => p.kind === "group-branch").branches[0].phoneAudioSrc).toBe("group.mp3");
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Audio + text (narration)").click(); });
+    await act(async () => { document.querySelector<HTMLElement>('.react-flow__node[data-id^="narration-"]')!.click(); });
+    expect(document.querySelector('.inspector')!.textContent).toContain("No audio for this group");
+    await pick('button[aria-label^="Choose audio"][aria-label$="Current media: none"]', 'default.mp3');
+    await pick('button[aria-label*=" · Group A."]', 'group.mp3');
+    const phase = compiled().phases.find((p: {kind: string}) => p.kind === "narration");
+    expect(phase.phoneAudioSrc).toBe("default.mp3");
+    expect(phase.phoneAudioByGroup).toEqual({ "group-a": "group.mp3" });
+    expect(document.querySelector('.inspector')!.textContent).toContain("Uses default: default.mp3");
+    const trigger = document.querySelector<HTMLButtonElement>('button[aria-label*=" · Group A."]')!;
+    await act(async () => { trigger.click(); });
+    expect(document.querySelector('.media-row[data-selected="true"]')?.textContent).toContain("group.mp3");
+    await act(async () => { button("Cancel").click(); });
+    expect(document.activeElement).toBe(trigger);
+    await act(async () => { button("Use default for Group A").click(); });
+    expect(compiled().phases.find((p: {kind: string}) => p.kind === "narration").phoneAudioByGroup).toBeUndefined();
+    await act(async () => { button("Remove default track").click(); });
+    expect(document.querySelector('.inspector')!.textContent).toContain("No audio for this group");
+  });
+
   it("authors a still image + MP3 phase with type-filtered library pickers", async () => {
     media.load.mockResolvedValue({ files: [
       { src: "opening.mp4", bytes: 1_000, hash: "video", durationMs: 1_000 },

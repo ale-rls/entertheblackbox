@@ -74,11 +74,11 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   const label = (plain: string, runtime: string) => <span title={runtime}>{plain}</span>;
   const text = (plain: string, runtime: string, value: string, change: (value: string) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" value={value} onChange={(event) => change(event.target.value)} /></label>;
   const number = (plain: string, runtime: string, value: number, change: (value: number) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" type="number" min="0" value={value} onChange={(event) => change(numberValue(event.target.value, value))} /></label>;
-  const mediaPicker = (plain: string, runtime: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc", src: string, kind: Exclude<StudioMediaKind, "unknown">) => <>
-    <div className="sc-tool-label media-source-field">{label(plain, runtime)}<button className="sc-tool-button media-source-picker" data-sc-tool-variant="secondary" type="button" aria-label={`Choose ${kind} for ${phase.id}. Current media: ${src}`} onClick={(event) => onChooseMedia(phase.id, runtime, kind, event.currentTarget)}>
-      <span className="sc-tool-mono">{src}</span><span>Browse library…</span>
+  const mediaPicker = (plain: string, runtime: MediaTarget, src: string | undefined, kind: Exclude<StudioMediaKind, "unknown">, emptyLabel = "Choose an MP3") => <>
+    <div className="sc-tool-label media-source-field">{label(plain, typeof runtime === "string" ? runtime : "groupId" in runtime ? `phoneAudioByGroup.${runtime.groupId}` : "monitorCues")}<button className="sc-tool-button media-source-picker" data-sc-tool-variant="secondary" type="button" aria-label={`Choose ${kind} for ${phase.id}${typeof runtime === "object" && "groupId" in runtime ? ` · ${plain}` : ""}. Current media: ${src ?? "none"}`} onClick={(event) => onChooseMedia(phase.id, runtime, kind, event.currentTarget)}>
+      <span className="sc-tool-mono">{src ?? emptyLabel}</span><span>Browse library…</span>
     </button></div>
-    {src !== "Choose an MP3" && !localMedia.some((file) => file.src === src) && <p className="field-error" role="alert">This file is missing from the shared media library. Choose a replacement.</p>}
+    {src && !localMedia.some((file) => file.src === src) && <p className="field-error" role="alert">This file is missing from the shared media library. Choose a replacement.</p>}
   </>;
   const updateVoteAssignment = (change: (assignment: Extract<Extract<Phase, { kind: "group-branch" }>["assignment"], { type: "vote" }>) => Extract<Extract<Phase, { kind: "group-branch" }>["assignment"], { type: "vote" }>) => {
     if (phase.kind !== "group-branch" || phase.assignment.type !== "vote") return;
@@ -244,7 +244,8 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       {(phase.assignment.type === "vote" || phase.assignment.type === "manual") && <label className="sc-tool-label">{label("Fallback group", "assignment.fallbackGroupId")}<select className="sc-tool-select" value={phase.assignment.fallbackGroupId} onChange={(event) => updateFallbackGroup(event.target.value)}>{phase.branches.map((branch) => <option key={branch.groupId} value={branch.groupId}>{project.scenario.groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId}</option>)}</select></label>}
       {phase.branches.map((branch, index) => <fieldset key={branch.groupId}><legend>{project.scenario.groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId}</legend>
         {number("Allocation weight", `branches.${index}.weight`, branch.weight, (weight) => onChange({ ...phase, branches: phase.branches.map((item, itemIndex) => itemIndex === index ? { ...item, weight: Math.max(1, weight) } : item) }))}
-        {text("Phone narration MP3", `branches.${index}.phoneAudioSrc`, branch.phoneAudioSrc ?? "", (phoneAudioSrc) => onChange({ ...phase, branches: phase.branches.map((item, itemIndex) => itemIndex === index ? { ...item, phoneAudioSrc: phoneAudioSrc || undefined } : item) }))}
+        {mediaPicker(`${project.scenario.groups?.find(group => group.id === branch.groupId)?.label ?? branch.groupId} · selection audio`, { groupId: branch.groupId }, branch.phoneAudioSrc, "audio", "No audio")}
+        {branch.phoneAudioSrc && <button className="sc-tool-button" type="button" onClick={() => onChange({ ...phase, branches: phase.branches.map(item => item.groupId === branch.groupId ? { ...item, phoneAudioSrc: undefined } : item) })}>Remove group audio</button>}
       </fieldset>)}
       <p className="sc-tool-copy field-hint">Connect each group output to its own next scene. Connect Rejoin to the shared scene where everyone meets again. The main display stays black during selection and group paths. Groups arriving early wait; the shared scene starts once all occupied paths finish.</p>
     </fieldset>}
@@ -453,16 +454,20 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       {phase.next.type === "quadrant-plurality" && <CountedStatuses phase={phase} onChange={onChange} />}
     </>}
     {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone audio</legend>
-      {mediaPicker(phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? "Synchronized phone soundtrack (MP3)" : "Native app narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}
-      {phase.phoneAudioSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, phoneAudioSrc: undefined })}>Remove phone narration</button>}
-      {(project.scenario.groups?.length ?? 0) > 0 && <details><summary>Audio by group</summary>
-      {(project.scenario.groups ?? []).map((group) => text(
-        `${group.label} override (MP3)`,
-        `phoneAudioByGroup.${group.id}`,
-        phase.phoneAudioByGroup?.[group.id] ?? "",
-        (src) => onChange({ ...phase, phoneAudioByGroup: Object.fromEntries(Object.entries({ ...(phase.phoneAudioByGroup ?? {}), [group.id]: src }).filter(([, value]) => Boolean(value))) }),
-      ))}
-      <p className="sc-tool-copy field-hint">Leave blank to use the shared track.</p></details>}
+      <p className="sc-tool-copy field-hint">Each listener hears one scene track. A group track replaces the default for that group.</p>
+      {mediaPicker(phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? "Synchronized phone soundtrack (MP3)" : "Default track (optional)", "phoneAudioSrc", phase.phoneAudioSrc, "audio", "No default audio")}
+      {phase.phoneAudioSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, phoneAudioSrc: undefined })}>Remove default track</button>}
+      {(project.scenario.groups?.length ?? 0) > 0 && <details open={Object.keys(phase.phoneAudioByGroup ?? {}).length > 0 || undefined}><summary>Different audio by group{Object.keys(phase.phoneAudioByGroup ?? {}).length > 0 ? ` · ${Object.keys(phase.phoneAudioByGroup!).length} assigned` : ""}</summary>
+        {(project.scenario.groups ?? []).map(group => <div key={group.id}>
+          {mediaPicker(group.label, { groupId: group.id }, phase.phoneAudioByGroup?.[group.id], "audio", phase.phoneAudioSrc ? `Uses default: ${phase.phoneAudioSrc}` : "No audio for this group")}
+          {phase.phoneAudioByGroup?.[group.id] && <button className="sc-tool-button" type="button" onClick={() => {
+            const phoneAudioByGroup = { ...phase.phoneAudioByGroup };
+            delete phoneAudioByGroup[group.id];
+            onChange({ ...phase, phoneAudioByGroup: Object.keys(phoneAudioByGroup).length ? phoneAudioByGroup : undefined });
+          }}>{phase.phoneAudioSrc ? `Use default for ${group.label}` : `Remove audio for ${group.label}`}</button>}
+        </div>)}
+        <p className="sc-tool-copy field-hint">Without a group track, listeners use the default. Without either, they hear no scene audio.</p>
+      </details>}
     </fieldset>}
     <MonitorEditor phase={phase} onChange={onChange} onChooseMedia={onChooseMedia} />
     <details><summary>Advanced settings</summary>

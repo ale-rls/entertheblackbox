@@ -2,7 +2,7 @@ import { MONITOR_IDS, monitorCuesSchema, type MonitorCue, type MonitorId } from 
 import type { Phase } from "./model.js";
 
 export type MonitorMediaTarget = { monitorId: MonitorId; cueIndex: number };
-export type MediaTarget = "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc" | MonitorMediaTarget;
+export type MediaTarget = "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc" | MonitorMediaTarget | { groupId: string };
 
 export function MonitorEditor({ phase, onChange, onChooseMedia }: {
   phase: Phase;
