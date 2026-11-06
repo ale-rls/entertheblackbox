@@ -181,7 +181,7 @@ function ConfirmationDialog({ action, scopeLabel, onCancel, onConfirm }: { scope
   </div>;
 }
 
-function JumpConfirmationDialog({ scene, scope, onCancel, onConfirm }: { scene: FlowScene; scope: string; onCancel: () => void; onConfirm: () => void }) {
+function JumpConfirmationDialog({ scene, scope, restart = false, onCancel, onConfirm }: { scene: FlowScene; scope: string; restart?: boolean; onCancel: () => void; onConfirm: () => void }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const titleId = "admin-jump-confirmation-title";
   const descriptionId = "admin-jump-confirmation-description";
@@ -205,12 +205,12 @@ function JumpConfirmationDialog({ scene, scope, onCancel, onConfirm }: { scene: 
 
   return <div className="sc-tool-dialog-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
     <div className="sc-tool-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} onKeyDown={handleKeyDown}>
-      <p className="sc-tool-eyebrow">Scene jump</p>
-      <h2 id={titleId}>Jump to “{scene.title}”?</h2>
-      <p id={descriptionId}>{scope}: this immediately leaves the current scene, clears its in-progress vote or playback state, and starts <span className="sc-tool-mono">{scene.id}</span>.</p>
+      <p className="sc-tool-eyebrow">{restart ? "Restart current scene" : "Scene jump"}</p>
+      <h2 id={titleId}>{restart ? "Restart" : "Jump to"} “{scene.title}”?</h2>
+      <p id={descriptionId}>{restart ? `${scope}: replay this scene from the beginning, reset its timer and clear its current vote. Audio, video and show cues play again. Other group paths keep running.` : <>{scope}: this immediately leaves the current scene, clears its in-progress vote or playback state, and starts <span className="sc-tool-mono">{scene.id}</span>.</>}</p>
       <div className="sc-tool-dialog-actions">
         <button ref={cancelRef} className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={onCancel}>Keep current scene</button>
-        <button className="sc-tool-button" data-sc-tool-variant="primary" type="button" onClick={onConfirm}>Jump to scene</button>
+        <button className="sc-tool-button" data-sc-tool-variant="primary" type="button" onClick={onConfirm}>{restart ? "Restart scene" : "Jump to scene"}</button>
       </div>
     </div>
   </div>;
@@ -265,6 +265,7 @@ export function App() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [flow, setFlow] = useState<SceneFlow | null>(null);
   const [jumpScope, setJumpScope] = useState<{ groupId?: string; label: string; epoch: number | null; sessionId: string | null; phaseId: string | null }>({ label: "Whole show", epoch: null, sessionId: null, phaseId: null });
+  const [restartingScene, setRestartingScene] = useState(false);
   const [jumpScene, setJumpScene] = useState<FlowScene | null>(null);
   const [showsInfo, setShowsInfo] = useState<ShowsInfo | null>(null);
   const [selectedShowId, setSelectedShowId] = useState("");
@@ -613,7 +614,7 @@ export function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phaseId: scene.id, groupId: jumpScope.groupId, expectedPhaseId: jumpScope.phaseId, expectedEpoch: jumpScope.epoch, sessionId: jumpScope.sessionId }),
       });
-      setFeedback({ status: "success", message: `Jumped to “${scene.title}”.` });
+      setFeedback({ status: "success", message: restartingScene ? `Restarted “${scene.title}”.` : `Jumped to “${scene.title}”.` });
       await refresh();
     } catch (error) {
       setFeedback({ status: "danger", message: error instanceof Error ? error.message : "Could not jump to that scene." });
@@ -642,7 +643,8 @@ export function App() {
       });
     });
   };
-  const requestJump = (scene: FlowScene, trigger: HTMLButtonElement, groupId?: string) => {
+  const requestJump = (scene: FlowScene, trigger: HTMLButtonElement, groupId?: string, restart = false) => {
+    setRestartingScene(restart);
     const path = status?.groupPaths.find((p) => p.groupId === groupId && p.state !== "split");
     setJumpScope({ ...(groupId ? { groupId } : {}), label: path ? `${path.label} · ${path.memberIds.length} participants` : "Whole show", epoch: path?.phaseEpoch ?? status?.phaseEpoch ?? null, sessionId: status?.sessionId ?? null, phaseId: path?.phaseId ?? status?.phaseId ?? null });
     confirmTriggerRef.current = trigger;
@@ -659,7 +661,9 @@ export function App() {
     confirmTriggerRef.current?.focus();
     void jumpToScene(scene).finally(() => {
       requestAnimationFrame(() => {
-        if (confirmTriggerRef.current?.disabled) flowHeadingRef.current?.focus();
+        if (!confirmTriggerRef.current?.isConnected || confirmTriggerRef.current.disabled) {
+          (restartingScene ? controlsHeadingRef : flowHeadingRef).current?.focus();
+        }
       });
     });
   };
@@ -684,6 +688,10 @@ export function App() {
                   : <button className="sc-tool-button" data-sc-tool-variant={path.done ? "secondary" : "primary"} type="button" disabled={path.done || path.state === "empty" || path.acceptingParticipants === false || busy} onClick={() => void skipPhase(path.groupId, path.label)}>
                   {path.state === "empty" ? `${path.label} — empty, available to join` : path.done ? `${path.label} — finished` : `Next scene for ${path.label} — ${path.memberIds.length} ${path.memberIds.length === 1 ? "person" : "people"}`}
                 </button>}
+                <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={busy || path.done || path.state === "empty" || path.state === "split" || path.state === "choosing" || path.acceptingParticipants === false || !flow?.scenes.some(scene => scene.id === path.phaseId)} onClick={(event) => {
+                  const scene = flow?.scenes.find(scene => scene.id === path.phaseId);
+                  if (scene) requestJump(scene, event.currentTarget, path.groupId, true);
+                }}>Restart scene for {path.label}</button>
                 <span>{path.state === "choosing" ? "" : path.done ? "At the reunion point, waiting on the other groups" : `Currently on “${path.phaseTitle}”`}</span>
               <div className="admin-nested-groups">{status?.groupPaths.filter(child => child.parentGroupId === path.groupId && !ancestors.includes(child.groupId) && child.groupId !== path.groupId).map(child => renderGroup(child, [...ancestors, path.groupId]))}</div></div>);
 
@@ -751,9 +759,9 @@ export function App() {
               <div className="admin-group-reunion"><h3>Shared reunion</h3><p>{[...new Set(status.groupPaths.map(path => path.reunionPhaseId).filter((id): id is string => Boolean(id)))].map(sceneTitle).join(" · ")}</p><p>{status.groupPaths.filter(path => path.done).length} / {status.groupPaths.length} paths finished. The shared timeline resumes when occupied paths finish.</p><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={busy} onClick={(event) => requestConfirmation("reunion", event.currentTarget)}>Bring all groups to reunion</button><span>Explicitly ends unfinished branches, with confirmation</span></div>
             </> : <div><GroupSelectionStart label="Start group paths" pending={status.pendingGroupAssignments?.length ?? 0} disconnected={status.pendingDisconnectedGroupAssignments?.length ?? 0} disabled={!isActive || busy} onStart={(skip) => void startGroupPaths(undefined, undefined, undefined, skip)} /></div>)
               : <div><button className="sc-tool-button" data-sc-tool-variant={isActive ? "primary" : "secondary"} type="button" disabled={!isActive || busy} onClick={() => void skipPhase()}>{skipLabel}</button><span>{isActive ? "Server validates phase support" : "Available during an active show"}</span></div>}
-            <details className="admin-other-actions"><summary>Other show actions</summary>            <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
+            {!inGroupBranch && <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy || !currentScene} onClick={(event) => { if (currentScene) requestJump(currentScene, event.currentTarget, undefined, true); }}>Restart current scene</button><span>Replay from the beginning; reset the timer and current vote</span></div>}
+            <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
             <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={!canReturnToIdle || busy} onClick={(event) => requestConfirmation("idle", event.currentTarget)}>Return to idle</button><span>Stop the current show</span></div>
-</details>
           </div>
           </div>
 
@@ -862,6 +870,6 @@ export function App() {
       </div>}
     </main>
     {confirmAction && <ConfirmationDialog scopeLabel={reunionScope?.label} action={confirmAction} onCancel={closeConfirmation} onConfirm={confirmControl} />}
-    {jumpScene && <JumpConfirmationDialog scene={jumpScene} scope={jumpScope.label} onCancel={closeJumpConfirmation} onConfirm={confirmJump} />}
+    {jumpScene && <JumpConfirmationDialog scene={jumpScene} scope={jumpScope.label} restart={restartingScene} onCancel={closeJumpConfirmation} onConfirm={confirmJump} />}
   </div>;
 }

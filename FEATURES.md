@@ -206,3 +206,5 @@ Implemented in apps/native and the ShowScreen module bundled with packages/expo-
 - Admin phone audio coverage audits every phase/group assignment against immutable downloaded bytes, distinguishing unassigned, unpublished, missing and corrupt audio; device timing separately reports runtime playback.
 
 - Optional `monitorGroupId` makes M1–M4 follow that audience’s independent path, clears cues while it waits, and returns to the shared timeline at reunion — scenario schema/validation and server phase engine.
+
+- Admin exposes whole-show restart/end and confirmed current-scene restart for shared scenes or an individual running group. Scene replay uses captured session/phase/epoch guards; other group paths continue — `apps/admin/src/App.tsx`, existing admin jump API.
