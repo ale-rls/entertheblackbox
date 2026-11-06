@@ -70,3 +70,18 @@ export function wallStatus(clip: string | null, slice: WallSliceState, showMode:
   if (!playback) return { clip, state: 'ready' };
   return { clip, state: playback.state, ...(playback.driftMs === undefined ? {} : { driftMs: playback.driftMs }) };
 }
+
+/**
+ * Box for the wall video on a portrait-locked screen. For a tablet mounted in
+ * landscape the box is the screen with width and height swapped, centred and
+ * rotated, so the video is upright on the wall. `screen` inside the box is
+ * what the crop maths should use.
+ */
+export function wallRotatedBox(device: { width: number; height: number }, rotation: 0 | 90 | -90 | undefined) {
+  if (!rotation) return { style: { left: 0, top: 0, width: device.width, height: device.height }, screen: device };
+  const width = device.height, height = device.width;
+  return {
+    style: { left: (device.width - width) / 2, top: (device.height - height) / 2, width, height, transform: [{ rotate: `${rotation}deg` }] },
+    screen: { width, height },
+  };
+}

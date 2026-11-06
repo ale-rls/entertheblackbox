@@ -1,6 +1,6 @@
 import type { WebSocket } from "ws";
 import { encodeMessage, PROTOCOL_VERSION, type WallMessage, type WallStatusMessage } from "@entertheblackbox/protocol";
-import { DEFAULT_WALL_LAYOUT, parseWallSliceFileName, wallSlotForLabel, wallSlotIds, type WallLayout } from "@entertheblackbox/shared";
+import { DEFAULT_WALL_LAYOUT, parseWallSliceFileName, wallMountRotation, wallSlotForLabel, wallSlotIds, type WallLayout } from "@entertheblackbox/shared";
 
 /** Lead between pressing Play and the shared start: covers LAN fan-out and the tablets' decoder start. */
 export const WALL_PLAY_LEAD_MS = 1_500;
@@ -147,7 +147,8 @@ export class VideoWallController {
     } : undefined;
     return {
       t: "wall", v: PROTOCOL_VERSION, seq: ++this.seq,
-      clip: slot && file && clip ? { id: clip.id, slot, url: `/media/${encodeURIComponent(file.src)}`, bytes: file.bytes, sha256: file.sha256, ...(region ? { region } : {}) } : null,
+      clip: slot && file && clip ? { id: clip.id, slot, url: `/media/${encodeURIComponent(file.src)}`, bytes: file.bytes, sha256: file.sha256,
+        ...(wallMountRotation(layout.mount) ? { rotation: wallMountRotation(layout.mount) } : {}), ...(region ? { region } : {}) } : null,
       startAt: this.startAt,
       loop: this.loop,
     };

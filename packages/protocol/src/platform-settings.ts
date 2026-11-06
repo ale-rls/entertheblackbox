@@ -59,5 +59,7 @@ export const wallLayoutSchema = z.object({
   gapMm: z.object({ x: z.number().min(0).max(10_000), y: z.number().min(0).max(10_000) }).strict(),
   source: z.object({ widthPx: wallPx, heightPx: wallPx, fps: z.number().positive().max(240) }).strict(),
   fit: z.enum(["fill", "fit"]),
+  /** Layouts saved before mounting existed were portrait. */
+  mount: z.enum(["portrait", "landscape-cw", "landscape-ccw"]).default("portrait"),
   slots: z.record(z.string().regex(/^[A-Z][0-9]{1,2}$/), z.string().trim().min(1).max(40)),
-}).strict() satisfies z.ZodType<WallLayout>;
+}).strict() satisfies z.ZodType<WallLayout, z.ZodTypeDef, unknown>;

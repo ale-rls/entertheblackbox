@@ -67,10 +67,21 @@ describe("VideoWallController", () => {
     expect(await wall.load("intro.mp4")).toEqual({ ok: true, delivered: 3 });
     expect(ensureLocal.mock.calls.map(([src]) => src)).toEqual(["intro.mp4"]);
     const region = { cols: 2, rows: 1, screenWidthMm: DEFAULT_WALL_LAYOUT.screen.widthMm, screenHeightMm: DEFAULT_WALL_LAYOUT.screen.heightMm,
-      gapXMm: DEFAULT_WALL_LAYOUT.gapMm.x, gapYMm: DEFAULT_WALL_LAYOUT.gapMm.y, fit: "fill", sourceWidthPx: 3840, sourceHeightPx: 2160 };
-    expect(t1.sent[0]!.clip).toEqual({ id: "intro.mp4", slot: "A1", url: "/media/intro.mp4", bytes: 40, sha256: hash("d"), region });
+      gapXMm: DEFAULT_WALL_LAYOUT.gapMm.x, gapYMm: DEFAULT_WALL_LAYOUT.gapMm.y, fit: "fill", sourceWidthPx: DEFAULT_WALL_LAYOUT.source.widthPx, sourceHeightPx: DEFAULT_WALL_LAYOUT.source.heightPx };
+    expect(t1.sent[0]!.clip).toEqual({ id: "intro.mp4", slot: "A1", url: "/media/intro.mp4", bytes: 40, sha256: hash("d"), rotation: -90, region });
     expect(t2.sent[0]!.clip).toMatchObject({ slot: "A2", url: "/media/intro.mp4", region });
     expect(spare.sent[0]!.clip).toBeNull();
+  });
+
+  it("tells landscape-mounted tablets to rotate the video", async () => {
+    const { wall, t1 } = setup();
+    wall.restoreLayout({ ...wall.layout, mount: "portrait" });
+    await wall.load("ocean");
+    expect(t1.sent.at(-1)!.clip).not.toHaveProperty("rotation");
+    wall.setLayout({ ...wall.layout, mount: "landscape-cw" });
+    expect(t1.sent.at(-1)!.clip).toMatchObject({ rotation: -90 });
+    wall.setLayout({ ...wall.layout, mount: "landscape-ccw" });
+    expect(t1.sent.at(-1)!.clip).toMatchObject({ rotation: 90 });
   });
 
   it("plays on a shared start time, cues, loops, stops, and welcomes late joiners with the current state", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WallMessage } from '@entertheblackbox/protocol';
-import { acceptWall, syncWallPlayer, wallStatus, wallViewFrame, type WallPlayer, type WallRegion } from './wall';
+import { acceptWall, syncWallPlayer, wallRotatedBox, wallStatus, wallViewFrame, type WallPlayer, type WallRegion } from './wall';
 
 const message = (seq: number): WallMessage => ({ t: 'wall', v: 2, seq, clip: null, startAt: null, loop: true });
 const player = (currentTime: number, playing = false): WallPlayer & { calls: string[] } => {
@@ -71,5 +71,14 @@ describe('wallViewFrame', () => {
     expect(wallViewFrame(undefined, 'A1', null, { width: 800, height: 450 })).toBeNull();
     expect(wallViewFrame(region, 'A1', null, null)).toBeNull();
     expect(wallViewFrame(region, 'C9', null, { width: 800, height: 450 })).toBeNull();
+  });
+});
+
+describe('wallRotatedBox', () => {
+  it('fills a portrait screen as is, and turns a landscape-mounted one', () => {
+    expect(wallRotatedBox({ width: 600, height: 1024 }, 0)).toEqual({ style: { left: 0, top: 0, width: 600, height: 1024 }, screen: { width: 600, height: 1024 } });
+    const turned = wallRotatedBox({ width: 600, height: 1024 }, -90);
+    expect(turned.screen).toEqual({ width: 1024, height: 600 });
+    expect(turned.style).toEqual({ left: -212, top: 212, width: 1024, height: 600, transform: [{ rotate: '-90deg' }] });
   });
 });
