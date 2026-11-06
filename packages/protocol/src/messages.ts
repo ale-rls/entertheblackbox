@@ -573,6 +573,22 @@ export const wallSchema = z.object({
     url: z.string().startsWith("/").max(500),
     bytes: z.number().int().positive(),
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    /**
+     * Present when `url` is the whole, uncut video: the device crops its own
+     * slot out of it using this wall geometry (see wallCropFraction). The
+     * source size is a fallback until the device knows the video's real size.
+     */
+    region: z.object({
+      cols: z.number().int().min(1).max(20),
+      rows: z.number().int().min(1).max(20),
+      screenWidthMm: z.number().positive(),
+      screenHeightMm: z.number().positive(),
+      gapXMm: z.number().min(0),
+      gapYMm: z.number().min(0),
+      fit: z.enum(["fill", "fit"]),
+      sourceWidthPx: z.number().int().positive(),
+      sourceHeightPx: z.number().int().positive(),
+    }).optional(),
   }).nullable(),
   startAt: timestamp.nullable(),
   loop: z.boolean(),

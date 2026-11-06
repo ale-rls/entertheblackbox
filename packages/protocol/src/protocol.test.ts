@@ -202,6 +202,8 @@ const serverMessages: ServerToClientMessage[] = [
   { t: "surface", v: 2, mode: "flash", color: "#ff00aa", applyAt: 1_700_000_000_060, seq: 3, holdMs: 250, label: "T07" },
   { t: "wall", v: 2, seq: 4, clip: { id: "ocean", slot: "B3", url: "/media/ocean__B3.mp4", bytes: 1024, sha256: "a".repeat(64) }, startAt: 1_700_000_002_000, loop: true },
   { t: "wall", v: 2, seq: 5, clip: null, startAt: null, loop: false },
+  { t: "wall", v: 2, seq: 6, startAt: null, loop: true, clip: { id: "intro.mp4", slot: "A2", url: "/media/intro.mp4", bytes: 2048, sha256: "b".repeat(64),
+    region: { cols: 4, rows: 3, screenWidthMm: 226.5, screenHeightMm: 157.4, gapXMm: 25, gapYMm: 25, fit: "fill", sourceWidthPx: 1280, sourceHeightPx: 720 } } },
 ];
 
 describe("round-trips", () => {

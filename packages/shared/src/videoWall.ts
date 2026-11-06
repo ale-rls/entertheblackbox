@@ -142,6 +142,43 @@ export function wallSlicePlan(layout: WallLayout): WallSlicePlan {
   return { wallMm: { width: round(width, 1), height: round(height, 1) }, wallPx: { x: originX, y: originY, w: wallW, h: wallH }, pxPerMm, slices, gaps };
 }
 
+/**
+ * Where one wall position sits in the master frame, as fractions of the
+ * frame (0–1; beyond that range in "fit" mode, which shows as black). Used by
+ * tablets playing an uncut video: they enlarge the whole video and shift it
+ * so only their own region is on screen. Unrounded, so it is exact for small
+ * videos too.
+ */
+export function wallCropFraction(layout: Pick<WallLayout, "cols" | "rows" | "screen" | "gapMm" | "fit">, sourceWidthPx: number, sourceHeightPx: number, slot: string): WallRect | null {
+  const match = /^([A-Z])([0-9]{1,2})$/.exec(slot);
+  if (!match || !(sourceWidthPx > 0) || !(sourceHeightPx > 0)) return null;
+  const row = match[1]!.charCodeAt(0) - 65, col = Number(match[2]) - 1;
+  const { cols, rows, screen, gapMm } = layout;
+  if (row >= rows || col < 0 || col >= cols) return null;
+  const width = cols * screen.widthMm + (cols - 1) * gapMm.x;
+  const height = rows * screen.heightMm + (rows - 1) * gapMm.y;
+  const scaleX = sourceWidthPx / width, scaleY = sourceHeightPx / height;
+  const pxPerMm = layout.fit === "fill" ? Math.min(scaleX, scaleY) : Math.max(scaleX, scaleY);
+  const originX = (sourceWidthPx - width * pxPerMm) / 2, originY = (sourceHeightPx - height * pxPerMm) / 2;
+  return {
+    x: (originX + col * (screen.widthMm + gapMm.x) * pxPerMm) / sourceWidthPx,
+    y: (originY + row * (screen.heightMm + gapMm.y) * pxPerMm) / sourceHeightPx,
+    w: screen.widthMm * pxPerMm / sourceWidthPx,
+    h: screen.heightMm * pxPerMm / sourceHeightPx,
+  };
+}
+
+/**
+ * Size and offset of the enlarged video view inside a tablet screen of
+ * `screenW`×`screenH` points, so that `crop` (fractions of the frame) fills
+ * the screen exactly.
+ */
+export function wallVideoFrame(crop: WallRect, screenW: number, screenH: number): { left: number; top: number; width: number; height: number } {
+  const width = screenW / crop.w, height = screenH / crop.h;
+  // `0 - x` rather than `-x`, so position 0 is 0, not -0.
+  return { left: 0 - crop.x * width, top: 0 - crop.y * height, width, height };
+}
+
 /** An ffmpeg command for one slice; pads with black first when the slice reaches past the source ("fit"). */
 export function wallFfmpegCommand(layout: WallLayout, slice: WallSlice, input: string, clip: string): string {
   const { source } = layout;

@@ -6,21 +6,36 @@ import { DEFAULT_WALL_LAYOUT, parseWallSliceFileName, wallSlotForLabel, wallSlot
 export const WALL_PLAY_LEAD_MS = 1_500;
 
 export type WallSliceFile = { src: string; bytes: number; sha256: string };
-export type WallClip = { id: string; slices: Record<string, WallSliceFile> };
+/**
+ * sliced: pre-cut `<clip>__<slot>.mp4` files, one per position.
+ * whole: one uncut video; every tablet downloads it and crops its own region.
+ */
+export type WallClip =
+  | { id: string; kind: "sliced"; slices: Record<string, WallSliceFile> }
+  | { id: string; kind: "whole"; file: WallSliceFile };
 type Recipient = { clientId: string; name?: string; connected?: boolean; socket?: WebSocket | undefined };
 export type WallDeviceStatus = Omit<WallStatusMessage, "t" | "v"> & { at: number };
 
-/** Group media library files named `<clip>__<slot>.mp4` into wall clips. */
+/**
+ * Wall clips from the media library: files named `<clip>__<slot>.mp4` group
+ * into pre-cut clips; every other MP4 can play uncut, cropped on the tablets.
+ */
 export function wallClipsFromMedia(records: readonly { src: string; bytes: number; hash?: string }[]): WallClip[] {
-  const clips = new Map<string, WallClip>();
+  const sliced = new Map<string, Extract<WallClip, { kind: "sliced" }>>();
+  const whole: WallClip[] = [];
   for (const record of records) {
+    if (!record.hash || !/^[a-f0-9]{64}$/.test(record.hash) || !(record.bytes > 0)) continue;
+    const file = { src: record.src, bytes: record.bytes, sha256: record.hash };
     const parsed = parseWallSliceFileName(record.src);
-    if (!parsed || !record.hash || !/^[a-f0-9]{64}$/.test(record.hash) || !(record.bytes > 0)) continue;
-    const clip = clips.get(parsed.clip) ?? { id: parsed.clip, slices: {} };
-    clip.slices[parsed.slot] = { src: record.src, bytes: record.bytes, sha256: record.hash };
-    clips.set(parsed.clip, clip);
+    if (parsed) {
+      const clip = sliced.get(parsed.clip) ?? { id: parsed.clip, kind: "sliced" as const, slices: {} };
+      clip.slices[parsed.slot] = file;
+      sliced.set(parsed.clip, clip);
+    } else if (/\.mp4$/i.test(record.src) && !/[\\/]/.test(record.src) && record.src.length <= 100) {
+      whole.push({ id: record.src, kind: "whole", file });
+    }
   }
-  return [...clips.values()].sort((a, b) => a.id.localeCompare(b.id));
+  return [...sliced.values(), ...whole].sort((a, b) => a.id.localeCompare(b.id));
 }
 
 /**
@@ -59,8 +74,11 @@ export class VideoWallController {
   async load(clipId: string): Promise<{ ok: true; delivered: number } | { ok: false; error: string }> {
     const clip = (await this.options.clips()).find((candidate) => candidate.id === clipId);
     if (!clip) return { ok: false, error: "unknown_clip" };
-    const slots = new Set(wallSlotIds(this.layoutValue));
-    for (const [slot, file] of Object.entries(clip.slices)) if (slots.has(slot)) await this.options.ensureLocal?.(file.src);
+    if (clip.kind === "whole") await this.options.ensureLocal?.(clip.file.src);
+    else {
+      const slots = new Set(wallSlotIds(this.layoutValue));
+      for (const [slot, file] of Object.entries(clip.slices)) if (slots.has(slot)) await this.options.ensureLocal?.(file.src);
+    }
     this.clip = clip;
     this.startAt = null;
     this.statuses.clear();
@@ -119,10 +137,17 @@ export class VideoWallController {
 
   private messageFor(name: string | undefined): WallMessage {
     const slot = name ? wallSlotForLabel(this.layoutValue, name) : null;
-    const file = slot && this.clip ? this.clip.slices[slot] : undefined;
+    const clip = this.clip;
+    const file = !slot || !clip ? undefined : clip.kind === "whole" ? clip.file : clip.slices[slot];
+    const layout = this.layoutValue;
+    const region = clip?.kind === "whole" ? {
+      cols: layout.cols, rows: layout.rows, screenWidthMm: layout.screen.widthMm, screenHeightMm: layout.screen.heightMm,
+      gapXMm: layout.gapMm.x, gapYMm: layout.gapMm.y, fit: layout.fit,
+      sourceWidthPx: layout.source.widthPx, sourceHeightPx: layout.source.heightPx,
+    } : undefined;
     return {
       t: "wall", v: PROTOCOL_VERSION, seq: ++this.seq,
-      clip: slot && file && this.clip ? { id: this.clip.id, slot, url: `/media/${encodeURIComponent(file.src)}`, bytes: file.bytes, sha256: file.sha256 } : null,
+      clip: slot && file && clip ? { id: clip.id, slot, url: `/media/${encodeURIComponent(file.src)}`, bytes: file.bytes, sha256: file.sha256, ...(region ? { region } : {}) } : null,
       startAt: this.startAt,
       loop: this.loop,
     };

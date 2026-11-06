@@ -1,5 +1,23 @@
 import type { WallMessage, WallStatusMessage } from '@entertheblackbox/protocol';
-import { wallCorrection, wallPlaybackPosition } from '@entertheblackbox/shared';
+import { wallCorrection, wallCropFraction, wallPlaybackPosition, wallVideoFrame } from '@entertheblackbox/shared';
+
+export type WallRegion = NonNullable<NonNullable<WallMessage['clip']>['region']>;
+
+/**
+ * Where to draw an uncut wall video so this tablet's region fills the screen.
+ * Uses the video's real pixel size once known (falls back to the layout's
+ * master size). Null when the whole video should simply fill the screen.
+ */
+export function wallViewFrame(region: WallRegion | undefined, slot: string, video: { width: number; height: number } | null, screen: { width: number; height: number } | null) {
+  if (!region || !screen || !(screen.width > 0) || !(screen.height > 0)) return null;
+  const width = video && video.width > 0 ? video.width : region.sourceWidthPx;
+  const height = video && video.height > 0 ? video.height : region.sourceHeightPx;
+  const crop = wallCropFraction({
+    cols: region.cols, rows: region.rows, fit: region.fit, gapMm: { x: region.gapXMm, y: region.gapYMm },
+    screen: { widthMm: region.screenWidthMm, heightMm: region.screenHeightMm, widthPx: 1, heightPx: 1 },
+  }, width, height, slot);
+  return crop ? wallVideoFrame(crop, screen.width, screen.height) : null;
+}
 
 /** Latest `wall` message wins; late or reordered messages are dropped. */
 export function acceptWall(current: WallMessage | null, next: WallMessage): WallMessage | null {
