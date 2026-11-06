@@ -29,6 +29,19 @@ import { PhaseSubtitles } from "./components/PhaseSubtitles.js";
 import { VideoTitle } from "./components/VideoTitle.js";
 import { FullscreenControl } from "./components/FullscreenControl.js";
 import { VoteDecisionSound } from "./components/VoteDecisionSound.js";
+import { CURTAIN_LEAVE_MS, CurtainStage } from "./curtain/CurtainStage.js";
+import type { CurtainTreatment } from "@entertheblackbox/protocol";
+import type { PositionField } from "@entertheblackbox/shared";
+
+type CurtainHold = {
+  key: string;
+  treatment: CurtainTreatment;
+  field: PositionField;
+  question: string;
+  visibleFrom?: number;
+  visibleUntil?: number;
+  leavingSince: number | null;
+};
 
 /**
  * Display application shell (plan §9), three rendering layers:
@@ -252,6 +265,50 @@ export function App() {
   const spectrumPhase = phase?.kind === "position-question" || phase?.kind === "video-position-question"
     ? phase
     : null;
+  // Curtain-light votes (a curtain-light group's own display): the lit
+  // curtain replaces the field overlay, spectrum glow and cursor dots.
+  const curtainPhase = spectrumPhase?.voteTreatment !== undefined ? spectrumPhase : null;
+  const curtainKey = curtainPhase === null ? null : `${state.sessionId ?? "pending"}:${state.phaseEpoch}`;
+  const [curtainHold, setCurtainHold] = useState<CurtainHold | null>(null);
+  const [curtainUnavailable, setCurtainUnavailable] = useState(false);
+  const [curtainUrl, setCurtainUrl] = useState<{ src: string; url: string | null } | null>(null);
+  useEffect(() => {
+    if (curtainPhase === null || curtainKey === null) {
+      // Keep the finished curtain briefly so it fades into the next scene.
+      setCurtainHold((previous) => previous === null || previous.leavingSince !== null ? previous : { ...previous, leavingSince: Date.now() });
+      return;
+    }
+    setCurtainHold({
+      key: curtainKey,
+      treatment: curtainPhase.voteTreatment!,
+      field: curtainPhase.field,
+      question: curtainPhase.text,
+      ...(curtainPhase.kind === "video-position-question"
+        ? { visibleFrom: curtainPhase.startedAt + curtainPhase.showAtMs, visibleUntil: curtainPhase.startedAt + curtainPhase.hideAtMs }
+        : { visibleFrom: curtainPhase.startedAt }),
+      leavingSince: null,
+    });
+    // Only a new phase epoch starts a new lighting scene; repeated snapshots must not reset it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curtainKey]);
+  useEffect(() => {
+    if (curtainHold?.leavingSince == null) return;
+    const timer = setTimeout(() => setCurtainHold(null), CURTAIN_LEAVE_MS + 100);
+    return () => clearTimeout(timer);
+  }, [curtainHold?.leavingSince]);
+  const curtainSrc = curtainHold?.treatment.curtain.src ?? null;
+  useEffect(() => {
+    if (curtainSrc === null) return;
+    let cancelled = false;
+    media.store.pin(curtainSrc);
+    void media.store.getBlobUrl(curtainSrc).then((url) => {
+      if (!cancelled) setCurtainUrl({ src: curtainSrc, url });
+      if (url === null) console.warn(`display: curtain video "${curtainSrc}" is not in the synced media`);
+    });
+    return () => { cancelled = true; };
+  }, [curtainSrc, media.store, mediaReady]);
+  const curtainActive = curtainPhase !== null && !curtainUnavailable;
+
   const phaseVideoKey = (phase?.kind === "video" || phase?.kind === "video-position-question")
     && phase.audioSrc === undefined
     ? `${state.sessionId ?? "pending"}:${state.phaseEpoch}`
@@ -349,8 +406,29 @@ export function App() {
         )}
       </section>
 
+      {curtainHold !== null && !curtainUnavailable && <section className="layer layer-curtain">
+        <CurtainStage
+          key={curtainHold.key}
+          treatment={curtainHold.treatment}
+          field={curtainHold.field}
+          question={curtainHold.question}
+          cursorField={cursorField}
+          clock={connection.clock}
+          liveCounts={curtainHold.leavingSince === null ? state.liveCounts as Record<string, number> | null : null}
+          closed={curtainHold.leavingSince !== null || state.resolution !== null}
+          {...(curtainHold.visibleFrom === undefined ? {} : { visibleFrom: curtainHold.visibleFrom })}
+          {...(curtainHold.visibleUntil === undefined ? {} : { visibleUntil: curtainHold.visibleUntil })}
+          leavingSince={curtainHold.leavingSince}
+          videoUrl={curtainUrl?.src === curtainHold.treatment.curtain.src ? curtainUrl.url : null}
+          onUnavailable={(error) => {
+            console.warn("display: curtain-light renderer unavailable, using the standard field", error);
+            setCurtainUnavailable(true);
+          }}
+        />
+      </section>}
+
       {/* Density-driven spectrum bloom, above media but beneath crisp UI. */}
-      {spectrumPhase !== null && (spectrumPhase.spectrumGlow ?? true) && <section className="layer layer-spectrum-glow">
+      {spectrumPhase !== null && !curtainActive && (spectrumPhase.spectrumGlow ?? true) && <section className="layer layer-spectrum-glow">
         <SpectrumGlowCanvas
           cursorField={cursorField}
           field={spectrumPhase.field}
@@ -398,7 +476,10 @@ export function App() {
           joinUrl={state.qrGrant?.showJoinUrl === false ? null : state.qrGrant?.url ?? null}
           networkName={typeof __LOBBY_WIFI_NAME__ === "string" ? __LOBBY_WIFI_NAME__ : "Staedel_WiFi"}
         />
-        {phase?.kind === "position-question" && (
+        {phase?.kind === "position-question" && curtainActive && state.resolution === null && phase.deadlineAt !== null && (
+          <Countdown clock={connection.clock} deadlineAt={phase.deadlineAt} className="curtain-countdown" />
+        )}
+        {phase?.kind === "position-question" && !curtainActive && (
           <div className="question">
             <div className="question-copy">
               <p className="question-text">{phase.text}</p>
@@ -434,6 +515,7 @@ export function App() {
             liveCounts={state.liveCounts}
             resolution={state.resolution}
             soundEnabled={soundEnabled}
+            bare={curtainActive}
           />
         )}
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && phase.rating && (
@@ -460,7 +542,7 @@ export function App() {
 
       {/* Layer 3: cursor canvas */}
       <section className="layer layer-cursors">
-        <CursorCanvas field={cursorField} showCursors={phase !== null && phase.kind !== "idle" ? (phase.showCursors ?? true) : true} blinkActiveVoters={state.resolution !== null} />
+        <CursorCanvas field={cursorField} showCursors={!curtainActive && (phase !== null && phase.kind !== "idle" ? (phase.showCursors ?? true) : true)} blinkActiveVoters={state.resolution !== null} />
       </section>
     </main>
   );

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { quadrantOfField } from "@entertheblackbox/shared";
-import type { GroupBranchPhase, PositionField, Scenario, VotingMethod } from "@entertheblackbox/scenario";
+import { curtainVoteField, quadrantOfField, resolveCurtainSettings } from "@entertheblackbox/shared";
+import { curtainStagePhaseIds, type GroupBranchPhase, type PositionField, type Scenario, type VotingMethod } from "@entertheblackbox/scenario";
 import type { FinalVoteSnapshot } from "../votes/vote-engine.js";
 
 export type GroupMembership = { participantId: string; groupId: string | null };
@@ -11,7 +11,11 @@ export class GroupManager {
   private readonly answers = new Map<string, Map<string, string>>();
   private readonly awaitingSelection = new Set<string>();
 
-  constructor(private readonly scenario: Scenario) {}
+  private readonly curtainStages: Set<string>;
+
+  constructor(private readonly scenario: Scenario) {
+    this.curtainStages = curtainStagePhaseIds(scenario);
+  }
 
   beginSession(participantIds: readonly string[]): void {
     this.membership.clear();
@@ -51,7 +55,11 @@ export class GroupManager {
     this.membership.set(participantId, groupId);
   }
 
-  recordAnswers(questionId: string, field: PositionField, snapshot: FinalVoteSnapshot): void {
+  recordAnswers(questionId: string, authoredField: PositionField, snapshot: FinalVoteSnapshot): void {
+    // Curtain-light votes count with a neutral gap; a position in the gap is no answer here either.
+    const field = this.curtainStages.has(questionId)
+      ? curtainVoteField(authoredField, resolveCurtainSettings(this.scenario.curtainLight).neutralGap)
+      : authoredField;
     for (const vote of snapshot.votes) {
       if (vote.x === null || vote.y === null) continue;
       const outcome = quadrantOfField(field, vote.x, vote.y);

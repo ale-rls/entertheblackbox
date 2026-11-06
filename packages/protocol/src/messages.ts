@@ -40,12 +40,38 @@ const timestamp = z.number().finite();
  * Kept structural (intersection) so it stays in lockstep with the
  * scenario package's Phase union.
  */
+/**
+ * Resolved curtain-light presentation for a vote on a curtain-light group's
+ * timeline. The phase's own `field` is already the counting field (with its
+ * neutral gap applied), so display lighting and server counting agree.
+ */
+export const curtainTreatmentSchema = z.object({
+  type: z.literal("curtain-light"),
+  curtain: z.object({
+    src: nonEmpty,
+    baked: z.number().finite(),
+    folds: z.number().finite(),
+    shine: z.number().finite(),
+    shadow: z.number().finite(),
+    poolBase: z.number().finite(),
+    poolGain: z.number().finite(),
+    cursorFlood: z.number().finite(),
+    cursorFloodCounted: z.number().finite(),
+    neutralGap: z.number().finite(),
+  }),
+  /** Answer id → colour, defaults already resolved. */
+  answerColors: z.record(z.string(), z.string()),
+  /** Where cursors appear on first interaction (neutral), or null if the layout has none. */
+  entry: z.object({ x: z.number().finite(), y: z.number().finite() }).nullable(),
+});
+
 export const phaseSnapshotSchema = z.intersection(
   phaseSchema,
   z.object({
     scenarioVersion: nonEmpty,
     startedAt: timestamp,
     deadlineAt: timestamp.nullable(),
+    voteTreatment: curtainTreatmentSchema.optional(),
   }),
 );
 
@@ -57,6 +83,8 @@ export const cursorSchema = z.object({
   color: nonEmpty,
   /** Set only for a replayed past-participant cursor (see apps/server/src/ghosts). Omitted for live cursors. */
   ghost: z.boolean().optional(),
+  /** Increments each time the participant touches their phone control (curtain-light votes). */
+  pulse: z.number().int().nonnegative().optional(),
 });
 
 export const fourQuadrantCountsSchema = z.object({
@@ -107,6 +135,8 @@ export const inputSchema = z.object({
   // disconnected for rounding errors.
   x: z.number().finite(),
   y: z.number().finite(),
+  /** Set on the first sample of a touch. Older apps omit it; the server then infers touches from pauses. */
+  touch: z.literal("start").optional(),
 });
 
 export const clockTimingSchema = z.object({
@@ -535,6 +565,7 @@ export const serverToClientSchema = z.union([
 // ------------------------------------------------------------------------- types
 
 export type PhaseSnapshotMessage = z.infer<typeof phaseSnapshotSchema>;
+export type CurtainTreatment = z.infer<typeof curtainTreatmentSchema>;
 export type Cursor = z.infer<typeof cursorSchema>;
 export type QuadrantCounts = z.infer<typeof quadrantCountsSchema>;
 export type FourQuadrantCounts = z.infer<typeof fourQuadrantCountsSchema>;

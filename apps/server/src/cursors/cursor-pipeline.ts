@@ -19,6 +19,15 @@ export class CursorPipeline {
   private lastEmittedCursors: Cursor[] = [];
   private ghostCursors: readonly Cursor[] = [];
   private dirty = false;
+  /**
+   * Curtain-light stages: cursors stay hidden (and ghosts are suppressed)
+   * until the participant first touches their phone during the stage.
+   */
+  private entryStage = false;
+  private readonly entered = new Set<string>();
+  /** Last position of an entered participant who disconnected mid-stage. */
+  private readonly parked = new Map<string, { x: number; y: number }>();
+  private readonly pulses = new Map<string, number>();
   private tickNumber = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
 
@@ -33,12 +42,17 @@ export class CursorPipeline {
       existing.lastSeq = -1;
       return;
     }
-    this.cursors.set(clientId, { clientId, color, x: 0.5, y: 0.5, lastSeq: -1 });
+    const parked = this.parked.get(clientId);
+    this.parked.delete(clientId);
+    this.cursors.set(clientId, { clientId, color, x: parked?.x ?? 0.5, y: parked?.y ?? 0.5, lastSeq: -1 });
     this.dirty = true;
     this.emitPresence();
   }
 
   leave(clientId: string): void {
+    const cursor = this.cursors.get(clientId);
+    // A reconnect within the same stage resumes where the cursor was.
+    if (cursor && this.entryStage && this.entered.has(clientId)) this.parked.set(clientId, { x: cursor.x, y: cursor.y });
     if (this.cursors.delete(clientId)) {
       this.dirty = true;
       this.emitPresence();
@@ -58,6 +72,62 @@ export class CursorPipeline {
     return true;
   }
 
+  /** Validate and consume an input sequence number without moving the cursor. */
+  acceptSeq(clientId: string, seq: number): boolean {
+    const cursor = this.cursors.get(clientId);
+    if (!cursor || !Number.isSafeInteger(seq) || seq < 0 || seq <= cursor.lastSeq) return false;
+    cursor.lastSeq = seq;
+    return true;
+  }
+
+  position(clientId: string): { x: number; y: number } | null {
+    const cursor = this.cursors.get(clientId);
+    return cursor ? { x: cursor.x, y: cursor.y } : null;
+  }
+
+  /** Move a cursor to a server-computed position (curtain-light relative input). */
+  place(clientId: string, x: number, y: number): void {
+    const cursor = this.cursors.get(clientId);
+    if (!cursor || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const nextX = clamp(x);
+    const nextY = clamp(y);
+    if (cursor.x !== nextX || cursor.y !== nextY) this.dirty = true;
+    cursor.x = nextX;
+    cursor.y = nextY;
+  }
+
+  /** Start (true) or end (false) a stage where cursors appear only after first interaction. */
+  setEntryStage(active: boolean): void {
+    this.entryStage = active;
+    this.entered.clear();
+    this.parked.clear();
+    this.pulses.clear();
+    this.dirty = true;
+  }
+
+  get inEntryStage(): boolean {
+    return this.entryStage;
+  }
+
+  isEntered(clientId: string): boolean {
+    return !this.entryStage || this.entered.has(clientId);
+  }
+
+  /** Reveal a participant's cursor at the stage's neutral entry point. */
+  enter(clientId: string, x: number, y: number): void {
+    if (!this.cursors.has(clientId)) return;
+    this.entered.add(clientId);
+    this.place(clientId, x, y);
+    this.pulse(clientId);
+  }
+
+  /** Briefly brighten this participant's light (they touched their phone). */
+  pulse(clientId: string): void {
+    if (!this.cursors.has(clientId)) return;
+    this.pulses.set(clientId, (this.pulses.get(clientId) ?? 0) + 1);
+    this.dirty = true;
+  }
+
   /** Replace the current set of replayed ("ghost") cursors -- see apps/server/src/ghosts. */
   setGhostCursors(ghosts: readonly Cursor[]): void {
     this.ghostCursors = ghosts;
@@ -66,8 +136,14 @@ export class CursorPipeline {
 
   tick(): void {
     if (!this.dirty || this.options.canSendCursors?.() === false) return;
-    const liveCursors = [...this.cursors.values()].map(({ lastSeq: _lastSeq, ...cursor }) => cursor);
-    const cursors = [...liveCursors, ...this.ghostCursors];
+    const liveCursors = [...this.cursors.values()]
+      .filter((cursor) => !this.entryStage || this.entered.has(cursor.clientId))
+      .map(({ lastSeq: _lastSeq, ...cursor }) => {
+        const pulse = this.pulses.get(cursor.clientId);
+        return pulse === undefined ? cursor : { ...cursor, pulse };
+      });
+    // Replayed cursors never "enter", so they would light the curtain unasked.
+    const cursors = this.entryStage ? liveCursors : [...liveCursors, ...this.ghostCursors];
     if (this.matchesLastEmission(cursors)) {
       this.dirty = false;
       return;
@@ -111,7 +187,8 @@ export class CursorPipeline {
         cursor.color === previous.color &&
         cursor.x === previous.x &&
         cursor.y === previous.y &&
-        cursor.ghost === previous.ghost;
+        cursor.ghost === previous.ghost &&
+        cursor.pulse === previous.pulse;
     });
   }
 }

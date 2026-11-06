@@ -27,6 +27,7 @@ export function VideoQuestionOverlay({
   liveCounts,
   resolution,
   soundEnabled = false,
+  bare = false,
 }: {
   phase: VideoQuestionPhase;
   clock: ServerClock;
@@ -34,6 +35,8 @@ export function VideoQuestionOverlay({
   liveCounts: NonNullable<QuestionStatusMessage["quadrantCounts"]> | null;
   resolution: QuestionResolvedMessage | null;
   soundEnabled?: boolean;
+  /** Curtain-light votes draw the question and answers in the lit curtain; keep only the timing UI. */
+  bare?: boolean;
 }) {
   const [now, setNow] = useState(() => clock.now());
 
@@ -87,18 +90,18 @@ export function VideoQuestionOverlay({
         if (fadingOut && event.animationName === "question-out") setRendered(false);
       }}
     >
-      <div className="question-copy">
+      {!bare && <div className="question-copy">
         <p className="question-text">{phase.text}</p>
-      </div>
-      <QuadrantOverlay
+      </div>}
+      {!bare && <QuadrantOverlay
         field={phase.field}
         liveField={liveField}
         liveCounts={liveCounts}
         resolution={resolution}
         showCounts={false}
         highlightRegionIds={highlightRegionIds}
-      />
-      {votingOpen && <VoteCloseCountdown clock={clock} deadlineAt={closeAt} soundEnabled={soundEnabled} durationSeconds={phase.closeCountdownSeconds ?? 5} center={questionFieldCenter(phase.field)} />}
+      />}
+      {votingOpen && <VoteCloseCountdown clock={clock} deadlineAt={closeAt} soundEnabled={soundEnabled} durationSeconds={phase.closeCountdownSeconds ?? 5} center={bare ? null : questionFieldCenter(phase.field)} />}
     </div>
   );
 }

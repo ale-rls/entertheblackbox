@@ -39,7 +39,10 @@ export {
   videoPositionQuestionPhaseSchema,
   normalizePositionQuestionInput,
   normalizeScenarioInput,
+  curtainLightSchema,
+  curtainLightingSchema,
 } from "./schema.js";
+export { curtainGroupIds, curtainStagePhaseIds, curtainLightIssues } from "./curtain.js";
 export type {
   Arena,
   ArenaEllipse,
@@ -76,6 +79,8 @@ export type {
   VideoPhase,
   VideoPositionQuestionPhase,
   PositionVotePhase,
+  CurtainLightConfig,
+  CurtainLightingTuning,
 } from "./schema.js";
 
 export { validateScenario } from "./validate.js";

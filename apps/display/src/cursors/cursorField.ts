@@ -16,6 +16,9 @@ type TrackedCursor = {
   previous: Sample | null;
   latest: Sample;
   ghost: boolean;
+  pulse: number | undefined;
+  /** Local time the participant last touched their phone (curtain-light votes). */
+  pulseAt: number | undefined;
 };
 
 export type RenderedCursor = {
@@ -24,6 +27,7 @@ export type RenderedCursor = {
   y: number;
   color: string;
   ghost: boolean;
+  pulseAt?: number | undefined;
 };
 
 export class CursorField {
@@ -75,12 +79,16 @@ export class CursorField {
       existing.latest = sample;
       existing.color = cursor.color;
       existing.ghost = ghost;
+      if (cursor.pulse !== undefined && cursor.pulse !== existing.pulse) existing.pulseAt = at;
+      if (cursor.pulse !== undefined) existing.pulse = cursor.pulse;
     } else {
       this.cursors.set(cursor.clientId, {
         color: cursor.color,
         previous: null,
         latest: sample,
         ghost,
+        pulse: cursor.pulse,
+        pulseAt: cursor.pulse === undefined ? undefined : at,
       });
     }
   }
@@ -115,6 +123,7 @@ export class CursorField {
         y,
         color: tracked.color,
         ghost: tracked.ghost,
+        ...(tracked.pulseAt === undefined ? {} : { pulseAt: tracked.pulseAt }),
       });
     }
     return out;

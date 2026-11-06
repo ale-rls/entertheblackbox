@@ -1,4 +1,5 @@
 import { monitorMediaSources } from "./monitors.js";
+import { curtainLightIssues } from "./curtain.js";
 import type { MediaManifest, Phase, Scenario } from "./schema.js";
 
 /**
@@ -20,7 +21,8 @@ export type ScenarioIssue = {
     | "immediate-group-reunion"
     | "missing-media"
     | "unreachable-phase"
-    | "unmarked-cycle";
+    | "unmarked-cycle"
+    | "curtain-light";
   phaseId?: string;
   message: string;
 };
@@ -32,7 +34,7 @@ export type ValidationResult = {
 };
 
 /** All outgoing phase targets, labelled for error messages. */
-function targetsOf(phase: Phase): Array<{ label: string; target: string }> {
+export function targetsOf(phase: Phase): Array<{ label: string; target: string }> {
   switch (phase.kind) {
     case "idle":
       return [];
@@ -185,6 +187,8 @@ export function validateScenario(
       }
     }
   }
+
+  for (const issue of curtainLightIssues(scenario, mediaManifest)) (issue.severity === "error" ? errors : warnings).push(issue);
 
   // Reachability from the entry phase; idle is always considered live
   // because every session returns to it.
