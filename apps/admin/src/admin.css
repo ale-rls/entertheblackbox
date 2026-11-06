@@ -231,3 +231,31 @@
 .surface-effect-settings .sc-tool-button { width: auto; }
 .surface-keys kbd, .surface-key { padding: 0 .35em; border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-radius: var(--sc-tool-radius-1); font-family: var(--sc-tool-font-mono); font-size: var(--sc-tool-font-size-00); }
 .surface-key { position: absolute; top: var(--sc-tool-space-2); right: var(--sc-tool-space-2); background: var(--sc-tool-color-canvas); color: var(--sc-tool-color-text-secondary); }
+
+/* Video wall: playback, position map and slice calculator. */
+.video-wall { display: grid; gap: var(--sc-tool-space-5); }
+.video-wall-section { display: grid; gap: var(--sc-tool-space-4); }
+.video-wall-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--sc-tool-space-3); }
+.video-wall-row .sc-tool-button { width: auto; }
+.video-wall-check { display: inline-flex; align-items: center; gap: var(--sc-tool-space-2); color: var(--sc-tool-color-text-secondary); font-size: var(--sc-tool-font-size-0); }
+.video-wall-grid { display: grid; gap: var(--sc-tool-space-2); overflow-x: auto; }
+.video-wall-cell { display: grid; gap: var(--sc-tool-space-1); align-content: start; padding: var(--sc-tool-space-3); border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-left-width: 4px; border-radius: var(--sc-tool-radius-2); background: var(--sc-tool-color-surface-2); }
+.video-wall-cell[data-tone="success"] { border-left-color: var(--sc-tool-color-success); }
+.video-wall-cell[data-tone="warning"] { border-left-color: var(--sc-tool-color-warning); }
+.video-wall-cell[data-tone="danger"] { border-left-color: var(--sc-tool-color-danger); }
+.video-wall-state { color: var(--sc-tool-color-text-secondary); font-size: var(--sc-tool-font-size-00); overflow-wrap: anywhere; }
+.video-wall-identify, .video-wall-copy { width: auto; justify-self: start; padding-block: var(--sc-tool-space-1); font-size: var(--sc-tool-font-size-00); }
+.video-wall-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--sc-tool-space-3); }
+.video-wall-preview { position: relative; width: 100%; max-height: 70vh; overflow: hidden; background: var(--sc-tool-color-canvas); border-radius: var(--sc-tool-radius-2); }
+.video-wall-preview-frame { position: absolute; }
+.video-wall-preview-frame video, .video-wall-preview-frame img { display: block; width: 100%; height: 100%; object-fit: fill; }
+.video-wall-preview svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.video-wall-preview-hidden { fill: var(--sc-tool-color-scrim); }
+.video-wall-preview-master { fill: none; stroke: var(--sc-tool-color-rule-strong); stroke-dasharray: 12 8; stroke-width: 3; vector-effect: non-scaling-stroke; }
+.video-wall-preview-slice { fill: none; stroke: var(--sc-tool-color-focus-on-dark); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.video-wall-preview-label { fill: var(--sc-tool-color-focus-on-dark); font-family: var(--sc-tool-font-mono); paint-order: stroke; stroke: var(--sc-tool-color-canvas); stroke-width: 4px; vector-effect: non-scaling-stroke; }
+.video-wall-table-wrap { overflow-x: auto; }
+.video-wall-table { width: 100%; border-collapse: collapse; font-size: var(--sc-tool-font-size-0); }
+.video-wall-table th, .video-wall-table td { padding: var(--sc-tool-space-2) var(--sc-tool-space-3); border-bottom: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule); text-align: start; white-space: nowrap; }
+.video-wall-table th { color: var(--sc-tool-color-text-secondary); font-weight: 500; }
+.video-wall-howto ol { margin: var(--sc-tool-space-2) 0 0; padding-inline-start: 1.25rem; display: grid; gap: var(--sc-tool-space-2); }

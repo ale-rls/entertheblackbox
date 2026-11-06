@@ -84,3 +84,31 @@ export async function downloadShow(origin: string, channel: ShowChannel, progres
   await SecureStore.setItemAsync(await selectionKey(origin, channel), manifest.revision);
   return manifest;
 }
+
+// ------------------------------------------------------------- video wall slices
+
+const wallRoot = new Directory(Paths.document, 'wall');
+/**
+ * Download and verify this tablet's video wall slice (size and SHA-256), kept
+ * by hash so a re-load of the same clip is instant. Other slices are deleted
+ * to free storage once the new one verifies.
+ */
+export async function downloadWallSlice(origin: string, slice: { url: string; bytes: number; sha256: string }): Promise<string> {
+  wallRoot.create({ intermediates: true, idempotent: true });
+  const final = new File(wallRoot, `${slice.sha256}.mp4`);
+  const expected = { bytes: slice.bytes, sha256: slice.sha256 } as ShowManifest['files'][number];
+  if (!await verified(final, expected)) {
+    const temporary = new File(wallRoot, `${slice.sha256}.download`);
+    try {
+      await transfer('the video wall slice', () => {}, async () => {
+        if (temporary.exists) temporary.delete();
+        await File.downloadFileAsync(`${origin}${slice.url}`, temporary, { idempotent: true });
+      });
+      if (!await verified(temporary, expected)) throw new Error('Video wall slice verification failed. Check the uploaded file in the media library.');
+      if (final.exists) final.delete();
+      temporary.move(final);
+    } catch (error) { if (temporary.exists) temporary.delete(); throw error; }
+  }
+  for (const entry of wallRoot.list()) if (entry instanceof File && entry.name !== final.name && !entry.name.endsWith('.download')) entry.delete();
+  return final.uri;
+}

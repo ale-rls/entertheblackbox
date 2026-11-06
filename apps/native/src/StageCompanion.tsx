@@ -8,7 +8,9 @@ import { contrastText } from './surface';
 
 type Props = StageInput & {
   answered: string | null;
-  origin: string; surface: { color: string; label?: string }; name: string; deviceLabel: string; manifest: ShowManifest | null;
+  origin: string; surface: { color: string; label?: string };
+  /** Video wall slice, drawn full screen behind show mode; `wallVisible` once it is playing. */
+  wall?: React.ReactNode; wallVisible?: boolean; onShowMode?: (active: boolean) => void; name: string; deviceLabel: string; manifest: ShowManifest | null;
   identity: { name: string; color: string } | null; clockText: string; playing: boolean;
   notificationStatus: string; appChannel: string;
   onOrigin: (value: string) => void; onName: (value: string) => void; onDeviceLabel: (value: string) => void;
@@ -129,6 +131,8 @@ export function StageCompanion(props: Props) {
     };
   }, [showMode]);
   useEffect(() => { if (!props.connected) setShowMode(false); }, [props.connected]);
+  const { onShowMode } = props;
+  useEffect(() => { onShowMode?.(showMode); }, [showMode, onShowMode]);
   const [settings, setSettings] = useState(false);
   const [selection, setSelection] = useState<string | null>(null);
   const [reaction, setReaction] = useState('');
@@ -164,7 +168,9 @@ export function StageCompanion(props: Props) {
     animation.start(); return () => animation.stop();
   }, [textVisible, reduceMotion, textOpacity]);
   const surfaceText = contrastText(props.surface.color);
-  return <SafeAreaView style={[styles.screen, showMode && { backgroundColor: props.surface.color }]}
+  return <View style={styles.wallRoot}>
+    {showMode && props.wall}
+    <SafeAreaView style={[styles.screen, showMode && { backgroundColor: props.wallVisible ? 'transparent' : props.surface.color }]}
     onStartShouldSetResponderCapture={() => { if (showMode) setLastTouch(Date.now()); return false; }}>
     <StatusBar hidden={showMode} barStyle="light-content" backgroundColor="#090a0b" />
     <ScrollView key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
@@ -245,13 +251,15 @@ export function StageCompanion(props: Props) {
     {showMode && !!props.surface.label && <View pointerEvents="none" style={styles.identify} accessibilityLiveRegion="polite">
       <Text adjustsFontSizeToFit numberOfLines={1} style={[styles.identifyText, { color: surfaceText }]}>{props.surface.label}</Text>
     </View>}
-  </SafeAreaView>;
+  </SafeAreaView>
+  </View>;
 }
 const styles = StyleSheet.create({
   exitWrap: { marginTop: 'auto' }, exitMode: { padding: 24, alignItems: 'center', minHeight: 64, backgroundColor: 'transparent' },
   exitText: { fontSize: 13, lineHeight: 20, opacity: .55 },
   identify: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: 24 },
   identifyText: { fontSize: 220, fontWeight: '700', letterSpacing: -4 },
+  wallRoot: { flex: 1, backgroundColor: '#000000' },
   screen: { flex: 1, backgroundColor: '#090a0b' }, page: { flexGrow: 1, paddingBottom: 24 },
   header: { padding: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 16 },
   identity: { flex: 1, alignItems: 'flex-end' }, identityName: { color: '#e4e5e6', fontSize: 12, letterSpacing: 1 },

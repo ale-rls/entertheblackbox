@@ -9,6 +9,8 @@ import {
 import type { ClientToServerMessage, ServerToClientMessage } from "./index.js";
 
 const clientMessages: ClientToServerMessage[] = [
+  { t: "wall_status", v: 2, clip: "ocean", state: "playing", driftMs: -12.5 },
+  { t: "wall_status", v: 2, clip: null, state: "idle" },
   {
     t: "join",
     v: 2,
@@ -198,6 +200,8 @@ const serverMessages: ServerToClientMessage[] = [
   { t: "pong", v: 2, echoClientTime: 4, serverTime: 5 },
   { t: "audio_bridge_changed", v: 2, streamUrl: "https://audio.example/stream/c1" },
   { t: "surface", v: 2, mode: "flash", color: "#ff00aa", applyAt: 1_700_000_000_060, seq: 3, holdMs: 250, label: "T07" },
+  { t: "wall", v: 2, seq: 4, clip: { id: "ocean", slot: "B3", url: "/media/ocean__B3.mp4", bytes: 1024, sha256: "a".repeat(64) }, startAt: 1_700_000_002_000, loop: true },
+  { t: "wall", v: 2, seq: 5, clip: null, startAt: null, loop: false },
 ];
 
 describe("round-trips", () => {

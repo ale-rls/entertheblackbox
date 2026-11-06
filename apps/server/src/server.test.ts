@@ -556,6 +556,22 @@ describe("WebSocket lifecycle", () => {
     client.close();
   });
 
+  it("welcomes a joining tablet with the wall state and shows its wall status in Admin", async () => {
+    const runtime = await buildServer({ config: await fixture(), verifyOperatorToken: async () => true });
+    runtimes.push(runtime);
+    const client = await openWebSocket(await listen(runtime));
+    const messages: Array<{ t: string; clip?: unknown }> = [];
+    client.on("message", (raw) => messages.push(JSON.parse(raw.toString())));
+    await joinParticipant(client, runtime);
+    await vi.waitFor(() => expect(messages).toContainEqual(expect.objectContaining({ t: "wall", clip: null, startAt: null })));
+    client.send(JSON.stringify({ t: "wall_status", v: 2, clip: "ocean", state: "ready" }));
+    await vi.waitFor(async () => {
+      const wall = (await runtime.app.inject({ method: "GET", url: "/api/admin/wall", headers: { authorization: "Bearer operator" } })).json();
+      expect(wall.devices[0].status).toMatchObject({ clip: "ocean", state: "ready" });
+    });
+    client.close();
+  });
+
   it("terminates an unresponsive participant and frees its registry connection slot", async () => {
     const runtime = await buildServer({
       config: await fixture(),

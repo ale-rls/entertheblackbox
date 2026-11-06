@@ -9,7 +9,8 @@ import { listWaitingVideos } from "./persistence/waiting-videos.js";
 import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
 import { basename } from "node:path";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
-import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
+import { readDisplaySettings, readWallLayout, writeDisplaySettings, writeWallLayout } from "./persistence/platform-config.js";
+import { VideoWallController, wallClipsFromMedia } from "./wall/wall.js";
 import { SurfaceController } from "./surface/surface.js";
 import { SurfaceEffectRunner } from "./surface/effects.js";
 import { AudioDelivery } from "./audio/audio-delivery.js";
@@ -125,6 +126,17 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   let engine: PhaseEngine | null = null;
   const surface = new SurfaceController({ recipients: () => admission.registry.values() });
   const surfaceEffects = new SurfaceEffectRunner(surface);
+  const wallClips = async () => {
+    if (!options.pocketbase) return [];
+    await options.pocketbase.ensureAuth();
+    return wallClipsFromMedia(await options.pocketbase.pb.collection<{ src: string; bytes: number; hash?: string }>("media").getFullList({ requestKey: null }));
+  };
+  const wall = new VideoWallController({
+    recipients: () => admission.registry.values(),
+    clips: wallClips,
+    ...(options.pocketbase ? { ensureLocal: (src: string) => syncMediaFromPocketbase(options.pocketbase!, config.mediaDir, src) } : {}),
+  });
+  if (options.pocketbase) void readWallLayout(options.pocketbase).then((layout) => wall.restoreLayout(layout)).catch(() => { /* Default layout until saved. */ });
   if (options.pocketbase) void readDisplaySettings(options.pocketbase).then((settings) => surface.restoreBase(settings.phoneSurfaceColor)).catch(() => { /* Black until an operator sets a colour. */ });
   const admission = options.admission ?? new AdmissionController({
     installationId: config.installationId,
@@ -136,11 +148,18 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     buildVersion: config.buildVersion,
     allowPublicJoin: true,
     isNewParticipantAllowed: () => config.allowLateJoin || engine?.lifecycleState !== "active",
-    onClientMessage: (message, socket, request) => engine?.handleClientMessage(message, socket, request),
+    onClientMessage: (message, socket, request) => {
+      if (message.t === "wall_status") {
+        for (const participant of admission.registry.values()) if (participant.socket === socket) wall.report(participant.clientId, message);
+        return;
+      }
+      return engine?.handleClientMessage(message, socket, request);
+    },
     onParticipantJoin: (participant, socket) => {
       groups?.ensureParticipant(participant.clientId);
       engine?.participantJoined(socket, participant);
       surface.welcome(socket);
+      wall.welcome(socket, participant.name);
     },
     onSocketClosed: (socket) => engine?.socketClosed(socket),
     onMessageError: (error) => {
@@ -340,6 +359,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     engine: () => engine,
     surface,
     surfaceEffects,
+    wall: {
+      controller: wall,
+      clips: wallClips,
+      saveLayout: async (layout) => options.pocketbase ? writeWallLayout(options.pocketbase, layout) : layout,
+    },
     ready: readiness.ready,
     phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
     onPublishing: (busy) => { publishing = busy; if (!busy) options.onPublicationEnded?.(); },
