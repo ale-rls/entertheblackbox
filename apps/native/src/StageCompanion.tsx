@@ -14,7 +14,7 @@ type Props = StageInput & {
   onOrigin: (value: string) => void; onName: (value: string) => void; onDeviceLabel: (value: string) => void;
   onPrepare: (download: boolean) => void; onJoin: () => void; onUpdate: () => void; onLeave: () => void;
   onPause: () => void; onResume: () => void; onVote: (id: string) => void; onGroup: (id: string) => void;
-  onReaction: (kind: 'applause' | 'boo') => void; onPoint: (x: number, y: number) => void;
+  onReaction: (kind: 'applause' | 'boo') => void; onPoint: (x: number, y: number, touchStart?: boolean) => void;
 };
 function Action({ label, onPress, disabled = false, primary = false, selected = false }: {
   label: string; onPress: () => void; disabled?: boolean; primary?: boolean; selected?: boolean;
@@ -57,16 +57,17 @@ function CursorPad({ onPoint, disabled, color }: { onPoint: Props['onPoint']; di
   const [dot, setDot] = useState({ x: .5, y: .5 });
   const size = useRef({ width: 1, height: 1 });
   const current = useRef({ onPoint, disabled }); current.current = { onPoint, disabled };
-  const move = (x: number, y: number) => {
+  const move = (x: number, y: number, touchStart = false) => {
     if (current.current.disabled) return;
     const point = { x: Math.max(0, Math.min(1, x / size.current.width)), y: Math.max(0, Math.min(1, y / size.current.height)) };
-    setDot(point); current.current.onPoint(point.x, point.y);
+    setDot(point); current.current.onPoint(point.x, point.y, touchStart);
   };
   const responder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => !current.current.disabled,
     onMoveShouldSetPanResponder: () => !current.current.disabled,
     onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: e => move(e.nativeEvent.locationX, e.nativeEvent.locationY),
+    // The first sample of a touch is flagged so curtain-light votes can pulse the light and steer relatively.
+    onPanResponderGrant: e => move(e.nativeEvent.locationX, e.nativeEvent.locationY, true),
     onPanResponderMove: e => move(e.nativeEvent.locationX, e.nativeEvent.locationY),
   })).current;
   return <View style={styles.pad} onLayout={e => { size.current = e.nativeEvent.layout; }}>

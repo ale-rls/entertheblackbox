@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { CursorsMessage } from "@entertheblackbox/protocol";
 import { CURSOR_TICK_INTERVAL_MS, CursorPipeline } from "./cursor-pipeline.js";
 
 describe("CursorPipeline", () => {
@@ -119,5 +120,36 @@ describe("CursorPipeline", () => {
     pipeline.tick();
     expect(batches).toHaveLength(2);
     expect((batches[1] as { cursors: unknown[] }).cursors).toEqual([{ clientId: "p1", color: "red", x: 0.5, y: 0.5 }]);
+  });
+});
+
+describe("curtain-light entry stages", () => {
+  it("hides cursors and ghosts until entry, pulses on touch, and resumes after reconnect", () => {
+    const batches: CursorsMessage[] = [];
+    const pipeline = new CursorPipeline({ sendCursors: (m) => batches.push(m), sendPresence: () => {} });
+    pipeline.join("a", "#fff");
+    pipeline.join("b", "#000");
+    pipeline.setGhostCursors([{ clientId: "ghost:1", x: 0.1, y: 0.1, color: "#f0f", ghost: true }]);
+    pipeline.setEntryStage(true);
+    pipeline.tick();
+    expect(batches.every((batch) => batch.cursors.length === 0)).toBe(true);
+
+    pipeline.enter("a", 0.4, 0.5);
+    pipeline.tick();
+    expect(batches.at(-1)!.cursors).toEqual([{ clientId: "a", color: "#fff", x: 0.4, y: 0.5, pulse: 1 }]);
+    pipeline.pulse("a");
+    pipeline.tick();
+    expect(batches.at(-1)!.cursors[0]!.pulse).toBe(2);
+
+    pipeline.place("a", 0.2, 0.3);
+    pipeline.leave("a");
+    pipeline.join("a", "#fff");
+    expect(pipeline.isEntered("a")).toBe(true);
+    expect(pipeline.position("a")).toEqual({ x: 0.2, y: 0.3 });
+    expect(pipeline.isEntered("b")).toBe(false);
+
+    pipeline.setEntryStage(false);
+    pipeline.tick();
+    expect(batches.at(-1)!.cursors.map((c) => c.clientId).sort()).toEqual(["a", "b", "ghost:1"]);
   });
 });

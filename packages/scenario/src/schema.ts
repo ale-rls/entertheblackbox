@@ -4,6 +4,9 @@ import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
 import { extraAudioCombinationError, mediaCombinationError } from "./media-kind.js";
 
 const unitCoordinateSchema = z.number().min(0).max(1);
+/** Width of the uncounted band centred on a field's split lines (curtain-light votes). */
+const neutralGapSchema = z.number().min(0).max(0.4);
+const hexColorSchema = z.string().regex(/^#[0-9a-f]{6}$/i, "colour must be a six-digit hex colour");
 const splitCoordinateSchema = z.number().min(0.05).max(0.95);
 
 /**
@@ -107,6 +110,7 @@ export const fourQuadrantFieldSchema = z.object({
   xAxis: axisSchema,
   yAxis: axisSchema,
   arena: arenaSchema.optional(),
+  neutralGap: neutralGapSchema.optional(),
 });
 
 export const twoQuadrantFieldSchema = z.object({
@@ -117,6 +121,7 @@ export const twoQuadrantFieldSchema = z.object({
   /** Optional viewport X coordinate for an off-centre left/right boundary. */
   splitX: splitCoordinateSchema.optional(),
   arena: arenaSchema.optional(),
+  neutralGap: neutralGapSchema.optional(),
 });
 
 export const polygonZoneSchema = z.object({
@@ -330,7 +335,37 @@ export const narrationPhaseSchema = z.object({
   showCursors: z.boolean().optional(),
 });
 
+/** Rehearsal light tuning; each value overrides the shared curtain default. */
+export const curtainLightingSchema = z.object({
+  poolBase: z.number().min(0).max(3).optional(),
+  poolGain: z.number().min(0).max(4).optional(),
+  cursorFlood: z.number().min(0).max(2).optional(),
+  cursorFloodCounted: z.number().min(0).max(2).optional(),
+});
+
+/**
+ * The shared curtain for curtain-light votes, configured once per show.
+ * `src` is a packed curtain video (colour | normal X / normal Y | depth)
+ * published through the normal media library, never committed to git.
+ */
+export const curtainLightSchema = curtainLightingSchema.extend({
+  src: z.string().min(1).regex(/\.mp4$/i, "curtain video must be an MP4").optional(),
+  baked: z.number().min(0).max(1).optional(),
+  folds: z.number().min(0).max(3).optional(),
+  shine: z.number().min(0).max(3).optional(),
+  shadow: z.number().min(0).max(1).optional(),
+  neutralGap: neutralGapSchema.optional(),
+});
+
+/** Per-stage curtain-light authoring; ignored outside curtain-light groups. */
+const curtainStageFields = {
+  /** Answer id → colour. Missing answers use the system defaults. */
+  answerColors: z.record(z.string().min(1), hexColorSchema).optional(),
+  lightTuning: curtainLightingSchema.optional(),
+};
+
 const positionQuestionBaseSchema = z.object({
+  ...curtainStageFields,
   kind: z.literal("position-question"),
   ...phoneAudioFields,
   id: phaseIdSchema,
@@ -378,6 +413,7 @@ const canonicalPositionQuestionPhaseSchema = z.union([
 ]);
 
 const videoPositionQuestionBaseSchema = z.object({
+  ...curtainStageFields,
   kind: z.literal("video-position-question"),
   ...phoneAudioFields,
   id: phaseIdSchema,
@@ -465,6 +501,8 @@ export const audienceGroupSchema = z.object({
   color: z.string().regex(/^#[0-9a-f]{6}$/i, "group color must be a six-digit hex color").optional(),
   /** How members answer position questions. Omitted preserves legacy physical + phone cursor input. */
   votingMethod: votingMethodSchema.optional(),
+  /** Presentation for this group's cursor votes. Omitted keeps the standard field overlay. */
+  voteTreatment: z.literal("curtain-light").optional(),
 });
 
 const groupBranchSchema = z.object({
@@ -550,6 +588,8 @@ const canonicalScenarioSchema = z.object({
   /** Immutable native assets belonging to this published scenario. */
   nativeReleaseId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   backgroundMusic: z.object({ src: z.string().min(1), volume: z.number().positive().max(1) }).optional(),
+  /** Shared curtain for groups whose votes use the curtain-light treatment. */
+  curtainLight: curtainLightSchema.optional(),
   version: z.string().min(1, "scenario version must be non-empty"),
   /** Stable group catalogue used by split nodes, targeting, and live controls. */
   groups: z.array(audienceGroupSchema).min(2, "a show with groups needs at least two groups").refine((groups) => new Set(groups.map((group) => group.id)).size === groups.length, {
@@ -618,6 +658,8 @@ export type PolygonZonesPluralityNext = z.infer<typeof polygonZonesPluralityNext
 export type RatingConfig = z.infer<typeof ratingConfigSchema>;
 export type Subtitle = z.infer<typeof subtitleSchema>;
 export type AudienceGroup = z.infer<typeof audienceGroupSchema>;
+export type CurtainLightConfig = z.infer<typeof curtainLightSchema>;
+export type CurtainLightingTuning = z.infer<typeof curtainLightingSchema>;
 export type VotingMethod = z.infer<typeof votingMethodSchema>;
 export type GroupAssignment = z.infer<typeof groupAssignmentSchema>;
 export type GroupBranchPhase = z.infer<typeof groupBranchPhaseSchema>;

@@ -93,6 +93,7 @@ export class MediaStore {
 
   private manifest: MediaManifest | null = null;
   private readonly blobUrls = new Map<string, string>(); // src -> object URL
+  private pinned: string | null = null;
   private stopped = false;
 
   constructor(deps: MediaStoreDeps = {}) {
@@ -250,10 +251,18 @@ export class MediaStore {
     return url;
   }
 
+  /**
+   * Keep a source's Blob URL alive across phase changes (e.g. the shared
+   * curtain-light video, which spans several votes). Pinning null clears it.
+   */
+  pin(src: string | null): void {
+    this.pinned = src;
+  }
+
   /** Revoke every Blob URL not in the keep set (active + plausible next). */
   retainOnly(keepSrcs: ReadonlySet<string>): void {
     for (const [src, url] of this.blobUrls) {
-      if (!keepSrcs.has(src)) {
+      if (!keepSrcs.has(src) && src !== this.pinned) {
         this.revokeObjectUrl(url);
         this.blobUrls.delete(src);
       }

@@ -1553,3 +1553,13 @@ body:has(.editor),
   margin-block-start: var(--sc-tool-space-3);
   padding-block-start: var(--sc-tool-space-2);
 }
+
+/* Curtain-light authoring */
+.curtain-stage, .curtain-shared { display: grid; gap: .5rem; }
+.curtain-preview canvas { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 4px; background: var(--sc-tool-color-canvas); }
+.curtain-preview-controls { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; }
+.curtain-colors { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+.curtain-color { display: flex; flex-direction: row; align-items: center; gap: .4rem; }
+.curtain-color input[type="color"] { width: 2rem; height: 1.5rem; padding: 0; border: 0; background: none; }
+.curtain-slider { display: grid; grid-template-columns: 1fr auto; gap: .25rem .5rem; }
+.curtain-slider input { grid-column: 1 / -1; }

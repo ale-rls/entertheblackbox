@@ -4,19 +4,29 @@ import {
   PROTOCOL_VERSION,
   type ClientToServerMessage,
   type ClockTiming,
+  type CurtainTreatment,
   type TimingMonitor,
   type DisplayPlaybackStatusMessage,
   type PhaseSnapshotMessage,
   type ServerToClientMessage,
 } from "@entertheblackbox/protocol";
 import type { Scenario, Phase, VotingMethod } from "@entertheblackbox/scenario";
-import { DEFAULT_INSTALLATION_POLICY } from "@entertheblackbox/shared";
+import {
+  curtainFieldCenter,
+  curtainVoteField,
+  DEFAULT_INSTALLATION_POLICY,
+  neutralEntryPoint,
+  resolveAnswerColors,
+  resolveCurtainSettings,
+  type PositionField,
+} from "@entertheblackbox/shared";
 import { timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import type { WebSocket } from "ws";
 import type { ParticipantRecord, ParticipantRegistry } from "../admission/index.js";
 import { QrGrantPushLoop, type QrGrantPushLoopOptions } from "../admission/qr.js";
 import { CursorPipeline } from "../cursors/index.js";
+import { RelativeTrackpad } from "../cursors/relative-trackpad.js";
 import { GhostCursorPlayer, type GhostPool } from "../ghosts/index.js";
 import type { TrackingAction } from "../tracking/audience.js";
 import { participantIdForGid } from "../tracking/protocol.js";
@@ -231,6 +241,8 @@ export class PhaseEngine {
   private readonly votes: VoteEngine;
   private readonly ratings = new RatingEngine();
   private readonly cursors: CursorPipeline;
+  private readonly trackpad = new RelativeTrackpad();
+  private curtainCache: { phase: Phase; treatment: CurtainTreatment; field: PositionField } | null = null;
   /** GID-to-phone bindings for personal audio and group-scoped physical votes.
    * Shared-timeline physical voting still works with anonymous bodies. */
   readonly bindings = new BindingRegistry();
@@ -708,8 +720,11 @@ export class PhaseEngine {
 
   getSnapshot(now = this.now()): PhaseSnapshotMessage {
     const phase = this.pathDone && this.path ? { ...this.path.waitingPhase, title: "Waiting for other groups", showCursors: false } : this.currentPhase();
+    const curtain = this.curtainFor(phase);
     return {
       ...phase,
+      // The display lights exactly the field the server counts (same field type, gap applied).
+      ...(curtain === null ? {} : { field: curtain.field as never, voteTreatment: curtain.treatment }),
       scenarioVersion: this.scenario.version,
       startedAt: this.phaseStartedAt,
       deadlineAt: this.deadlineAt,
@@ -1056,7 +1071,10 @@ export class PhaseEngine {
           this.matches(message.sessionId, this.phaseId, message.phaseEpoch)
         ) {
           const participantId = this.participantIds.get(socket);
-          if (participantId !== undefined) {
+          const curtain = this.lifecycle === "active" && !this.pathDone ? this.curtainFor(this.currentPhase()) : null;
+          if (participantId !== undefined && curtain !== null) {
+            this.curtainInput(participantId, message, curtain);
+          } else if (participantId !== undefined) {
             if (this.cursors.recordInput(participantId, message.seq, message.x, message.y)) {
               // Lobby movement is projected so visitors see their cursors in
               // the waiting room, but recordings, votes, and question
@@ -1391,6 +1409,8 @@ export class PhaseEngine {
     } else {
       this.lifecycle = "active";
     }
+    this.cursors.setEntryStage(this.lifecycle === "active" && this.curtainFor(phase) !== null);
+    this.trackpad.reset();
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
     this.path?.onPhase(phase, this.phaseStartedAt);
@@ -1503,6 +1523,71 @@ export class PhaseEngine {
     return this.requirePhase(this.phaseId);
   }
 
+  /**
+   * Curtain-light presentation for a vote on a curtain-light group's own
+   * timeline, or null. The counting field gains the shared neutral gap so
+   * appearing at the entry point never casts a vote.
+   */
+  private curtainFor(phase: Phase): { treatment: CurtainTreatment; field: PositionField } | null {
+    if (phase.kind !== "position-question" && phase.kind !== "video-position-question") return null;
+    const groupId = this.path?.timelineId;
+    if (groupId === undefined) return null;
+    if (this.scenario.groups?.find((group) => group.id === groupId)?.voteTreatment !== "curtain-light") return null;
+    if (this.curtainCache?.phase === phase) return this.curtainCache;
+    const curtain = resolveCurtainSettings(this.scenario.curtainLight, phase.lightTuning);
+    const field = curtainVoteField(phase.field, curtain.neutralGap);
+    this.curtainCache = {
+      phase,
+      field,
+      treatment: {
+        type: "curtain-light",
+        curtain,
+        answerColors: resolveAnswerColors(field, phase.answerColors),
+        entry: neutralEntryPoint(field),
+      },
+    };
+    return this.curtainCache;
+  }
+
+  /**
+   * Curtain-light input: the first touch of a stage reveals the cursor at
+   * the neutral entry point (no vote); later touches steer it relative to
+   * where it is and pulse its light. Votes still go through the vote engine,
+   * which stops accepting them at the deadline.
+   */
+  private curtainInput(
+    participantId: string,
+    message: Extract<ClientToServerMessage, { t: "input" }>,
+    curtain: { treatment: CurtainTreatment; field: PositionField },
+  ): void {
+    if (!this.cursors.acceptSeq(participantId, message.seq)) return;
+    const now = this.now();
+    const fingerX = Math.min(1, Math.max(0, message.x));
+    const fingerY = Math.min(1, Math.max(0, message.y));
+    if (!this.cursors.isEntered(participantId)) {
+      const entry = curtain.treatment.entry ?? curtainFieldCenter(curtain.field);
+      this.cursors.enter(participantId, entry.x, entry.y);
+      this.trackpad.anchor(participantId, fingerX, fingerY, entry, now);
+      this.movement.recordSample(participantId, entry.x, entry.y, now);
+      return;
+    }
+    const current = this.cursors.position(participantId);
+    if (current === null) return;
+    const touchStart = message.touch === "start";
+    if (touchStart) this.cursors.pulse(participantId);
+    const point = this.trackpad.move(participantId, fingerX, fingerY, current, now, touchStart);
+    this.cursors.place(participantId, point.x, point.y);
+    this.movement.recordSample(participantId, point.x, point.y, now);
+    const phase = this.currentPhase();
+    const open = phase.kind === "position-question"
+      || (phase.kind === "video-position-question"
+        && now >= this.phaseStartedAt + phase.openAtMs
+        && now < this.phaseStartedAt + phase.closeAtMs);
+    if (open && acceptsVotingInput(this.groupSelection?.method?.(participantId), "phone-cursor")) {
+      this.recordInput(now, participantId, point.x, point.y);
+    }
+  }
+
   private normalizeStartTimes(startTimes: readonly number[]): number[] {
     return [...new Set(startTimes.filter((time) => Number.isSafeInteger(time) && time > 0))].sort((a, b) => a - b);
   }
@@ -1549,9 +1634,10 @@ export class PhaseEngine {
       connected: participant.socket !== undefined,
       lastHeartbeatAt: participant.lastSeenAt,
     }));
+    const curtain = this.curtainFor(phase);
     this.votes.beginQuestion({
       sessionId: this.sessionId,
-      question: phase,
+      question: curtain === null ? phase : { ...phase, field: curtain.field } as typeof phase,
       phaseEpoch: this.phaseEpoch,
       phaseStartedAt,
       phaseDeadline,
@@ -1642,7 +1728,8 @@ export class PhaseEngine {
       connectedCount: status.connectedCount,
       positionedCount: status.positionedCount,
       field: status.field,
-      ...(phase.showLiveCounts ? { quadrantCounts: status.quadrantCounts } : {}),
+      // Curtain-light pools are driven by the live counts even when no numbers are shown.
+      ...(phase.showLiveCounts || this.curtainFor(phase) !== null ? { quadrantCounts: status.quadrantCounts } : {}),
     } as Extract<ServerToClientMessage, { t: "question_status" }>);
     this.questionStatusDirty = false;
     this.lastQuestionStatusAt = now;

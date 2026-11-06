@@ -190,13 +190,14 @@ export default function App() {
     const s = latest.current;
     if (s && authorized.current && view.canAct && view.voting?.method === 'phone-buttons' && !view.voting.closed) { acknowledgeAction('vote'); connection.current?.send({ t: 'button_vote', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, outcome }); }
   }
-  function point(x: number, y: number) {
+  function point(x: number, y: number, touchStart = false) {
     const s = latest.current;
-    if (!s || !authorized.current || !view.cursorOpen || Date.now() - inputTime.current < 50) return;
+    // A touch start is never throttled: it is what reveals and pulses the cursor.
+    if (!s || !authorized.current || !view.cursorOpen || (!touchStart && Date.now() - inputTime.current < 50)) return;
     acknowledgeAction('vote');
     inputTime.current = Date.now();
     connection.current?.send({ t: 'input', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, seq: seq.current++,
-      x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) });
+      x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)), ...(touchStart ? { touch: 'start' as const } : {}) });
   }
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
   return <StageCompanion answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
