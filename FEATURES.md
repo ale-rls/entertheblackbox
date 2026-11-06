@@ -207,4 +207,4 @@ Implemented in apps/native and the ShowScreen module bundled with packages/expo-
 
 - Optional `monitorGroupId` makes M1–M4 follow that audience’s independent path, clears cues while it waits, and returns to the shared timeline at reunion — scenario schema/validation and server phase engine.
 
-- Admin exposes whole-show restart/end and confirmed current-scene restart for shared scenes or an individual running group. Scene replay uses captured session/phase/epoch guards; other group paths continue — `apps/admin/src/App.tsx`, existing admin jump API.
+- Studio phone audio uses the same audio-filtered library picker for default tracks, audience-specific replacements and group-selection audio; explicit default/silence states and removal controls explain what each audience hears — Studio Inspector and media picker.
