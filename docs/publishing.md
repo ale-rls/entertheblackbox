@@ -1,5 +1,8 @@
 # Publish a show once
 
+For script revisions, private backup edits and the required left-to-right canvas
+layout, first follow [Updating shows](updating-shows.md).
+
 1. Open the show in Studio on the venue server (`/studio/`). Upload its videos, images and MP3s in **Media library**, and resolve Diagnostics.
 2. Click **Publish** at the top right of the editor (disabled until Diagnostics are resolved). Sign in as an operator, confirm the name and optionally choose background music, then **Publish**.
 3. The server checks the graph and referenced media, freezes the assets, prepares native downloads, saves one version and selects it automatically. Main projection, M1–M4 and native devices all follow that version. There is no separate monitor or phone publication.
