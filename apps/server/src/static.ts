@@ -18,6 +18,8 @@ const contentTypes: Record<string, string> = {
   ".mp4": "video/mp4",
   ".webm": "video/webm",
   ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
 };
 
 async function sendFile(
@@ -200,4 +202,23 @@ export function registerBundleRoutes(
       await sendBundleFile(reply, bundles[role], request.params["*"], request.headers.range);
     });
   }
+}
+
+/**
+ * Licensed webfonts (Optik) served at runtime from a directory outside git,
+ * e.g. a persistent volume (fonts/README.md). Only font files are exposed.
+ * Not immutable: the files keep their names when replaced on the volume.
+ * A missing file is a plain 404 and the pages fall back to system fonts.
+ */
+export function registerFontRoutes(app: FastifyInstance, fontsDir: string): void {
+  app.get<{ Params: { "*": string } }>("/fonts/*", async (request, reply) => {
+    const rootPath = resolve(fontsDir);
+    const filePath = resolve(rootPath, request.params["*"]);
+    const extension = extname(filePath).toLowerCase();
+    if (!filePath.startsWith(`${rootPath}${sep}`) || (extension !== ".woff2" && extension !== ".woff")) {
+      await reply.code(404).send({ error: "font_not_found" });
+      return;
+    }
+    await sendFile(reply, filePath, "public, max-age=86400", "font_not_found");
+  });
 }

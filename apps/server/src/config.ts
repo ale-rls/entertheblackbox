@@ -36,6 +36,7 @@ const envSchema = z.object({
   SCENARIO_PATH: z.string().min(1).optional(),
   MEDIA_MANIFEST_PATH: z.string().min(1).optional(),
   MEDIA_DIR: z.string().min(1).optional(),
+  FONTS_DIR: z.string().min(1).optional(),
   DISPLAY_DIST_DIR: z.string().min(1).optional(),
   PHONE_DIST_DIR: z.string().min(1).optional(),
   ADMIN_DIST_DIR: z.string().min(1).optional(),
@@ -77,6 +78,8 @@ export type ServerConfig = {
   scenarioPath: string;
   mediaManifestPath: string;
   mediaDir: string;
+  /** Licensed webfonts served at /fonts/ (kept out of git, see fonts/README.md). */
+  fontsDir: string;
   bundleDirs: Record<"display" | "phone" | "admin" | "studio", string>;
   pocketbase: {
     url: string;
@@ -154,6 +157,7 @@ export function loadConfig(
     scenarioPath: fromRoot(value.SCENARIO_PATH, "content/scenarios/dev.json"),
     mediaManifestPath: fromRoot(value.MEDIA_MANIFEST_PATH, "content/media-manifest.json"),
     mediaDir: fromRoot(value.MEDIA_DIR, "content/media"),
+    fontsDir: fromRoot(value.FONTS_DIR, "fonts/optik"),
     bundleDirs: {
       display: fromRoot(value.DISPLAY_DIST_DIR, "apps/display/dist"),
       phone: fromRoot(value.PHONE_DIST_DIR, "apps/phone/dist"),

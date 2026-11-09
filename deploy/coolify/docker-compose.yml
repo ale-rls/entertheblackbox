@@ -15,6 +15,8 @@ services:
     # Keep published native audio and channel pointers across replacements.
     volumes:
       - native-shows:/app/content/media/native-shows
+      # Licensed Optik webfonts, copied in by hand (not in git; fonts/README.md).
+      - optik-fonts:/app/fonts/optik
     restart: unless-stopped
     expose:
       - "80"
@@ -94,6 +96,7 @@ services:
 
 volumes:
   native-shows:
+  optik-fonts:
   pocketbase-data:
   audio-data:
   # Historical stream volumes retained for data preservation; no stream services run.

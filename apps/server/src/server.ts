@@ -34,7 +34,7 @@ import { readServerConfigOverride, writeActiveShowId, writeTargetAudienceSize } 
 import { writeLobbyStartTimes } from "./persistence/lobby-config.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 import { getLatestPublishedShow, listPublishedShows, loadScenarioReadiness, publishShow, type ScenarioReadiness } from "./readiness.js";
-import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
+import { registerBundleRoutes, registerFontRoutes, registerMediaRoutes } from "./static.js";
 
 export const WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024;
 export const DEFAULT_MAX_WEBSOCKET_CONNECTIONS = 300;
@@ -481,6 +481,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     })().catch(error => { nativeManifest = undefined; throw error; });
     return nativeManifest;
   });
+  registerFontRoutes(app, config.fontsDir);
   registerBundleRoutes(app, config.bundleDirs);
 
   app.server.on("upgrade", (request, socket, head) => {
