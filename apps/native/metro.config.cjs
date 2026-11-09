@@ -12,4 +12,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   }
   return context.resolveRequest(context, moduleName, platform);
 };
+// Licensed Optik files live in the gitignored repo-root fonts/ (fonts/README.md).
+const fontsRoot = path.resolve(__dirname, '../../fonts');
+if (fs.existsSync(fontsRoot)) config.watchFolders = [...config.watchFolders, fontsRoot];
 module.exports = config;

@@ -1,6 +1,7 @@
 import type { ServerToClientMessage } from '@entertheblackbox/protocol';
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, AppState, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, AppState, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
+import { Text, TextInput } from './Text';
 import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
 import type { ShowManifest } from '@entertheblackbox/show-content';
 import type { StageInput } from './stage-state';
