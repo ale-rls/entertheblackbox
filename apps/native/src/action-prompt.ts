@@ -11,8 +11,9 @@ export function actionPrompt(s: Snapshot | null, voting: Voting | null, groups: 
   const matches = (m: Voting | Groups) => m.sessionId === s.sessionId && m.phaseEpoch === s.phaseEpoch;
   if (groups && matches(groups) && !groups.selectedGroupId)
     return { key: `${key}:group`, body: 'Open the app to choose your group.' };
-  if (voting && matches(voting) && !voting.closed && voting.method !== 'physical')
-    return { key: `${key}:vote`, body: voting.method === 'phone-buttons' ? 'Open the app to choose your answer.' : 'Open the app to move your cursor and answer.' };
+  // Only button votes are answered in the app; physical and cursor votes happen in the room.
+  if (voting && matches(voting) && !voting.closed && voting.method === 'phone-buttons')
+    return { key: `${key}:vote`, body: 'Open the app to choose your answer.' };
   const rating = 'rating' in p ? p.rating : null;
   if (rating) {
     const index = rating.windows ? rating.windows.findIndex(w => now - p.startedAt >= w.startAtMs && now - p.startedAt < w.endAtMs) : 0;

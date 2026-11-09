@@ -8,7 +8,7 @@ const groups: Groups = { t: 'group_selection_options', v: 2, sessionId: 's', pha
 describe('action eligibility', () => {
   it('alerts only for current, open phone voting', () => {
     expect(actionPrompt(s, vote, null, 200)?.body).toContain('answer');
-    for (const v of [{ ...vote, closed: true }, { ...vote, phaseEpoch: 0 }, { ...vote, sessionId: 'old' }, { ...vote, method: 'physical' as const }]) expect(actionPrompt(s, v, null, 200)).toBeNull();
+    for (const v of [{ ...vote, closed: true }, { ...vote, phaseEpoch: 0 }, { ...vote, sessionId: 'old' }, { ...vote, method: 'physical' as const }, { ...vote, method: 'phone-cursor' as const }]) expect(actionPrompt(s, v, null, 200)).toBeNull();
     expect(actionPrompt(s, vote, null, 1100)).toBeNull();
     expect(actionPrompt({ ...s, participantState: 'finished' }, vote, null, 200)).toBeNull();
   });
