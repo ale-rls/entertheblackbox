@@ -94,6 +94,43 @@ file as part of the same PR — don't let it drift into a stale snapshot.
 - **Rebuild clients after frontend changes** — the server serves built bundles,
   not a dev server.
 
+## Authoring a show (scenario JSON or Studio backup)
+
+These bit us when generating a show from a script. The generated backup itself
+is show content: keep it out of git.
+
+- **Scene IDs: letters, digits, `-`, `_` only, starting alphanumeric.** Studio's
+  editor enforces this (`phaseIdError`, `apps/studio/src/inspector/model.ts`);
+  the runtime schema and `pnpm validate-scenario` only require non-empty IDs.
+  An ID with dots, spaces or umlauts passes validation and imports, then cannot
+  be edited in Studio.
+- **Verify generated backups with Studio's own code**, not only
+  `validate-scenario`: run `importBackup` + `compileStudioGraph`
+  (`apps/studio/src/io.ts`) under `tsx`, plus the ID rule above.
+- **Late joiners never enter a group path.** Path rosters are fixed when a
+  group-branch's selection closes (`startGroupPaths`); phones joining later wait
+  silently until the reunion. Anything an audience that joins mid-show must take
+  part in (e.g. scanning a QR shown in a video) belongs on the shared timeline.
+- **The main display is black during a group-branch's selection and paths.** A
+  path's media shows only on `/display/?group=<id>`; one projector cannot follow
+  both the main and a group display.
+- **Membership-only split:** a group-branch whose branches have no `next` just
+  labels participants and continues at its `next`. Shared scenes can then give
+  each group different headphone audio via `phoneAudioByGroup`. A participant
+  has one group at a time, so a later split replaces the label: re-label
+  afterwards if later scenes target the earlier group.
+- **Self-select splits wait for every phone in the cohort.** If someone does not
+  choose, the operator must start the group paths in Admin. There is no
+  "first N to press" rule; operators move people during the window instead.
+- **Curtain-light polygon zones need an unlit gap.** Zones that tile the whole
+  screen leave no neutral entry point and fail validation.
+- **Studio rewrites video and still+MP3 durations from library media** on open:
+  `expectedDurationMs` = media length + `tailDurationMs`. You cannot trim a video
+  by shortening `expectedDurationMs`; use `tailDurationMs` to hold longer.
+- **Narration scenes show their text and the corner join QR on the main
+  display; video scenes hide the QR.** For a black, silent operator hold use a
+  still image + a short silent MP3 with `tailDurationMs` and `allowSkip`.
+
 ## Native app update preference
 
 Director decision (2026-10-28): **production EAS Update is the main delivery
