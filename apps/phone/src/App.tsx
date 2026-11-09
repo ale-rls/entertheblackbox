@@ -1,3 +1,4 @@
+import { ParticipantTaskCard } from "./ParticipantTaskCard.js";
 import { rehearsalId, runtimeApi, runtimeWebSocket } from "@entertheblackbox/protocol";
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
 import { PROTOCOL_VERSION } from "@entertheblackbox/protocol";
@@ -350,7 +351,7 @@ export function App() {
   return (
     <main
       className="phone-root"
-      style={{ touchAction: "none", userSelect: "none" }}
+      style={{ touchAction: state.task?.task && state.task.task.status !== "cancelled" ? "pan-y" : "none", userSelect: "none" }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {submittedName === null ? (
@@ -480,6 +481,11 @@ export function App() {
         </div>
       )}
 
+      <ParticipantTaskCard state={state.task} enabled={state.join.kind === "accepted"} clock={connection?.clock}
+        respond={(instanceId, optionId) => {
+          if (state.join.kind !== "accepted" || !state.sessionId) return;
+          connection?.send({ t: "participant_task_response", v: PROTOCOL_VERSION, sessionId: state.sessionId, instanceId, optionId });
+        }} />
       <footer className="hud">
         {state.currentGroup && <span className="phone-current-group" aria-label="Deine Gruppe" style={{ color: state.currentGroup.color }}>{state.currentGroup.label}</span>}
         {identity && (

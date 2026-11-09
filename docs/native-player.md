@@ -239,4 +239,4 @@ Not yet measured: start accuracy and drift on the venue tablets and network, and
 
 Admin → Devices → Phone audio coverage checks every scene/group against the immutable phone download with SHA-256 and byte counts. No audio assigned is distinct from a missing or corrupt file. The foreground activity visualization requires a moving native playhead and updates every 250 ms; it does not measure speaker volume or headphones.
 
-Browser voting supports ordinary name/lease admission and group selection. Shows configured with admission programs or participant tasks require the native app; the browser displays that requirement instead of joining. Do not enable those show-wide features for a mixed browser/native audience.
+Browser voting supports ordinary name/lease admission and group selection. Participant tasks are supported in the browser, including response windows and outcome messages. Shows configured with admission programs still require the native app; the browser displays that requirement instead of joining. Do not enable admission programs for a mixed browser/native audience.

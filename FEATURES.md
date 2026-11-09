@@ -51,6 +51,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Native iOS/Android app for both audiences and all loan tablets: identity, group choices, cursor/buttons/reactions, downloaded narration and background music. See the native section below.
 - Browser voting at `/phone/`: name/lease admission, group selection, cursor/button votes and reactions alongside native participants. `/` and legacy `/phone-janus/` redirect there. Keep the page foregrounded; personal audio requires the native app — `apps/phone`, `apps/server/src/static.ts`.
+- Browser participant tasks: capability-aware joining, timed choices and outcome messages, with responses disabled after expiry or disconnect — `apps/phone/src/ParticipantTaskCard.tsx`. Admission-program audio and tablet handover remain native-only.
 - Retained browser audio, Icecast/Liquidsoap and Janus source/tests are historical. Environment settings cannot enable stream delivery through `loadConfig`; production Compose no longer starts these services.
 
 ## Display / installation screen — `apps/display`

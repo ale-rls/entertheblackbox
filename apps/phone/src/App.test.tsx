@@ -65,3 +65,26 @@ it("sends fresh finger anchors for every curtain-light touch", async () => {
   expect(starts[0]).toMatchObject({ x: .5, y: .5, phaseEpoch: 2 });
   expect(starts[1]).toMatchObject({ x: .5, y: .5, phaseEpoch: 2 });
 });
+
+it("answers tasks, handles full outcomes, and disables responses on disconnect and expiry", async () => {
+  await receive({ t: "identity", v: 2, clientId: "visitor", color: "#ffffff", sessionId: "show", participantLease: "lease", leaseExpiresAt: 1e12 });
+  const task: Extract<ServerToClientMessage, { t: "participant_task" }> = {
+    t: "participant_task", v: 2, sessionId: "show", task: {
+      id: "task-1", deadlineAt: Date.now() + 60000, status: "open",
+      template: { id: "volunteer", title: "Volunteer", question: "Open the curtain?", notificationBody: "Choose", groupIds: ["ki"], durationMs: 60000,
+        options: [{ id: "yes", label: "JA", capacity: 2, message: "Accepted" }, { id: "no", label: "NEIN", message: "Stay" }], fullMessage: "Others were faster" },
+      recipient: { participantId: "visitor", optionId: null, sequence: null, status: "pending", message: "", respondedAt: null },
+    },
+  };
+  await receive(task);
+  const yes = () => host.querySelector<HTMLButtonElement>('.participant-task button')!;
+  await act(async () => yes().click());
+  expect(mock.send).toHaveBeenCalledWith({ t: "participant_task_response", v: 2, sessionId: "show", instanceId: "task-1", optionId: "yes" });
+  await receive({ ...task, task: { ...task.task!, recipient: { ...task.task!.recipient, status: "full", message: "Others were faster" } } });
+  expect(host.textContent).toContain("Others were faster"); expect(yes().disabled).toBe(false);
+  await act(async () => mock.options!.onSocketLost!()); expect(yes().disabled).toBe(true);
+  await receive({ t: "identity", v: 2, clientId: "visitor", color: "#ffffff", sessionId: "show", participantLease: "lease", leaseExpiresAt: 1e12 });
+  await receive({ ...task, task: { ...task.task!, deadlineAt: Date.now() - 1 } }); expect(yes().disabled).toBe(true);
+  await receive({ ...task, task: { ...task.task!, status: "cancelled" } }); expect(host.querySelector('.participant-task')).toBeNull();
+  await receive({ ...task, sessionId: "old-show" }); expect(host.querySelector('.participant-task')).toBeNull();
+});
