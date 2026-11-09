@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type PocketBase from "pocketbase";
-import QRCode from "qrcode";
 import type { Draft } from "../model.js";
 import { exportArtifacts } from "../io.js";
 
@@ -27,13 +26,10 @@ export function DevicePreview({ draft, phaseId, request, operator, onClose }: {
   const [error, setError] = useState("");
   const [needsSignIn, setNeedsSignIn] = useState(!operator.authStore.isValid);
   const [credentials, setCredentials] = useState({ email: "", password: "" });
-  const canvas = useRef<HTMLCanvasElement>(null);
   const inFlight = useRef(false);
   const latest = useRef({ draft, phaseId });
   latest.current = { draft, phaseId };
-  const phoneUrl = new URL(`/phone/?rehearsal=${id}`, location.origin).href;
   const displayUrl = new URL(`/display/?rehearsal=${id}`, location.origin).href;
-  const cuesUrl = new URL(`/api/rehearsals/${id}/cues`, location.origin).href;
 
   const start = async () => {
     if (inFlight.current) return;
@@ -75,9 +71,7 @@ export function DevicePreview({ draft, phaseId, request, operator, onClose }: {
     const timer = setInterval(() => void poll(), 2000);
     return () => { cancelled = true; clearInterval(timer); };
   }, [id, status !== null]);
-  useEffect(() => {
-    if (status && canvas.current) void QRCode.toCanvas(canvas.current, phoneUrl, { width: 180, margin: 1 }).catch(() => setError("QR could not be drawn. Open the phone link instead."));
-  }, [phoneUrl, status !== null, request]);
+
 
   const signIn = async (event: FormEvent) => {
     event.preventDefault(); setBusy(true); setError("");
@@ -114,14 +108,10 @@ export function DevicePreview({ draft, phaseId, request, operator, onClose }: {
     </>}
     {status && <div className="device-preview-connections">
       <p role="status">Playing: <strong>{status.phaseId}</strong> · {status.participants} phone(s) · {status.displays} display(s)</p>
-      <canvas ref={canvas} aria-label="Scan to join this preview on your phone" />
-      <p><a href={phoneUrl} target="_blank" rel="noreferrer">Open phone</a> · <a href={displayUrl} target="_blank" rel="noreferrer">Open display</a></p>
+      <p><a href={displayUrl} target="_blank" rel="noreferrer">Open main display</a></p>
+      <p>{["M1", "M2", "M3", "M4"].map((monitor) => <a key={monitor} href={`${displayUrl}&monitor=${monitor}&setup=1`} target="_blank" rel="noreferrer" style={{ marginRight: "1rem" }}>{monitor}</a>)}</p>
+      <p className="sc-tool-help">Participant devices use the native app only. To rehearse their audio and actions, use Publish show on a rehearsal venue server. This isolated preview is for display screens.</p>
       {status.groups.length > 0 && <details><summary>Group displays</summary>{status.groups.map((group) => <p key={group.id}><a href={`${displayUrl}&group=${encodeURIComponent(group.id)}`} target="_blank" rel="noreferrer">{group.label || group.id}</a></p>)}</details>}
-      <details><summary>TouchDesigner connection</summary>
-        <label className="sc-tool-label">Cue feed URL<input className="sc-tool-field" readOnly value={cuesUrl} onFocus={(event) => event.target.select()} /></label>
-        <label className="sc-tool-label">Bearer token<input className="sc-tool-field" readOnly value={id} onFocus={(event) => event.target.select()} /></label>
-        <p className="sc-tool-help">Use these in your TouchDesigner cue receiver, then trigger a phase to send its cues.</p>
-      </details>
       <p className="sc-tool-help">Preview links last until you end it, the server restarts, or two hours pass without triggering a phase.</p>
       <button className="sc-tool-button" disabled={busy} onClick={() => void stop()}>End device preview</button>
     </div>}

@@ -1,10 +1,18 @@
-import { publishScenario as publishNativeScenario } from "@entertheblackbox/show-content/publisher";
+import { nativeAudioCoverage } from './admin/native-audio.js';
+import { preparePublication } from "./publication.js";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { showManifestSchema } from "@entertheblackbox/show-content";
+import { prepareScenario as prepareNativeScenario } from "@entertheblackbox/show-content/publisher";
 import { Rehearsals } from "./rehearsal/rehearsal.js";
 import { listWaitingVideos } from "./persistence/waiting-videos.js";
 import { syncMediaFromPocketbase } from "./persistence/media-sync.js";
 import { basename } from "node:path";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
-import { readDisplaySettings, writeDisplaySettings } from "./persistence/platform-config.js";
+import { readDisplaySettings, readWallLayout, writeDisplaySettings, writeWallLayout } from "./persistence/platform-config.js";
+import { VideoWallController, wallClipsFromMedia } from "./wall/wall.js";
+import { SurfaceController } from "./surface/surface.js";
+import { SurfaceEffectRunner } from "./surface/effects.js";
 import { AudioDelivery } from "./audio/audio-delivery.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
@@ -49,10 +57,12 @@ export type BuildServerOptions = {
   webSocketKeepAliveIntervalMs?: number;
   movementConsentTimeoutMs?: number;
   /** Notifies the process host after an active session has safely reached idle. */
+  onPublicationEnded?: () => void;
   onSessionEnded?: (event: { reason: string; sessionId: string; endedAt: number }) => void;
 };
 
 export type ServerRuntime = {
+  isPublishing: () => boolean;
   app: FastifyInstance;
   config: ServerConfig;
   readiness: ScenarioReadiness;
@@ -67,6 +77,7 @@ export type ServerRuntime = {
 export async function buildServer(options: BuildServerOptions = {}): Promise<ServerRuntime> {
   const config = options.config ?? loadConfig();
   const readiness = options.readiness ?? (await loadScenarioReadiness(config));
+  let publishing = false;
   const startedAt = Date.now();
   const app = Fastify({ logger: config.nodeEnv !== "test" });
   const rehearsals = new Rehearsals(config, (error) => app.log.error({ error }, "rehearsal failed"));
@@ -113,6 +124,20 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   audio?.start();
   if (readiness.ready) audio?.prepare(readiness.scenario.phases);
   let engine: PhaseEngine | null = null;
+  const surface = new SurfaceController({ recipients: () => admission.registry.values() });
+  const surfaceEffects = new SurfaceEffectRunner(surface);
+  const wallClips = async () => {
+    if (!options.pocketbase) return [];
+    await options.pocketbase.ensureAuth();
+    return wallClipsFromMedia(await options.pocketbase.pb.collection<{ src: string; bytes: number; hash?: string }>("media").getFullList({ requestKey: null }));
+  };
+  const wall = new VideoWallController({
+    recipients: () => admission.registry.values(),
+    clips: wallClips,
+    ...(options.pocketbase ? { ensureLocal: (src: string) => syncMediaFromPocketbase(options.pocketbase!, config.mediaDir, src) } : {}),
+  });
+  if (options.pocketbase) void readWallLayout(options.pocketbase).then((layout) => wall.restoreLayout(layout)).catch(() => { /* Default layout until saved. */ });
+  if (options.pocketbase) void readDisplaySettings(options.pocketbase).then((settings) => surface.restoreBase(settings.phoneSurfaceColor)).catch(() => { /* Black until an operator sets a colour. */ });
   const admission = options.admission ?? new AdmissionController({
     installationId: config.installationId,
     roomId: config.roomId,
@@ -123,10 +148,18 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     buildVersion: config.buildVersion,
     allowPublicJoin: true,
     isNewParticipantAllowed: () => config.allowLateJoin || engine?.lifecycleState !== "active",
-    onClientMessage: (message, socket, request) => engine?.handleClientMessage(message, socket, request),
+    onClientMessage: (message, socket, request) => {
+      if (message.t === "wall_status") {
+        for (const participant of admission.registry.values()) if (participant.socket === socket) wall.report(participant.clientId, message);
+        return;
+      }
+      return engine?.handleClientMessage(message, socket, request);
+    },
     onParticipantJoin: (participant, socket) => {
       groups?.ensureParticipant(participant.clientId);
       engine?.participantJoined(socket, participant);
+      surface.welcome(socket);
+      wall.welcome(socket, participant.name);
     },
     onSocketClosed: (socket) => engine?.socketClosed(socket),
     onMessageError: (error) => {
@@ -324,16 +357,28 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     registerRehearsals: (admin) => rehearsals.registerAdmin(admin),
     verifyToken: options.verifyOperatorToken ?? createOperatorTokenVerifier(config.pocketbase.url),
     engine: () => engine,
+    surface,
+    surfaceEffects,
+    wall: {
+      controller: wall,
+      clips: wallClips,
+      saveLayout: async (layout) => options.pocketbase ? writeWallLayout(options.pocketbase, layout) : layout,
+    },
     ready: readiness.ready,
     phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
-    publishNativeShow: async (scenario, channel, music) => {
-      // Background music is chosen from the media library, so pull it down before the release is hashed.
-      if (music && options.pocketbase) await syncMediaFromPocketbase(options.pocketbase, config.mediaDir, music.src);
-      return publishNativeScenario(scenario, config.mediaDir, channel, music);
-    },
+    onPublishing: (busy) => { publishing = busy; if (!busy) options.onPublicationEnded?.(); },
     startedAt,
     trustProxy: config.trustProxy,
     rateLimitPolicy: config.adminRateLimit,
+    nativeAudioCoverage: async () => {
+      if (!readiness.ready) throw new Error('No active show');
+      const scenario = readiness.scenario;
+      const manifest = scenario.nativeReleaseId
+        ? showManifestSchema.parse(JSON.parse(await readFile(resolve(config.mediaDir, 'native-shows/releases', `${scenario.nativeReleaseId}.json`), 'utf8')))
+        : await prepareNativeScenario(scenario, config.mediaDir, scenario.backgroundMusic);
+      if (manifest.scenarioVersion !== scenario.version) throw new Error('Native release does not match active show');
+      return nativeAudioCoverage(scenario, manifest, config.mediaDir);
+    },
     audioStatus: async () => {
       const status = audio ? await audio.status() : { configured: false, players: [] };
       return {
@@ -388,7 +433,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         readPending: async () => (await readServerConfigOverride(options.pocketbase!))?.activeShowId ?? null,
         write: (showId) => writeActiveShowId(options.pocketbase!, showId),
         latest: (showId) => getLatestPublishedShow(options.pocketbase!, showId),
-        publish: (record) => publishShow(options.pocketbase!, record),
+        publish: async (record) => {
+          await syncMediaFromPocketbase(options.pocketbase!, config.mediaDir);
+          const prepared = await preparePublication(record.scenario, record.mediaManifest, config.mediaDir, record.backgroundMusic);
+          return publishShow(options.pocketbase!, { ...record, ...prepared });
+        },
       },
       ghostConfig: {
         active: options.targetAudienceSizeOverride
@@ -402,7 +451,20 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     }),
   });
 
-  registerMediaRoutes(app, config.mediaDir);
+  // Compatibility URLs both resolve to the running scenario, never an independently promoted channel.
+  let nativeManifest: Promise<import("@entertheblackbox/show-content").ShowManifest> | undefined;
+  registerMediaRoutes(app, config.mediaDir, async () => {
+    if (!readiness.ready) throw new Error("No active show");
+    nativeManifest ??= (async () => {
+      const scenario = readiness.scenario;
+      const manifest = scenario.nativeReleaseId
+        ? showManifestSchema.parse(JSON.parse(await readFile(resolve(config.mediaDir, "native-shows", "releases", `${scenario.nativeReleaseId}.json`), "utf8")))
+        : await prepareNativeScenario(scenario, config.mediaDir, scenario.backgroundMusic);
+      if (manifest.scenarioVersion !== scenario.version) throw new Error("Native release does not match active show");
+      return manifest;
+    })().catch(error => { nativeManifest = undefined; throw error; });
+    return nativeManifest;
+  });
   registerBundleRoutes(app, config.bundleDirs);
 
   app.server.on("upgrade", (request, socket, head) => {
@@ -475,11 +537,12 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     await audio?.stop();
     clearInterval(webSocketKeepAliveInterval);
     movementConsent?.stop();
+    surfaceEffects.stop();
     tracking?.stop();
     engine?.stop();
     for (const socket of webSockets.clients) socket.terminate();
     await new Promise<void>((resolve) => webSockets.close(() => resolve()));
   });
 
-  return { app, config, readiness, webSockets, admission, engine, rehearsals, tracking, startedAt };
+  return { isPublishing: () => publishing, app, config, readiness, webSockets, admission, engine, rehearsals, tracking, startedAt };
 }

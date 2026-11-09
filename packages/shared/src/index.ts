@@ -98,6 +98,11 @@ export type FourQuadrantField = {
   xAxis: Axis;
   yAxis: Axis;
   arena?: Arena | undefined;
+  /**
+   * Width (normalized viewport units) of an unlit, uncounted band centred
+   * on each split line. Omitted or 0 keeps the original edge-to-edge split.
+   */
+  neutralGap?: number | undefined;
 };
 
 export type TwoQuadrantField = {
@@ -108,6 +113,8 @@ export type TwoQuadrantField = {
   /** Viewport X coordinate of the left/right boundary when no arena is configured. */
   splitX?: number | undefined;
   arena?: Arena | undefined;
+  /** Width of the uncounted band centred on the split; see FourQuadrantField. */
+  neutralGap?: number | undefined;
 };
 
 export type PolygonPoint = { x: number; y: number };
@@ -275,49 +282,86 @@ function isBottomOfArenaQuad(corners: ArenaQuad["corners"], x: number, y: number
 }
 
 /**
+ * Signed distance (normalized viewport units) from each split line of a
+ * two- or four-region field. Positive dx is the right/max side, positive dy
+ * the bottom/max side, measured against the same calibrated lines the
+ * classifier uses (field split, ellipse centre/splitY, or quad midlines).
+ * Used for neutral gaps, and by renderers so light follows the vote geometry.
+ */
+export function fieldSplitOffsets(
+  field: FourQuadrantField | TwoQuadrantField,
+  x: number,
+  y: number,
+): { dx: number; dy: number } {
+  const arena = field.arena;
+  if (arena === undefined) {
+    const splitX = field.type === "two-quadrant" ? field.splitX ?? 0.5 : 0.5;
+    return { dx: x - splitX, dy: y - 0.5 };
+  }
+  if (arena.type === "ellipse") return { dx: x - arena.centerX, dy: y - arenaEllipseSplitY(arena) };
+  const { topMid, bottomMid, leftMid, rightMid } = arenaQuadLandmarks(arena.corners);
+  const vertical = Math.hypot(bottomMid.x - topMid.x, bottomMid.y - topMid.y) || 1;
+  const horizontal = Math.hypot(rightMid.x - leftMid.x, rightMid.y - leftMid.y) || 1;
+  return {
+    dx: -sideOfLine(topMid, bottomMid, { x, y }) / vertical,
+    dy: sideOfLine(leftMid, rightMid, { x, y }) / horizontal,
+  };
+}
+
+/** Whether a point lies inside a field's calibrated arena (always true without one). */
+export function insideFieldArena(field: PositionField, x: number, y: number): boolean {
+  if (field.type === "polygon-zones" || field.arena === undefined) return true;
+  const arena = field.arena;
+  if (arena.type === "ellipse") {
+    const normalizedX = (x - arena.centerX) / arena.radiusX;
+    const normalizedY = (y - arena.centerY) / arena.radiusY;
+    return normalizedX * normalizedX + normalizedY * normalizedY <= 1;
+  }
+  return pointInPolygon(arena.corners, x, y);
+}
+
+/**
  * Assign a normalized position to one of the field's spatial quadrants/zones.
  * The exact 0.5 boundary belongs to the max side: right for x, bottom for y.
- * Polygon zones return null when the point isn't inside any defined zone.
+ * Returns null for positions that cast no vote: outside a calibrated arena,
+ * inside a neutral gap, or (for polygon zones) outside every zone.
  */
-export function quadrantOfField(field: FourQuadrantField, x: number, y: number): FourQuadrant;
-export function quadrantOfField(field: TwoQuadrantField, x: number, y: number): TwoQuadrant;
+export function quadrantOfField(field: FourQuadrantField, x: number, y: number): FourQuadrant | null;
+export function quadrantOfField(field: TwoQuadrantField, x: number, y: number): TwoQuadrant | null;
 export function quadrantOfField(field: PolygonZonesField, x: number, y: number): string | null;
 export function quadrantOfField(field: PositionField, x: number, y: number): PositionQuadrant | null;
 export function quadrantOfField(field: PositionField, x: number, y: number): PositionQuadrant | null {
-  if (field.type !== "polygon-zones" && field.arena !== undefined) {
-    const arena = field.arena;
-    if (arena.type === "ellipse") {
-      const normalizedX = (x - arena.centerX) / arena.radiusX;
-      const normalizedY = (y - arena.centerY) / arena.radiusY;
-      if (normalizedX * normalizedX + normalizedY * normalizedY > 1) return null;
-    } else if (!pointInPolygon(arena.corners, x, y)) {
-      return null;
-    }
-  }
+  if (field.type === "polygon-zones") return zoneOfPolygons(field.zones, x, y);
+  if (!insideFieldArena(field, x, y)) return null;
+  const halfGap = Math.max(0, field.neutralGap ?? 0) / 2;
   if (field.type === "four-quadrant") {
-    if (field.arena === undefined) return quadrantOf(x, y);
+    if (field.arena === undefined && halfGap === 0) return quadrantOf(x, y);
     const arena = field.arena;
-    const right = arena.type === "ellipse" ? x >= arena.centerX : isRightOfArenaQuad(arena.corners, x, y);
-    const bottom = arena.type === "ellipse" ? y >= arenaEllipseSplitY(arena) : isBottomOfArenaQuad(arena.corners, x, y);
+    const offsets = fieldSplitOffsets(field, x, y);
+    if (halfGap > 0 && (Math.abs(offsets.dx) < halfGap || Math.abs(offsets.dy) < halfGap)) return null;
+    // Keep the original calibrated comparisons for the exact-boundary convention.
+    const right = arena === undefined ? x >= 0.5 : arena.type === "ellipse" ? x >= arena.centerX : isRightOfArenaQuad(arena.corners, x, y);
+    const bottom = arena === undefined ? y >= 0.5 : arena.type === "ellipse" ? y >= arenaEllipseSplitY(arena) : isBottomOfArenaQuad(arena.corners, x, y);
     if (right) return bottom ? "q4" : "q1";
     return bottom ? "q3" : "q2";
   }
-  if (field.type === "two-quadrant") {
-    if (field.arena === undefined) {
-      const coordinate = field.axis === "x" ? x : y;
-      const boundary = field.axis === "x" ? field.splitX ?? 0.5 : 0.5;
-      return coordinate >= boundary ? "max" : "min";
-    }
-    const arena = field.arena;
-    if (arena.type === "ellipse") {
-      const coordinate = field.axis === "x" ? x : y;
-      const boundary = field.axis === "x" ? arena.centerX : arenaEllipseSplitY(arena);
-      return coordinate >= boundary ? "max" : "min";
-    }
-    const isMax = field.axis === "x" ? isRightOfArenaQuad(arena.corners, x, y) : isBottomOfArenaQuad(arena.corners, x, y);
-    return isMax ? "max" : "min";
+  if (halfGap > 0) {
+    const offsets = fieldSplitOffsets(field, x, y);
+    if (Math.abs(field.axis === "x" ? offsets.dx : offsets.dy) < halfGap) return null;
   }
-  return zoneOfPolygons(field.zones, x, y);
+  if (field.arena === undefined) {
+    const coordinate = field.axis === "x" ? x : y;
+    const boundary = field.axis === "x" ? field.splitX ?? 0.5 : 0.5;
+    return coordinate >= boundary ? "max" : "min";
+  }
+  const arena = field.arena;
+  if (arena.type === "ellipse") {
+    const coordinate = field.axis === "x" ? x : y;
+    const boundary = field.axis === "x" ? arena.centerX : arenaEllipseSplitY(arena);
+    return coordinate >= boundary ? "max" : "min";
+  }
+  const isMax = field.axis === "x" ? isRightOfArenaQuad(arena.corners, x, y) : isBottomOfArenaQuad(arena.corners, x, y);
+  return isMax ? "max" : "min";
 }
 
 export function quadrantsOfField(field: FourQuadrantField): typeof FOUR_QUADRANTS;
@@ -331,6 +375,11 @@ export function quadrantsOfField(field: PositionField): typeof FOUR_QUADRANTS | 
 }
 
 export * from "./resolution.js";
+export * from "./curtain.js";
 
 export { ServerClock } from "./serverClock.js";
 export { followMediaClock } from "./mediaClock.js";
+
+export * from "./surfaceEffects.js";
+
+export * from "./videoWall.js";

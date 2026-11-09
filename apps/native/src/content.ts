@@ -34,9 +34,30 @@ export async function loadShow(origin: string, channel: ShowChannel): Promise<Sh
   for (const entry of manifest.files) if (!await verified(localAudio(entry.sha256), entry)) return null;
   return manifest;
 }
+// Expo wraps Android transport errors in a JS Error containing the native cause.
+const interrupted = /timeout|timed out|network (?:request failed|lost|error|is unreachable)|SSLProtocolException|SocketException|UnknownHostException|ConnectException|unexpected end of stream|connection (?:reset|closed|refused|lost)|internet connection appears to be offline/i;
+async function transfer<T>(label: string, progress: (text: string) => void, read: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await read();
+    } catch (error) {
+      console.warn(`Show download: ${label}, attempt ${attempt}`, error);
+      if (!interrupted.test(String(error))) {
+        progress('Download stopped');
+        throw new Error(`Could not download ${label}. Ask the operator to check the published show and available device storage.`);
+      }
+      if (attempt === 4) {
+        progress('Download paused');
+        throw new Error(`Could not finish downloading ${label}. Check your connection and try again. Completed audio files are saved.`);
+      }
+      progress(`Connection interrupted. Retrying ${label} (attempt ${attempt + 1} of 4)…`);
+      await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** (attempt - 1)));
+    }
+  }
+}
 export async function downloadShow(origin: string, channel: ShowChannel, progress: (text: string) => void): Promise<ShowManifest> {
   ensureRoot();
-  const response = await fetch(`${origin}/media/native-shows/channels/${channel}.json?check=${Date.now()}`);
+  const response = await transfer('the show list', progress, () => fetch(`${origin}/media/native-shows/channels/${channel}.json?check=${Date.now()}`));
   if (!response.ok) throw new Error(`Show channel unavailable (${response.status}). Publish this channel on the venue server first.`);
   const manifest = await parseManifest(await response.json());
   let index = 0;
@@ -46,7 +67,12 @@ export async function downloadShow(origin: string, channel: ShowChannel, progres
     if (await verified(final, entry)) continue;
     const temporary = new File(root, `${entry.sha256}.download`);
     try {
-      await File.downloadFileAsync(mediaUrl(origin, `native-shows/audio/${entry.sha256}.mp3`), temporary, { idempotent: true });
+      const label = `audio file ${index} of ${manifest.files.length}`;
+      await transfer(label, progress, async () => {
+        if (temporary.exists) temporary.delete();
+        progress(`Downloading ${label}`);
+        await File.downloadFileAsync(mediaUrl(origin, `native-shows/audio/${entry.sha256}.mp3`), temporary, { idempotent: true });
+      });
       if (!await verified(temporary, entry)) throw new Error(`Audio verification failed: ${entry.src}`);
       if (final.exists) final.delete();
       temporary.move(final);
@@ -57,4 +83,42 @@ export async function downloadShow(origin: string, channel: ShowChannel, progres
   destination.write(JSON.stringify(manifest));
   await SecureStore.setItemAsync(await selectionKey(origin, channel), manifest.revision);
   return manifest;
+}
+
+// ------------------------------------------------------------- video wall slices
+
+const wallRoot = new Directory(Paths.document, 'wall');
+/**
+ * SHA-256 here reads the whole file into memory. The venue tablets (Lenovo
+ * Tab M7, 2 GB RAM) can't afford that for a large uncut video, so above this
+ * size a wall file is checked by exact byte count only.
+ */
+export const WALL_HASH_LIMIT_BYTES = 48 * 1024 * 1024;
+export const wallVerification = (bytes: number): 'sha256' | 'size' => bytes <= WALL_HASH_LIMIT_BYTES ? 'sha256' : 'size';
+async function wallVerified(file: File, slice: { bytes: number; sha256: string }) {
+  if (!file.exists || file.size !== slice.bytes) return false;
+  return wallVerification(slice.bytes) === 'size' || await digest(file) === slice.sha256;
+}
+/**
+ * Download and verify this tablet's video wall slice (size and SHA-256), kept
+ * by hash so a re-load of the same clip is instant. Other slices are deleted
+ * to free storage once the new one verifies.
+ */
+export async function downloadWallSlice(origin: string, slice: { url: string; bytes: number; sha256: string }): Promise<string> {
+  wallRoot.create({ intermediates: true, idempotent: true });
+  const final = new File(wallRoot, `${slice.sha256}.mp4`);
+  if (!await wallVerified(final, slice)) {
+    const temporary = new File(wallRoot, `${slice.sha256}.download`);
+    try {
+      await transfer('the video wall slice', () => {}, async () => {
+        if (temporary.exists) temporary.delete();
+        await File.downloadFileAsync(`${origin}${slice.url}`, temporary, { idempotent: true });
+      });
+      if (!await wallVerified(temporary, slice)) throw new Error('Video wall slice verification failed. Check the uploaded file in the media library.');
+      if (final.exists) final.delete();
+      temporary.move(final);
+    } catch (error) { if (temporary.exists) temporary.delete(); throw error; }
+  }
+  for (const entry of wallRoot.list()) if (entry instanceof File && entry.name !== final.name && !entry.name.endsWith('.download')) entry.delete();
+  return final.uri;
 }

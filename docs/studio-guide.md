@@ -10,13 +10,9 @@ Choose **New show** for a minimal idle-only project, or import `scenario.json` a
 
 Use the node palette to add phases, connect their typed handles, and select a node to edit its properties. The End node means “return to idle/attract”; the required runtime `idle` phase stays in the exported scenario without appearing as a duplicate canvas node. A position question can use four quadrants (both X and Y axes) or two quadrants (one active axis). Four-quadrant outputs are q2 top-left, q1 top-right, q3 bottom-left, and q4 bottom-right; the exact center belongs to q4. Two-quadrant X questions divide left/right and Y questions divide top/bottom; their stable outputs are `min` and `max`, and exactly 0.5 belongs to max (right or bottom). Studio labels these outputs with their spatial position and authored endpoint text. Runtime IDs must be unique. Undo is available for inspector changes, including destructive phase-type, transition, and quadrant-layout changes.
 
-Every active phase has a **Phone headphones** field. Choose an MP3 there to
-send that recording to all joined personal streams when the phase begins. This
-is separate from the display's video, still-image narration, or extra audio,
-so the room and headphones can carry different sound. The phase duration must
-leave enough time for the full phone recording plus the venue's measured
-stream buffer. Removing the field makes the phase silent on headphones and
-stops narration left over from the preceding phase.
+Participant devices use the native iOS/Android app only. The **Phone headphones** field (`phoneAudioSrc`) selects downloaded narration; group overrides choose targeted tracks. Publish with the top-right **Publish** button; all outputs and native devices share that selected version. Include enough phase time for narration. No browser stream fallback is supported.
+
+Select a phase and open **Stage monitors** to author M1–M4 video, image, text, placeholder and blank cues, with offsets and optional durations. Select image/video assets through the shared media picker. The main server clock drives all four screens; see [monitor setup](monitor-displays.md).
 
 ## Validate and preview
 
@@ -24,43 +20,15 @@ The Validation and media panel lists blocking errors, warnings, media references
 
 Preview starts at the configured entry phase. Advance video and question timers manually, force each fixed/quadrant/tie/empty outcome, and exercise stale, disconnected, and abandoned-solo cases. Four-quadrant questions expose q1–q4; two-quadrant questions expose min/max. The frozen result shows counted and excluded votes, quadrant totals, winner, and resolved target.
 
-### Preview on devices
+### Rehearsing on devices
 
-Select a phase and click **Preview on devices**. Sign in as an operator if
-needed. Studio loads the current draft into a separate in-memory runtime and
-starts that phase immediately, without publishing. Scan the panel’s phone QR,
-open its display link, and use the TouchDesigner cue URL and bearer token in
-your cue receiver. Group display links are available under **Group displays**.
-Devices must reach the same server URL as Studio; use a network-accessible
-hostname rather than localhost when joining from another device.
-
-Click **Preview on devices** again after selecting a phase or editing content.
-The server validates the draft before replacing the preview, keeps phones and
-displays connected, and restarts the chosen phase with the latest changes.
-Normal timers, votes, group branches, personal audio (when the audio bridge is
-configured), and outgoing cues use the actual show engine. Trigger again after
-connecting TouchDesigner to receive the phase’s outgoing cues; attaching to the
-feed supplies a current-state snapshot, not a replay of earlier cues.
-
-Preview uses the media already available on the server. Missing media produces
-an error and leaves the previous preview running. Upload/sync media first;
-preview does not publish or change production’s scenario. The ordinary
-`/phone/`, `/display/`, and `/api/cues` URLs continue to address production.
-Preview links grant access to that rehearsal: share them only with testers.
-Movement and vote recordings from preview are not saved to production history.
-
-**Hide** closes the panel while devices keep running. **End device preview**
-closes its device connections and cue feed. Previews expire two hours after the
-last phase trigger, or on a server restart; click again to recreate one. The
-server allows four simultaneous previews. Jumping directly into a phase starts
-with fresh group membership and answer history; start at an earlier branch or
-question when testing decisions that depend on those earlier answers.
+The editor top bar no longer offers **Preview on devices** or **Preview from here**. Rehearse by publishing the show to a venue server and running it from Admin with real displays and native apps. TouchDesigner monitor helpers are no longer part of this workflow.
 
 ## Export and hand off
 
-**Export for deployment** is enabled only after validation and warning acknowledgement. It emits a versioned set containing `scenario.json`, `media-manifest.json`, `.studio.json`, `validation-report.json`, and `README.txt`. Keep all five files together. The complete set can be selected in **Import** to resume editing with its saved layout. The report records the runtime schema, Studio build, media total, warnings, and branch-smoke results. An authenticated operator may instead use **Publish** to upload the validated scenario and referenced media to PocketBase; the server syncs those media files locally before activating the published show.
+The file-based **Export files** and **Export for deployment** actions are retired from the File menu; **Publish** (top right) is the hand-off. It is disabled while Diagnostics report errors or unacknowledged warnings; the issue count beside it opens the Diagnostics panel.
 
-Use **Backup** for a restorable working draft. Browser storage is convenient, not an archival system; export a backup at each curator handoff.
+Use **File → Save backup** for a restorable working draft. Browser storage is convenient, not an archival system; export a backup at each curator handoff.
 
 ## Recovery and limitations
 
@@ -70,10 +38,10 @@ The checked-in example is `content/scenarios/dev.json` with `content/media-manif
 
 ## V1 acceptance record
 
-All §18 requirements are covered by adapter/unit/e2e regression tests: fixture import and canonical round-trip; runtime-validator-gated export; UI authoring; fixed, four-quadrant, and two-quadrant transitions with shared targets; unreachable/cycle diagnostics; all outcome presets; distinct-media and 2 GiB gates; reload-persistent drafts and corrupt-revision recovery; runtime/layout separation; and versioned reproducible exports. Studio has no production route or installation-control API, so publishing and active sessions remain outside it. The sole deferred item is multi-participant drag simulation (STEP-044); it is not an §18 acceptance-row omission.
+All §18 requirements are covered by adapter/unit/e2e regression tests: fixture import and canonical round-trip; runtime-validator-gated export; UI authoring; fixed, four-quadrant, and two-quadrant transitions with shared targets; unreachable/cycle diagnostics; all outcome presets; distinct-media and 2 GiB gates; reload-persistent drafts and corrupt-revision recovery; runtime/layout separation; and versioned reproducible exports. This is the original V1 acceptance record; Studio now also publishes through the authenticated server API. The sole deferred item is multi-participant drag simulation (STEP-044); it is not an §18 acceptance-row omission.
 
-## Publish native device audio
+## Publish the show
 
-In Studio served from the venue server, choose **File → Publish to devices…**. Sign in as an operator, select **Rehearsal** or **Production**, and press **Publish to devices**. Studio exports the current draft; the server validates it and publishes a verified audio release to that channel. The result shows its scenario version, audio count, and revision. Native apps download the latest channel release before joining.
+On the venue server click **Publish** in the top-right corner of the editor, sign in as an operator, confirm the name and optional background music, then publish. The server validates the current graph and media, prepares immutable visual/audio assets, saves one version and selects it for projection, M1–M4 and native devices. A running performance keeps its current version until it ends.
 
-Referenced MP3s must already be synced to the server. Missing files leave the old channel selected. Publishing is unavailable during an active show. This action changes only the native audio channel; use the existing scenario publishing and active-show controls separately. See [native player publishing](native-player.md#publish-directly-from-studio) for the complete workflow.
+No separate native channel publication is required. Phones check/download the running show before joining. See [publishing.md](publishing.md) for preparation, failures and activation.

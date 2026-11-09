@@ -159,8 +159,14 @@ async function sendRangedFile(
 export function registerMediaRoutes(
   app: FastifyInstance,
   mediaDir: string,
+  activeNativeManifest?: () => Promise<unknown>,
 ): void {
   app.get<{ Params: { "*": string } }>("/media/*", async (request, reply) => {
+    if (/^native-shows\/channels\/(rehearsal|production)\.json$/.test(request.params["*"]) && activeNativeManifest) {
+      reply.header("cache-control", "no-store");
+      try { return reply.send(await activeNativeManifest()); }
+      catch { return reply.code(503).send({ error: "active_show_content_unavailable" }); }
+    }
     const rootPath = resolve(mediaDir);
     const filePath = resolve(rootPath, request.params["*"]);
     if (filePath === rootPath || !filePath.startsWith(`${rootPath}${sep}`)) {
@@ -178,17 +184,19 @@ export function registerBundleRoutes(
   app: FastifyInstance,
   bundles: Record<"display" | "phone" | "admin" | "studio", string>,
 ): void {
-  // Most root-page visitors are participants opening the stable join link;
-  // display is only ever loaded with its own full authenticated URL for
-  // the venue's one big-screen kiosk, never via the bare root path.
-  app.get("/", async (_request, reply) => reply.redirect("/phone/"));
-
-  // Same compiled UI; the pathname selects the optional Janus transport.
-  app.get("/phone-janus", async (request, reply) => reply.redirect(`/phone-janus/${request.url.includes("?") ? request.url.slice(request.url.indexOf("?")) : ""}`));
-  app.get<{ Params: { "*": string } }>("/phone-janus/*", async (request, reply) => {
-    await sendBundleFile(reply, bundles.phone, request.params["*"], request.headers.range);
-  });
-  for (const role of ["display", "phone", "admin", "studio"] as const) {
+  // Participant browser entry points only explain native-app admission.
+  // Keep legacy URLs so printed QR codes remain useful, never serve the old web client.
+  const nativeJoin = async (_request: unknown, reply: FastifyReply) => {
+    reply.header("cache-control", "no-store").type("text/html; charset=utf-8").send(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Enter the Blackbox</title>
+<style>body{background:#111;color:#fff;font:20px/1.5 system-ui;max-width:36rem;margin:10vh auto;padding:24px}a{color:#fff}small{color:#bbb}</style></head>
+<body><h1>Enter the Blackbox</h1><p>Join with the Enter the Blackbox app on your iPhone, iPad or Android device.</p>
+<p><a href="entertheblackbox://">Open the app</a></p><p>In the app, choose the venue server, enter your name, then tap “Update show &amp; join”. The app downloads and verifies the show before you join.</p>
+<p>If you need the app or a loan device, please ask the entrance team.</p><small>This browser page does not play show audio or collect votes.</small></body></html>`);
+  };
+  app.get("/", nativeJoin);
+  for (const path of ["/phone", "/phone/*", "/phone-janus", "/phone-janus/*"]) app.get(path, nativeJoin);
+  for (const role of ["display", "admin", "studio"] as const) {
     app.get(`/${role}`, async (_request, reply) => reply.redirect(`/${role}/`));
     app.get<{ Params: { "*": string } }>(`/${role}/*`, async (request, reply) => {
       await sendBundleFile(reply, bundles[role], request.params["*"], request.headers.range);

@@ -129,6 +129,8 @@ export function displayReducer(
     case "status":
     case "pong":
     case "audio_bridge_changed":
+    case "surface":
+    case "wall":
       return state;
   }
 }

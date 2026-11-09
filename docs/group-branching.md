@@ -1,3 +1,5 @@
+> Current delivery: all participant devices use the native iOS/Android app with downloaded audio. Browser phone/streaming instructions below are historical. M1–M4 use [monitor display pages](monitor-displays.md); see [native setup](native-player.md).
+
 # Group branching and targeted audio
 
 Runtime schema version 5 makes audience groups first-class show state. Studio authors can define a stable group catalogue, start a session with multiple balanced groups, add a **Group branch** component, and attach either broadcast or group-specific phone narration to later phases.

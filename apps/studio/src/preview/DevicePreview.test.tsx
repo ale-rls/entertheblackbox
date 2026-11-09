@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DevicePreview } from "./DevicePreview.js";
 import { importRuntime } from "../io.js";
 
-vi.mock("qrcode", () => ({ default: { toCanvas: vi.fn(async () => {}) } }));
 const draft = importRuntime({ version: "test", entryPhaseId: "first", phases: [
   { kind: "idle", id: "idle" },
   { kind: "narration", id: "first", text: "First", durationMs: 60000, next: "second" },
@@ -35,22 +34,25 @@ describe("Preview on devices", () => {
     const firstUrl = request.mock.calls[0]![0];
     expect(firstUrl).toMatch(/^\/api\/admin\/rehearsals\//);
     expect(JSON.parse(request.mock.calls[0]![1].body).phaseId).toBe("first");
-    const phoneUrl = container.querySelector<HTMLAnchorElement>('a[href*="/phone/"]')!.href;
+    const monitorUrl = container.querySelector<HTMLAnchorElement>('a[href*="monitor=M1"]')!.href;
     const edited = structuredClone(draft);
     const second = edited.project.scenario.phases.find((p) => p.id === "second");
     if (second?.kind === "narration") second.text = "Edited";
     await render(2, "second", edited);
     expect(request.mock.calls[1]![0]).toBe(firstUrl);
     expect(JSON.parse(request.mock.calls[1]![1].body)).toMatchObject({ phaseId: "second", scenario: { phases: expect.arrayContaining([expect.objectContaining({ text: "Edited" })]) } });
-    expect(container.querySelector<HTMLAnchorElement>('a[href*="/phone/"]')!.href).toBe(phoneUrl);
-    expect(container.textContent).toContain("TouchDesigner connection");
+    expect(container.querySelector<HTMLAnchorElement>('a[href*="monitor=M1"]')!.href).toBe(monitorUrl);
+    expect(container.textContent).not.toContain("TouchDesigner connection");
+    expect(container.querySelectorAll('a[href*="monitor=M"]')).toHaveLength(4);
+    expect(container.textContent).toContain("native app only");
+    expect(container.querySelector('a[href*="/phone/"]')).toBeNull();
   });
   it("shows validation errors while keeping the existing connection links", async () => {
     await render(1);
     request.mockResolvedValueOnce(new Response(JSON.stringify({ errors: ["Missing media: scene.mp4"] }), { status: 400 }));
     await render(2);
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Missing media: scene.mp4");
-    expect(container.querySelector('a[href*="/phone/"]')).not.toBeNull();
+    expect(container.querySelector('a[href*="monitor=M1"]')).not.toBeNull();
   });
   it("requires sign-in before submitting a draft", async () => {
     await render(1, "first", draft, { authStore: { isValid: false } } as PocketBase);

@@ -1,3 +1,4 @@
+import { WALL_MAX_COLS, WALL_MAX_ROWS, type WallLayout } from "@entertheblackbox/shared";
 import { z } from "zod";
 
 /** Browser-playable media URLs; allow same-origin paths and HTTP(S) only. */
@@ -10,6 +11,7 @@ export const waitingVideoUrlSchema = z.string().max(2048).refine((value) => {
 
 /** Public display copy and waiting video settings. */
 export const displaySettingsSchema = z.object({
+  phoneSurfaceColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color").default("#000000"),
   heading: z.string().max(160),
   countdownTemplate: z.string().min(1).max(160).refine((value) => value.includes("{time}"), "Include {time} for the countdown"),
   networkInstructions: z.string().max(600),
@@ -22,6 +24,7 @@ export const displaySettingsSchema = z.object({
 }).strict();
 export type DisplaySettings = z.infer<typeof displaySettingsSchema>;
 export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
+  phoneSurfaceColor: "#000000",
   heading: "Join the show",
   countdownTemplate: "Show starts in {time}",
   networkInstructions: "Verbinde dich mit dem Besucher-WLAN {wifi} oder nutze dein eigenes mobiles Netz.",
@@ -45,3 +48,18 @@ export function resolveSignageVideoUrl(settings: DisplaySettings, signageId: str
     ? settings.signageVideoUrls[signageId]!
     : settings.waitingVideoUrl;
 }
+
+/** Tablet video wall layout (Admin → Wall). Type and slice math live in @entertheblackbox/shared. */
+const positiveMm = z.number().positive().max(10_000);
+const wallPx = z.number().int().positive().max(16_384);
+export const wallLayoutSchema = z.object({
+  cols: z.number().int().min(1).max(WALL_MAX_COLS),
+  rows: z.number().int().min(1).max(WALL_MAX_ROWS),
+  screen: z.object({ widthMm: positiveMm, heightMm: positiveMm, widthPx: wallPx, heightPx: wallPx }).strict(),
+  gapMm: z.object({ x: z.number().min(0).max(10_000), y: z.number().min(0).max(10_000) }).strict(),
+  source: z.object({ widthPx: wallPx, heightPx: wallPx, fps: z.number().positive().max(240) }).strict(),
+  fit: z.enum(["fill", "fit"]),
+  /** Layouts saved before mounting existed were portrait. */
+  mount: z.enum(["portrait", "landscape-cw", "landscape-ccw"]).default("portrait"),
+  slots: z.record(z.string().regex(/^[A-Z][0-9]{1,2}$/), z.string().trim().min(1).max(40)),
+}).strict() satisfies z.ZodType<WallLayout, z.ZodTypeDef, unknown>;

@@ -172,7 +172,7 @@ describe("Admin operations UI", () => {
     expect(requests).toContainEqual({ url: "/api/admin/status", method: "GET" });
     expect(requests.some(({ url }) => url === "/api/admin/errors")).toBe(false);
     expect(intervalSpy).toHaveBeenCalledWith(expect.any(Function), 2_000);
-    expect(document.body.textContent).toContain("Authenticated");
+    expect(document.body.textContent).toContain("Operator signed in");
     expect(document.body.textContent).toContain("question-02");
     expect(document.body.textContent).toContain("118");
   });
@@ -210,6 +210,55 @@ describe("Admin operations UI", () => {
     expect(document.activeElement).toBe(restartTrigger);
   });
 
+  it("restarts the captured shared scene with session and epoch guards", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    const live = { ...activeStatus };
+    const { requests } = createAdminFetch({ status: live });
+    await renderApp();
+    expect(button("Restart show").closest("details")).toBeNull();
+    expect(button("Return to idle").closest("details")).toBeNull();
+    const trigger = button("Restart current scene");
+    await act(async () => { trigger.click(); });
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("reset its timer and clear its current vote");
+    expect(requests.some(r => r.method === "POST")).toBe(false);
+    // A later status must not retarget an already-open confirmation.
+    live.phaseId = "intro"; live.phaseEpoch = 8;
+    await act(async () => { button("Restart scene").click(); });
+    await flush();
+    expect(requests).toContainEqual({ url: "/api/admin/jump", method: "POST", body: JSON.stringify({ phaseId: "question-02", expectedPhaseId: "question-02", expectedEpoch: 7, sessionId: "5H7D-A2" }) });
+    expect(document.body.textContent).toContain("Restarted “Choose a position”.");
+  });
+
+  it("restarts only the selected running group and disables finished paths", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    const { requests } = createAdminFetch({
+      flow: { ...sceneFlow, scenes: [...sceneFlow.scenes, { id: "split", kind: "group-branch", title: "Split", routes: [] }] },
+      status: { ...activeStatus, phaseId: "split", groupPathsStarted: true, groupPaths: [
+        { groupId: "a", memberIds: ["p1"], phaseId: "question-02", phaseEpoch: 12, done: false, label: "Actors", color: "#f00", phaseTitle: "Choose a position", state: "active" },
+        { groupId: "b", memberIds: ["p2"], phaseId: "intro", phaseEpoch: 13, done: true, label: "Builders", color: "#0f0", phaseTitle: "Opening film", state: "finished" },
+      ] },
+    });
+    await renderApp();
+    expect(button("Restart scene for Builders").disabled).toBe(true);
+    expect(document.body.textContent).not.toContain("Restart current scene");
+    await act(async () => { button("Restart scene for Actors").click(); });
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Other group paths keep running");
+    await act(async () => { button("Restart scene").click(); });
+    await flush();
+    expect(requests.filter(r => r.method === "POST")).toEqual([{ url: "/api/admin/jump", method: "POST", body: JSON.stringify({ phaseId: "question-02", groupId: "a", expectedPhaseId: "question-02", expectedEpoch: 12, sessionId: "5H7D-A2" }) }]);
+  });
+
+  it("reports a refused scene restart without claiming success", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    createAdminFetch({ rejectAction: "jump" });
+    await renderApp();
+    await act(async () => { button("Restart current scene").click(); });
+    await act(async () => { button("Restart scene").click(); });
+    await flush();
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("server refused this action");
+    expect(document.body.textContent).not.toContain("Restarted “");
+  });
+
   it("keeps idle operations focused on session controls and scheduling", async () => {
     localStorage.setItem("admin-token", "operator-secret");
     createAdminFetch({ status: { ...activeStatus, lifecycle: "idle" } });
@@ -217,8 +266,9 @@ describe("Admin operations UI", () => {
     expect(document.querySelector("#admin-connection-heading")).toBeNull();
     expect(document.querySelector("#admin-flow-heading")).toBeNull();
     const headings = [...document.querySelectorAll(".admin-grid h2")].map((node) => node.textContent);
-    expect(headings.slice(0, 2)).toEqual(["Session controls", "Run of show"]);
-    expect(document.querySelector("#admin-lobby-heading")?.closest(".sc-tool-panel")).toBe(document.querySelector("#admin-controls-heading")?.closest(".sc-tool-panel"));
+    expect(headings).toContain("Ready to start");
+    expect(document.querySelector<HTMLElement>(".admin-setup-content")?.hidden).toBe(true);
+    expect(document.querySelector("#admin-lobby-heading")?.closest(".admin-setup-content")).not.toBeNull();
   });
 
   it("shows the published flow and confirms a direct jump to any other scene", async () => {
@@ -265,7 +315,7 @@ describe("Admin operations UI", () => {
     });
     expect(document.body.textContent).toContain("Show added in 5 minutes.");
 
-    const panels = Array.from(document.querySelectorAll(".admin-grid > section"));
+    const panels = Array.from(document.querySelectorAll(".admin-grid > section:not([hidden])"));
     expect(panels[0]?.querySelector("#admin-controls-heading")).not.toBeNull();
   });
 
@@ -385,15 +435,15 @@ describe("Admin operations UI", () => {
     failStatus = true;
     await act(async () => { poll(); });
     await flush();
-    expect(document.body.textContent).toContain("Last status received");
+    expect(document.body.textContent).toContain("Updates stale");
     expect(document.body.textContent).toContain("Showing the last received status");
     expect(document.body.textContent).toContain("question-02");
 
     failStatus = false;
     await act(async () => { poll(); });
     await flush();
-    expect(document.body.textContent).toContain("Authenticated");
-    expect(document.body.textContent).toContain("Authenticated");
+    expect(document.body.textContent).toContain("Operator signed in");
+    expect(document.body.textContent).toContain("Operator signed in");
     expect(document.body.textContent).not.toContain("Status stale");
     expect(document.querySelector('[role="alert"]')).toBeNull();
   });
@@ -448,34 +498,20 @@ describe("Admin operations UI", () => {
   });
 });
 
-it("plays and stops background music while the show is active", async () => {
+it("separates device, display and setup views and remembers selection", async () => {
   localStorage.setItem("admin-token", "operator-token");
-  const { mock, requests } = createAdminFetch({ status: { ...activeStatus, audio: {
-    configured: true, players: [], soundcheckSources: ["music.mp3"], backgroundMusic: null,
-  } } });
-  // Real fetch() defaults a plain string body's Content-Type to text/plain,
-  // which Fastify then leaves unparsed instead of JSON -- so every music
-  // request must set this header explicitly. See #133.
-  const musicContentType = () => {
-    const calls = mock.mock.calls.filter(([input]) => String(input).endsWith("/audio/music"));
-    return new Headers(calls.at(-1)?.[1]?.headers).get("content-type");
-  };
-  await renderApp();
-  expect(button("Play / apply music").disabled).toBe(true);
-  const select = document.querySelector('[aria-label="Background music"] select') as HTMLSelectElement;
-  await act(async () => {
-    select.value = "music.mp3";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  expect(button("Play / apply music").disabled).toBe(false);
-  await act(async () => button("Play / apply music").click());
-  await flush();
-  expect(JSON.parse(requests.find(r => r.url.endsWith("/audio/music"))!.body!)).toEqual({ src: "music.mp3", volume: 0.2 });
-  expect(musicContentType()).toBe("application/json");
-  await act(async () => button("Stop music").click());
-  await flush();
-  expect(JSON.parse(requests.filter(r => r.url.endsWith("/audio/music")).at(-1)!.body!)).toEqual({ src: null, volume: 0.2 });
-  expect(musicContentType()).toBe("application/json");
+  createAdminFetch(); await renderApp();
+  expect(document.querySelector<HTMLElement>(".admin-session-panel")?.hidden).toBe(false);
+  await act(async () => button("Displays").click());
+  expect(document.querySelector<HTMLElement>(".admin-display-content")?.hidden).toBe(false);
+  expect(document.querySelector<HTMLElement>(".admin-session-panel")?.hidden).toBe(true);
+  expect(document.querySelector('.admin-display-content')?.textContent).toContain("Not reported");
+  expect(localStorage.getItem("admin-view")).toBe("displays");
+  await act(async () => button("Devices").click());
+  expect(document.querySelector("#show-clock-heading")).not.toBeNull();
+  expect(document.body.textContent).not.toContain("Play / apply music");
+  await act(async () => button("Setup").click());
+  expect(document.querySelector<HTMLElement>(".admin-setup-content")?.hidden).toBe(false);
 });
 
 it("offers scoped start and scoped reunion for nested splits", async () => {
@@ -513,4 +549,17 @@ it("offers explicit recovery when disconnected people block a nested selection",
   expect(recover.disabled).toBe(false);
   await act(async () => recover.click()); await flush();
   expect(requests).toContainEqual({ url: "/api/admin/groups/start-paths", method: "POST", body: JSON.stringify({ groupId: "ki", expectedPhaseId: "roles", expectedEpoch: 5, skipDisconnected: true }) });
+});
+
+it("nests subgroup lanes and keeps completed paths disabled", async () => {
+  localStorage.setItem("admin-token", "operator-secret");
+  createAdminFetch({ flow: { entryPhaseId: "split", scenes: [{ id: "split", kind: "group-branch", title: "Split", routes: [] }] },
+    status: { ...activeStatus, phaseId: "split", groupPathsStarted: true, groupPaths: [
+      { groupId: "parent", parentGroupId: null, label: "Parent", color: null, memberIds: [], phaseId: "roles", phaseTitle: "Roles", phaseEpoch: 2, done: false, state: "split" },
+      { groupId: "child", parentGroupId: "parent", label: "Child", color: null, memberIds: ["p"], phaseId: "done", phaseTitle: "Reunion", phaseEpoch: 3, done: true, state: "finished" },
+    ] } });
+  await renderApp();
+  expect(document.querySelector(".admin-group-lane .admin-nested-groups .admin-group-lane")?.textContent).toContain("Child");
+  expect(button("Child — finished").disabled).toBe(true);
+  expect(button("Finish subgroups of Parent").disabled).toBe(false);
 });

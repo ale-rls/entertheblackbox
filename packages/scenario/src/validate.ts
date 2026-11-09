@@ -1,3 +1,5 @@
+import { monitorMediaSources } from "./monitors.js";
+import { curtainLightIssues } from "./curtain.js";
 import type { MediaManifest, Phase, Scenario } from "./schema.js";
 
 /**
@@ -19,7 +21,8 @@ export type ScenarioIssue = {
     | "immediate-group-reunion"
     | "missing-media"
     | "unreachable-phase"
-    | "unmarked-cycle";
+    | "unmarked-cycle"
+    | "curtain-light";
   phaseId?: string;
   message: string;
 };
@@ -31,7 +34,7 @@ export type ValidationResult = {
 };
 
 /** All outgoing phase targets, labelled for error messages. */
-function targetsOf(phase: Phase): Array<{ label: string; target: string }> {
+export function targetsOf(phase: Phase): Array<{ label: string; target: string }> {
   switch (phase.kind) {
     case "idle":
       return [];
@@ -69,6 +72,9 @@ export function validateScenario(
 
   const byId = new Map<string, Phase>();
   const groupIds = new Set((scenario.groups ?? []).map((group) => group.id));
+  if (scenario.monitorGroupId !== undefined && !groupIds.has(scenario.monitorGroupId)) errors.push({
+    severity: "error", code: "unknown-group", message: `monitorGroupId references unknown group "${scenario.monitorGroupId}"`,
+  });
   for (const phase of scenario.phases) {
     if (byId.has(phase.id)) {
       errors.push({
@@ -160,9 +166,9 @@ export function validateScenario(
   if (mediaManifest) {
     const known = new Set(mediaManifest.files.map((f) => f.src));
     for (const phase of scenario.phases) {
-      if (phase.kind === "idle") continue;
       const sources = [
-        ...(phase.kind === "group-branch"
+        ...monitorMediaSources(phase.monitorCues),
+        ...(phase.kind === "idle" ? [] : phase.kind === "group-branch"
           ? phase.branches.flatMap((branch) => branch.phoneAudioSrc ? [branch.phoneAudioSrc] : [])
           : [
               ...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []),
@@ -181,6 +187,8 @@ export function validateScenario(
       }
     }
   }
+
+  for (const issue of curtainLightIssues(scenario, mediaManifest)) (issue.severity === "error" ? errors : warnings).push(issue);
 
   // Reachability from the entry phase; idle is always considered live
   // because every session returns to it.

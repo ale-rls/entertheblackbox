@@ -1,3 +1,5 @@
+> Current delivery: all participant devices use the native iOS/Android app with downloaded audio. Browser phone/streaming instructions below are historical. M1–M4 use [monitor display pages](monitor-displays.md); see [native setup](native-player.md).
+
 # Show clock and cue timesheet
 
 The show server is the time authority. Every runtime cue has a server Unix-millisecond `startedAt`, a session/phase epoch, and (where applicable) `deadlineAt`. Position is `(serverNow - startedAt) / 1000`. Decision and subtitle windows are offsets from that same start. Parallel group branches share server time but have independent cue starts; transferring a participant adopts the destination cue's timestamp.

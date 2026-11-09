@@ -333,11 +333,54 @@ describe("Studio feedback and keyboard entry", () => {
     await act(async () => { canvas.dispatchEvent(move); });
 
     await act(async () => { button("Add").click(); });
-    await act(async () => { button("Narration (text only, no media)").click(); });
+    await act(async () => { button("Audio + text (narration)").click(); });
     await flush();
 
     const node = Array.from(document.querySelectorAll<HTMLElement>('.react-flow__node[data-id^="narration-"]')).at(-1)!;
     expect(node.style.transform).toContain("translate(650px,320px)");
+  });
+
+  it("picks group audio without changing the default or other groups, and restores fallback on removal", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "default.mp3", bytes: 100, hash: "default" },
+      { src: "group.mp3", bytes: 100, hash: "group" },
+      { src: "film.mp4", bytes: 100, hash: "film" },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Group branching moment").click(); });
+    await act(async () => { document.querySelector<HTMLElement>('.react-flow__node[data-id^="group-branch-"]')!.click(); });
+    const pick = async (selector: string, src: string) => {
+      await act(async () => { document.querySelector<HTMLButtonElement>(selector)!.click(); });
+      const dialog = document.querySelector('[role="dialog"]')!;
+      expect(dialog.textContent).not.toContain("film.mp4");
+      const row = Array.from(dialog.querySelectorAll('.media-row')).find(row => row.textContent?.includes(src))!;
+      await act(async () => { row.querySelector<HTMLButtonElement>('button')!.click(); });
+      await flush();
+    };
+    await pick('button[aria-label*="Group A · selection audio"]', 'group.mp3');
+    const compiled = () => JSON.parse(document.querySelector('.inspector pre')!.textContent!);
+    expect(compiled().phases.find((p: {kind: string}) => p.kind === "group-branch").branches[0].phoneAudioSrc).toBe("group.mp3");
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Audio + text (narration)").click(); });
+    await act(async () => { document.querySelector<HTMLElement>('.react-flow__node[data-id^="narration-"]')!.click(); });
+    expect(document.querySelector('.inspector')!.textContent).toContain("No audio for this group");
+    await pick('button[aria-label^="Choose audio"][aria-label$="Current media: none"]', 'default.mp3');
+    await pick('button[aria-label*=" · Group A."]', 'group.mp3');
+    const phase = compiled().phases.find((p: {kind: string}) => p.kind === "narration");
+    expect(phase.phoneAudioSrc).toBe("default.mp3");
+    expect(phase.phoneAudioByGroup).toEqual({ "group-a": "group.mp3" });
+    expect(document.querySelector('.inspector')!.textContent).toContain("Uses default: default.mp3");
+    const trigger = document.querySelector<HTMLButtonElement>('button[aria-label*=" · Group A."]')!;
+    await act(async () => { trigger.click(); });
+    expect(document.querySelector('.media-row[data-selected="true"]')?.textContent).toContain("group.mp3");
+    await act(async () => { button("Cancel").click(); });
+    expect(document.activeElement).toBe(trigger);
+    await act(async () => { button("Use default for Group A").click(); });
+    expect(compiled().phases.find((p: {kind: string}) => p.kind === "narration").phoneAudioByGroup).toBeUndefined();
+    await act(async () => { button("Remove default track").click(); });
+    expect(document.querySelector('.inspector')!.textContent).toContain("No audio for this group");
   });
 
   it("authors a still image + MP3 phase with type-filtered library pickers", async () => {
@@ -585,20 +628,43 @@ describe("Studio feedback and keyboard entry", () => {
     expect(Array.from(document.querySelectorAll("button")).some((item) => item.textContent === "Preview")).toBe(false);
   });
 
-  it("offers a display preview from the selected phase in the top bar", async () => {
+  it("keeps preview actions out of the top bar and offers Publish at the top right", async () => {
     await render(<App />);
     await act(async () => { button("New show").click(); });
-    expect(Array.from(document.querySelectorAll("a")).some((item) => item.textContent === "Preview from here")).toBe(false);
-
     await act(async () => { button("Add").click(); });
     await act(async () => { button("Video phase").click(); });
     await act(async () => { button("Cancel").click(); });
-    const preview = Array.from(document.querySelectorAll<HTMLAnchorElement>("a")).find((item) => item.textContent === "Preview from here")!;
-    await act(async () => { preview.click(); });
 
-    expect(preview.href).toMatch(/\/preview\.html\?preview=/);
-    expect(preview.target).toBe("_blank");
-    expect(preview.rel).toBe("noreferrer");
+    const menubarText = document.querySelector(".menubar")?.textContent ?? "";
+    expect(menubarText).not.toContain("Preview on devices");
+    expect(menubarText).not.toContain("Preview from here");
+    const publish = document.querySelector<HTMLButtonElement>(".menubar .publish-action")!;
+    expect(publish.textContent).toBe("Publish");
+    expect(publish.getAttribute("data-sc-tool-variant")).toBe("primary");
+  });
+
+  it("disables Publish while diagnostics block it and badges nodes with missing media", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Video phase").click(); });
+    await act(async () => { button("Cancel").click(); });
+
+    expect(document.querySelector<HTMLButtonElement>(".menubar .publish-action")!.disabled).toBe(true);
+    expect(document.querySelector(".menubar .publish-issues")?.textContent).toMatch(/^\d+ issues?$/);
+    const warning = document.querySelector(".studio-node .node-warning");
+    expect(warning?.getAttribute("aria-label")).toBe("Missing media: media/new-video.mp4");
+  });
+
+  it("removes retired export and publish items from the File menu", async () => {
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("File").click(); });
+    const items = Array.from(document.querySelectorAll("[role=menuitem]")).map((item) => item.textContent);
+    expect(items).not.toContain("Export files");
+    expect(items).not.toContain("Export for deployment");
+    expect(items).not.toContain("Publish show…");
+    expect(items).toContain("Save backup");
   });
 
   it("offers the centered XL title option for video phases", async () => {
@@ -623,7 +689,7 @@ describe("Studio feedback and keyboard entry", () => {
 
     expect(titlePosition.value).toBe("centered-xl");
     const compiled = Array.from(document.querySelectorAll("details"))
-      .find((item) => item.querySelector("summary")?.textContent?.includes("Compiled scenario JSON"));
+      .find((item) => item.querySelector("summary")?.textContent?.includes("Scenario JSON"));
     expect(compiled?.querySelector("pre")?.textContent).toContain('"titleLayout": "centered-xl"');
   });
 
@@ -701,11 +767,6 @@ describe("Studio feedback and keyboard entry", () => {
     await act(async () => { button("New show").click(); });
 
     const content = document.querySelector<HTMLElement>("#bottom-panel-content")!;
-    const collapse = button("Collapse panel");
-    expect(collapse.getAttribute("aria-expanded")).toBe("true");
-    expect(content.hidden).toBe(false);
-
-    await act(async () => { collapse.click(); });
     expect(content.hidden).toBe(true);
     expect(document.querySelector(".diagnostics")?.classList.contains("is-collapsed")).toBe(true);
     expect(button("Expand panel").getAttribute("aria-expanded")).toBe("false");
@@ -713,6 +774,9 @@ describe("Studio feedback and keyboard entry", () => {
     await act(async () => { button("Expand panel").click(); });
     expect(content.hidden).toBe(false);
     expect(button("Collapse panel").getAttribute("aria-expanded")).toBe("true");
+
+    await act(async () => { button("Collapse panel").click(); });
+    expect(content.hidden).toBe(true);
   });
 
   it("acknowledges every acknowledgement-required diagnostic at once", async () => {
@@ -783,13 +847,14 @@ describe("Studio feedback and keyboard entry", () => {
 });
 
 
-it("opens device publishing from File and requires operator sign-in", async () => {
+it("opens one show publication from the top-right Publish action and requires operator sign-in", async () => {
   localStorage.clear();
   await render(<App />);
   await act(async () => { button("New show").click(); });
-  await act(async () => { button("File").click(); });
-  await act(async () => { button("Publish to devices…").click(); });
-  expect(document.querySelector("#publish-heading")?.textContent).toBe("Publish to devices");
+  await act(async () => { document.querySelector<HTMLButtonElement>(".menubar .publish-action")!.click(); });
+  expect(document.querySelector("#publish-heading")?.textContent).toBe("Publish show");
   expect(document.querySelector("#publish-email")).not.toBeNull();
   expect(document.querySelector("#native-show-channel")).toBeNull();
+  expect(document.body.textContent).not.toContain("Publish to devices…");
+  expect(document.body.textContent).not.toContain("Publish to PocketBase…");
 });

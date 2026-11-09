@@ -1,3 +1,5 @@
+> Current delivery: all participant devices use the native iOS/Android app with downloaded audio. Browser phone/streaming instructions below are historical. M1–M4 use [monitor display pages](monitor-displays.md); see [native setup](native-player.md).
+
 # Venue installation guide
 
 Provision and acceptance-test the exact museum mini PC before launch. Minimum

@@ -1,3 +1,4 @@
+import { MonitorEditor, type MediaTarget } from "./MonitorEditor.js";
 import { useEffect, useState } from "react";
 import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import type { Arena } from "../../../../packages/shared/src/index.js";
@@ -8,6 +9,8 @@ import { ArenaQuadEditor, DEFAULT_ARENA_QUAD } from "./ArenaQuadEditor.js";
 import { TimingTimeline } from "./TimingTimeline.js";
 import { studioMediaKindForSource, type StudioMediaKind } from "../media/library.js";
 import { setGroupOptions } from "./groups.js";
+import { CurtainSharedEditor, CurtainStageEditor } from "./CurtainLightEditor.js";
+import { curtainStagePhaseIds, type CurtainLightConfig } from "../../../../packages/scenario/src/index.js";
 
 type Props = {
   project: StudioProject;
@@ -15,12 +18,13 @@ type Props = {
   localMedia: Array<{ src: string; durationMs?: number; previewUrl?: string }>;
   onRename: (nextId: string) => void;
   onChange: (phase: Phase) => void;
-  onChooseMedia: (phaseId: string, target: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc", mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
+  onChooseMedia: (phaseId: string, target: MediaTarget, mediaKind: Exclude<StudioMediaKind, "unknown">, trigger: HTMLButtonElement) => void;
   onComponentTypeChange: (type: AuthorableComponentType, trigger: HTMLSelectElement) => void;
   onTransitionChange: (kind: "fixed" | "quadrant-plurality", trigger: HTMLSelectElement) => void;
   onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x-split" | "two-quadrant-x-spectrum" | "two-quadrant-y-split" | "two-quadrant-y-spectrum" | "three-candidate-zones", trigger: HTMLSelectElement) => void;
   onTargetAudienceSizeChange: (value: number) => void;
   onGroupsChange: (groups: NonNullable<StudioProject["scenario"]["groups"]>, initialGroupIds: string[]) => void;
+  onCurtainLightChange?: (config: CurtainLightConfig | undefined) => void;
 };
 
 const numberValue = (value: string, fallback: number) => {
@@ -28,7 +32,7 @@ const numberValue = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export function Inspector({ project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange }: Props) {
+export function Inspector({ project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onCurtainLightChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   const [copiedArena, setCopiedArena] = useState<Arena | null>(null);
@@ -63,21 +67,24 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
           <option value="phone-cursor">Phone cursor</option>
           <option value="phone-buttons">Phone buttons</option>
         </select></label>
+        <label className="sc-tool-checkbox"><input type="checkbox" checked={group.voteTreatment === "curtain-light"} onChange={(event) => onGroupsChange((project.scenario.groups ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, voteTreatment: event.target.checked ? "curtain-light" as const : undefined } : item), project.scenario.initialGroupIds ?? [])} /><span title="voteTreatment">Curtain-light cursor votes</span></label>
         <label className="sc-tool-checkbox"><input type="checkbox" checked={(project.scenario.initialGroupIds ?? []).includes(group.id)} onChange={(event) => { const current = project.scenario.initialGroupIds ?? []; onGroupsChange(project.scenario.groups ?? [], event.target.checked ? [...current, group.id] : current.filter((id) => id !== group.id)); }} />Assign members to this group at show start</label>
         <button className="sc-tool-button" type="button" disabled={(project.scenario.groups?.length ?? 0) <= 2} onClick={() => onGroupsChange((project.scenario.groups ?? []).filter((_, itemIndex) => itemIndex !== index), (project.scenario.initialGroupIds ?? []).filter((id) => id !== group.id))}>Remove group</button>
       </div>)}
       <button className="sc-tool-button" type="button" onClick={() => { const groups = project.scenario.groups ?? []; if (groups.length === 0) { onGroupsChange([{ id: "group-1", label: "Group 1" }, { id: "group-2", label: "Group 2" }], []); return; } let suffix = groups.length + 1; while (groups.some((group) => group.id === `group-${suffix}`)) suffix += 1; onGroupsChange([...groups, { id: `group-${suffix}`, label: `Group ${suffix}` }], project.scenario.initialGroupIds ?? []); }}>{(project.scenario.groups?.length ?? 0) === 0 ? "Add groups" : "Add group"}</button>
+      {(project.scenario.groups ?? []).some((group) => group.voteTreatment === "curtain-light") && onCurtainLightChange &&
+        <CurtainSharedEditor config={project.scenario.curtainLight} mediaSources={localMedia.map((file) => file.src)} onChange={onCurtainLightChange} />}
       <p className="sc-tool-copy field-hint">A show has at least two labelled groups. Starting groups are assigned automatically in the lobby; a group scene can instead ask people to choose on their phones.</p>
     </fieldset>
     <Compiled project={project} /></aside>;
-  const label = (plain: string, runtime: string) => <span>{plain}<small>{runtime}</small></span>;
+  const label = (plain: string, runtime: string) => <span title={runtime}>{plain}</span>;
   const text = (plain: string, runtime: string, value: string, change: (value: string) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" value={value} onChange={(event) => change(event.target.value)} /></label>;
   const number = (plain: string, runtime: string, value: number, change: (value: number) => void) => <label className="sc-tool-label">{label(plain, runtime)}<input className="sc-tool-field" type="number" min="0" value={value} onChange={(event) => change(numberValue(event.target.value, value))} /></label>;
-  const mediaPicker = (plain: string, runtime: "src" | "audioSrc" | "extraAudioSrc" | "phoneAudioSrc", src: string, kind: Exclude<StudioMediaKind, "unknown">) => <>
-    <div className="sc-tool-label media-source-field">{label(plain, runtime)}<button className="sc-tool-button media-source-picker" data-sc-tool-variant="secondary" type="button" aria-label={`Choose ${kind} for ${phase.id}. Current media: ${src}`} onClick={(event) => onChooseMedia(phase.id, runtime, kind, event.currentTarget)}>
-      <span className="sc-tool-mono">{src}</span><span>Browse library…</span>
+  const mediaPicker = (plain: string, runtime: MediaTarget, src: string | undefined, kind: Exclude<StudioMediaKind, "unknown">, emptyLabel = "Choose an MP3") => <>
+    <div className="sc-tool-label media-source-field">{label(plain, typeof runtime === "string" ? runtime : "groupId" in runtime ? `phoneAudioByGroup.${runtime.groupId}` : "monitorCues")}<button className="sc-tool-button media-source-picker" data-sc-tool-variant="secondary" type="button" aria-label={`Choose ${kind} for ${phase.id}${typeof runtime === "object" && "groupId" in runtime ? ` · ${plain}` : ""}. Current media: ${src ?? "none"}`} onClick={(event) => onChooseMedia(phase.id, runtime, kind, event.currentTarget)}>
+      <span className="sc-tool-mono">{src ?? emptyLabel}</span><span>Browse library…</span>
     </button></div>
-    {!localMedia.some((file) => file.src === src) && <p className="field-error" role="alert">This file is missing from the shared media library. Choose a replacement.</p>}
+    {src && !localMedia.some((file) => file.src === src) && <p className="field-error" role="alert">This file is missing from the shared media library. Choose a replacement.</p>}
   </>;
   const updateVoteAssignment = (change: (assignment: Extract<Extract<Phase, { kind: "group-branch" }>["assignment"], { type: "vote" }>) => Extract<Extract<Phase, { kind: "group-branch" }>["assignment"], { type: "vote" }>) => {
     if (phase.kind !== "group-branch" || phase.assignment.type !== "vote") return;
@@ -89,22 +96,21 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   };
 
   return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2>
-    <label className="sc-tool-label">{label("Runtime ID", "id")}<input className="sc-tool-field" aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
+    <label className="sc-tool-label">{label("Scene ID", "id")}<input className="sc-tool-field" aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
     {phase.kind !== "idle" && <label className="sc-tool-label">{label("Component type", "kind + media")}<select className="sc-tool-select" value={componentTypeForPhase(phase)} onChange={(event) => onComponentTypeChange(event.target.value as AuthorableComponentType, event.currentTarget)}>
       <option value="video">Video</option>
       <option value="synchronized-video">Video + synchronized phone audio</option>
       <option value="image-audio">Still image + MP3</option>
-      <option value="narration">Narration (text only, no media)</option>
+      <option value="narration">Audio + text (narration)</option>
       <option value="position-question">Position question</option>
       <option value="video-position-question">Video + position vote</option>
       <option value="image-audio-position-question">Still image + MP3 + position vote</option>
       <option value="group-branch">Group branching moment</option>
     </select></label>}
-    {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
     {(phase.kind === "video" || phase.kind === "video-position-question") && <>
       {phase.kind === "video" && phase.phoneAudioMode === "synchronized" && <>
-        <p className="sc-tool-copy field-hint">The display page plays muted video. Phones download the matching MP3 and play against the shared show clock. Keep phones open and enable synchronized audio before the scene.</p>
+        <p className="sc-tool-copy field-hint">The display page plays muted video. Phones download the matching MP3 and play against the shared show clock. Native apps prepare the soundtrack before joining and follow the server clock.</p>
         {number("Preparation interval (ms)", "syncLeadMs", phase.syncLeadMs ?? 3000, (syncLeadMs) => onChange({ ...phase, syncLeadMs: Math.max(1000, Math.min(30000, syncLeadMs)) }))}
         <label className="sc-tool-label">Picture timing adjustment (ms)<input className="sc-tool-field" type="number" min="-2000" max="2000" value={phase.syncVideoOffsetMs ?? 0} onChange={(event) => onChange({ ...phase, syncVideoOffsetMs: Math.max(-2000, Math.min(2000, Number(event.target.value) || 0)) })} /></label>
         <p className="sc-tool-copy field-hint">Positive values delay the picture; negative values advance it. Calibrate using the actual display and headphones. Existing extra display audio is muted for this mode.</p>
@@ -135,7 +141,7 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
             <p className="sc-tool-copy field-hint">The extra track starts with the video, plays once, and stops when the video ends. The video still controls phase timing.</p>
           </>}
         </>
-        : <>{mediaPicker("Still image", "src", phase.src, "image")}{mediaPicker("Main display MP3", "audioSrc", phase.audioSrc, "audio")}<p className="sc-tool-copy field-hint">This MP3 plays from the display. Use Phone headphones below for private narration.</p></>}
+        : <>{mediaPicker("Still image", "src", phase.src, "image")}{mediaPicker("Main display MP3", "audioSrc", phase.audioSrc, "audio")}<p className="sc-tool-copy field-hint">This MP3 plays from the display. Use Phone audio below for private narration.</p></>}
       <p className="sc-tool-copy field-hint">{detectedDuration === undefined
         ? "Playback duration is detected automatically from the video or MP3."
         : phase.audioSrc === undefined
@@ -189,25 +195,21 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, subtitles: [...(phase.subtitles ?? []), { text: "New subtitle", startAtMs: 0, endAtMs: Math.min(phase.expectedDurationMs, 5_000) }] })}>Add subtitle</button>
       </fieldset>
     </>}
-    {phase.kind === "narration" && <fieldset><legend>Narration text</legend>
-      <p className="sc-tool-copy field-hint">Plain text shown on the display. Use this while a scene has no recorded video or MP3 yet; add a real soundtrack under Phone headphones below whenever it's ready, or convert this to a Video component once you have footage.</p>
+    {phase.kind === "narration" && <fieldset><legend>Audio + text</legend>
+      <p className="sc-tool-copy field-hint">Introduce the next question with phone audio and monitor text. Connect this scene to a Position question; set its duration to cover the introduction.</p>
       {text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
       <label className="sc-tool-label">{label("Display text", "text")}<textarea className="sc-tool-field" rows={4} value={phase.text} onChange={(event) => onChange({ ...phase, text: event.target.value })} /></label>
       {number("Duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs: Math.max(1, durationMs) }))}
       <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.allowSkip ?? false} onChange={(event) => onChange({ ...phase, allowSkip: event.target.checked || undefined })} />{label("Operator can skip early", "allowSkip")}</label>
-      <fieldset><legend>Per-group text overrides <small>textByGroup</small></legend>
+      {(project.scenario.groups?.length ?? 0) > 0 && <details><summary>Text by group</summary>
         {(project.scenario.groups ?? []).map((group) => <label className="sc-tool-label" key={group.id}>{label(`${group.label} text`, `textByGroup.${group.id}`)}<textarea className="sc-tool-field" rows={3} value={phase.textByGroup?.[group.id] ?? ""} onChange={(event) => {
           const value = event.target.value;
           const textByGroup = { ...phase.textByGroup };
           if (value.trim()) textByGroup[group.id] = value; else delete textByGroup[group.id];
           onChange({ ...phase, textByGroup: Object.keys(textByGroup).length ? textByGroup : undefined });
         }} /></label>)}
-        <p className="sc-tool-copy field-hint">Leave blank to fall back to the shared display text above for that group.</p>
-      </fieldset>
-    </fieldset>}
-    {phase.kind !== "idle" && <fieldset><legend>External show cues</legend>
-      {text("Cue names (comma separated)", "outgoingCues", (phase.outgoingCues ?? []).join(", "), (value) => onChange({ ...phase, outgoingCues: value.split(",").map((cue) => cue.trim()).filter(Boolean) }))}
-      <p className="sc-tool-copy field-hint">Sent once to TouchDesigner or another show-control receiver when this scene starts.</p>
+        <p className="sc-tool-copy field-hint">Leave blank to use the shared text.</p>
+      </details>}
     </fieldset>}
     {phase.kind === "group-branch" && <fieldset><legend>Group branching moment</legend>
       <fieldset><legend>Group options</legend>
@@ -248,20 +250,10 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
       {(phase.assignment.type === "vote" || phase.assignment.type === "manual") && <label className="sc-tool-label">{label("Fallback group", "assignment.fallbackGroupId")}<select className="sc-tool-select" value={phase.assignment.fallbackGroupId} onChange={(event) => updateFallbackGroup(event.target.value)}>{phase.branches.map((branch) => <option key={branch.groupId} value={branch.groupId}>{project.scenario.groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId}</option>)}</select></label>}
       {phase.branches.map((branch, index) => <fieldset key={branch.groupId}><legend>{project.scenario.groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId}</legend>
         {number("Allocation weight", `branches.${index}.weight`, branch.weight, (weight) => onChange({ ...phase, branches: phase.branches.map((item, itemIndex) => itemIndex === index ? { ...item, weight: Math.max(1, weight) } : item) }))}
-        {text("Phone narration MP3", `branches.${index}.phoneAudioSrc`, branch.phoneAudioSrc ?? "", (phoneAudioSrc) => onChange({ ...phase, branches: phase.branches.map((item, itemIndex) => itemIndex === index ? { ...item, phoneAudioSrc: phoneAudioSrc || undefined } : item) }))}
+        {mediaPicker(`${project.scenario.groups?.find(group => group.id === branch.groupId)?.label ?? branch.groupId} · selection audio`, { groupId: branch.groupId }, branch.phoneAudioSrc, "audio", "No audio")}
+        {branch.phoneAudioSrc && <button className="sc-tool-button" type="button" onClick={() => onChange({ ...phase, branches: phase.branches.map(item => item.groupId === branch.groupId ? { ...item, phoneAudioSrc: undefined } : item) })}>Remove group audio</button>}
       </fieldset>)}
       <p className="sc-tool-copy field-hint">Connect each group output to its own next scene. Connect Rejoin to the shared scene where everyone meets again. The main display stays black during selection and group paths. Groups arriving early wait; the shared scene starts once all occupied paths finish.</p>
-    </fieldset>}
-    {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone headphones</legend>
-      {mediaPicker(phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? "Synchronized phone soundtrack (MP3)" : "Phone stream narration (MP3)", "phoneAudioSrc", phase.phoneAudioSrc ?? "Choose an MP3", "audio")}
-      {phase.phoneAudioSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, phoneAudioSrc: undefined })}>Remove phone narration</button>}
-      {(project.scenario.groups ?? []).map((group) => text(
-        `${group.label} override (MP3)`,
-        `phoneAudioByGroup.${group.id}`,
-        phase.phoneAudioByGroup?.[group.id] ?? "",
-        (src) => onChange({ ...phase, phoneAudioByGroup: Object.fromEntries(Object.entries({ ...(phase.phoneAudioByGroup ?? {}), [group.id]: src }).filter(([, value]) => Boolean(value))) }),
-      ))}
-      <p className="sc-tool-copy field-hint">The broadcast MP3 is the fallback. Group overrides replace it only for members of that group.</p>
     </fieldset>}
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
@@ -372,6 +364,8 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
           </fieldset>)}
         </fieldset>;
       })()}
+      {curtainStagePhaseIds(project.scenario).has(phase.id) &&
+        <CurtainStageEditor phase={phase} scenario={project.scenario} onChange={onChange} />}
       {phase.field.type === "two-quadrant" && phase.field.variant !== "split" &&
         <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.spectrumGlow ?? true} onChange={(event) => onChange({ ...phase, spectrumGlow: event.target.checked })} />{label("Show spectrum density glow", "spectrumGlow")}</label>}
       {phase.field.type !== "polygon-zones" && (() => {
@@ -463,11 +457,35 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
             : `0 ms is the end of the MP3. The tail runs from 0 to ${phase.tailDurationMs ?? 0} ms; negative values happen during the audio. Required order: show ≤ open < close ≤ hide.`}</p>
         </fieldset>;
       })()}
-      {number("Connection stale after (ms)", "connectionStaleAfterMs", phase.connectionStaleAfterMs, (connectionStaleAfterMs) => onChange({ ...phase, connectionStaleAfterMs }))}
       <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showLiveCounts} onChange={(event) => onChange({ ...phase, showLiveCounts: event.target.checked })} />{label("Show live quadrant counts", "showLiveCounts")}</label>
       <label className="sc-tool-label">{label("Transition rule", "next.type")}<select className="sc-tool-select" value={phase.next.type} onChange={(event) => onTransitionChange(event.target.value as "fixed" | "quadrant-plurality", event.currentTarget)}><option value="fixed">Fixed target</option><option value="quadrant-plurality">Quadrant plurality</option></select></label>
       {phase.next.type === "quadrant-plurality" && <CountedStatuses phase={phase} onChange={onChange} />}
     </>}
+    {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone audio</legend>
+      <p className="sc-tool-copy field-hint">Each listener hears one scene track. A group track replaces the default for that group.</p>
+      {mediaPicker(phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? "Synchronized phone soundtrack (MP3)" : "Default track (optional)", "phoneAudioSrc", phase.phoneAudioSrc, "audio", "No default audio")}
+      {phase.phoneAudioSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, phoneAudioSrc: undefined })}>Remove default track</button>}
+      {(project.scenario.groups?.length ?? 0) > 0 && <details open={Object.keys(phase.phoneAudioByGroup ?? {}).length > 0 || undefined}><summary>Different audio by group{Object.keys(phase.phoneAudioByGroup ?? {}).length > 0 ? ` · ${Object.keys(phase.phoneAudioByGroup!).length} assigned` : ""}</summary>
+        {(project.scenario.groups ?? []).map(group => <div key={group.id}>
+          {mediaPicker(group.label, { groupId: group.id }, phase.phoneAudioByGroup?.[group.id], "audio", phase.phoneAudioSrc ? `Uses default: ${phase.phoneAudioSrc}` : "No audio for this group")}
+          {phase.phoneAudioByGroup?.[group.id] && <button className="sc-tool-button" type="button" onClick={() => {
+            const phoneAudioByGroup = { ...phase.phoneAudioByGroup };
+            delete phoneAudioByGroup[group.id];
+            onChange({ ...phase, phoneAudioByGroup: Object.keys(phoneAudioByGroup).length ? phoneAudioByGroup : undefined });
+          }}>{phase.phoneAudioSrc ? `Use default for ${group.label}` : `Remove audio for ${group.label}`}</button>}
+        </div>)}
+        <p className="sc-tool-copy field-hint">Without a group track, listeners use the default. Without either, they hear no scene audio.</p>
+      </details>}
+    </fieldset>}
+    <MonitorEditor phase={phase} onChange={onChange} onChooseMedia={onChooseMedia} />
+    <details><summary>Advanced settings</summary>
+    {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
+      {(phase.kind === "position-question" || phase.kind === "video-position-question") && number("Connection stale after (ms)", "connectionStaleAfterMs", phase.connectionStaleAfterMs, (connectionStaleAfterMs) => onChange({ ...phase, connectionStaleAfterMs }))}
+    {phase.kind !== "idle" && <fieldset><legend>External show cues</legend>
+      {text("Cue names (comma separated)", "outgoingCues", (phase.outgoingCues ?? []).join(", "), (value) => onChange({ ...phase, outgoingCues: value.split(",").map((cue) => cue.trim()).filter(Boolean) }))}
+      <p className="sc-tool-copy field-hint">Sent once to TouchDesigner or another show-control receiver when this scene starts.</p>
+    </fieldset>}
+    </details>
     <Compiled project={project} />
   </aside>;
 }
@@ -517,5 +535,5 @@ function CountedStatuses({ phase, onChange }: { phase: Extract<Phase, { kind: "p
 }
 
 function Compiled({ project }: { project: StudioProject }) {
-  return <details><summary>Compiled scenario JSON (read only)</summary><pre>{compiledJson(project)}</pre></details>;
+  return <details><summary>Scenario JSON</summary><pre>{compiledJson(project)}</pre></details>;
 }

@@ -11,7 +11,7 @@ it("loads saved copy, saves edits and retains them when PocketBase fails", async
   const host = document.createElement("div"); document.body.append(host); const root = createRoot(host);
   try {
     await act(async () => { root.render(<DisplaySettingsPanel token="operator" />); });
-    const input = host.querySelector("input")!;
+    const input = host.querySelector<HTMLInputElement>("input:not([type])")!;
     expect(input.value).toBe("Saved heading");
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "New heading"); input.dispatchEvent(new Event("input", { bubbles: true })); });
     await act(async () => { host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });

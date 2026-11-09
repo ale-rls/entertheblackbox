@@ -1,7 +1,8 @@
 # Enter the Blackbox Studio
 
-Runtime and authoring toolkit for a browser-based, multiplayer theater piece.
-Visitors use their phones as cursors and collectively navigate questions and
+Runtime and authoring toolkit for a multiplayer theater piece.
+Participant phones and tablets use the native iOS/Android app only (downloaded audio and controls). Browser pages render installation displays, M1–M4 monitors, Studio and Admin. TouchDesigner monitor helpers and browser participant delivery are retired. See docs/monitor-displays.md and docs/native-player.md.
+Visitors use their native apps as cursors and collectively navigate questions and
 video branches on a shared display. The server is authoritative; shows are
 versioned scenario graphs, not hard-coded flows.
 
@@ -87,8 +88,9 @@ file as part of the same PR — don't let it drift into a stale snapshot.
   is the A/hold clip. Empty playlist is a supported state: static centred QR.
 - **The display uses a service worker.** After rebuilding, hard-refresh or you
   will debug a stale bundle. README has the full recovery steps.
-- **Studio does not publish to a running server.** Restarting the server with
-  `SCENARIO_PATH`/`MEDIA_MANIFEST_PATH` is what selects a show locally.
+- **Studio publishes all show outputs together.** File → Publish show prepares
+  content and selects the show; activation waits until a running show ends.
+  See docs/publishing.md.
 - **Rebuild clients after frontend changes** — the server serves built bundles,
   not a dev server.
 

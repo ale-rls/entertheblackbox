@@ -36,7 +36,7 @@ export class ShowPlayer {
       // Lock-screen controls, calls and unplugged headphones act natively; mirror them here.
       if (this.disposed || reason === 'api') return;
       this.enabled = !paused;
-      this.report(paused ? 'Paused — use Resume at show position' : 'Playing');
+      this.report(paused ? 'Paused — use Resume at show position' : 'Waiting for playback status');
     });
     // Foreground housekeeping only: keeps the native clock calibrated and the status line
     // current. Playback never waits on it.
@@ -97,6 +97,7 @@ export class ShowPlayer {
       ended: 'Cue ended', error: `Playback error: ${cue.error ?? 'unknown'}` }[cue.state];
     if (status) this.report(status);
   }
+  isPaused(): boolean { return !this.enabled; }
   timing(): ClockTiming {
     // iOS records omit nil fields; the ping schema requires explicit nulls.
     const media = (role: MediaTiming['role'], layer: LayerTiming | undefined): MediaTiming[] => layer ? [{ role,

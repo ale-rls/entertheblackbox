@@ -39,7 +39,10 @@ export {
   videoPositionQuestionPhaseSchema,
   normalizePositionQuestionInput,
   normalizeScenarioInput,
+  curtainLightSchema,
+  curtainLightingSchema,
 } from "./schema.js";
+export { curtainGroupIds, curtainStagePhaseIds, curtainLightIssues } from "./curtain.js";
 export type {
   Arena,
   ArenaEllipse,
@@ -76,12 +79,14 @@ export type {
   VideoPhase,
   VideoPositionQuestionPhase,
   PositionVotePhase,
+  CurtainLightConfig,
+  CurtainLightingTuning,
 } from "./schema.js";
 
 export { validateScenario } from "./validate.js";
 export type { ScenarioIssue, ValidationResult } from "./validate.js";
 
-export { statSizeWithNodeFs, validateMediaManifest } from "./media.js";
+export { validateMediaManifest } from "./media.js";
 export type { MediaIssue, StatSize } from "./media.js";
 export { extraAudioCombinationError, mediaCombinationError, mediaKindForSource } from "./media-kind.js";
 export type { MediaKind } from "./media-kind.js";
@@ -89,3 +94,5 @@ export type { MediaKind } from "./media-kind.js";
 // Quadrant assignment (half-open boundary convention) is shared domain
 // logic; re-exported so scenario consumers need not import shared directly.
 export { quadrantOf } from "@entertheblackbox/shared";
+
+export * from "./monitors.js";

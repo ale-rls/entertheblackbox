@@ -81,6 +81,46 @@ it('rejects a failed latest check instead of returning the saved release', async
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: async () => a })
     .mockRejectedValueOnce(new Error('Offline')));
   await downloadShow(origin, 'rehearsal', () => {});
-  await expect(downloadShow(origin, 'rehearsal', () => {})).rejects.toThrow('Offline');
+  await expect(downloadShow(origin, 'rehearsal', () => {})).rejects.toThrow('Could not download the show list');
   expect(await loadShow(origin, 'rehearsal')).toEqual(a);
+});
+
+it('recovers from a TLS read failure and discards the partial file before retrying', async () => {
+  const manifest = release('voice');
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => manifest }));
+  const { File } = await import('expo-file-system');
+  const original = File.downloadFileAsync;
+  const download = vi.spyOn(File, 'downloadFileAsync')
+    .mockImplementationOnce(async (_url, destination) => {
+      (destination as InstanceType<typeof File>).write('partial');
+      throw new Error('javax.net.ssl.SSLProtocolException: BAD_DECRYPT');
+    })
+    .mockImplementationOnce((url, destination, options) => {
+      expect(destination.exists).toBe(false);
+      return original(url, destination, options);
+    });
+  vi.useFakeTimers();
+  try {
+    const progress = vi.fn();
+    const result = downloadShow(origin, 'rehearsal', progress);
+    await vi.runAllTimersAsync();
+    expect(await result).toEqual(manifest);
+    expect(progress).toHaveBeenCalledWith(expect.stringContaining('attempt 2 of 4'));
+    download.mockRejectedValue(new Error('java.net.SocketTimeoutException: timeout'));
+    localAudio(manifest.files[0]!.sha256).delete();
+    const failure = expect(downloadShow(origin, 'rehearsal', progress)).rejects.toThrow('Check your connection and try again');
+    await vi.runAllTimersAsync();
+    await failure;
+    expect(download).toHaveBeenCalledTimes(6);
+  } finally {
+    download.mockRestore();
+    vi.useRealTimers();
+  }
+});
+
+it('hashes small wall files and checks only the size of large ones on low-memory tablets', async () => {
+  const { wallVerification, WALL_HASH_LIMIT_BYTES } = await import('./content');
+  expect(wallVerification(10 * 1024 * 1024)).toBe('sha256');
+  expect(wallVerification(WALL_HASH_LIMIT_BYTES)).toBe('sha256');
+  expect(wallVerification(WALL_HASH_LIMIT_BYTES + 1)).toBe('size');
 });

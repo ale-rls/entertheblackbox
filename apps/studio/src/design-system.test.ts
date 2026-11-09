@@ -32,7 +32,6 @@ describe("production Studio design-system contract", () => {
       "Import failed:",
       "Connection not made:",
       "Idle phase not added:",
-      "Deployment export failed:",
     ]) expect(app).toContain(actionableFeedback);
   });
 

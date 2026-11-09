@@ -1,3 +1,5 @@
+> Historical browser/streaming documentation. Participant delivery is now native-only; this is not the production setup. See the repository README and docs/native-player.md.
+
 # Video with synchronized phone audio
 
 In Studio, select **Video + synchronized phone audio** in the scene's Component

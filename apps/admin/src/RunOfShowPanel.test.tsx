@@ -21,7 +21,7 @@ it("provides direct show-tool links and brief audience guidance", () => {
   const host = document.createElement("div");
   const root = createRoot(host);
   act(() => root.render(<RunOfShowPanel phoneJoinUrl="https://show.example/phone/" />));
-  expect([...host.querySelectorAll("a")].map((link) => link.getAttribute("href"))).toEqual(["/studio/", "/admin/?view=audio", "/phone/"]);
+  expect([...host.querySelectorAll("a")].map((link) => link.getAttribute("href"))).toEqual(["/studio/", "/phone/", ...["M1", "M2", "M3", "M4"].map(id => `/display/?monitor=${id}&setup=1`)]);
   expect(host.textContent).toContain("QR code");
   expect(host.textContent).toContain("Download join QR (PNG)");
   expect(host.textContent).not.toContain("DISPLAY_TOKEN");

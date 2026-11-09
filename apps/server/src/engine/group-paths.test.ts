@@ -708,3 +708,33 @@ it("lets Admin recover a nested selection blocked by a disconnected phone and st
   expect(restored.snapshot).toMatchObject({ phase: { id: "instructions", startedAt: 200 }, phoneAudioActive: true });
   h.engine.stop();
 });
+
+
+describe("group-following stage monitors", () => {
+  it("follows the chosen group, restores its clock on reconnect, clears while waiting and rejoins", () => {
+    const value = scenarioSchema.parse({ ...scenario, monitorGroupId: "a", phases: scenario.phases.map(p => p.id === "vote"
+      ? { ...p, monitorCues: { M1: [{ kind: "text", text: "Choose now", startMs: 0 }] } } : p) });
+    const h = setup(value); const a = h.phone("one"); const b = h.phone("two");
+    const theater = h.display("b");
+    const join = () => { const screen = new Socket(); h.send(screen, { t: "display_join", v: 2, clientVersion: "test",
+      installationId: "inst", roomId: "room", displayToken: "secret", monitorId: "M1" }); return screen; };
+    const screen = join(); h.engine.adminStart(); h.choose(a, "a"); h.choose(b, "b"); h.tick(100);
+    expect(screen.snapshot.phase).toMatchObject({ id: "vote", startedAt: 100, monitorCues: { M1: [{ text: "Choose now" }] } });
+    expect(theater.snapshot.phase.id).toBe("film");
+    h.setNow(150); const replacement = join();
+    expect(replacement.snapshot.phase).toMatchObject({ id: "vote", startedAt: 100 });
+    expect(h.engine.adminJumpGroup("a", "vote", 150)).toEqual({ ok: true });
+    h.tick(150);
+    expect(replacement.snapshot.phase.startedAt).toBe(150);
+    h.tick(250); h.tick(251);
+    expect(replacement.snapshot.phase.monitorCues).toBeUndefined();
+    expect(theater.snapshot.phase.id).toBe("film");
+    h.tick(1100);
+    expect(replacement.snapshot.phase.id).toBe("together");
+    h.engine.stop();
+  });
+  it("rejects an unknown monitor group", () => {
+    const value = scenarioSchema.parse({ ...scenario, monitorGroupId: "missing" });
+    expect(validateScenario(value).errors.some(e => e.code === "unknown-group" && e.message.includes("monitorGroupId"))).toBe(true);
+  });
+});

@@ -1,3 +1,4 @@
+import { monitorIdSchema } from "@entertheblackbox/scenario";
 import { z } from "zod";
 import {
   audienceGroupSchema,
@@ -39,12 +40,38 @@ const timestamp = z.number().finite();
  * Kept structural (intersection) so it stays in lockstep with the
  * scenario package's Phase union.
  */
+/**
+ * Resolved curtain-light presentation for a vote on a curtain-light group's
+ * timeline. The phase's own `field` is already the counting field (with its
+ * neutral gap applied), so display lighting and server counting agree.
+ */
+export const curtainTreatmentSchema = z.object({
+  type: z.literal("curtain-light"),
+  curtain: z.object({
+    src: nonEmpty,
+    baked: z.number().finite(),
+    folds: z.number().finite(),
+    shine: z.number().finite(),
+    shadow: z.number().finite(),
+    poolBase: z.number().finite(),
+    poolGain: z.number().finite(),
+    cursorFlood: z.number().finite(),
+    cursorFloodCounted: z.number().finite(),
+    neutralGap: z.number().finite(),
+  }),
+  /** Answer id → colour, defaults already resolved. */
+  answerColors: z.record(z.string(), z.string()),
+  /** Where cursors appear on first interaction (neutral), or null if the layout has none. */
+  entry: z.object({ x: z.number().finite(), y: z.number().finite() }).nullable(),
+});
+
 export const phaseSnapshotSchema = z.intersection(
   phaseSchema,
   z.object({
     scenarioVersion: nonEmpty,
     startedAt: timestamp,
     deadlineAt: timestamp.nullable(),
+    voteTreatment: curtainTreatmentSchema.optional(),
   }),
 );
 
@@ -56,6 +83,8 @@ export const cursorSchema = z.object({
   color: nonEmpty,
   /** Set only for a replayed past-participant cursor (see apps/server/src/ghosts). Omitted for live cursors. */
   ghost: z.boolean().optional(),
+  /** Increments each time the participant touches their phone control (curtain-light votes). */
+  pulse: z.number().int().nonnegative().optional(),
 });
 
 export const fourQuadrantCountsSchema = z.object({
@@ -106,6 +135,8 @@ export const inputSchema = z.object({
   // disconnected for rounding errors.
   x: z.number().finite(),
   y: z.number().finite(),
+  /** Set on the first sample of a touch. Older apps omit it; the server then infers touches from pauses. */
+  touch: z.literal("start").optional(),
 });
 
 export const clockTimingSchema = z.object({
@@ -172,7 +203,22 @@ export const buttonVoteSchema = z.object({
   outcome: nonEmpty,
 });
 
+/**
+ * Native tablet → server: video wall progress, so Admin can see which
+ * tablets have their slice and how far each is from the shared clock.
+ */
+export const wallStatusSchema = z.object({
+  t: z.literal("wall_status"),
+  v,
+  clip: z.string().min(1).max(100).nullable(),
+  state: z.enum(["idle", "downloading", "ready", "playing", "ended", "error"]),
+  /** Playback position minus the expected position, in milliseconds (positive = ahead). */
+  driftMs: z.number().finite().optional(),
+  detail: z.string().max(300).optional(),
+});
+
 export const phoneToServerSchema = z.discriminatedUnion("t", [
+  wallStatusSchema,
   joinSchema,
   inputSchema,
   pingSchema,
@@ -185,6 +231,8 @@ export const phoneToServerSchema = z.discriminatedUnion("t", [
 
 export const displayJoinSchema = z.object({
   t: z.literal("display_join"),
+  /** Dedicated main-timeline monitor; never occupies the main display slot. */
+  monitorId: monitorIdSchema.optional(),
   /** Omit for the main display. Group displays only render that group's path. */
   groupId: z.string().min(1).optional(),
   /**
@@ -246,6 +294,7 @@ export const displayToServerSchema = z.discriminatedUnion("t", [
 
 /** Everything the server can receive over a socket. */
 export const clientToServerSchema = z.discriminatedUnion("t", [
+  wallStatusSchema,
   joinSchema,
   inputSchema,
   pingSchema,
@@ -488,6 +537,65 @@ export const audioBridgeChangedSchema = z.object({
   streamUrl: nonEmpty,
 });
 
+/**
+ * Native show-mode surface colour, scheduled on the shared server clock.
+ * `set` changes the base colour; `flash` overlays a colour (cleared after
+ * `holdMs`, or held until `release`); `label` asks the device to show its
+ * label large (Identify). `seq` is per-server monotonic so late or reordered
+ * messages are ignored.
+ */
+export const surfaceSchema = z.object({
+  t: z.literal("surface"),
+  v,
+  mode: z.enum(["set", "flash", "release"]),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  applyAt: timestamp,
+  seq: z.number().int().nonnegative(),
+  holdMs: z.number().int().positive().max(60_000).optional(),
+  label: z.string().min(1).max(40).optional(),
+});
+
+/**
+ * Video wall state for one device (each tablet gets its own slice). `clip`
+ * null = no wall clip (show the surface colour). `startAt` null = loaded and
+ * paused on the first frame; otherwise playback position is
+ * (serverNow − startAt), on the shared server clock. Idempotent: the latest
+ * `seq` wins, and joining devices receive the current state.
+ */
+export const wallSchema = z.object({
+  t: z.literal("wall"),
+  v,
+  seq: z.number().int().nonnegative(),
+  clip: z.object({
+    id: z.string().min(1).max(100),
+    slot: z.string().regex(/^[A-Z][0-9]{1,2}$/),
+    /** Same-origin path of this device's slice, e.g. /media/ocean__A1.mp4 */
+    url: z.string().startsWith("/").max(500),
+    bytes: z.number().int().positive(),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    /** Degrees to rotate the video on the (portrait-locked) device, for tablets mounted in landscape. */
+    rotation: z.union([z.literal(0), z.literal(90), z.literal(-90)]).optional(),
+    /**
+     * Present when `url` is the whole, uncut video: the device crops its own
+     * slot out of it using this wall geometry (see wallCropFraction). The
+     * source size is a fallback until the device knows the video's real size.
+     */
+    region: z.object({
+      cols: z.number().int().min(1).max(20),
+      rows: z.number().int().min(1).max(20),
+      screenWidthMm: z.number().positive(),
+      screenHeightMm: z.number().positive(),
+      gapXMm: z.number().min(0),
+      gapYMm: z.number().min(0),
+      fit: z.enum(["fill", "fit"]),
+      sourceWidthPx: z.number().int().positive(),
+      sourceHeightPx: z.number().int().positive(),
+    }).optional(),
+  }).nullable(),
+  startAt: timestamp.nullable(),
+  loop: z.boolean(),
+});
+
 /** Everything a client can receive from the server. */
 export const serverToClientSchema = z.union([
   snapshotSchema,
@@ -508,11 +616,14 @@ export const serverToClientSchema = z.union([
   votingOptionsSchema,
   pongSchema,
   audioBridgeChangedSchema,
+  surfaceSchema,
+  wallSchema,
 ]);
 
 // ------------------------------------------------------------------------- types
 
 export type PhaseSnapshotMessage = z.infer<typeof phaseSnapshotSchema>;
+export type CurtainTreatment = z.infer<typeof curtainTreatmentSchema>;
 export type Cursor = z.infer<typeof cursorSchema>;
 export type QuadrantCounts = z.infer<typeof quadrantCountsSchema>;
 export type FourQuadrantCounts = z.infer<typeof fourQuadrantCountsSchema>;
@@ -552,4 +663,7 @@ export type JoinRejectedMessage = z.infer<typeof joinRejectedSchema>;
 export type StatusMessage = z.infer<typeof statusSchema>;
 export type PongMessage = z.infer<typeof pongSchema>;
 export type AudioBridgeChangedMessage = z.infer<typeof audioBridgeChangedSchema>;
+export type SurfaceMessage = z.infer<typeof surfaceSchema>;
+export type WallMessage = z.infer<typeof wallSchema>;
+export type WallStatusMessage = z.infer<typeof wallStatusSchema>;
 export type ServerToClientMessage = z.infer<typeof serverToClientSchema>;

@@ -12,8 +12,19 @@ export async function publishShow(scenarioFile: string, mediaDirectory: string, 
 
 /** Publish an already-exported Studio scenario without writing private scripts to disk. */
 export async function publishScenario(input: unknown, mediaDirectory: string, channel: string, backgroundMusic?: BackgroundMusic): Promise<ShowManifest> {
-  const music = backgroundMusicSchema.optional().parse(backgroundMusic);
   const selectedChannel = channelSchema.parse(channel);
+  const manifest = await prepareScenario(input, mediaDirectory, backgroundMusic);
+  const target = resolve(mediaDirectory, "native-shows", "channels", `${selectedChannel}.json`);
+  await mkdir(dirname(target), { recursive: true });
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  await writeFile(temporary, JSON.stringify(manifest));
+  await rename(temporary, target);
+  return manifest;
+}
+
+/** Prepare immutable native content without changing any active channel. */
+export async function prepareScenario(input: unknown, mediaDirectory: string, backgroundMusic?: BackgroundMusic): Promise<ShowManifest> {
+  const music = backgroundMusicSchema.optional().parse(backgroundMusic);
   const scenario = scenarioSchema.parse(input);
   const mediaRoot = await realpath(mediaDirectory);
   const sources = [...new Set([...(music ? [music.src] : []), ...scenario.phases.flatMap(phase => {
@@ -44,10 +55,6 @@ export async function publishScenario(input: unknown, mediaDirectory: string, ch
   await mkdir(resolve(base, 'channels'), { recursive: true });
   const body = JSON.stringify(manifest, null, 2) + '\n';
   await writeFile(resolve(base, 'releases', `${manifest.revision}.json`), body);
-  const target = resolve(base, 'channels', `${selectedChannel}.json`);
-  const temporary = `${target}.${randomUUID()}.tmp`;
-  await writeFile(temporary, body);
-  await rename(temporary, target); // Promote only after every asset is present.
   return manifest;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

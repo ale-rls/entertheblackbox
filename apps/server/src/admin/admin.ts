@@ -1,7 +1,12 @@
-import { backgroundMusicSchema, type BackgroundMusic, channelSchema, type ShowManifest, type ShowChannel } from "@entertheblackbox/show-content";
-import { scenarioSchema, validateScenario, type Scenario } from "@entertheblackbox/scenario";
+import { backgroundMusicSchema, type BackgroundMusic } from "@entertheblackbox/show-content";
 import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings } from "@entertheblackbox/protocol";
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { z } from "zod";
+import type { SurfaceController } from "../surface/surface.js";
+import type { VideoWallController, WallClip } from "../wall/wall.js";
+import { wallLayoutSchema } from "@entertheblackbox/protocol";
+import type { SurfaceEffectRunner } from "../surface/effects.js";
+import { SURFACE_EFFECT_KINDS, SURFACE_EFFECT_MAX_PERIOD_MS, SURFACE_EFFECT_MIN_PERIOD_MS } from "@entertheblackbox/shared";
 import { InMemoryIpRateLimiter, requestIp } from "../admission/rate-limit.js";
 import type { PhaseCheckpoint, PhaseEngine, TransitionResult } from "../engine/phase-engine.js";
 import type {
@@ -11,6 +16,37 @@ import type {
 } from "../movement/index.js";
 import type { PublishedShowArtifact, PublishedShowSummary } from "../readiness.js";
 import type { FinalVoteSnapshot } from "../votes/index.js";
+
+const surfaceRequestSchema = z.object({
+  target: z.union([z.literal("all"), z.array(z.string().min(1)).min(1).max(200)]),
+  mode: z.enum(["flash", "release", "identify"]),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  holdMs: z.number().int().positive().max(60_000).optional(),
+}).refine((value) => value.mode !== "flash" || value.color !== undefined, { message: "flash needs a color", path: ["color"] });
+
+const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const surfaceEffectRequestSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("start"),
+    effect: z.object({
+      kind: z.enum(SURFACE_EFFECT_KINDS),
+      color: hexColor,
+      color2: hexColor,
+      periodMs: z.number().int().min(SURFACE_EFFECT_MIN_PERIOD_MS).max(SURFACE_EFFECT_MAX_PERIOD_MS),
+      brightness: z.number().min(0).max(1),
+    }),
+    order: z.array(z.string().min(1)).max(200),
+  }),
+  z.object({ action: z.literal("stop") }),
+]);
+
+const wallCommandSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("load"), clip: z.string().min(1).max(100) }),
+  z.object({ action: z.literal("play"), leadMs: z.number().int().min(200).max(10_000).optional() }),
+  z.object({ action: z.literal("cue") }),
+  z.object({ action: z.literal("stop") }),
+  z.object({ action: z.literal("loop"), loop: z.boolean() }),
+]);
 
 export type AdminExport = { json: unknown; csv: string };
 export interface AdminDataSource {
@@ -27,14 +63,25 @@ export interface AdminDataSource {
 }
 
 export type RegisterAdminOptions = {
-  publishNativeShow?: (scenario: Scenario, channel: ShowChannel, backgroundMusic?: BackgroundMusic) => Promise<ShowManifest>;
+  onPublishing?: (busy: boolean) => void;
   registerRehearsals?: (app: FastifyInstance) => void;
   waitingVideos?: () => Promise<readonly { src: string; url: string; available: boolean }[]>;
   displaySettings?: { read: () => Promise<DisplaySettings>; write: (value: DisplaySettings) => Promise<DisplaySettings> };
   /** Validates a bearer token against the operators auth collection. */
   verifyToken: (token: string) => Promise<boolean>;
   engine: () => PhaseEngine | null;
+  /** Native show-mode surface colour (base + instrument). */
+  surface?: Pick<SurfaceController, "setBase" | "play">;
+  /** Tablet video wall (Admin → Wall). */
+  wall?: {
+    controller: Pick<VideoWallController, "snapshot" | "setLayout" | "load" | "play" | "cue" | "stop" | "setLoop">;
+    clips: () => Promise<WallClip[]>;
+    saveLayout: (layout: z.infer<typeof wallLayoutSchema>) => Promise<z.infer<typeof wallLayoutSchema>>;
+  };
+  /** Programmed instrument effects (chase, breathe, waves). */
+  surfaceEffects?: Pick<SurfaceEffectRunner, "start" | "stop" | "state">;
   ready: boolean;
+  nativeAudioCoverage?: () => Promise<unknown>;
   audioStatus?: () => Promise<unknown>;
   audioMusic?: {
     sources: readonly string[] | (() => Promise<readonly string[]>);
@@ -71,7 +118,7 @@ export type RegisterAdminOptions = {
     write: (showId: string) => Promise<void>;
     /** Latest immutable production artifact, optionally scoped to a show. */
     latest?: (showId?: string) => Promise<PublishedShowArtifact | null>;
-    publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown }) => Promise<PublishedShowSummary>;
+    publish: (record: { showId: string; name: string; scenario: unknown; mediaManifest: unknown; backgroundMusic?: BackgroundMusic }) => Promise<PublishedShowSummary>;
   };
   ghostConfig?: {
     /** The ghost fill target this running process actually booted with (override, or the scenario's own value, or 0). */
@@ -125,7 +172,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
     }),
   };
   const now = options.now ?? (() => Date.now());
-  let nativePublishBusy = false;
+  let publishBusy = false;
 
   app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -145,7 +192,72 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
     });
 
     options.registerRehearsals?.(admin);
+    admin.get("/audio/native-coverage", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.nativeAudioCoverage) return reply.code(503).send({ error: "show_unavailable" });
+      return options.nativeAudioCoverage();
+    });
 
+    admin.post<{ Body: unknown }>("/surface", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.surface) return reply.code(503).send({ error: "surface_unavailable" });
+      const parsed = surfaceRequestSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_surface_request", issues: parsed.error.issues });
+      const { target, mode } = parsed.data;
+      const delivered = mode === "flash"
+        ? options.surface.play(target, { mode, color: parsed.data.color!, ...(parsed.data.holdMs === undefined ? {} : { holdMs: parsed.data.holdMs }) })
+        : options.surface.play(target, { mode });
+      return { ok: true, delivered };
+    });
+    admin.get("/wall", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.wall) return reply.code(503).send({ error: "wall_unavailable" });
+      const clips = await options.wall.clips().catch(() => null);
+      return { ...options.wall.controller.snapshot(), clips, clipsError: clips === null ? "Media library unavailable" : undefined };
+    });
+    admin.put<{ Body: unknown }>("/wall/layout", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.wall) return reply.code(503).send({ error: "wall_unavailable" });
+      const parsed = wallLayoutSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_wall_layout", issues: parsed.error.issues });
+      const layout = await options.wall.saveLayout(parsed.data);
+      const delivered = options.wall.controller.setLayout(layout);
+      options.data?.audit({ action: "set-wall-layout", at: new Date().toISOString(), detail: { key: "video-wall" } });
+      return { ok: true, layout, delivered };
+    });
+    admin.post<{ Body: unknown }>("/wall", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.wall) return reply.code(503).send({ error: "wall_unavailable" });
+      const parsed = wallCommandSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_wall_command", issues: parsed.error.issues });
+      const wall = options.wall.controller;
+      const command = parsed.data;
+      if (command.action === "load") {
+        const result = await wall.load(command.clip);
+        return result.ok ? result : reply.code(404).send(result);
+      }
+      if (command.action === "play") {
+        const result = wall.play(command.leadMs);
+        return result.ok ? result : reply.code(409).send(result);
+      }
+      const delivered = command.action === "cue" ? wall.cue() : command.action === "stop" ? wall.stop() : wall.setLoop(command.loop);
+      return { ok: true, delivered };
+    });
+    admin.get("/surface/effect", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.surfaceEffects) return reply.code(503).send({ error: "surface_unavailable" });
+      return { running: options.surfaceEffects.state, serverNow: Date.now() };
+    });
+    admin.post<{ Body: unknown }>("/surface/effect", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.surfaceEffects) return reply.code(503).send({ error: "surface_unavailable" });
+      const parsed = surfaceEffectRequestSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_surface_effect", issues: parsed.error.issues });
+      const delivered = parsed.data.action === "start"
+        ? options.surfaceEffects.start(parsed.data.effect, parsed.data.order)
+        : options.surfaceEffects.stop();
+      return { ok: true, delivered, running: options.surfaceEffects.state, serverNow: Date.now() };
+    });
     admin.get("/settings/waiting-videos", async (_request, reply) => {
       reply.header("cache-control", "no-store");
       if (!options.waitingVideos) return reply.code(503).send({ error: "media_library_unavailable" });
@@ -161,6 +273,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       const parsed = displaySettingsSchema.safeParse(request.body);
       if (!parsed.success) return reply.code(400).send({ error: "invalid_display_settings", issues: parsed.error.issues });
       const display = await options.displaySettings.write(parsed.data);
+      options.surface?.setBase(display.phoneSurfaceColor);
       options.data?.audit({ action: "set-display-settings", at: new Date().toISOString(), detail: { key: "display" } });
       return { configured: true, display };
     });
@@ -367,36 +480,10 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       options.data?.audit({ action: "set-target-audience-size", at: new Date().toISOString(), detail: { targetAudienceSize } });
       return { ok: true, pending: targetAudienceSize };
     });
-    admin.post<{ Body: { channel?: unknown; scenario?: unknown; backgroundMusic?: unknown } }>("/native-shows/publish", async (request, reply) => {
-      reply.header("cache-control", "no-store");
-      if (!options.publishNativeShow) return reply.code(503).send({ error: "native_publishing_unavailable" });
-      if (options.engine()?.lifecycleState === "active") return reply.code(409).send({ error: "show_active" });
-      if (nativePublishBusy) return reply.code(409).send({ error: "publish_in_progress" });
-      const channel = channelSchema.safeParse(request.body?.channel);
-      const scenario = scenarioSchema.safeParse(request.body?.scenario);
-      const music = backgroundMusicSchema.optional().safeParse(request.body?.backgroundMusic);
-      if (!channel.success || !scenario.success || !music.success) return reply.code(400).send({ error: "invalid_native_publish_request" });
-      const validation = validateScenario(scenario.data);
-      if (!validation.ok) return reply.code(400).send({ error: "invalid_scenario", issues: validation.errors });
-      nativePublishBusy = true;
-      try {
-        const manifest = await options.publishNativeShow(scenario.data, channel.data, music.data);
-        try {
-          options.data?.audit({ action: "publish-native-show", at: new Date().toISOString(), detail: {
-            channel: channel.data, revision: manifest.revision, scenarioVersion: manifest.scenarioVersion, fileCount: manifest.files.length,
-          } });
-        } catch (error) { request.log.error({ error }, "native publication audit failed after successful promotion"); }
-        return { ok: true, channel: channel.data, revision: manifest.revision,
-          scenarioVersion: manifest.scenarioVersion, fileCount: manifest.files.length };
-      } catch (error) {
-        request.log.error({ error }, "native show publication failed");
-        return reply.code(422).send({ error: "native_publish_failed",
-          message: "Could not prepare the audio release. Check that every referenced MP3 is synced to the server and is at most 64 MiB. The channel was not updated." });
-      } finally { nativePublishBusy = false; }
-    });
-    admin.post<{ Body: { showId?: unknown; name?: unknown; scenario?: unknown; mediaManifest?: unknown; baseRecordId?: unknown; force?: unknown } }>("/publish", async (request, reply) => {
+    admin.post("/native-shows/publish", async (_request, reply) => reply.code(410).send({ error: "use_unified_publish", message: "Use Publish show in Studio. It includes native devices and every display." }));
+    admin.post<{ Body: { showId?: unknown; name?: unknown; scenario?: unknown; mediaManifest?: unknown; baseRecordId?: unknown; force?: unknown; backgroundMusic?: unknown } }>("/publish", async (request, reply) => {
       if (!options.showConfig) return reply.code(503).send({ error: "show_config_unavailable" });
-      const { showId, name, scenario, mediaManifest, baseRecordId, force } = request.body ?? {};
+      const { showId, name, scenario, mediaManifest, baseRecordId, force, backgroundMusic } = request.body ?? {};
       if (
         typeof showId !== "string" || !INSTALLATION_ID_PATTERN.test(showId)
         || typeof name !== "string" || name.trim() === ""
@@ -407,27 +494,40 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       ) {
         return reply.code(400).send({ error: "invalid_publish_request" });
       }
-      // force lets an operator explicitly overwrite production despite a
-      // stale baseline (Studio surfaces what it would overwrite first --
-      // see the stale_production_baseline branch below and App.tsx's
-      // "Publish anyway" flow). It never bypasses operator auth.
-      if (typeof baseRecordId === "string" && force !== true) {
-        if (!options.showConfig.latest) return reply.code(503).send({ error: "show_config_unavailable" });
-        const latest = await options.showConfig.latest(showId);
-        if (!latest || latest.recordId !== baseRecordId) {
-          return reply.code(409).send({
-            error: "stale_production_baseline",
-            latest: latest === null ? null : {
-              recordId: latest.recordId,
-              version: latest.version,
-              publishedAt: latest.publishedAt,
-            },
-          });
+      const music = backgroundMusicSchema.optional().safeParse(backgroundMusic);
+      if (!music.success) return reply.code(400).send({ error: "invalid_publish_request" });
+      if (publishBusy) return reply.code(409).send({ error: "publish_in_progress" });
+      publishBusy = true;
+      options.onPublishing?.(true);
+      try {
+        // force lets an operator explicitly overwrite production despite a
+        // stale baseline (Studio surfaces what it would overwrite first --
+        // see the stale_production_baseline branch below and App.tsx's
+        // "Publish anyway" flow). It never bypasses operator auth.
+        if (typeof baseRecordId === "string" && force !== true) {
+          if (!options.showConfig.latest) return reply.code(503).send({ error: "show_config_unavailable" });
+          const latest = await options.showConfig.latest(showId);
+          if (!latest || latest.recordId !== baseRecordId) {
+            return reply.code(409).send({
+              error: "stale_production_baseline",
+              latest: latest === null ? null : {
+                recordId: latest.recordId,
+                version: latest.version,
+                publishedAt: latest.publishedAt,
+              },
+            });
+          }
         }
-      }
-      const published = await options.showConfig.publish({ showId, name, scenario, mediaManifest });
-      options.data?.audit({ action: "publish-show", at: new Date().toISOString(), detail: { showId, name, ...(force === true ? { forced: true } : {}) } });
-      return { ok: true, show: published };
+        const published = await options.showConfig.publish({ showId, name, scenario, mediaManifest, ...(music.data ? { backgroundMusic: music.data } : {}) });
+        try { await options.showConfig.write(showId); }
+        catch { return reply.code(503).send({ error: "activation_failed", message: "Show saved, but automatic selection failed. Select it in Admin → Active show or retry publication." }); }
+        try { options.data?.audit({ action: "publish-show", at: new Date().toISOString(), detail: { showId, name, ...(force === true ? { forced: true } : {}) } }); }
+        catch (error) { request.log.error({ error }, "publication audit failed after successful save"); }
+        return { ok: true, show: published, deferred: options.engine()?.lifecycleState === "active" };
+      } catch (error) {
+        request.log.error({ error }, "show publication failed");
+        return reply.code(422).send({ error: "publish_failed", message: error instanceof Error ? error.message : "Could not prepare show content." });
+      } finally { publishBusy = false; options.onPublishing?.(false); }
     });
     admin.get<{ Params: { sessionId: string }; Querystring: { format?: string } }>("/sessions/:sessionId/export", async (request, reply) => {
       const result = await options.data?.exportSession(request.params.sessionId);

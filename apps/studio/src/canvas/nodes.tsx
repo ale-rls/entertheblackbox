@@ -7,10 +7,12 @@ type NodeData = {
   kind: string;
   outcomes?: Array<{ id: string; label: string; tone: "quad" | "special" }>;
   groupOutputs?: string[];
+  /** Media sources this phase references that are not in the media library. */
+  missingMedia?: string[];
 };
 type Phase = StudioProject["scenario"]["phases"][number];
 
-const KIND_TITLE: Record<string, string> = { idle: "Idle", video: "Media", narration: "Narration", "position-question": "Question", "video-position-question": "Media + vote", "group-branch": "Group branch" };
+const KIND_TITLE: Record<string, string> = { idle: "Idle", video: "Media", narration: "Audio + text", "position-question": "Question", "video-position-question": "Media + vote", "group-branch": "Group branch" };
 
 const InPort = () => (
   <div className="port port-in"><Handle aria-label="Input" className="sc-tool-graph-port" id="input" type="target" position={Position.Left} /><span className="port-name">in</span></div>
@@ -75,9 +77,12 @@ export function PhaseNode({ id, data, dragging, selected }: NodeProps) {
     : value.kind !== "idle" ? [<OutPort key="next" id="next" label="next" />] : [];
   return (
     <div className={`studio-node sc-tool-graph-node kind-${value.kind}`} data-sc-tool-domain={value.kind === "position-question" || value.kind === "video-position-question" ? "question" : value.kind} data-sc-tool-dragging={dragging} data-selected={selected}>
-      <div className="node-head">{KIND_TITLE[value.kind] ?? value.kind}</div>
+      <div className="node-head">
+        <span>{KIND_TITLE[value.kind] ?? value.kind}</span>
+        {value.missingMedia && value.missingMedia.length > 0 && <span className="node-warning" role="img" aria-label={`Missing media: ${value.missingMedia.join(", ")}`} title={`Missing media:\n${value.missingMedia.join("\n")}`}>⚠</span>}
+      </div>
       <div className="node-body">
-        <div className="node-title">{value.label}</div>
+        <div className="node-title" title={value.label}>{value.label}</div>
         {value.groupOutputs && <div className="group-output-list" aria-label="Membership outputs">
           {value.groupOutputs.map((groupId) => <span key={groupId}>{groupId}</span>)}
         </div>}

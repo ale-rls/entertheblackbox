@@ -102,14 +102,15 @@ describe("bundle video assets", () => {
   });
 });
 
-it("serves the same phone bundle at the isolated route and preserves join query on redirect", async () => {
+it("serves native joining instructions at both legacy browser routes", async () => {
   const app = await bundleApp();
   const normal = await app.inject({ url: "/phone/" });
   const janus = await app.inject({ url: "/phone-janus/" });
   expect(janus.statusCode).toBe(200);
   expect(janus.body).toBe(normal.body);
   const redirect = await app.inject({ url: "/phone-janus?grant=test" });
-  expect(redirect.headers.location).toBe("/phone-janus/?grant=test");
+  expect(redirect.statusCode).toBe(200);
+  expect(redirect.body).toContain("Open the app");
 });
 
 
@@ -124,4 +125,19 @@ it('never caches mutable native show channels but keeps hashed audio immutable',
   expect(channel.statusCode).toBe(200); expect(channel.headers['cache-control']).toBe('no-store');
   const audio = await app.inject({ url: '/media/native-shows/audio/hash.mp3' });
   expect(audio.headers['cache-control']).toContain('immutable');
+});
+
+
+describe("native-only participant entry", () => {
+  it("never serves the retired browser controller, including legacy asset paths", async () => {
+    const app = await bundleApp();
+    for (const url of ["/", "/phone/", "/phone/?rehearsal=old", "/phone/assets/app.js", "/phone-janus/"]) {
+      const response = await app.inject({ url });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain("entertheblackbox://");
+      expect(response.body).toContain("This browser page does not play show audio or collect votes");
+      expect(response.headers["cache-control"]).toBe("no-store");
+    }
+    expect((await app.inject({ url: "/display/?monitor=M1" })).body).toBe("<h1>display</h1>");
+  });
 });
