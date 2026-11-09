@@ -102,18 +102,6 @@ describe("bundle video assets", () => {
   });
 });
 
-it("serves native joining instructions at both legacy browser routes", async () => {
-  const app = await bundleApp();
-  const normal = await app.inject({ url: "/phone/" });
-  const janus = await app.inject({ url: "/phone-janus/" });
-  expect(janus.statusCode).toBe(200);
-  expect(janus.body).toBe(normal.body);
-  const redirect = await app.inject({ url: "/phone-janus?grant=test" });
-  expect(redirect.statusCode).toBe(200);
-  expect(redirect.body).toContain("Open the app");
-});
-
-
 it('never caches mutable native show channels but keeps hashed audio immutable', async () => {
   const root = await mkdtemp(join(tmpdir(), 'native-show-route-')); roots.push(root);
   await mkdir(join(root, 'native-shows/channels'), { recursive: true });
@@ -128,15 +116,27 @@ it('never caches mutable native show channels but keeps hashed audio immutable',
 });
 
 
-describe("native-only participant entry", () => {
-  it("never serves the retired browser controller, including legacy asset paths", async () => {
+describe("browser participant entry", () => {
+  it("serves the voting controller and its assets", async () => {
     const app = await bundleApp();
-    for (const url of ["/", "/phone/", "/phone/?rehearsal=old", "/phone/assets/app.js", "/phone-janus/"]) {
+    for (const url of ["/phone/", "/phone/?rehearsal=test"]) {
       const response = await app.inject({ url });
       expect(response.statusCode).toBe(200);
-      expect(response.body).toContain("entertheblackbox://");
-      expect(response.body).toContain("This browser page does not play show audio or collect votes");
-      expect(response.headers["cache-control"]).toBe("no-store");
+      expect(response.body).toBe("<h1>display</h1>");
+      expect(response.headers["cache-control"]).toBe("no-cache");
+    }
+    const asset = await app.inject({ url: "/phone/assets/app.js" });
+    expect(asset.headers["content-type"]).toContain("javascript");
+    expect(asset.body).toBe("console.log('ready')");
+    expect((await app.inject({ url: "/phone/assets/missing.js" })).statusCode).toBe(404);
+  });
+
+  it("preserves query parameters on printed and legacy entry URLs", async () => {
+    const app = await bundleApp();
+    for (const path of ["/", "/phone", "/phone-janus", "/phone-janus/"]) {
+      const response = await app.inject({ url: `${path}?rehearsal=test&grant=old` });
+      expect(response.statusCode).toBe(302);
+      expect(response.headers.location).toBe("/phone/?rehearsal=test&grant=old");
     }
     expect((await app.inject({ url: "/display/?monitor=M1" })).body).toBe("<h1>display</h1>");
   });

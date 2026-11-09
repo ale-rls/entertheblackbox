@@ -30,6 +30,7 @@ export type PhoneState = {
   routingEpoch: number;
   /** Cursor input is accepted in the lobby, videos, and position questions. */
   inputOpen: boolean;
+  curtainLight: boolean;
   currentGroup: NonNullable<Extract<ServerToClientMessage, { t: "snapshot" }>["currentGroup"]> | null;
   phoneAudioActive: boolean;
   participantState: "choosing" | "unassigned" | "active" | "finished";
@@ -58,6 +59,7 @@ export const initialPhoneState: PhoneState = {
   synchronizedPhase: null,
   routingEpoch: 0,
   inputOpen: false,
+  curtainLight: false,
   currentGroup: null,
   phoneAudioActive: false,
   participantState: "active",
@@ -138,6 +140,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         phoneAudioActive: m.phoneAudioActive ?? false,
         participantState: m.participantState ?? "active",
         synchronizedPhase: m.phase.kind === "video" && m.phase.phoneAudioMode === "synchronized" ? m.phase : null,
+        curtainLight: m.phase.voteTreatment?.type === "curtain-light",
         inputOpen: m.phase.kind === "idle" ||
           ((m.phase.kind === "video" || m.phase.kind === "position-question" || m.phase.kind === "video-position-question") && m.phase.showCursors !== false),
         phaseTiming,
