@@ -38,6 +38,15 @@ export class TaskEngine {
       recipients: [...new Set(ids)].map(participantId => ({ participantId, optionId: null, sequence: null, status: 'pending', message: '', respondedAt: null })) };
     this.instances.push(task); return structuredClone(task);
   }
+  /** Adds a late joiner to a still-open task; false when closed, already a recipient, or busy with another open task. */
+  addRecipient(instanceId: string, participantId: string, now: number): boolean {
+    this.tick(now);
+    const task = this.instances.find(t => t.id === instanceId);
+    if (!task || task.status !== 'open' || task.recipients.some(r => r.participantId === participantId)) return false;
+    if (this.instances.some(t => t.sessionId === task.sessionId && t.status === 'open' && t.recipients.some(r => r.participantId === participantId))) return false;
+    task.recipients.push({ participantId, optionId: null, sequence: null, status: 'pending', message: '', respondedAt: null });
+    return true;
+  }
   respond(instanceId: string, sessionId: string, participantId: string, optionId: string, now: number): boolean {
     this.tick(now);
     const task = this.instances.find(t => t.id === instanceId && t.sessionId === sessionId);
@@ -54,7 +63,8 @@ export class TaskEngine {
       catch (error) { r.status = 'full'; r.message = error instanceof Error ? error.message : 'Role unavailable'; return true; }
     }
     Object.assign(r, { optionId, status: option.capacity === undefined ? 'answered' : 'accepted', sequence: ++this.sequence, respondedAt: now, message: option.message });
-    if (task.recipients.every(r => r.status === 'accepted' || r.status === 'answered')) task.status = 'closed';
+    // A scene's task stays open to its deadline so late joiners can still be added.
+    if (task.phaseId === null && task.recipients.every(r => r.status === 'accepted' || r.status === 'answered')) task.status = 'closed';
     return true;
   }
   close(id: string, cancel = false): boolean {

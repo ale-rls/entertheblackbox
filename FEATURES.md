@@ -99,7 +99,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - QR-based admission with signed join grants — `admission/qr.ts`, `tokens.ts`
 - Participant registry, capacity limits, returning-participant lease/reconnect — `admission/registry.ts`
 - Per-path admission programs (intro + loop clocks per device), capability-gated join with compatible update notice, occupant handover with `occupantId` validation of queued commands — `admission/admission-program.ts`, `admission/controller.ts`
-- Server-arbitrated participant tasks and capacity-limited roles; restart cancels old-session tasks — `apps/server/src/prompts/task-engine.ts`
+- Server-arbitrated participant tasks and capacity-limited roles; restart cancels old-session tasks; late joiners in the audience join a scene task that is still open — `apps/server/src/prompts/task-engine.ts`
 - Per-IP join rate limiting
 - Late-join toggle, printed/hidden phone join URL
 - Cursor pipeline (batching/throttling) → **apps/realtime-ws-coolify**

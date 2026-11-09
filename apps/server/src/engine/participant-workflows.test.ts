@@ -27,6 +27,15 @@ describe('connected participant workflows',()=>{
   expect(()=>h.engine.taskCommand({action:'go',sessionId:'stale',phaseId:'task',phaseEpoch:h.engine.currentPhaseEpoch})).toThrow('Stale');
   h.engine.taskCommand({action:'go',sessionId:h.engine.currentSessionId,phaseId:'task',phaseEpoch:h.engine.currentPhaseEpoch});expect(h.engine.currentPhaseId).toBe('next');
  });
+ it('gives a still-open scene task to late joiners and newly grouped participants in its audience',()=>{
+  const h=setup();const a=h.phone('a');h.engine.adminStart();const task=h.engine.taskStatus.instances[0]!;h.respond(a,task.id,'no');
+  const lastTask=(socket:Socket)=>socket.sent.filter(m=>m.t==='participant_task').at(-1).task;
+  const late=h.phone('late');expect(lastTask(late)).toMatchObject({id:task.id,recipient:{participantId:'late',status:'pending'}});
+  const outside=h.phone('outside','audience');expect(lastTask(outside)).toBeNull();
+  expect(h.engine.adminAssignGroup('outside','ki').ok).toBe(true);expect(lastTask(outside)).toMatchObject({id:task.id});
+  h.respond(late,task.id);expect(h.engine.taskStatus.assignments).toMatchObject([{participantId:'late',roleId:'helper'}]);
+  h.tick(2000);const tooLate=h.phone('too-late');expect(lastTask(tooLate)).toBeNull();
+ });
  it('stops admission before active phase frames and never starts admission for active late arrivals',()=>{
   const h=setup();const p=h.phone('a');expect(p.sent.find(m=>m.t==='admission_state').active).toBe(true);
   h.engine.adminStart();const stop=p.sent.findIndex(m=>m.t==='admission_state'&&!m.active);const start=p.sent.findIndex(m=>m.t==='phase'&&m.phase.kind==='narration');expect(stop).toBeLessThan(start);
