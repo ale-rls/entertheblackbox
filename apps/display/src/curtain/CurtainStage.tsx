@@ -11,7 +11,7 @@ const FADE_OUT_MS = 900;
 /** How long a finished curtain stays on screen, fading into the next scene. */
 export const CURTAIN_LEAVE_MS = 1_200;
 const MAX_RENDER_WIDTH = 1920;
-const FONT = '"Leander", system-ui, sans-serif';
+const FONT = '"Optik", system-ui, sans-serif';
 
 export type CurtainStageProps = {
   treatment: CurtainTreatment;

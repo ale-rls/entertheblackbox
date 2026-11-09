@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Pressable } from 'react-native';
+import { Text } from './Text';
 import type { ServerToClientMessage } from '@entertheblackbox/protocol';
 export type ParticipantTaskState = Extract<ServerToClientMessage, { t: 'participant_task' }>;
 export function taskAlert(state: ParticipantTaskState | null, now: number) {

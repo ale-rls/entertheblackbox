@@ -52,3 +52,8 @@ apps/native/ios/
 *.apk
 *.aab
 content/media/native-shows/
+
+# Optik (Playtype) is a commercial font licensed to one person. The EULA forbids
+# making the files publicly downloadable, and this repo is public. Copy the
+# licensed files in locally; see fonts/README.md.
+/fonts/optik/
