@@ -100,6 +100,9 @@ describe("independent group paths", () => {
     expect(late.snapshot.routingEpoch).toBe(1);
     expect(h.cues).toHaveLength(before);
     expect(h.engine.groupPaths.find(p => p.groupId === "b")?.memberIds).toEqual(["two", "late"]);
+    // Admin sees each member on its path's cue, not the shared split scene.
+    expect(h.engine.participantPresence.find(p => p.clientId === "late")).toMatchObject({ phaseId: b.snapshot.phase.id, phaseStartedAt: 100 });
+    expect(h.engine.currentPhaseId).not.toBe(b.snapshot.phase.id);
     h.engine.socketClosed(late.ws); h.registry.releaseSocket(late.ws, 450);
     const restored = h.phone("late");
     expect(restored.snapshot.phase.id).toBe("film");
