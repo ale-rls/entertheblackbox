@@ -1,3 +1,4 @@
+import type { ServerToClientMessage } from '@entertheblackbox/protocol';
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, AppState, PanResponder, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
@@ -7,6 +8,8 @@ import { stageState, showModeAction, showModeTextVisible, SHOW_TEXT_IDLE_MS } fr
 import { contrastText } from './surface';
 
 type Props = StageInput & {
+  admission?: Extract<ServerToClientMessage, { t: 'admission_state' }> | null; onAdmissionGroup?: (id: string) => void;
+  participantTask?: React.ReactNode; taskVisible?: boolean;
   answered: string | null;
   origin: string; surface: { color: string; label?: string };
   /** Video wall slice, drawn full screen behind show mode; `wallVisible` once it is playing. */
@@ -142,7 +145,7 @@ export function StageCompanion(props: Props) {
   const normal = props.connected && props.status === 'Connected' && !props.paused && !screen.title.includes('attention');
   const rejected = props.status.startsWith('Join rejected');
   const hasChoices = !!(screen.groups?.groups.length || screen.voting || screen.ratingOpen || screen.cursorOpen);
-  const needsAction = showModeAction(props, props.answered);
+  const needsAction = !!props.admission?.active && !props.admission.program || !!props.taskVisible || showModeAction(props, props.answered);
   const problem = !normal || !!props.error || !!modeError;
   const reveal = !showMode || needsAction || problem;
   // Show-mode text fades after a few idle seconds; any touch brings it back.
@@ -174,6 +177,8 @@ export function StageCompanion(props: Props) {
     onStartShouldSetResponderCapture={() => { if (showMode) setLastTouch(Date.now()); return false; }}>
     <StatusBar hidden={showMode} barStyle="light-content" backgroundColor="#090a0b" />
     <ScrollView key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
+      {props.admission?.active && <View style={styles.page}><Text style={styles.buttonText}>{props.admission.program ? 'Welcome. Waiting for the show to start.' : 'Choose your audience'}</Text>{props.admission.choices.map(g => <Action key={g.id} label={g.label} selected={props.admission?.program?.groupId === g.id} disabled={!normal} onPress={() => props.onAdmissionGroup?.(g.id)} />)}</View>}
+      {props.participantTask}
       {!showMode && <View style={styles.header}><View style={styles.identity}>
         <Text style={styles.identityName}>{props.identity?.name ?? 'SETUP'}</Text>
         {props.connected && <Text style={styles.muted}>{props.snapshot?.currentGroup?.label ?? 'Waiting for group'}</Text>}

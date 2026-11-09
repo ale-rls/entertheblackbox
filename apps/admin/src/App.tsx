@@ -1,3 +1,5 @@
+import { AdmissionPrograms, type AdmissionStatus } from './AdmissionPrograms.js';
+import { ParticipantTasks, type TaskStatus } from './ParticipantTasks.js';
 import { NativeAudioCoverage } from './NativeAudioCoverage.js';
 import { SurfaceInstrument } from "./SurfaceInstrument.js";
 import { VideoWall } from "./VideoWall.js";
@@ -17,6 +19,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type Keyboard
 const POCKETBASE_URL = import.meta.env.VITE_POCKETBASE_URL ?? "http://127.0.0.1:8090";
 
 export type Status = {
+  tasks?: TaskStatus | null;
+  admission?: AdmissionStatus | null;
   audio?: { backgroundMusic?: { src: string; volume: number } | null; configured: boolean; capacity?: { total: number; assigned: number; available: number }; deliveryFailures?: Record<string, string>; error?: string | null; poll_age_s?: number | null; soundcheckSources?: string[]; backend?: "remote" | "local"; backendLabel?: string; players: Array<{ player_id: string; transport?: "icecast" | "janus"; name?: string; connected: boolean; flagged: boolean; listeners: number; playbackState?: string; phoneReportAgeMs?: number; reconnects?: number; lastRecoveryMs?: number | null }> };
   healthy: boolean;
   ready: boolean;
@@ -712,11 +716,13 @@ export function App() {
           <button className="sc-tool-button" onClick={() => selectTab("devices")}>{status.connectedParticipants} participants</button>
           <StatusLabel status={statusStale ? "warning" : status.ready ? "success" : "danger"}>{statusStale ? "Updates stale" : status.ready ? "Server connected" : "Server not ready"}</StatusLabel>
         </div>}
-        {!audioOnly && <nav className="admin-tabs" aria-label="Admin views">{["show", "devices", "instrument", "wall", "displays", "setup"].map(tab => <button key={tab} className="sc-tool-button" aria-pressed={activeTab === tab} onClick={() => selectTab(tab)}>{tab[0]!.toUpperCase() + tab.slice(1)}</button>)}</nav>}
+        {!audioOnly && <nav className="admin-tabs" aria-label="Admin views">{["show", "tasks", "devices", "instrument", "wall", "displays", "setup"].map(tab => <button key={tab} className="sc-tool-button" aria-pressed={activeTab === tab} onClick={() => selectTab(tab)}>{tab[0]!.toUpperCase() + tab.slice(1)}</button>)}</nav>}
 
       </div>
 
       {connectedToken && (activeTab === "devices" || audioOnly) && <NativeAudioCoverage key={connectedToken} token={connectedToken} />}
+      {connectedToken && status?.admission && activeTab === 'tasks' && <AdmissionPrograms token={connectedToken} state={status.admission} participants={status.participants} groups={status.groups ?? []} />}
+      {connectedToken && status?.tasks && activeTab === 'tasks' && <ParticipantTasks token={connectedToken} state={status.tasks} sessionId={status.sessionId ?? ''} phaseId={status.phaseId ?? ''} phaseEpoch={status.phaseEpoch ?? 0} participants={status.participants} refresh={tasks => setStatus(current => current ? { ...current, tasks } : current)} />}
       {connectedToken && status && activeTab === "instrument" && !audioOnly && <SurfaceInstrument token={connectedToken} participants={status.participants} />}
       {connectedToken && activeTab === "wall" && !audioOnly && <VideoWall key={connectedToken} token={connectedToken} pocketbaseUrl={POCKETBASE_URL} />}
       {status && (activeTab === "devices" || audioOnly) && <ShowClockPanel clock={clock} status={status} stale={statusStale} receivedAt={statusReceivedAt} />}

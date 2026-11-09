@@ -127,6 +127,8 @@ export class ParticipantRegistry {
       : { ok: true, participant, replacedSocket };
   }
 
+  removeLease(lease: string): void { this.participants.delete(lease); this.connectedLeases.delete(lease); }
+
   releaseSocket(socket: WebSocket, now = Date.now()): void {
     for (const [lease, participant] of this.participants) {
       if (participant.socket === socket) {

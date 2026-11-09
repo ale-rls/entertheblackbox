@@ -7,6 +7,7 @@ export { validateLayer } from './validateLayer';
 
 declare class AudioSchedulerModule extends NativeModule<AudioSchedulerEvents> {
   /** Activates the playback session and lock-screen controls. Call before setting layers. */
+  supportsAdmissionPrograms?(): boolean;
   configure(nowPlaying: NowPlaying): Promise<void>;
   /** Current clock time in ms. Native code advances it on a monotonic clock until the next call. */
   setClock(nowMs: number): void;
@@ -26,6 +27,7 @@ declare class AudioSchedulerModule extends NativeModule<AudioSchedulerEvents> {
 const native = requireNativeModule<AudioSchedulerModule>('AudioScheduler');
 
 const AudioScheduler = {
+  supportsAdmissionPrograms: () => native.supportsAdmissionPrograms?.() === true,
   configure: (nowPlaying: NowPlaying) => native.configure(nowPlaying),
   setClock: (nowMs: number) => native.setClock(nowMs),
   setLayer(id: string, layer: Layer): Promise<void> {

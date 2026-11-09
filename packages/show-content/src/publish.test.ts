@@ -60,3 +60,11 @@ it('publishes and hashes background music configuration and preserves the channe
   expect(showManifestSchema.safeParse({ ...first, backgroundMusic: { src: 'absent.mp3', volume: 0.2 } }).success).toBe(false);
   expect(showManifestSchema.safeParse({ ...first, backgroundMusic: { src: 'bed.mp3', volume: 0 } }).success).toBe(false);
 });
+
+it('includes admission intro and loop audio in the immutable native release',async()=>{
+  const root=await fixture();const path=join(root,'scenario.json');const scenario=JSON.parse(await readFile(path,'utf8'));
+  scenario.groups=[{id:'stage',label:'Stage'},{id:'audience',label:'Audience'}];
+  scenario.admission={assignment:'self-select',paths:[{groupId:'stage',intro:[{src:'intro.mp3',durationMs:1000}],loop:[{src:'waiting.mp3',durationMs:2000},{durationMs:1000}]}]};
+  await writeFile(path,JSON.stringify(scenario));await writeFile(join(root,'intro.mp3'),'intro');await writeFile(join(root,'waiting.mp3'),'loop');
+  const release=await publishShow(path,root,'rehearsal');expect(release.files.map(f=>f.src)).toEqual(expect.arrayContaining(['intro.mp3','waiting.mp3']));
+});

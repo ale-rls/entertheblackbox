@@ -1,3 +1,4 @@
+import { admissionSources } from '@entertheblackbox/scenario';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
@@ -27,7 +28,7 @@ export async function prepareScenario(input: unknown, mediaDirectory: string, ba
   const music = backgroundMusicSchema.optional().parse(backgroundMusic);
   const scenario = scenarioSchema.parse(input);
   const mediaRoot = await realpath(mediaDirectory);
-  const sources = [...new Set([...(music ? [music.src] : []), ...scenario.phases.flatMap(phase => {
+  const sources = [...new Set([...admissionSources(scenario.admission),...(music ? [music.src] : []), ...scenario.phases.flatMap(phase => {
     if (phase.kind === 'idle') return [];
     if (phase.kind === 'group-branch') return phase.branches.flatMap(b => b.phoneAudioSrc ? [b.phoneAudioSrc] : []);
     return [...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []), ...Object.values(phase.phoneAudioByGroup ?? {})];

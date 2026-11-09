@@ -28,9 +28,9 @@ beforeEach(() => {
     scheduler.listeners.push(listener); return { remove: scheduler.removeListener };
   });
 });
-afterEach(() => { players.splice(0).forEach(p => p.dispose()); vi.useRealTimers(); });
-it('hands the cue to the native scheduler on the server clock, so a late join starts mid-clip natively', () => {
-  const { p } = setup(); p.setCue(cue);
+afterEach(async () => { await Promise.all(players.splice(0).map(p => p.dispose())); vi.useRealTimers(); });
+it('hands the cue to the native scheduler on the server clock, so a late join starts mid-clip natively', async () => {
+  const { p } = setup(); p.setCue(cue); await p.settled();
   expect(scheduler.setClock).toHaveBeenCalledWith(5000);
   expect(scheduler.setLayer).toHaveBeenCalledWith('cue', { uri: 'file://b.mp3', startAt: 1000, endAt: 11000 });
 });
@@ -40,19 +40,19 @@ it('waits for a measured clock before scheduling, then schedules from housekeepi
   clock.addSample(5000, 5000, 5000); await vi.advanceTimersByTimeAsync(500);
   expect(scheduler.setLayer).toHaveBeenCalledOnce();
 });
-it('fails closed on a different show version or missing source', () => {
-  const { p, status } = setup(); p.setCue({ ...cue, scenarioVersion: 'other' });
+it('fails closed on a different show version or missing source', async () => {
+  const { p, status } = setup(); p.setCue({ ...cue, scenarioVersion: 'other' }); await p.settled();
   expect(status).toHaveBeenCalledWith(expect.stringContaining('Show changed')); expect(scheduler.setLayer).not.toHaveBeenCalled();
   expect(scheduler.clearLayer).toHaveBeenCalledWith('cue');
   p.setCue({ ...cue, src: 'missing.mp3' }); expect(status).toHaveBeenCalledWith(expect.stringContaining('Missing downloaded'));
 });
-it('clears the cue layer on a silent phase and reschedules only on a real cue change', () => {
-  const { p } = setup(); p.setCue(cue); p.setCue({ ...cue });
+it('clears the cue layer on a silent phase and reschedules only on a real cue change', async () => {
+  const { p } = setup(); p.setCue(cue); p.setCue({ ...cue }); await p.settled();
   expect(scheduler.setLayer).toHaveBeenCalledOnce();
-  p.setCue({ ...cue, endsAt: 12000 }); expect(scheduler.setLayer).toHaveBeenCalledTimes(2);
-  p.setCue(null); expect(scheduler.clearLayer).toHaveBeenCalledWith('cue');
+  p.setCue({ ...cue, endsAt: 12000 }); await p.settled(); expect(scheduler.setLayer).toHaveBeenCalledTimes(2);
+  p.setCue(null); await p.settled(); expect(scheduler.clearLayer).toHaveBeenCalledWith('cue');
 });
-it('starts the looping bed once and leaves it alone across cue changes, then releases everything on leave', () => {
+it('starts the looping bed once and leaves it alone across cue changes, then releases everything on leave', async () => {
   const { p } = setup({ withMusic: true });
   p.startMusic(); p.startMusic();
   expect(scheduler.setLayer).toHaveBeenCalledOnce();
@@ -60,7 +60,7 @@ it('starts the looping bed once and leaves it alone across cue changes, then rel
   p.setCue(cue); p.setCue(null);
   expect(scheduler.setLayer.mock.calls.filter(call => call[0] === 'bed')).toHaveLength(1);
   expect(scheduler.clearLayer).not.toHaveBeenCalledWith('bed');
-  p.dispose(); players.splice(players.indexOf(p), 1);
+  await p.dispose(); players.splice(players.indexOf(p), 1);
   expect(scheduler.removeListener).toHaveBeenCalledOnce(); expect(scheduler.reset).toHaveBeenCalledOnce();
 });
 it('refuses to start without downloaded background music', () => {
@@ -94,4 +94,19 @@ it('sends explicit nulls when iOS omits empty timing fields', () => {
   const { p } = setup({ withMusic: true });
   scheduler.timing = [{ id: 'bed', state: 'playing', positionMs: 1200 } as unknown as typeof scheduler.timing[number]];
   expect(p.timing().media).toEqual([{ role: 'extra', positionMs: 1200, targetMs: null, driftMs: null, state: 'playing' }]);
+});
+
+it('serializes admission cleanup before the first active show cue',async()=>{
+  const {p}=setup();
+  p.setAdmission({t:'admission_state',v:2,generation:'lobby',scenarioVersion:'one',revision:1,anchor:1000,active:true,choices:[],program:{groupId:'ki',intro:[],loop:[{src:cue.src,durationMs:10000}]}});
+  await p.settled();expect(scheduler.setLayer).toHaveBeenCalledWith('admission-loop-0',expect.objectContaining({repeatEveryMs:10000}));
+  p.setAdmission(null);p.setCue(cue);await p.settled();
+  expect(scheduler.clearLayer.mock.invocationCallOrder.at(-1)).toBeLessThan(scheduler.setLayer.mock.invocationCallOrder.at(-1)!);
+});
+it('waits for a retired player to release admission audio before configuring the next join',async()=>{
+  const {p}=setup();let release!:()=>void;
+  scheduler.setLayer.mockImplementationOnce(()=>new Promise<void>(resolve=>{release=resolve;}));
+  p.setAdmission({t:'admission_state',v:2,generation:'lobby',scenarioVersion:'one',revision:1,anchor:1000,active:true,choices:[],program:{groupId:'ki',intro:[],loop:[{src:cue.src,durationMs:10000}]}});
+  await Promise.resolve();const disposed=p.dispose();const configure=ShowPlayer.configure();expect(scheduler.configure).not.toHaveBeenCalled();release();await disposed;await configure;
+  expect(scheduler.reset.mock.invocationCallOrder.at(-1)).toBeLessThan(scheduler.configure.mock.invocationCallOrder.at(-1)!);
 });

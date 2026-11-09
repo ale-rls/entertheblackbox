@@ -147,6 +147,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     trustProxy: config.trustProxy,
     buildVersion: config.buildVersion,
     allowPublicJoin: true,
+    requiredCapabilities: () => readiness.ready ? [...(readiness.scenario.participantTasks?.length ? ['participant-tasks-v1'] : []), ...(readiness.scenario.admission ? ['admission-programs-v1'] : [])] : [],
     isNewParticipantAllowed: () => config.allowLateJoin || engine?.lifecycleState !== "active",
     onClientMessage: (message, socket, request) => {
       if (message.t === "wall_status") {
@@ -211,9 +212,10 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         adminData?.recordCheckpoint?.(checkpoint);
         if (checkpoint.kind === "transition") {
           const participantIds = admission.registry.values().map((participant) => participant.clientId);
-          if (checkpoint.reason === "session-start" || checkpoint.reason === "admin-restart") groups?.beginSession(participantIds);
+          if (checkpoint.reason === "session-start" || checkpoint.reason === "admin-restart") groups?.beginSession(participantIds, !!readiness.scenario.admission);
         }
       },
+      onTasksChanged: (sessionId, tasks, revision) => adminData?.audit({ action: 'participant-task-state', at: new Date().toISOString(), detail: { sessionId, tasks, revision } }),
       onVoteSnapshotEnqueued: (snapshot) => {
         adminData?.recordVoteSnapshot?.(snapshot);
         const question = readiness.scenario.phases.find((phase) => phase.id === snapshot.questionId);
@@ -354,6 +356,17 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     adminData?.recordError?.({ message: error.message, at: new Date().toISOString(), path: request.url });
   });
   registerAdminRoutes(app, {
+    handover: participantId => {
+      const current = admission.registry.values().find(p => p.clientId === participantId);
+      if (!engine || !current?.socket || current.socket.readyState !== 1) throw new Error('Choose a connected participant');
+      const groupId = groups?.groupFor(participantId) ?? null;
+      const replacement = admission.handover(participantId);
+      engine.retireOccupant(participantId);
+      groups?.retireParticipant(participantId);
+      if (groupId) groups?.assign(replacement.clientId, groupId);
+      engine.welcomeReplacement(replacement, groupId);
+      return replacement.clientId;
+    },
     registerRehearsals: (admin) => rehearsals.registerAdmin(admin),
     verifyToken: options.verifyOperatorToken ?? createOperatorTokenVerifier(config.pocketbase.url),
     engine: () => engine,

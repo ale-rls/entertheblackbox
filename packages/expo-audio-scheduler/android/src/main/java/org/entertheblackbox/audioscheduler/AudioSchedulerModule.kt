@@ -16,6 +16,7 @@ class LayerConfig(
   @Field val volume: Double = 1.0,
   @Field val startAt: Double? = null,
   @Field val endAt: Double? = null,
+  @Field val repeatEveryMs: Double? = null,
   @Field val resyncThresholdMs: Double = 250.0
 ) : Record
 
@@ -30,6 +31,7 @@ class AudioSchedulerModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("AudioScheduler")
+    Function("supportsAdmissionPrograms") { true }
 
     Events("onPausedChange", "onLayerError")
 
@@ -65,7 +67,7 @@ class AudioSchedulerModule : Module() {
 
     AsyncFunction("setLayer") { id: String, config: LayerConfig ->
       engine.setLayer(id, LayerSpec(config.uri, config.loop, config.volume.toFloat(),
-        config.startAt, config.endAt, config.resyncThresholdMs))
+        config.startAt, config.endAt, config.resyncThresholdMs, config.repeatEveryMs))
     }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("clearLayer") { id: String ->

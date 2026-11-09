@@ -1,3 +1,4 @@
+import { admissionSources } from '@entertheblackbox/scenario';
 import { monitorMediaSources } from "../../../../packages/scenario/src/monitors.js";
 import type { StudioProject } from "@entertheblackbox/studio-adapter";
 
@@ -61,12 +62,12 @@ async function browserMediaDuration(file: File): Promise<number> {
 export function mediaRows(project: StudioProject): MediaRow[] {
   return project.manifest.files.map((file) => ({
     ...file,
-    references: project.scenario.phases.filter((phase) => phaseMediaSources(phase).includes(file.src)).map((phase) => phase.id),
+    references: [...project.scenario.phases.filter((phase) => phaseMediaSources(phase).includes(file.src)).map((phase) => phase.id), ...(admissionSources(project.scenario.admission).includes(file.src) ? ['Admission'] : [])],
   }));
 }
 
 export function distinctReferencedBytes(project: StudioProject): number {
-  const referenced = new Set(project.scenario.phases.flatMap(phaseMediaSources));
+  const referenced = new Set([...project.scenario.phases.flatMap(phaseMediaSources), ...admissionSources(project.scenario.admission)]);
   const byHash = new Map<string, number>();
   for (const file of project.manifest.files) if (referenced.has(file.src)) byHash.set(file.hash, Math.max(byHash.get(file.hash) ?? 0, file.bytes));
   return [...byHash.values()].reduce((sum, bytes) => sum + bytes, 0);

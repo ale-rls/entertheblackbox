@@ -1,3 +1,5 @@
+import { admissionConfigSchema } from './admission.js';
+import { participantTaskSchema, participantRoleSchema } from './tasks.js';
 import { monitorCuesSchema } from "./monitors.js";
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
@@ -322,6 +324,8 @@ export const videoPhaseSchema = z.object({
  */
 export const narrationPhaseSchema = z.object({
   kind: z.literal("narration"),
+  taskId: z.string().min(1).optional(),
+  waitForGo: z.boolean().optional(),
   ...phoneAudioFields,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
@@ -585,6 +589,10 @@ export const phaseSchema = z.union([
 ]);
 
 const canonicalScenarioSchema = z.object({
+  admission: admissionConfigSchema.optional(),
+  handoverTaskId: z.string().min(1).optional(),
+  participantRoles: z.array(participantRoleSchema).max(100).refine(a => new Set(a.map(r => r.id)).size === a.length, "Role IDs must be unique").optional(),
+  participantTasks: z.array(participantTaskSchema).max(100).refine(a => new Set(a.map(t => t.id)).size === a.length, "Task IDs must be unique").optional(),
   /** Immutable native assets belonging to this published scenario. */
   nativeReleaseId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   backgroundMusic: z.object({ src: z.string().min(1), volume: z.number().positive().max(1) }).optional(),

@@ -48,12 +48,14 @@ function join(
   lease?: string,
   ip?: string,
   forwarded?: string,
+  capabilities?: string[],
 ): void {
   controller.handleConnection(s, request(ip, forwarded));
   s.emit("message", Buffer.from(JSON.stringify({
     t: "join",
     v: 2,
     clientVersion: "test",
+    ...(capabilities ? { capabilities } : {}),
     installationId: "inst-1",
     roomId: "room-1",
     name: "Test participant",
@@ -551,4 +553,21 @@ it("isolates verified recovery from shared-IP join throttling and still limits e
   expect(lastMessage(other)).toMatchObject({ t: "identity" });
   const forged = socket(); join(admission, forged, "", lease + "x");
   expect(lastMessage(forged)).toMatchObject({ reason: "rate_limited" });
+});
+
+it('hands a connected device to a fresh occupant and rejects the retired lease', () => {
+  const c=controller({allowPublicJoin:true});const s=socket();join(c,s,'',undefined,undefined,undefined,['occupant-handover-v1']);const before=lastMessage(s);const replacement=c.handover(before.clientId);
+  expect(replacement.clientId).not.toBe(before.clientId);expect(c.registry.values()).toHaveLength(1);expect(lastMessage(s)).toMatchObject({t:'identity',clientId:replacement.clientId});
+  const stale=socket();join(c,stale,'',before.participantLease);expect(lastMessage(stale)).toMatchObject({t:'join_rejected',reason:'expired_grant'});
+  const reconnect=socket();join(c,reconnect,'',replacement.participantLease);expect(lastMessage(reconnect)).toMatchObject({t:'identity',clientId:replacement.clientId});
+});
+it('gives older native clients a parseable upgrade explanation before capability rejection', () => {
+  const c=controller({allowPublicJoin:true,requiredCapabilities:()=>['admission-programs-v1']});const s=socket();join(c,s,'');
+  const messages=(s as unknown as MockSocket).sent as any[];expect(messages).toContainEqual(expect.objectContaining({t:'reload',reason:'assets'}));expect(lastMessage(s)).toMatchObject({t:'join_rejected',reason:'update_required'});expect(c.registry.values()).toHaveLength(0);
+});
+it('rejects queued commands from the former occupant after handover on the same socket', () => {
+  const received=vi.fn();const c=controller({allowPublicJoin:true,onClientMessage:received});const s=socket();join(c,s,'',undefined,undefined,undefined,['occupant-handover-v1']);const previous=lastMessage(s);const replacement=c.handover(previous.clientId);received.mockClear();
+  const command={t:'button_vote',v:2,sessionId:'s',phaseEpoch:1,outcome:'yes'};
+  for(const occupantId of [undefined,previous.clientId,replacement.clientId]) s.emit('message',Buffer.from(JSON.stringify({...command,...(occupantId?{occupantId}:{})})));
+  expect(received).toHaveBeenCalledTimes(1);expect(received.mock.calls[0]![0]).toMatchObject({occupantId:replacement.clientId});
 });

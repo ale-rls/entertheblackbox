@@ -1,3 +1,5 @@
+import { admissionLayers } from './admission-program';
+import type { ServerToClientMessage } from '@entertheblackbox/protocol';
 import AudioScheduler, { type LayerTiming } from '@entertheblackbox/expo-audio-scheduler';
 import type { ClockTiming } from '@entertheblackbox/protocol';
 import type { ServerClock } from '@entertheblackbox/shared';
@@ -15,6 +17,28 @@ type MediaTiming = ClockTiming['media'][number];
  * are frozen (Android) or throttled (iOS) behind a locked screen.
  */
 export class ShowPlayer {
+  private static disposal: Promise<void> = Promise.resolve();
+  private admissionKey = '';
+  private admissionIds: string[] = [];
+  private audioQueue: Promise<void> = Promise.resolve();
+  private queue(work: () => Promise<void>) { this.audioQueue = this.audioQueue.then(async () => { if (!this.disposed) await work(); }).catch(error => this.fail(error)); }
+  setAdmission(state: Extract<ServerToClientMessage, { t: 'admission_state' }> | null) {
+    const key = state?.active && state.program ? `${state.generation}:${state.revision}:${state.anchor}:${state.program.groupId}` : '';
+    if (key === this.admissionKey) return;
+    this.admissionKey = key;
+    this.queue(async () => {
+      for (const id of this.admissionIds) await AudioScheduler.clearLayer(id);
+      this.admissionIds = [];
+      if (!state?.active || !state.program || state.anchor === null || state.scenarioVersion !== this.manifest.scenarioVersion) return;
+      AudioScheduler.setClock(this.clock.now());
+      const layers = admissionLayers(state.program, state.anchor).map(layer => {
+        const file = this.manifest.files.find(f => f.src === layer.src);
+        if (!file || !localAudio(file.sha256).exists) throw new Error(`Missing admission audio: ${layer.src}`);
+        return { ...layer, uri: localAudio(file.sha256).uri };
+      });
+      for (const { id, src: _, ...layer } of layers) { this.admissionIds.push(id); await AudioScheduler.setLayer(id, layer); }
+    });
+  }
   private bedUri: string | null = null;
   private musicStarted = false;
   private cue: Cue | null = null;
@@ -43,6 +67,7 @@ export class ShowPlayer {
     this.timer = setInterval(() => this.sync(), 500);
   }
   static async configure() {
+    await ShowPlayer.disposal;
     await AudioScheduler.configure({ title: 'Enter the Blackbox', artist: 'Show audio' });
   }
   private report(status: string) { if (status !== this.status) { this.status = status; this.changed(status); } }
@@ -68,7 +93,7 @@ export class ShowPlayer {
     this.applyCue();
   }
   private clearCue(status: string) {
-    AudioScheduler.clearLayer(CUE).catch(error => this.fail(error));
+    this.queue(() => AudioScheduler.clearLayer(CUE));
     this.report(status);
   }
   private applyCue() {
@@ -78,8 +103,8 @@ export class ShowPlayer {
     if (!this.clock.hasSamples) { this.report('Waiting for clock'); return; }
     this.cueApplied = true;
     AudioScheduler.setClock(this.clock.now());
-    AudioScheduler.setLayer(CUE, { uri: this.cueUri, startAt: cue.startedAt, endAt: cue.endsAt })
-      .catch(error => this.fail(error));
+    const uri = this.cueUri;
+    this.queue(() => AudioScheduler.setLayer(CUE, { uri, startAt: cue.startedAt, endAt: cue.endsAt }));
     this.report(this.enabled ? 'Scheduled' : 'Paused on this device');
   }
   setEnabled(enabled: boolean) {
@@ -109,8 +134,11 @@ export class ShowPlayer {
       elapsedMs: this.cue ? this.clock.now() - this.cue.startedAt : 0, mode: 'synchronized',
       media: [...media('main', layers.find(l => l.id === CUE)), ...media('extra', layers.find(l => l.id === BED))] };
   }
+  settled() { return this.audioQueue; }
   dispose() {
+    if (this.disposed) return ShowPlayer.disposal;
     this.disposed = true; clearInterval(this.timer); this.subscription.remove();
-    AudioScheduler.reset().catch(() => {});
+    ShowPlayer.disposal = this.audioQueue.then(() => AudioScheduler.reset()).catch(() => {});
+    return ShowPlayer.disposal;
   }
 }

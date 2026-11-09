@@ -3,6 +3,7 @@ import { encodeMessage, parseServerMessage, PROTOCOL_VERSION, SHOW_ENDED_CLOSE_C
   type PhoneToServerMessage, type ServerToClientMessage } from '@entertheblackbox/protocol';
 export type Socket = Pick<WebSocket, 'readyState' | 'send' | 'close' | 'onopen' | 'onmessage' | 'onclose' | 'onerror'>;
 type Options = {
+  capabilities?: string[];
   origin: string; installationId: string; roomId: string; name: string; clientVersion: string;
   lease: string | null; saveLease: (lease: string | null) => void;
   message: (message: ServerToClientMessage) => void; status: (status: string) => void;
@@ -12,6 +13,7 @@ export class NativeConnection {
   readonly clock = new ServerClock();
   private socket: Socket | null = null;
   private stopped = true;
+  private occupantId: string | null = null;
   private attempt = 0;
   private lastReceived = 0;
   private heartbeat: ReturnType<typeof setInterval> | undefined;
@@ -30,7 +32,7 @@ export class NativeConnection {
     this.connect();
   }
   send(message: PhoneToServerMessage) {
-    if (this.socket?.readyState === 1) this.socket.send(encodeMessage(message));
+    if (this.socket?.readyState === 1) this.socket.send(encodeMessage(message.t === 'input' || message.t === 'reaction' || message.t === 'group_selection' || message.t === 'button_vote' || message.t === 'participant_task_response' || message.t === 'admission_choice' ? { ...message, ...(this.occupantId ? { occupantId: this.occupantId } : {}) } : message));
   }
   private connect() {
     if (this.stopped) return;
@@ -43,6 +45,7 @@ export class NativeConnection {
       this.options.status('Joining');
       this.send({ t: 'join', v: PROTOCOL_VERSION, name: this.options.name,
         installationId: this.options.installationId, roomId: this.options.roomId,
+        capabilities: this.options.capabilities ?? [],
         clientVersion: this.options.clientVersion, ...(this.options.lease ? { participantLease: this.options.lease } : {}) });
       this.send({ t: 'ping', v: PROTOCOL_VERSION, clientTime: Date.now() });
       this.heartbeat = setInterval(() => {
@@ -58,6 +61,7 @@ export class NativeConnection {
       const message = parsed.message;
       if (message.t === 'pong') this.clock.addSample(message.echoClientTime, Date.now(), message.serverTime);
       if (message.t === 'identity') {
+        this.occupantId = message.clientId;
         this.attempt = 0; this.options.lease = message.participantLease;
         this.options.saveLease(message.participantLease); this.options.status('Connected');
       }

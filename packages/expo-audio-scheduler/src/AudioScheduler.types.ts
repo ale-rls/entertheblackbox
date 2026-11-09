@@ -17,6 +17,8 @@ export type Layer = {
   startAt?: number | null;
   /** Clock time at which an anchored layer stops. */
   endAt?: number | null;
+  /** Repeat this anchored window at this period; scheduled entirely natively. */
+  repeatEveryMs?: number;
   /** Anchored layers are re-seeked when they drift further than this from the clock. Default 250. */
   resyncThresholdMs?: number;
 };
