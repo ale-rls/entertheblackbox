@@ -1658,15 +1658,17 @@ export class PhaseEngine {
   }
 
   /**
-   * Curtain-light presentation for a vote on a curtain-light group's own
-   * timeline, or null. The counting field gains the shared neutral gap so
-   * appearing at the entry point never casts a vote.
+   * Curtain-light presentation for a vote marked `curtainLightVote` (on any
+   * timeline) or on a curtain-light group's own timeline, or null. The
+   * counting field gains the shared neutral gap so appearing at the entry
+   * point never casts a vote.
    */
   private curtainFor(phase: Phase): { treatment: CurtainTreatment; field: PositionField } | null {
     if (phase.kind !== "position-question" && phase.kind !== "video-position-question") return null;
     const groupId = this.path?.timelineId;
-    if (groupId === undefined) return null;
-    if (this.scenario.groups?.find((group) => group.id === groupId)?.voteTreatment !== "curtain-light") return null;
+    const groupCurtain = groupId !== undefined
+      && this.scenario.groups?.find((group) => group.id === groupId)?.voteTreatment === "curtain-light";
+    if (!groupCurtain && phase.curtainLightVote !== true) return null;
     if (this.curtainCache?.phase === phase) return this.curtainCache;
     const curtain = resolveCurtainSettings(this.scenario.curtainLight, phase.lightTuning);
     const field = curtainVoteField(phase.field, curtain.neutralGap);

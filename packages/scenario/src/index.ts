@@ -42,7 +42,7 @@ export {
   curtainLightSchema,
   curtainLightingSchema,
 } from "./schema.js";
-export { curtainGroupIds, curtainStagePhaseIds, curtainLightIssues } from "./curtain.js";
+export { curtainGroupIds, curtainStagePhaseIds, curtainLightIssues, isCurtainLightVote } from "./curtain.js";
 export type {
   Arena,
   ArenaEllipse,

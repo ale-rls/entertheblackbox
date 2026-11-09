@@ -24,6 +24,18 @@ relighting shader). Other groups' votes are unchanged.
 Fabric and default light levels live under *Shared curtain → Fabric and
 light tuning*.
 
+### A single vote on the shared timeline
+
+A vote that is not on a group's own path (for example a question both
+audiences answer together after a reunion) can be drawn as curtain light on
+its own: select it and tick **Draw this vote as curtain light**
+(`curtainLightVote: true`). It then counts as a curtain stage with the same
+rules, the shared curtain video is required, and the **Curtain light** section
+appears. Everyone whose input reaches that vote, including late joiners
+without a group, gets the curtain entry and relative steering. Custom zones
+that tile the whole screen leave no neutral entry point and are rejected:
+leave an unlit gap between them.
+
 ## What the audience sees
 
 | Layout | Treatment |

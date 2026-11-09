@@ -15,15 +15,20 @@ export function curtainGroupIds(scenario: Pick<Scenario, "groups">): string[] {
   return (scenario.groups ?? []).filter((group) => group.voteTreatment === "curtain-light").map((group) => group.id);
 }
 
+/** A vote explicitly drawn on the curtain wherever it runs, shared timeline included. */
+export function isCurtainLightVote(phase: Phase): boolean {
+  return (phase.kind === "position-question" || phase.kind === "video-position-question") && phase.curtainLightVote === true;
+}
+
 /**
- * Position votes that run on a curtain-light group's own timeline: every
- * vote reachable from that group's branch entry before the branch's shared
- * reunion. The server applies the treatment per running group timeline;
- * this static view drives Studio controls and validation.
+ * Curtain-light stages: votes marked `curtainLightVote`, plus every vote
+ * reachable from a curtain-light group's branch entry before the branch's
+ * shared reunion. The server applies the treatment per running timeline;
+ * this static view drives Studio controls, validation and counting.
  */
 export function curtainStagePhaseIds(scenario: Pick<Scenario, "groups" | "phases">): Set<string> {
   const groups = new Set(curtainGroupIds(scenario));
-  const stages = new Set<string>();
+  const stages = new Set<string>(scenario.phases.filter(isCurtainLightVote).map((phase) => phase.id));
   if (groups.size === 0) return stages;
   const byId = new Map<string, Phase>(scenario.phases.map((phase) => [phase.id, phase]));
   for (const branchPhase of scenario.phases) {
@@ -61,7 +66,7 @@ function stageLabels(phase: PositionVotePhase): string[] {
 export function curtainLightIssues(scenario: Scenario, mediaManifest?: MediaManifest): ScenarioIssue[] {
   const issues: ScenarioIssue[] = [];
   const groups = (scenario.groups ?? []).filter((group) => group.voteTreatment === "curtain-light");
-  if (groups.length === 0) return issues;
+  if (groups.length === 0 && !scenario.phases.some(isCurtainLightVote)) return issues;
   const settings = resolveCurtainSettings(scenario.curtainLight);
   if (scenario.curtainLight?.src === undefined) {
     issues.push({ severity: "error", code: "curtain-light", message: "Curtain-light votes need a shared curtain video (curtainLight.src) from the media library" });

@@ -363,6 +363,11 @@ export const curtainLightSchema = curtainLightingSchema.extend({
 
 /** Per-stage curtain-light authoring; ignored outside curtain-light groups. */
 const curtainStageFields = {
+  /**
+   * Draw this vote as light on the shared curtain wherever it runs, including
+   * the shared timeline. Votes on a curtain-light group's own path need no flag.
+   */
+  curtainLightVote: z.boolean().optional(),
   /** Answer id → colour. Missing answers use the system defaults. */
   answerColors: z.record(z.string().min(1), hexColorSchema).optional(),
   lightTuning: curtainLightingSchema.optional(),

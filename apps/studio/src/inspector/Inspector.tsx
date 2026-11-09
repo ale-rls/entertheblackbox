@@ -14,7 +14,7 @@ import { TimingTimeline } from "./TimingTimeline.js";
 import { studioMediaKindForSource, type StudioMediaKind } from "../media/library.js";
 import { setGroupOptions } from "./groups.js";
 import { CurtainSharedEditor, CurtainStageEditor } from "./CurtainLightEditor.js";
-import { curtainStagePhaseIds, type CurtainLightConfig } from "../../../../packages/scenario/src/index.js";
+import { curtainStagePhaseIds, isCurtainLightVote, type CurtainLightConfig } from "../../../../packages/scenario/src/index.js";
 
 type Props = {
   onHandoverTaskChange?: (id: string) => void;
@@ -84,7 +84,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
         <button className="sc-tool-button" type="button" disabled={(project.scenario.groups?.length ?? 0) <= 2} onClick={() => onGroupsChange((project.scenario.groups ?? []).filter((_, itemIndex) => itemIndex !== index), (project.scenario.initialGroupIds ?? []).filter((id) => id !== group.id))}>Remove group</button>
       </div>)}
       <button className="sc-tool-button" type="button" onClick={() => { const groups = project.scenario.groups ?? []; if (groups.length === 0) { onGroupsChange([{ id: "group-1", label: "Group 1" }, { id: "group-2", label: "Group 2" }], []); return; } let suffix = groups.length + 1; while (groups.some((group) => group.id === `group-${suffix}`)) suffix += 1; onGroupsChange([...groups, { id: `group-${suffix}`, label: `Group ${suffix}` }], project.scenario.initialGroupIds ?? []); }}>{(project.scenario.groups?.length ?? 0) === 0 ? "Add groups" : "Add group"}</button>
-      {(project.scenario.groups ?? []).some((group) => group.voteTreatment === "curtain-light") && onCurtainLightChange &&
+      {((project.scenario.groups ?? []).some((group) => group.voteTreatment === "curtain-light") || project.scenario.phases.some(isCurtainLightVote)) && onCurtainLightChange &&
         <CurtainSharedEditor config={project.scenario.curtainLight} mediaSources={localMedia.map((file) => file.src)} onChange={onCurtainLightChange} />}
       <p className="sc-tool-copy field-hint">A show has at least two labelled groups. Starting groups are assigned automatically in the lobby; a group scene can instead ask people to choose on their phones.</p>
     </fieldset>
@@ -381,6 +381,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
           </fieldset>)}
         </fieldset>;
       })()}
+      <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.curtainLightVote === true} onChange={(event) => onChange({ ...phase, curtainLightVote: event.target.checked ? true : undefined })} />{label("Draw this vote as curtain light", "curtainLightVote")}</label>
       {curtainStagePhaseIds(project.scenario).has(phase.id) &&
         <CurtainStageEditor phase={phase} scenario={project.scenario} onChange={onChange} />}
       {phase.field.type === "two-quadrant" && phase.field.variant !== "split" &&
