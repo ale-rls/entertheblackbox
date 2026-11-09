@@ -152,7 +152,7 @@ export function StageCompanion(props: Props) {
           <Text style={styles.label}>Device label</Text>
           <TextInput accessibilityLabel="Device label" style={styles.input} value={props.deviceLabel} autoCapitalize="characters" autoCorrect={false} maxLength={40} editable={!props.busy}
             placeholder="e.g. T07 — matches the sticker on this tablet" placeholderTextColor="#999fa7" onChangeText={props.onDeviceLabel} />
-          <Text style={styles.muted}>Saved on this device and used as its name in the show. Admin sorts and identifies tablets by this label.</Text>
+          <Text style={styles.muted}>Saved on this device. Identifies the tablet in Admin and on the video wall; the participant enters their own name when joining.</Text>
           <Text style={styles.label}>Venue server</Text>
           <TextInput accessibilityLabel="Venue server" style={styles.input} value={props.origin} autoCapitalize="none" autoCorrect={false} editable={!props.busy}
             placeholder="https://show.example.org" placeholderTextColor="#999fa7" onChangeText={props.onOrigin} />
@@ -178,10 +178,9 @@ export function StageCompanion(props: Props) {
         </View>
         <View style={styles.inset}>
           {!props.connected ? <>
-            {props.deviceLabel.trim() ? <Text style={styles.label}>This tablet: {props.deviceLabel.trim()}</Text> : <>
-              <Text style={styles.label}>Your name / device label</Text>
-              <TextInput accessibilityLabel="Your name or device label" style={styles.input} value={props.name} onChangeText={props.onName} maxLength={40} editable={!props.busy} placeholder="e.g. Alex" placeholderTextColor="#999fa7" />
-            </>}
+            {!!props.deviceLabel.trim() && <Text style={styles.muted}>This tablet: {props.deviceLabel.trim()}</Text>}
+            <Text style={styles.label}>Your name</Text>
+            <TextInput accessibilityLabel="Your name" style={styles.input} value={props.name} onChangeText={props.onName} maxLength={40} editable={!props.busy} placeholder="e.g. Alex" placeholderTextColor="#999fa7" />
             {!props.origin.trim() && <Text style={styles.muted}>Set the venue server in Device settings to join.</Text>}
             <Action label={props.error ? 'Try joining again' : 'Prepare & join'} primary disabled={props.busy || !props.origin.trim() || !(props.deviceLabel.trim() || props.name.trim())} onPress={props.onJoin} />
             <Text style={styles.muted}>Joining checks the latest show and prepares your audio.</Text>

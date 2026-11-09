@@ -49,7 +49,7 @@ export function AudienceOverview({ status, clock, sceneTitle, stale }: { status:
     <div className="clock-table-scroll" tabIndex={0} role="region" aria-label="Audience cues">
       <table className="admin-audience-table"><thead><tr><th scope="col">Device</th><th scope="col">Group</th><th scope="col">Cue now</th><th scope="col">In cue</th><th scope="col">Audio</th></tr></thead><tbody>
         {visible.map((p) => <tr key={p.clientId} data-offline={!p.connected || undefined}>
-          <th scope="row">{p.name}<small>{p.client === "native" ? "App" : p.client === "web" ? "Web" : "—"}{p.connected ? "" : " · offline"}</small></th>
+          <th scope="row">{p.name}<small>{p.client === "native" ? "App" : p.client === "web" ? "Web" : "—"}{p.deviceLabel && p.deviceLabel !== p.name ? ` · ${p.deviceLabel}` : ""}{p.connected ? "" : " · offline"}</small></th>
           <td>{groupOf(p)?.label ?? <span className="admin-audience-missing">No group</span>}</td>
           <td>{p.state === "unassigned" ? "Waiting for a group" : p.state === "finished" ? "Waiting at reunion" : p.phaseId ? sceneTitle(p.phaseId) : "—"}</td>
           <td>{stale || serverNow === null || p.phaseStartedAt === undefined ? "—" : clockText(serverNow - p.phaseStartedAt)}</td>

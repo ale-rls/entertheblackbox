@@ -577,6 +577,24 @@ describe("WebSocket lifecycle", () => {
     legacyApp.close(); browser.close();
   });
 
+  it("keeps a tablet's label separate from its participant's name, and matches the video wall on the label", async () => {
+    const runtime = await buildServer({ config: await fixture(), verifyOperatorToken: async () => true });
+    runtimes.push(runtime);
+    const port = await listen(runtime);
+    const tablet = await openWebSocket(port);
+    await joinParticipant(tablet, runtime, { name: "Ada", deviceLabel: "T07", client: "native" });
+    const legacy = await openWebSocket(port);
+    await joinParticipant(legacy, runtime, { name: "T08", client: "native" });
+    const auth = { authorization: "Bearer operator" };
+    await vi.waitFor(async () => {
+      const status = (await runtime.app.inject({ method: "GET", url: "/api/admin/status", headers: auth })).json();
+      expect(status.participants.map((p: { name: string; deviceLabel: string | null }) => [p.name, p.deviceLabel])).toEqual([["Ada", "T07"], ["T08", null]]);
+      const wall = (await runtime.app.inject({ method: "GET", url: "/api/admin/wall", headers: auth })).json();
+      expect(wall.devices.map((d: { name: string }) => d.name)).toEqual(["T07", "T08"]);
+    });
+    tablet.close(); legacy.close();
+  });
+
   it("welcomes a joining tablet with the wall state and shows its wall status in Admin", async () => {
     const runtime = await buildServer({ config: await fixture(), verifyOperatorToken: async () => true });
     runtimes.push(runtime);

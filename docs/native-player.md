@@ -4,7 +4,7 @@ The native participant app is in `apps/native`. It provides downloaded personal 
 
 ## What is implemented
 
-- Name/device-label admission, secure participant lease storage scoped to server and installation, reconnect/backoff, heartbeat recovery, and foreground reconnection.
+- Participant name and a separate device label (the tablet's sticker) at admission, secure participant lease storage scoped to server and installation, reconnect/backoff, heartbeat recovery, and foreground reconnection.
 - Timestamped native MP3 playback, late-join seeking, drift correction, background audio capability, lock-screen controls, device pause/resume, and stop on silent scenes/show end.
 - Per-group audio overrides, group selection, phone-button votes, reactions. The app has no cursor voting: in-app participants vote physically or with buttons; cursor voting is the browser client's. Narration text, subtitles and scene titles stay off participant screens. The existing server chooses branches.
 - Persistent downloaded audio, SHA-256 and byte-count verification, immutable releases, a release pinned to the server’s active show, and preservation of the previous selection after failed downloads.
@@ -208,7 +208,7 @@ Colour, second colour, dimmer, cycle time (0.3–10 s) and the tablet list updat
 ### Identifying 40 tablets
 
 1. **Label the hardware.** Put a sticker T01–T40 on each tablet's back *and* its case/charger slot. Record label ↔ serial number ↔ OS in a sheet.
-2. **Set the label once.** On each tablet: Device settings → **Device label** → `T07`. The label is stored on the device (secure store), survives app updates, and is used as the device's name when it joins. The join screen then shows "This tablet: T07" instead of asking for a name.
+2. **Set the label once.** On each tablet: Device settings → **Device label** → `T07`. The label is stored on the device (secure store), survives app updates, and is sent with every join as the device label. It identifies the tablet in Admin (Instrument tiles, Identify, effects order, video wall slots); the participant's name is separate. The join screen shows "This tablet: T07" and asks for **Your name**, which is cleared when a show ends so the next person enters theirs. Without a name the tablet joins under its label.
 3. **Verify with Identify.** Join all tablets, open Admin → Instrument, and press **Identify** on each tile. That tablet flashes white for 3 s with its label in large type, so you can check that sticker and label match.
 4. **Watch for duplicates.** Admin flags two connected tablets with the same label. Fix it in that tablet's Device settings before the show.
 5. **Charging and storage order.** Store and charge tablets in label order, so a tablet that fails to join is easy to locate from the Admin grid.

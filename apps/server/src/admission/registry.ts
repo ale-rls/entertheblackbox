@@ -15,6 +15,8 @@ export type ParticipantRecord = {
   color: string;
   /** Native app or web browser; decides the audience group when the show maps clients to groups. */
   client?: ParticipantClient | undefined;
+  /** Label of the physical device (loan tablet sticker); the participant's own name is `name`. */
+  deviceLabel?: string | undefined;
   joinedAt: number;
   leaseExpiresAt: number;
   socket?: WebSocket | undefined;
@@ -97,6 +99,7 @@ export class ParticipantRegistry {
     clientId: string;
     name: string;
     client?: ParticipantClient | undefined;
+    deviceLabel?: string | undefined;
     leaseExpiresAt: number;
     socket: WebSocket;
     now?: number;
@@ -117,6 +120,7 @@ export class ParticipantRegistry {
     };
     participant.name = options.name;
     if (options.client !== undefined) participant.client = options.client;
+    participant.deviceLabel = options.deviceLabel;
     const replacedSocket = existing?.socket && existing.socket !== options.socket
       ? existing.socket
       : undefined;

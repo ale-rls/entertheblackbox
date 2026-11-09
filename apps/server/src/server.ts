@@ -124,7 +124,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   audio?.start();
   if (readiness.ready) audio?.prepare(readiness.scenario.phases);
   let engine: PhaseEngine | null = null;
-  const surface = new SurfaceController({ recipients: () => admission.registry.values() });
+  // Identify shows the tablet's label, not the participant's name.
+  const surface = new SurfaceController({ recipients: () => admission.registry.values().map((participant) => ({ ...participant, name: participant.deviceLabel ?? participant.name })) });
   const surfaceEffects = new SurfaceEffectRunner(surface);
   const wallClips = async () => {
     if (!options.pocketbase) return [];
@@ -132,7 +133,8 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     return wallClipsFromMedia(await options.pocketbase.pb.collection<{ src: string; bytes: number; hash?: string }>("media").getFullList({ requestKey: null }));
   };
   const wall = new VideoWallController({
-    recipients: () => admission.registry.values(),
+    // Wall slots belong to the physical tablet; older apps sent their label as the name.
+    recipients: () => admission.registry.values().map((participant) => ({ ...participant, name: participant.deviceLabel ?? participant.name })),
     clips: wallClips,
     ...(options.pocketbase ? { ensureLocal: (src: string) => syncMediaFromPocketbase(options.pocketbase!, config.mediaDir, src) } : {}),
   });
@@ -160,7 +162,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       groups?.ensureParticipant(participant.clientId, participant.client);
       engine?.participantJoined(socket, participant);
       surface.welcome(socket);
-      wall.welcome(socket, participant.name);
+      wall.welcome(socket, participant.deviceLabel ?? participant.name);
     },
     onSocketClosed: (socket) => engine?.socketClosed(socket),
     onMessageError: (error) => {

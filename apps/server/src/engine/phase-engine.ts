@@ -161,6 +161,7 @@ export type ParticipantPresence = {
   joinedAt: number;
   lastSeenAt: number;
   client: "native" | "web" | null;
+  deviceLabel: string | null;
   /** The scene this participant's timeline is on right now (their group path, else the shared one). */
   phaseId: string;
   phaseStartedAt: number;
@@ -534,6 +535,7 @@ export class PhaseEngine {
       joinedAt: participant.joinedAt,
       lastSeenAt: participant.lastSeenAt,
       client: participant.client ?? null,
+      deviceLabel: participant.deviceLabel ?? null,
       ...this.participantCue(participant.clientId),
     }));
   }

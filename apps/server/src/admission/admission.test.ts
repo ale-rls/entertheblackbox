@@ -556,7 +556,8 @@ it("isolates verified recovery from shared-IP join throttling and still limits e
 });
 
 it('hands a connected device to a fresh occupant and rejects the retired lease', () => {
-  const c=controller({allowPublicJoin:true});const s=socket();join(c,s,'',undefined,undefined,undefined,['occupant-handover-v1']);const before=lastMessage(s);const replacement=c.handover(before.clientId);
+  const c=controller({allowPublicJoin:true});const s=socket();join(c,s,'',undefined,undefined,undefined,['occupant-handover-v1']);const before=lastMessage(s);c.registry.values()[0]!.deviceLabel='T07';c.registry.values()[0]!.client='native';const replacement=c.handover(before.clientId);
+  expect(replacement).toMatchObject({deviceLabel:'T07',client:'native'});
   expect(replacement.clientId).not.toBe(before.clientId);expect(c.registry.values()).toHaveLength(1);expect(lastMessage(s)).toMatchObject({t:'identity',clientId:replacement.clientId});
   const stale=socket();join(c,stale,'',before.participantLease);expect(lastMessage(stale)).toMatchObject({t:'join_rejected',reason:'expired_grant'});
   const reconnect=socket();join(c,reconnect,'',replacement.participantLease);expect(lastMessage(reconnect)).toMatchObject({t:'identity',clientId:replacement.clientId});
