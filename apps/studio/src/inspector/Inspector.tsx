@@ -32,6 +32,7 @@ type Props = {
   onQuestionLayoutChange: (layout: "four-quadrant" | "two-quadrant-x-split" | "two-quadrant-x-spectrum" | "two-quadrant-y-split" | "two-quadrant-y-spectrum" | "three-candidate-zones", trigger: HTMLSelectElement) => void;
   onTargetAudienceSizeChange: (value: number) => void;
   onGroupsChange: (groups: NonNullable<StudioProject["scenario"]["groups"]>, initialGroupIds: string[]) => void;
+  onGroupByClientChange?: (value: StudioProject["scenario"]["groupByClient"]) => void;
   onCurtainLightChange?: (config: CurtainLightConfig | undefined) => void;
 };
 
@@ -40,7 +41,7 @@ const numberValue = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChange, onTasksChange, project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onCurtainLightChange }: Props) {
+export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChange, onTasksChange, project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onGroupByClientChange, onCurtainLightChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   const [copiedArena, setCopiedArena] = useState<Arena | null>(null);
@@ -86,6 +87,18 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
       <button className="sc-tool-button" type="button" onClick={() => { const groups = project.scenario.groups ?? []; if (groups.length === 0) { onGroupsChange([{ id: "group-1", label: "Group 1" }, { id: "group-2", label: "Group 2" }], []); return; } let suffix = groups.length + 1; while (groups.some((group) => group.id === `group-${suffix}`)) suffix += 1; onGroupsChange([...groups, { id: `group-${suffix}`, label: `Group ${suffix}` }], project.scenario.initialGroupIds ?? []); }}>{(project.scenario.groups?.length ?? 0) === 0 ? "Add groups" : "Add group"}</button>
       {((project.scenario.groups ?? []).some((group) => group.voteTreatment === "curtain-light") || project.scenario.phases.some(isCurtainLightVote)) && onCurtainLightChange &&
         <CurtainSharedEditor config={project.scenario.curtainLight} mediaSources={localMedia.map((file) => file.src)} onChange={onCurtainLightChange} />}
+      {onGroupByClientChange && (project.scenario.groups?.length ?? 0) > 0 && <div>
+        {([["native", "App joins go to"], ["web", "Web browser joins go to"]] as const).map(([client, text]) => <label key={client} className="sc-tool-label"><span>{text}<small>groupByClient.{client}</small></span>
+          <select className="sc-tool-select" value={project.scenario.groupByClient?.[client] ?? ""} onChange={(event) => {
+            const { [client]: _, ...rest } = project.scenario.groupByClient ?? {};
+            const next = event.target.value ? { ...rest, [client]: event.target.value } : rest;
+            onGroupByClientChange(Object.keys(next).length ? next : undefined);
+          }}>
+            <option value="">No automatic group</option>
+            {(project.scenario.groups ?? []).map((group) => <option key={group.id} value={group.id}>{group.label}</option>)}
+          </select></label>)}
+        <p className="sc-tool-copy field-hint">Applied the moment someone joins, also mid-show, so late joiners get a group. Group scenes with manual assignment keep it.</p>
+      </div>}
       <p className="sc-tool-copy field-hint">A show has at least two labelled groups. Starting groups are assigned automatically in the lobby; a group scene can instead ask people to choose on their phones.</p>
     </fieldset>
     <Compiled project={project} /></aside>;

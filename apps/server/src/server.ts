@@ -157,7 +157,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       return engine?.handleClientMessage(message, socket, request);
     },
     onParticipantJoin: (participant, socket) => {
-      groups?.ensureParticipant(participant.clientId);
+      groups?.ensureParticipant(participant.clientId, participant.client);
       engine?.participantJoined(socket, participant);
       surface.welcome(socket);
       wall.welcome(socket, participant.name);
@@ -364,6 +364,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       engine.retireOccupant(participantId);
       groups?.retireParticipant(participantId);
       if (groupId) groups?.assign(replacement.clientId, groupId);
+      groups?.ensureParticipant(replacement.clientId, replacement.client);
       engine.welcomeReplacement(replacement, groupId);
       return replacement.clientId;
     },

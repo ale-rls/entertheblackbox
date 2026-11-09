@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { curtainVoteField, quadrantOfField, resolveCurtainSettings } from "@entertheblackbox/shared";
 import { curtainStagePhaseIds, type GroupBranchPhase, type PositionField, type Scenario, type VotingMethod } from "@entertheblackbox/scenario";
+import type { ParticipantClient } from "@entertheblackbox/protocol";
 import type { FinalVoteSnapshot } from "../votes/vote-engine.js";
 
 export type GroupMembership = { participantId: string; groupId: string | null };
@@ -10,6 +11,8 @@ export class GroupManager {
   private readonly membership = new Map<string, string>();
   private readonly answers = new Map<string, Map<string, string>>();
   private readonly awaitingSelection = new Set<string>();
+  /** Survives session boundaries: a device stays the same client for its whole visit. */
+  private readonly clients = new Map<string, ParticipantClient>();
 
   private readonly curtainStages: Set<string>;
 
@@ -31,10 +34,17 @@ export class GroupManager {
     this.awaitingSelection.clear();
   }
 
-  ensureParticipant(participantId: string): string | null {
+  ensureParticipant(participantId: string, client?: ParticipantClient): string | null {
+    if (client !== undefined) this.clients.set(participantId, client);
     if (this.awaitingSelection.has(participantId)) return null;
     const current = this.membership.get(participantId);
     if (current !== undefined) return current;
+    const known = this.clients.get(participantId);
+    const byClient = known === undefined ? undefined : this.scenario.groupByClient?.[known];
+    if (byClient !== undefined && this.scenario.groups?.some((group) => group.id === byClient)) {
+      this.membership.set(participantId, byClient);
+      return byClient;
+    }
     const initial = this.scenario.initialGroupIds;
     if (!initial?.length) return null;
     const groupId = this.leastPopulated(initial, participantId);
@@ -42,7 +52,7 @@ export class GroupManager {
     return groupId;
   }
 
-  retireParticipant(participantId: string): void { this.membership.delete(participantId); this.awaitingSelection.delete(participantId); }
+  retireParticipant(participantId: string): void { this.clients.delete(participantId); this.membership.delete(participantId); this.awaitingSelection.delete(participantId); }
 
   groupFor(participantId: string): string | null {
     return this.membership.get(participantId) ?? null;

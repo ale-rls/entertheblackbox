@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 import {
   encodeMessage,
   parseClientMessage,
+  participantClientOf,
   PROTOCOL_VERSION,
   SHOW_ENDED_CLOSE_CODE,
   type ClientToServerMessage,
@@ -118,7 +119,7 @@ export class AdmissionController {
     this.retiredLeases.set(old.participantLease, old.leaseExpiresAt);
     this.options.onSocketClosed?.(old.socket);
     this.registry.removeLease(old.participantLease);
-    const admitted = this.registry.admit({ participantLease: issued.token, clientId: issued.claims.clientId, name: old.name, leaseExpiresAt: issued.claims.expiresAt, socket: old.socket, now });
+    const admitted = this.registry.admit({ participantLease: issued.token, clientId: issued.claims.clientId, name: old.name, client: old.client, leaseExpiresAt: issued.claims.expiresAt, socket: old.socket, now });
     if (!admitted.ok) throw new Error('Could not reserve replacement occupant');
     state.occupantId = admitted.participant.clientId;
     state.requireOccupantId = true;
@@ -306,6 +307,7 @@ export class AdmissionController {
       participantLease: issuedLease.token,
       clientId,
       name: parsed.message.name,
+      client: participantClientOf(parsed.message),
       leaseExpiresAt: issuedLease.claims.expiresAt,
       socket,
       now,

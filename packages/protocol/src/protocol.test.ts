@@ -5,6 +5,7 @@ import {
   encodeMessage,
   parseClientMessage,
   parseServerMessage,
+  participantClientOf,
 } from "./index.js";
 import type { ClientToServerMessage, ServerToClientMessage } from "./index.js";
 
@@ -361,4 +362,13 @@ it("bounds device timing reports and keeps old heartbeat/ping payloads valid", (
   expect(parseClientMessage(JSON.stringify({ ...heartbeat, timing: { ...timing, media: Array(3).fill(timing.media[0]) } })).ok).toBe(false);
   expect(parseClientMessage(JSON.stringify({ ...heartbeat, timing: { ...timing, roundTripMs: -1 } })).ok).toBe(false);
   expect(parseClientMessage(JSON.stringify({ t: "ping", v: 2, clientTime: 1000, timing: { sessionId: "s", phaseId: "p", phaseEpoch: 1, routingEpoch: 2, timing: { ...timing, mode: "synchronized" } } })).ok).toBe(true);
+});
+
+describe("participantClientOf", () => {
+  it("uses the declared client, else infers native from the handover capability", () => {
+    expect(participantClientOf({ client: "web", capabilities: ["occupant-handover-v1"] })).toBe("web");
+    expect(participantClientOf({ capabilities: ["participant-tasks-v1", "occupant-handover-v1"] })).toBe("native");
+    expect(participantClientOf({ capabilities: ["participant-tasks-v1"] })).toBe("web");
+    expect(participantClientOf({})).toBe("web");
+  });
 });

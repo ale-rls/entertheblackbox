@@ -162,6 +162,9 @@ export function validateScenario(
       });
     }
   }
+  for (const [client, groupId] of Object.entries(scenario.groupByClient ?? {})) if (groupId !== undefined && !groupIds.has(groupId)) errors.push({
+    severity: "error", code: "unknown-group", message: `groupByClient.${client} references unknown group "${groupId}"`,
+  });
   for (const groupId of scenario.initialGroupIds ?? []) if (!groupIds.has(groupId)) errors.push({
     severity: "error", code: "unknown-group", message: `initialGroupIds references unknown group "${groupId}"`,
   });

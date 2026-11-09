@@ -45,7 +45,7 @@ export class NativeConnection {
       this.options.status('Joining');
       this.send({ t: 'join', v: PROTOCOL_VERSION, name: this.options.name,
         installationId: this.options.installationId, roomId: this.options.roomId,
-        capabilities: this.options.capabilities ?? [],
+        capabilities: this.options.capabilities ?? [], client: 'native',
         clientVersion: this.options.clientVersion, ...(this.options.lease ? { participantLease: this.options.lease } : {}) });
       this.send({ t: 'ping', v: PROTOCOL_VERSION, clientTime: Date.now() });
       this.heartbeat = setInterval(() => {
