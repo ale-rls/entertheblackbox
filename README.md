@@ -1,6 +1,6 @@
 # Enter the Blackbox
 
-Enter the Blackbox is the runtime and visual authoring toolkit for the piece of the same name. All participant phones and loan tablets use the **native iOS/Android app** for downloaded audio, cursors, choices and reactions. Browser pages are installation displays, monitor screens, Studio and Admin only.
+Enter the Blackbox is the runtime and visual authoring toolkit for the piece of the same name. Participant phones and loan tablets use the **native iOS/Android app** for downloaded audio, cursors, choices and reactions. Audience groups can also use **`/phone/` in their phone browser** for cursor voting, choices and reactions without personal audio.
 
 Shows are server-authoritative scenario graphs. M1–M4 each open a dedicated display page, cache verified media before the show, and follow authored cues on the main server clock. See [Monitor displays](docs/monitor-displays.md) and [Native participant setup](docs/native-player.md). TouchDesigner is no longer used to render the four monitors.
 
@@ -8,7 +8,7 @@ Shows are server-authoritative scenario graphs. M1–M4 each open a dedicated di
 
 - `apps/server` — Fastify HTTP and WebSocket server, phase engine, admission, and admin API.
 - `apps/display` — fullscreen React client for the installation screen.
-- `apps/phone` — retired browser participant source, retained for historical tests; not served or built for production.
+- `apps/phone` — browser participant controller for voting without personal audio; built and served in production.
 - `apps/native` — Expo iOS/Android participant player with downloaded audio and EAS updates; [setup and rehearsal](docs/native-player.md).
 - `apps/admin` — protected operational interface.
 - `apps/studio` — local visual editor for importing, authoring, validating, previewing, and exporting shows.
@@ -118,7 +118,7 @@ Open the installation display:
 
 No query parameters are needed: the display authenticates with its build-time token and resolves its installation/room live from the server's own `/api/status`, so the venue's one kiosk never needs to remember or type a full URL. Two query parameters open other display kiosks instead of the main one: `?group=<group-id>` opens that group's own dedicated kiosk (see [docs/group-branching.md](docs/group-branching.md)), and `?signage=<id>` opens a signage kiosk that always shows a looping video and the live join QR code, independent of the show's state (e.g. a lobby entrance screen) — configured in `/admin/` next to the other waiting videos. The server allows only one authenticated main display connection, plus one per active group and one per signage kiosk. The root and legacy `/phone/` routes show native-app joining instructions.
 
-Participants install the native app, select the venue server and tap **Update show & join**. See [native player setup](docs/native-player.md). Existing printed QR URLs still open instructions, not a browser controller. Joining never starts a show by headcount; operators start it manually or schedule it in Admin.
+Participants install the native app, select the venue server and tap **Update show & join**. See [native player setup](docs/native-player.md). For browser voting, open the printed QR URL or `/phone/`, enter a name, and choose a group when prompted. Keep the page open and the phone awake. Joining never starts a show by headcount; operators start it manually or schedule it in Admin.
 
 The server also exposes:
 
@@ -161,7 +161,7 @@ Saving/exporting a draft does not change the installation. Use the top-right **P
 
 ### Connect native participant devices
 
-Use the [native player guide](docs/native-player.md) to install the iOS/Android app, publish the show once in Studio, and join the venue server. Use trusted HTTPS/WSS for production. Loan tablets use this same app. Browser audio and browser voting are retired; old QR destinations display app instructions.
+Use the [native player guide](docs/native-player.md) to install the iOS/Android app, publish the show once in Studio, and join the venue server. Use trusted HTTPS/WSS for production. Loan tablets use this same app. Browser voting is available at `/phone/` alongside native participants; browser audio remains retired. Configure those audience groups with phone-cursor voting and provide their audio through the venue.
 
 ### Main display waiting content
 

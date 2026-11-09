@@ -1,7 +1,7 @@
 # Enter the Blackbox Studio
 
 Runtime and authoring toolkit for a multiplayer theater piece.
-Participant phones and tablets use the native iOS/Android app only (downloaded audio and controls). Browser pages render installation displays, M1–M4 monitors, Studio and Admin. TouchDesigner monitor helpers and browser participant delivery are retired. See docs/monitor-displays.md and docs/native-player.md.
+Participant phones and tablets use the native iOS/Android app for downloaded audio and controls, or `/phone/` in a browser for voting without personal audio. Browser pages also render installation displays, M1–M4 monitors, Studio and Admin. TouchDesigner monitor helpers and browser audio delivery are retired. See docs/monitor-displays.md and docs/native-player.md.
 Visitors use their native apps as cursors and collectively navigate questions and
 video branches on a shared display. The server is authoritative; shows are
 versioned scenario graphs, not hard-coded flows.

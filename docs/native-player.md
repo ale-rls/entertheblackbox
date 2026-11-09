@@ -1,6 +1,6 @@
 # Native player: setup, updates, and rehearsal
 
-The native participant app is in `apps/native`. It is the only supported participant client, for both audiences and all loan tablets. Browser participant routes show native-app joining instructions; Icecast/Janus streams are retired from production. Native devices play verified downloaded files. No Expo or public internet connection is required during a show once the app and content are installed, provided devices can reach the venue server.
+The native participant app is in `apps/native`. It provides downloaded personal audio and controls for audience phones and loan tablets. Audience groups needing only voting can use `/phone/` in their phone browser alongside native participants; Icecast/Janus streams are retired from production. Native devices play verified downloaded files. No Expo or public internet connection is required during a show once the app and content are installed, provided devices can reach the venue server.
 
 ## What is implemented
 
@@ -238,3 +238,5 @@ While playing, each tablet compares its position with the shared clock four time
 Not yet measured: start accuracy and drift on the venue tablets and network, and how long 40 tablets take to download a slice. Try 2–4 tablets first.
 
 Admin → Devices → Phone audio coverage checks every scene/group against the immutable phone download with SHA-256 and byte counts. No audio assigned is distinct from a missing or corrupt file. The foreground activity visualization requires a moving native playhead and updates every 250 ms; it does not measure speaker volume or headphones.
+
+Browser voting supports ordinary name/lease admission and group selection. Shows configured with admission programs or participant tasks require the native app; the browser displays that requirement instead of joining. Do not enable those show-wide features for a mixed browser/native audience.
