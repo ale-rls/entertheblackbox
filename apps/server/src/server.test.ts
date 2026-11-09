@@ -112,7 +112,7 @@ async function openWebSocket(port: number, options?: WebSocket.ClientOptions): P
   return client;
 }
 
-async function joinParticipant(client: WebSocket, runtime: ServerRuntime): Promise<void> {
+async function joinParticipant(client: WebSocket, runtime: ServerRuntime, extra: Record<string, unknown> = {}): Promise<void> {
   const identity = new Promise<void>((resolve, reject) => {
     client.once("message", (raw) => {
       try {
@@ -131,6 +131,7 @@ async function joinParticipant(client: WebSocket, runtime: ServerRuntime): Promi
     roomId: runtime.config.roomId,
     name: "Test participant",
     joinGrant: runtime.admission.issueJoinGrant().token,
+    ...extra,
   }));
   await identity;
 }
@@ -554,6 +555,25 @@ describe("WebSocket lifecycle", () => {
     await joinParticipant(client, runtime);
     await vi.waitFor(() => expect(messages).toContainEqual(expect.objectContaining({ t: "surface", mode: "set", color: "#000000" })));
     client.close();
+  });
+
+  it("puts app joins and web joins into the show's client groups", async () => {
+    const config = await fixture();
+    const scenario = JSON.parse(await readFile(config.scenarioPath, "utf8"));
+    await writeFile(config.scenarioPath, JSON.stringify({ ...scenario,
+      groups: [{ id: "ki", label: "KI" }, { id: "theater", label: "Theater" }], groupByClient: { native: "ki", web: "theater" } }));
+    const runtime = await buildServer({ config, verifyOperatorToken: async () => true });
+    runtimes.push(runtime);
+    const port = await listen(runtime);
+    const legacyApp = await openWebSocket(port);
+    await joinParticipant(legacyApp, runtime, { name: "T01", capabilities: ["participant-tasks-v1", "occupant-handover-v1"] });
+    const browser = await openWebSocket(port);
+    await joinParticipant(browser, runtime, { name: "Web", client: "web", capabilities: ["participant-tasks-v1"] });
+    await vi.waitFor(async () => {
+      const status = (await runtime.app.inject({ method: "GET", url: "/api/admin/status", headers: { authorization: "Bearer operator" } })).json();
+      expect(Object.fromEntries(status.participants.map((p: { name: string; groupId: string | null }) => [p.name, p.groupId]))).toEqual({ T01: "ki", Web: "theater" });
+    });
+    legacyApp.close(); browser.close();
   });
 
   it("welcomes a joining tablet with the wall state and shows its wall status in Admin", async () => {

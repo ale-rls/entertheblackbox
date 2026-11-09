@@ -614,6 +614,12 @@ const canonicalScenarioSchema = z.object({
   initialGroupIds: z.array(groupIdSchema).min(2).refine((ids) => new Set(ids).size === ids.length, {
     message: "initial group ids must be unique",
   }).optional(),
+  /**
+   * Group by participant client: native app or web browser. Applied the moment
+   * a participant joins, mid-show too, so late joiners get a group. Wins over
+   * initialGroupIds; manual splits keep it.
+   */
+  groupByClient: z.object({ native: groupIdSchema.optional(), web: groupIdSchema.optional() }).strict().optional(),
   /** Phase the lobby transitions into when a session starts (plan §6). */
   entryPhaseId: phaseIdSchema,
   /**

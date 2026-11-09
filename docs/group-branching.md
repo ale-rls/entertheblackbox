@@ -22,6 +22,12 @@ The main display is black throughout selection and independent paths: no media, 
 
 On ordinary components, **Phone headphones** accepts a broadcast MP3 plus optional per-group MP3 overrides. A group override wins; the broadcast file is used for participants without an override. Omitting both produces silence and resets the phone's previous cue.
 
+## Group by client
+
+`groupByClient` maps the participant client to a group: `{ "native": "ki", "web": "theater" }` puts everyone in the native app in `ki` and everyone voting in the browser in `theater`. It is applied the moment a participant joins, in the lobby or mid-show, so late joiners always get a group. It takes precedence over `initialGroupIds`, and a group-branch with `manual` assignment keeps it (its fallback only covers people without a valid group). Self-select and vote splits still reassign. Studio: Show properties → Audience groups → "App joins go to" / "Web browser joins go to".
+
+The browser client sends `client: "web"` and the native app `client: "native"`. Apps released before this field are recognised by their `occupant-handover-v1` capability, which the browser client never declares.
+
 ## Scenario example
 
 ```json

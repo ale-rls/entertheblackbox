@@ -42,7 +42,7 @@ describe("editable group scene options", () => {
   });
 
   it("renames groups throughout the scenario and blocks deletions that leave an invalid scene", () => {
-    const value = { ...project().scenario, monitorGroupId: "a" };
+    const value = { ...project().scenario, monitorGroupId: "a", groupByClient: { native: "a", web: "c" } };
     const groups = value.groups!.map((group) => group.id === "a" ? { ...group, id: "actors", label: "The actors" } : group);
     const renamed = updateGroupCatalogue(value, groups, value.initialGroupIds!);
     const phase = renamed.phases.find((phase) => phase.kind === "group-branch")!;
@@ -50,6 +50,7 @@ describe("editable group scene options", () => {
     expect(phase.assignment).toEqual({ type: "manual", fallbackGroupId: "actors" });
     expect(renamed.monitorGroupId).toBe("actors");
     expect(renamed.initialGroupIds).toEqual(["actors", "b"]);
+    expect(renamed.groupByClient).toEqual({ native: "actors", web: "c" });
     expect(() => updateGroupCatalogue(value, value.groups!.filter((group) => group.id !== "a"), ["b", "c"])).toThrow(/fewer than two/);
     expect(() => updateGroupCatalogue(value, [value.groups![0]!], ["a"])).toThrow(/at least two/);
   });

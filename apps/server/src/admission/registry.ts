@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import type { ParticipantClient } from "@entertheblackbox/protocol";
 import type { WebSocket } from "ws";
 
 export const IDENTITY_COLORS = [
@@ -12,6 +13,8 @@ export type ParticipantRecord = {
   name: string;
   participantLease: string;
   color: string;
+  /** Native app or web browser; decides the audience group when the show maps clients to groups. */
+  client?: ParticipantClient | undefined;
   joinedAt: number;
   leaseExpiresAt: number;
   socket?: WebSocket | undefined;
@@ -93,6 +96,7 @@ export class ParticipantRegistry {
     participantLease: string;
     clientId: string;
     name: string;
+    client?: ParticipantClient | undefined;
     leaseExpiresAt: number;
     socket: WebSocket;
     now?: number;
@@ -112,6 +116,7 @@ export class ParticipantRegistry {
       lastSeenAt: now,
     };
     participant.name = options.name;
+    if (options.client !== undefined) participant.client = options.client;
     const replacedSocket = existing?.socket && existing.socket !== options.socket
       ? existing.socket
       : undefined;

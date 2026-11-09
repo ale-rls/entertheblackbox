@@ -51,7 +51,7 @@ export class Rehearsal {
         this.engine.handleClientMessage(message, socket, request);
       },
       onParticipantJoin: (participant, socket) => {
-        this.groups.ensureParticipant(participant.clientId);
+        this.groups.ensureParticipant(participant.clientId, participant.client);
         this.engine.participantJoined(socket, participant);
       },
       onSocketClosed: (socket) => {

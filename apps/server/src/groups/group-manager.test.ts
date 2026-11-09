@@ -14,6 +14,19 @@ const branch = (assignment: GroupBranchPhase["assignment"]): GroupBranchPhase =>
 });
 
 describe("GroupManager", () => {
+  it("assigns by client at join, also mid-show, and manual splits keep it", () => {
+    const groups = new GroupManager({ ...scenario, groupByClient: { native: "c", web: "b" } });
+    groups.ensureParticipant("tablet", "native");
+    groups.beginSession(["tablet"]);
+    expect(groups.groupFor("tablet")).toBe("c");
+    // Late joiner after the session started.
+    expect(groups.ensureParticipant("phone", "web")).toBe("b");
+    groups.applyBranch({ ...branch({ type: "manual", fallbackGroupId: "a" }), branches: [{ groupId: "c", weight: 1 }, { groupId: "b", weight: 1 }] }, ["tablet", "phone"]);
+    expect(groups.snapshot(["tablet", "phone"])).toEqual([{ participantId: "tablet", groupId: "c" }, { participantId: "phone", groupId: "b" }]);
+    // Unknown client falls back to the balanced lobby groups.
+    expect(["a", "b"]).toContain(groups.ensureParticipant("unknown"));
+  });
+
   it("starts with balanced groups and keeps reconnecting participants stable", () => {
     const groups = new GroupManager(scenario);
     groups.beginSession(["one", "two", "three", "four"]);

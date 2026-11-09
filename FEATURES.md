@@ -116,6 +116,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 ## Group branching
 
 - Group manager (catalogue, membership, balanced/manual/vote assignment, per-group paths/reunion) — `groups/group-manager.ts`
+- Group by client (`groupByClient`): native-app joins and web-browser joins each get an authored group at join time, also mid-show for late joiners; manual splits keep it. Clients send `client` in `join`; older apps are recognised as native by their `occupant-handover-v1` capability — `groups/group-manager.ts`, `participantClientOf` in `packages/protocol`, Studio Show properties → Audience groups
 - Per-group native narration and independent playback position
 - Live group transfer with playback-position join — `apps/admin/src/App.tsx`, `apps/server/src/groups/`
 

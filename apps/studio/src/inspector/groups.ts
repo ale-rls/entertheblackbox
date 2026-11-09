@@ -52,5 +52,7 @@ export function updateGroupCatalogue(scenario: Scenario, groups: Group[], initia
   // Keep intermediate checkbox edits; validation prevents publishing a lone
   // initial group, but discarding it here makes selecting the second impossible.
   const monitorGroupId = scenario.monitorGroupId === undefined ? undefined : remap(scenario.monitorGroupId);
-  return { ...scenario, monitorGroupId: monitorGroupId !== undefined && ids.has(monitorGroupId) ? monitorGroupId : undefined, groups, phases: phases as Scenario["phases"], initialGroupIds: initial.length ? initial : undefined };
+  const byClient = Object.fromEntries(Object.entries(scenario.groupByClient ?? {}).map(([client, id]) => [client, id === undefined ? undefined : remap(id)]).filter(([, id]) => id !== undefined && ids.has(id)));
+  return { ...scenario, monitorGroupId: monitorGroupId !== undefined && ids.has(monitorGroupId) ? monitorGroupId : undefined, groups, phases: phases as Scenario["phases"], initialGroupIds: initial.length ? initial : undefined,
+    groupByClient: Object.keys(byClient).length ? byClient : undefined };
 }

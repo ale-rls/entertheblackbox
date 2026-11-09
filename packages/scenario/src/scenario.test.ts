@@ -686,6 +686,16 @@ describe("validateScenario graph checks", () => {
     expect(result.ok).toBe(true);
   });
 
+  it("rejects a client mapping to an unknown group", () => {
+    const parsed = scenarioSchema.parse({
+      version: "groups", entryPhaseId: "idle", cyclesAllowed: false,
+      groups: [{ id: "ki", label: "KI" }, { id: "theater", label: "Theater" }],
+      groupByClient: { native: "ki", web: "saal" }, phases: [idle],
+    });
+    expect(validateScenario(parsed).errors.map((error) => error.message)).toEqual(['groupByClient.web references unknown group "saal"']);
+    expect(() => scenarioSchema.parse({ ...parsed, groupByClient: { tablet: "ki" } })).toThrow();
+  });
+
   it("rejects unknown groups and vote sources", () => {
     const parsed = scenarioSchema.parse({
       version: "groups", entryPhaseId: "split", cyclesAllowed: false,

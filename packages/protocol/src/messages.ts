@@ -113,6 +113,8 @@ export const joinSchema = z.object({
   v,
   clientVersion: nonEmpty,
   capabilities: z.array(z.string().max(80)).max(20).optional(),
+  /** Which participant client joined; older clients omit it (see participantClientOf). */
+  client: z.enum(["native", "web"]).optional(),
   installationId: nonEmpty,
   roomId: nonEmpty,
   name: z.string().trim().min(1).max(40),
@@ -658,6 +660,11 @@ export type TwoQuadrantCounts = z.infer<typeof twoQuadrantCountsSchema>;
 export type PolygonZonesCounts = z.infer<typeof polygonZonesCountsSchema>;
 
 export type JoinMessage = z.infer<typeof joinSchema>;
+export type ParticipantClient = "native" | "web";
+/** Older native apps omit `client` but always declare occupant handover; web never does. */
+export function participantClientOf(join: Pick<JoinMessage, "client" | "capabilities">): ParticipantClient {
+  return join.client ?? (join.capabilities?.includes("occupant-handover-v1") ? "native" : "web");
+}
 export type InputMessage = z.infer<typeof inputSchema>;
 export type PingMessage = z.infer<typeof pingSchema>;
 export type ReactionMessage = z.infer<typeof reactionSchema>;
