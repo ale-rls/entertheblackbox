@@ -10,8 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "export": "expo export --platform ios --platform android",
-    "update:preview": "eas update --channel preview --environment preview",
-    "update:production": "eas update --channel production --environment production"
+    "update:preview": "node scripts/eas-update.mjs preview",
+    "update:production": "node scripts/eas-update.mjs production"
   },
   "dependencies": {
     "@entertheblackbox/expo-audio-scheduler": "workspace:*",
