@@ -41,13 +41,34 @@ const scenario = scenarioSchema.parse({
   ],
 });
 
-function setup() {
+const sharedScenario = scenarioSchema.parse({
+  version: "curtain-shared-test", entryPhaseId: "shared-vote",
+  groups: [
+    { id: "ki", label: "KI", votingMethod: "physical" },
+    { id: "theater", label: "Theater", votingMethod: "phone-cursor" },
+  ],
+  curtainLight: { src: "curtain.mp4" },
+  phases: [
+    { kind: "idle", id: "idle" },
+    ...[["shared-vote", "plain-vote", true], ["plain-vote", "idle", false]].map(([id, target, curtain]) => ({
+      kind: "position-question", id, text: "Choose", durationMs: 1_000, freezeMs: 0,
+      connectionStaleAfterMs: 5_000, showLiveCounts: false, ...(curtain ? { curtainLightVote: true, answerColors: { rot: "#e5484d" } } : {}),
+      // Four colour fields with an unlit gap between them, so cursors can appear without voting.
+      field: { type: "polygon-zones", zones: ([["rot", 0, 0], ["blau", 0.53, 0], ["gelb", 0, 0.53], ["gruen", 0.53, 0.53]] as const).map(([zid, x, y]) => ({
+        id: zid, label: zid, points: [{ x, y }, { x: x + 0.47, y }, { x: x + 0.47, y: y + 0.47 }, { x, y: y + 0.47 }],
+      })) },
+      next: { type: "fixed", target },
+    })),
+  ],
+});
+
+function setup(value = scenario) {
   let now = 0;
   const registry = new ParticipantRegistry(10);
-  const groups = new GroupManager(scenario);
+  const groups = new GroupManager(value);
   const votes: FinalVoteSnapshot[] = [];
   const engine = new PhaseEngine({
-    scenario, registry, now: () => now,
+    scenario: value, registry, now: () => now,
     installationId: "inst", roomId: "room", showId: "show", displayToken: "secret",
     autoStartOnFirstParticipant: false, sessionIdFactory: () => "visit",
     onCheckpoint: (event) => {
@@ -61,9 +82,9 @@ function setup() {
     onVoteSnapshotEnqueued: (snapshot) => votes.push(snapshot),
   });
   const send = (socket: Socket, message: ClientToServerMessage) => engine.handleClientMessage(message, socket.ws);
-  const display = (groupId: string) => {
+  const display = (groupId?: string) => {
     const socket = new Socket();
-    send(socket, { t: "display_join", v: 2, clientVersion: "test", installationId: "inst", roomId: "room", displayToken: "secret", groupId });
+    send(socket, { t: "display_join", v: 2, clientVersion: "test", installationId: "inst", roomId: "room", displayToken: "secret", ...(groupId === undefined ? {} : { groupId }) });
     return socket;
   };
   const phone = (id: string) => {
@@ -124,6 +145,31 @@ describe("curtain-light votes", () => {
     expect(vote.x).toBeCloseTo(0.15);
     expect(vote.y).toBeCloseTo(0.5);
     expect(final.votes.find((v) => v.participantId === "two")!.x).toBeNull();
+    h.engine.stop();
+  });
+
+  it("draws a flagged vote on the shared timeline as curtain light, entering at a neutral point", () => {
+    const h = setup(sharedScenario);
+    const main = h.display();
+    const late = h.phone("late");
+    h.engine.adminStart(); h.tick(10);
+    const phase = main.snapshot.phase;
+    expect(phase.id).toBe("shared-vote");
+    expect(phase.voteTreatment.type).toBe("curtain-light");
+    expect(phase.voteTreatment.answerColors.rot).toBe("#e5484d");
+    expect(phase.voteTreatment.entry).not.toBeNull();
+
+    // The first touch only reveals the cursor; the participant has no group (joined late).
+    h.setNow(100); h.touch(late, 0.9, 0.9, true);
+    h.setNow(200); h.touch(late, 0.9, 0.9, true);
+    h.setNow(220); h.touch(late, 0.6, 0.6);
+    h.tick(1_200);
+    const vote = h.votes.find((snapshot) => snapshot.questionId === "shared-vote")!.votes[0]!;
+    expect(vote.x).not.toBeNull();
+    expect(vote.x!).toBeLessThan(0.5);
+
+    expect(main.snapshot.phase.id).toBe("plain-vote");
+    expect(main.snapshot.phase.voteTreatment).toBeUndefined();
     h.engine.stop();
   });
 

@@ -35,7 +35,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Visual graph editor — `apps/studio/src/canvas/nodes.tsx`, `App.tsx`
 - Typed inspector per phase kind (arena ellipse/quad editors, polygon zones, timing timeline) — `apps/studio/src/inspector/*`
-- Curtain-light authoring: per-group switch, shared curtain (video + fabric/light tuning), per-stage answer colours with reset, light preview with simulated votes, neutral-gap/lighting rehearsal tuning, validation — `apps/studio/src/inspector/CurtainLightEditor.tsx`, `packages/scenario/src/curtain.ts`
+- Curtain-light authoring: per-group switch, per-vote switch for shared-timeline votes (`curtainLightVote`), shared curtain (video + fabric/light tuning), per-stage answer colours with reset, light preview with simulated votes, neutral-gap/lighting rehearsal tuning, validation — `apps/studio/src/inspector/CurtainLightEditor.tsx`, `packages/scenario/src/curtain.ts`
 - Media library (PocketBase-backed) with usage-reference tracking — `apps/studio/src/media/MediaLibraryDialog.tsx`, `pocketbase-media.ts` → **PocketBase**
 - Local media fallback/import reconciliation — `apps/studio/src/media/local.ts`
 - Device preview (isolated runtime with main/group/monitor display links) — **no longer reachable from the Studio editor**; module and server route remain — `apps/studio/src/preview/DevicePreview.tsx`, `apps/server/src/rehearsal/rehearsal.ts`
@@ -59,7 +59,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Video handoff between phases (pre-buffered next clip) — `PhaseVideoHandoff.tsx`, `apps/server/src/engine/video.ts`
 - Live cursor field (real + ghost cursors) — `cursors/CursorCanvas.tsx`, `cursorField.ts` ← **apps/realtime-ws-coolify** + server ghost pool
 - Spectrum glow / cursor-density heat — `cursors/spectrumGlow.ts`
-- Curtain-light votes for curtain-light groups (WebGL2 relit packed curtain video, answer pools from the counting geometry, instanced per-cursor lights with touch pulses, per-word adaptive labels, fade into the next scene) — `curtain/*`, geometry in `packages/shared/src/curtain.ts`; see `docs/curtain-light-voting.md`
+- Curtain-light votes for curtain-light groups and for votes flagged `curtainLightVote` on any timeline (WebGL2 relit packed curtain video, answer pools from the counting geometry, instanced per-cursor lights with touch pulses, per-word adaptive labels, fade into the next scene) — `curtain/*`, geometry in `packages/shared/src/curtain.ts`; see `docs/curtain-light-voting.md`
 - Quadrant/zone overlays, vote-close countdown — `QuadrantOverlay.tsx`, `VoteCloseCountdown.tsx`, `VideoQuestionOverlay.tsx`
 - Ghost cursors (replayed past-participant cursors filling a sparse room) — `apps/server/src/ghosts/ghost-cursor-player.ts`
 - Idle attract loop (`attract-*.mp4` playlist, perspective-calibrated QR marker tracking) — `IdleAttract.tsx`, `idle/*`

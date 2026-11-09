@@ -34,6 +34,24 @@ describe("curtain-light stages", () => {
     expect([...curtainStagePhaseIds(scenario())]).toEqual(["theater-vote"]);
   });
 
+  it("includes votes flagged curtainLightVote on the shared timeline, and needs the curtain video for them", () => {
+    const shared = scenarioSchema.parse({
+      version: "t", entryPhaseId: "vote",
+      phases: [
+        { kind: "idle", id: "idle" },
+        { kind: "position-question", id: "vote", text: "Q?", durationMs: 1000, freezeMs: 0, connectionStaleAfterMs: 1000,
+          showLiveCounts: false, curtainLightVote: true, next: { type: "fixed", target: "plain" },
+          field: { type: "two-quadrant", axis: "x", variant: "split", labels: { minLabel: "No", maxLabel: "Yes" } } },
+        { kind: "position-question", id: "plain", text: "Q?", durationMs: 1000, freezeMs: 0, connectionStaleAfterMs: 1000,
+          showLiveCounts: false, next: { type: "fixed", target: "idle" },
+          field: { type: "two-quadrant", axis: "x", variant: "split", labels: { minLabel: "No", maxLabel: "Yes" } } },
+      ],
+    });
+    expect([...curtainStagePhaseIds(shared)]).toEqual(["vote"]);
+    expect(validateScenario(shared).errors.map((issue) => issue.code)).toContain("curtain-light");
+    expect(validateScenario({ ...shared, curtainLight: { src: "curtain.mp4" } }, manifest).errors).toEqual([]);
+  });
+
   it("accepts a two-way vote once the default gap is applied", () => {
     const result = validateScenario(scenario(), manifest);
     expect(result.errors).toEqual([]);
