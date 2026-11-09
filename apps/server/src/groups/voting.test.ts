@@ -29,4 +29,15 @@ describe("group voting methods", () => {
     }
     expect(pointForOutcome(field, "unknown")).toBeNull();
   });
+
+  it("carries the phase's authored answer colours to phone buttons", () => {
+    const options = votingOptions({
+      kind: "position-question", id: "q", text: "Choose",
+      field: { type: "two-quadrant", variant: "split", axis: "x", labels: { minLabel: "Nein", maxLabel: "Ja" } },
+      durationMs: 1_000, freezeMs: 0, connectionStaleAfterMs: 1_000,
+      showLiveCounts: true, next: { type: "fixed", target: "idle" },
+      answerColors: { max: "#30a46c" },
+    });
+    expect(options).toEqual([{ id: "min", label: "Nein" }, { id: "max", label: "Ja", color: "#30a46c" }]);
+  });
 });

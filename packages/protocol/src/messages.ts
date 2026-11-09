@@ -549,7 +549,8 @@ export const votingOptionsSchema = z.object({
   method: z.enum(["physical", "phone-cursor", "phone-buttons"]),
   closed: z.boolean().optional(),
   question: z.string(),
-  options: z.array(z.object({ id: nonEmpty, label: nonEmpty })),
+  /** `color` is the phase's authored answer colour, when it has one. */
+  options: z.array(z.object({ id: nonEmpty, label: nonEmpty, color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional() })),
 });
 
 export const pongSchema = z.object({

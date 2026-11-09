@@ -6,7 +6,16 @@ export function acceptsVotingInput(configured: VotingMethod | undefined, source:
   return configured === undefined ? source !== "phone-buttons" : configured === source;
 }
 
-export function votingOptions(phase: Phase): Array<{ id: string; label: string }> {
+/** Phone-button answers, carrying the phase's authored answer colours. */
+export function votingOptions(phase: Phase): Array<{ id: string; label: string; color?: string }> {
+  const colors = phase.kind === "position-question" || phase.kind === "video-position-question" ? phase.answerColors : undefined;
+  return votingAnswers(phase).map((option) => {
+    const color = colors?.[option.id];
+    return color === undefined ? option : { ...option, color };
+  });
+}
+
+function votingAnswers(phase: Phase): Array<{ id: string; label: string }> {
   if (phase.kind !== "position-question" && phase.kind !== "video-position-question") return [];
   if (phase.field.type === "polygon-zones") {
     return phase.field.zones.map((zone) => ({ id: zone.id, label: zone.label }));
