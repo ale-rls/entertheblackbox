@@ -11,6 +11,13 @@ describe('participant tasks', () => {
     expect(e.respond(t.id,'s','c','no',11)).toBe(true); expect(e.all()[0]!.status).toBe('closed');
     expect(e.current('b','s')?.recipient.optionId).toBe('yes');
   });
+  it('keeps a scene task open after everyone answered and adds late recipients until its deadline', () => {
+    const e = new TaskEngine(); const t = e.open(template, 's', ['a'], 0, { id: 'scene', epoch: 1 });
+    e.respond(t.id,'s','a','no',1); expect(e.all()[0]!.status).toBe('open');
+    expect(e.addRecipient(t.id,'late',2)).toBe(true); expect(e.addRecipient(t.id,'late',3)).toBe(false);
+    expect(e.respond(t.id,'s','late','yes',4)).toBe(true);
+    expect(e.addRecipient(t.id,'too-late',1000)).toBe(false); expect(e.all()[0]!.status).toBe('closed');
+  });
   it('rejects wrong session, unknown recipients/options and expired responses', () => {
     const e = new TaskEngine(); const t = e.open(template,'s',['a'],0);
     expect(e.respond(t.id,'old','a','yes',1)).toBe(false);

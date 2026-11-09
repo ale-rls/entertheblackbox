@@ -19,6 +19,10 @@ audio and shows task prompts.
   "full" message. Operators send tasks from Admin → Participant tasks.
   A phase can open a task (`taskId`) and hold until the operator presses GO
   (`waitForGo`).
+  A scene's task stays open until its response window ends, even when
+  everyone has answered. Anyone who joins, or is moved into its audience
+  group, during that window becomes a recipient and gets the prompt.
+  Operator-sent tasks still close once every recipient has answered.
 - **Roles** (`scenario.participantRoles`). These are capacity-limited and can
   belong to an exclusive set. Roles come from accepted task options or from
   Admin. Withdrawing a role marks the matching task answer `withdrawn`.

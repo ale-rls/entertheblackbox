@@ -427,6 +427,18 @@ export class PhaseEngine {
     this.tasks.open(template, this.sessionId, ids, this.now(), graph ? { id: this.phaseId, epoch: this.phaseEpoch } : null);
     this.taskError = null;
   }
+  /** Late joiners and newly grouped participants get this scene's task while it is still open. */
+  private offerOpenPhaseTasks(participantId: string): void {
+    if (this.lifecycle !== 'active') return;
+    const group = this.groupSelection?.current(participantId) ?? '';
+    let added = false;
+    for (const task of this.tasks.all()) {
+      if (task.sessionId !== this.sessionId || task.status !== 'open' || task.phaseId !== this.phaseId || task.phaseEpoch !== this.phaseEpoch) continue;
+      if (task.template.groupIds.length && !task.template.groupIds.includes(group)) continue;
+      if (this.tasks.addRecipient(task.id, participantId, this.now())) added = true;
+    }
+    if (added) this.pushTasks(true);
+  }
   private sendTask(socket: WebSocket): void {
     if (!this.scenario.participantTasks?.length) return;
     const id = this.participantIds.get(socket);
@@ -710,6 +722,7 @@ export class PhaseEngine {
         this.sendVotingOptions(socket);
         this.sendAdmission(socket);
       }
+      this.offerOpenPhaseTasks(participantId);
       return { ok: true };
     }
     const leaving = sourceChain.filter((source) => !destinationChain.includes(source));
@@ -1001,6 +1014,7 @@ export class PhaseEngine {
     this.send(socket, this.getSnapshotMessage());
     this.sendGroupSelectionOptions(socket);
     this.sendVotingOptions(socket);
+    if (_participant) this.offerOpenPhaseTasks(_participant.clientId);
     this.sendTask(socket);
     this.sendAdmission(socket);
     this.queueQuestionStatus();
