@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Fastify, { type FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
-import { registerBundleRoutes, registerMediaRoutes } from "./static.js";
+import { registerBundleRoutes, registerFontRoutes, registerMediaRoutes } from "./static.js";
 
 const apps: FastifyInstance[] = [];
 const roots: string[] = [];
@@ -139,5 +139,24 @@ describe("browser participant entry", () => {
       expect(response.headers.location).toBe("/phone/?rehearsal=test&grant=old");
     }
     expect((await app.inject({ url: "/display/?monitor=M1" })).body).toBe("<h1>display</h1>");
+  });
+});
+
+describe("runtime font route", () => {
+  it("serves only font files from the fonts directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "entertheblackbox-fonts-"));
+    roots.push(root);
+    await writeFile(join(root, "Optik-Regular.woff2"), "font");
+    await writeFile(join(root, "notes.txt"), "secret");
+    const app = Fastify(); apps.push(app); registerFontRoutes(app, root);
+
+    const font = await app.inject({ url: "/fonts/Optik-Regular.woff2" });
+    expect(font.statusCode).toBe(200);
+    expect(font.body).toBe("font");
+    expect(font.headers["content-type"]).toBe("font/woff2");
+    expect(font.headers["cache-control"]).toBe("public, max-age=86400");
+    expect((await app.inject({ url: "/fonts/Optik-Bold.woff2" })).statusCode).toBe(404);
+    expect((await app.inject({ url: "/fonts/notes.txt" })).statusCode).toBe(404);
+    expect((await app.inject({ url: "/fonts/..%2Fescape.woff2" })).statusCode).toBe(404);
   });
 });

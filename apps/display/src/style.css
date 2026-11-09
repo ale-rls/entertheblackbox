@@ -1,8 +1,8 @@
-/* Optik is licensed and must not be published: the files live in the gitignored
-   fonts/optik/ (see fonts/README.md). Without them, the fallback font renders. */
+/* Optik is licensed and must not be published. The server serves it at runtime
+   from FONTS_DIR (see fonts/README.md); without the files, the fallback renders. */
 @font-face {
   font-family: "Optik";
-  src: url("../../../fonts/optik/Optik-Regular.woff2") format("woff2");
+  src: url("/fonts/Optik-Regular.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
@@ -10,7 +10,7 @@
 
 @font-face {
   font-family: "Optik";
-  src: url("../../../fonts/optik/Optik-Bold.woff2") format("woff2");
+  src: url("/fonts/Optik-Bold.woff2") format("woff2");
   font-style: normal;
   font-weight: 700;
   font-display: swap;
@@ -18,7 +18,7 @@
 
 @font-face {
   font-family: "Optik";
-  src: url("../../../fonts/optik/Optik-Italic.woff2") format("woff2");
+  src: url("/fonts/Optik-Italic.woff2") format("woff2");
   font-style: italic;
   font-weight: 400;
   font-display: swap;

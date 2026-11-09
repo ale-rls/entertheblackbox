@@ -148,6 +148,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Scenario/media-manifest schemas + validation CLI — `packages/scenario`
 - Shared runtime helpers (server clock, quadrant constants) — `packages/shared`
 - Studio↔runtime adapter — `packages/studio-adapter`
+- Optik (licensed, not in git) on audience-facing surfaces: native/credits bundle it at build time; `/phone/` and `/display/` load `/fonts/*.woff2` at runtime from the server's `FONTS_DIR` (Coolify `optik-fonts` volume), cached by the display service worker — `apps/server/src/static.ts` (`registerFontRoutes`), [fonts/README.md](fonts/README.md).
 
 ## Tooling / dev & ops scripts
 

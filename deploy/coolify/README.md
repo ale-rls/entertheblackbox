@@ -36,6 +36,11 @@ up with PocketBase. It contains immutable downloaded-audio releases and atomic
 rehearsal/production channel pointers; it must survive container replacement.
 See [native player setup and acceptance](../../docs/native-player.md).
 
+The optik-fonts volume is mounted at `/app/fonts/optik` and served at `/fonts/`.
+It holds the licensed Optik `.woff2` files, which are not in git. Copy them in
+once (see [fonts/README.md](../../fonts/README.md)). They survive redeploys and
+need no rebuild. Until they are there, browser pages use the system font.
+
 Display tokens are baked into the display build and must match server runtime.
 After rebuilding, refresh displays so their service-worker shell is current.
 Production uses HTTPS/WSS. No container health check proves audible native

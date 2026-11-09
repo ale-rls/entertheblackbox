@@ -43,7 +43,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // App shell ONLY: hashed assets and page navigations. Everything else
+  // App shell ONLY: hashed assets, fonts and page navigations. Everything else
   // (media, media-manifest, /api/*, /ws, health endpoints) passes
   // through untouched — the SW must never sit between the app and the
   // server's live surfaces (review finding, plan §9).
@@ -57,6 +57,28 @@ self.addEventListener("fetch", (event) => {
         const response = await fetch(event.request);
         if (response.ok) await cache.put(event.request, response.clone());
         return response;
+      })(),
+    );
+    return;
+  }
+
+  // Licensed fonts are served at runtime from the server's FONTS_DIR, outside
+  // the hashed bundle. Stale-while-revalidate: a screen keeps Optik through a
+  // server outage, and a replaced file on the volume arrives on the next load.
+  if (url.pathname.startsWith("/fonts/")) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(SHELL_CACHE);
+        const cached = await cache.match(event.request);
+        const refresh = fetch(event.request).then(async (response) => {
+          if (response.ok) await cache.put(event.request, response.clone());
+          return response;
+        });
+        if (cached) {
+          event.waitUntil(refresh.catch(() => undefined));
+          return cached;
+        }
+        return refresh;
       })(),
     );
     return;
