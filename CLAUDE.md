@@ -99,6 +99,13 @@ file as part of the same PR — don't let it drift into a stale snapshot.
 These bit us when generating a show from a script. The generated backup itself
 is show content: keep it out of git.
 
+- **Always lay out show nodes left to right in playback order.** Entry is
+  leftmost, later scenes advance right, parallel branches use separate rows,
+  and their reunion sits to the right of every incoming branch. Do not wrap
+  the sequence into a multi-column grid. Preserve explicit cycle back-edges.
+  For layout-only edits, change document coordinates/order and viewport only;
+  keep runtime phases, transitions, media and show identity unchanged. Follow
+  [Updating shows](docs/updating-shows.md) and verify the final saved layout.
 - **Scene IDs: letters, digits, `-`, `_` only, starting alphanumeric.** Studio's
   editor enforces this (`phaseIdError`, `apps/studio/src/inspector/model.ts`);
   the runtime schema and `pnpm validate-scenario` only require non-empty IDs.
