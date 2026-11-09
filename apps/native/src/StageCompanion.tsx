@@ -1,6 +1,6 @@
 import type { ServerToClientMessage } from '@entertheblackbox/protocol';
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, AppState, PanResponder, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, AppState, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
 import type { ShowManifest } from '@entertheblackbox/show-content';
 import type { StageInput } from './stage-state';
@@ -19,7 +19,7 @@ type Props = StageInput & {
   onOrigin: (value: string) => void; onName: (value: string) => void; onDeviceLabel: (value: string) => void;
   onPrepare: (download: boolean) => void; onJoin: () => void; onUpdate: () => void; onLeave: () => void;
   onPause: () => void; onResume: () => void; onVote: (id: string) => void; onGroup: (id: string) => void;
-  onReaction: (kind: 'applause' | 'boo') => void; onPoint: (x: number, y: number, touchStart?: boolean) => void;
+  onReaction: (kind: 'applause' | 'boo') => void;
 };
 function Action({ label, onPress, disabled = false, primary = false, selected = false }: {
   label: string; onPress: () => void; disabled?: boolean; primary?: boolean; selected?: boolean;
@@ -56,43 +56,6 @@ function AudioField({ playing, compact }: { playing: boolean; compact: boolean }
       transform: [{ scaleY: pulse.interpolate({ inputRange: [0, 1], outputRange: i % 2 ? [.5, 1] : [1, .45] }) }],
     }]} />)}</View>
     {!compact && <Text style={styles.audioLabel}>AUDIO PLAYING</Text>}
-  </View>;
-}
-function CursorPad({ onPoint, disabled, color }: { onPoint: Props['onPoint']; disabled: boolean; color: string }) {
-  const [dot, setDot] = useState({ x: .5, y: .5 });
-  const size = useRef({ width: 1, height: 1 });
-  const current = useRef({ onPoint, disabled }); current.current = { onPoint, disabled };
-  const move = (x: number, y: number, touchStart = false) => {
-    if (current.current.disabled) return;
-    const point = { x: Math.max(0, Math.min(1, x / size.current.width)), y: Math.max(0, Math.min(1, y / size.current.height)) };
-    setDot(point); current.current.onPoint(point.x, point.y, touchStart);
-  };
-  const responder = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => !current.current.disabled,
-    onMoveShouldSetPanResponder: () => !current.current.disabled,
-    onPanResponderTerminationRequest: () => false,
-    // The first sample of a touch is flagged so curtain-light votes can pulse the light and steer relatively.
-    onPanResponderGrant: e => move(e.nativeEvent.locationX, e.nativeEvent.locationY, true),
-    onPanResponderMove: e => move(e.nativeEvent.locationX, e.nativeEvent.locationY),
-  })).current;
-  return <View style={styles.pad} onLayout={e => { size.current = e.nativeEvent.layout; }}>
-    <View style={styles.touchSurface} {...responder.panHandlers}>
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      {Array.from({ length: 9 }, (_, i) => <React.Fragment key={i}>
-        <View style={[styles.gridVertical, { left: `${(i + 1) * 10}%` }]} />
-        <View style={[styles.gridHorizontal, { top: `${(i + 1) * 10}%` }]} />
-      </React.Fragment>)}
-    </View>
-    <Text pointerEvents="none" style={styles.padLabel}>Touch or drag to position your cursor</Text>
-    <View pointerEvents="none" style={[styles.dot, { left: `${dot.x * 100}%`, top: `${dot.y * 100}%`, backgroundColor: color }]} />
-    </View>
-    <View style={styles.accessibleCursor}>
-      {(['left', 'right', 'up', 'down'] as const).map(direction => <Pressable key={direction} accessibilityRole="button" accessibilityLabel={`Move cursor ${direction}`}
-        disabled={disabled} onPress={() => move((dot.x + (direction === 'left' ? -.05 : direction === 'right' ? .05 : 0)) * size.current.width,
-          (dot.y + (direction === 'up' ? -.05 : direction === 'down' ? .05 : 0)) * size.current.height)} style={styles.direction}>
-        <Text style={styles.muted}>{{ left: '←', right: '→', up: '↑', down: '↓' }[direction]}</Text>
-      </Pressable>)}
-    </View>
   </View>;
 }
 export function StageCompanion(props: Props) {
@@ -144,7 +107,7 @@ export function StageCompanion(props: Props) {
   useEffect(() => { if (props.connected) setSettings(false); }, [props.connected]);
   const normal = props.connected && props.status === 'Connected' && !props.paused && !screen.title.includes('attention');
   const rejected = props.status.startsWith('Join rejected');
-  const hasChoices = !!(screen.groups?.groups.length || screen.voting || screen.ratingOpen || screen.cursorOpen);
+  const hasChoices = !!(screen.groups?.groups.length || screen.voting || screen.ratingOpen);
   const needsAction = !!props.admission?.active && !props.admission.program || !!props.taskVisible || showModeAction(props, props.answered);
   const problem = !normal || !!props.error || !!modeError;
   const reveal = !showMode || needsAction || problem;
@@ -213,7 +176,6 @@ export function StageCompanion(props: Props) {
           {!!props.notificationStatus && props.notificationStatus !== 'Show action notifications enabled' && <Text style={styles.muted}>{props.notificationStatus}</Text>}
           {!props.connected && !props.busy && props.status !== 'Download a show, then join' && <Text style={styles.muted}>{props.status}</Text>}
         </View>
-        {screen.cursorOpen && <CursorPad key={`${props.snapshot?.sessionId}:${props.snapshot?.phaseEpoch}:${props.snapshot?.routingEpoch}`} onPoint={props.onPoint} disabled={!screen.canAct} color={props.identity?.color ?? '#d9e4f1'} />}
         <View style={styles.inset}>
           {!props.connected ? <>
             {props.deviceLabel.trim() ? <Text style={styles.label}>This tablet: {props.deviceLabel.trim()}</Text> : <>
@@ -279,10 +241,4 @@ const styles = StyleSheet.create({
   audio: { height: 240, backgroundColor: '#10151c', justifyContent: 'center', overflow: 'hidden' }, audioCompact: { height: 80, backgroundColor: 'transparent' },
   bars: { flexDirection: 'row', alignItems: 'center', gap: 3 }, bar: { flex: 1, backgroundColor: '#8f9fb3', opacity: .65, borderRadius: 2 },
   audioLabel: { position: 'absolute', left: 24, bottom: 18, fontSize: 11, color: '#afbdcf', letterSpacing: 1.4 },
-  pad: { height: 300, width: '100%', backgroundColor: '#11161c', overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
-  touchSurface: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  padLabel: { color: '#b6c3d3', fontSize: 13, padding: 24, textAlign: 'center' }, gridVertical: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: '#202831' },
-  gridHorizontal: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: '#202831' },
-  dot: { position: 'absolute', width: 18, height: 18, borderRadius: 9, transform: [{ translateX: -9 }, { translateY: -9 }], borderWidth: 2, borderColor: '#f1f4f8' },
-  accessibleCursor: { position: 'absolute', bottom: 0, flexDirection: 'row' }, direction: { minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
 });

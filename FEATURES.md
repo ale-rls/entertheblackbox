@@ -49,7 +49,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 ## Participant experience — `apps/native` and `apps/phone`
 
-- Native iOS/Android app for both audiences and all loan tablets: identity, group choices, cursor/buttons/reactions, downloaded narration and background music. See the native section below.
+- Native iOS/Android app for both audiences and all loan tablets: identity, group choices, button votes and reactions (no cursor voting: in-app participants vote physically or with buttons), downloaded narration and background music. See the native section below.
 - Browser voting at `/phone/`: name/lease admission, group selection, cursor/button votes and reactions alongside native participants. `/` and legacy `/phone-janus/` redirect there. Keep the page foregrounded; personal audio requires the native app — `apps/phone`, `apps/server/src/static.ts`.
 - Browser participant tasks: capability-aware joining, timed choices and outcome messages, with responses disabled after expiry or disconnect — `apps/phone/src/ParticipantTaskCard.tsx`. Admission-program audio and tablet handover remain native-only.
 - Retained browser audio, Icecast/Liquidsoap and Janus source/tests are historical. Environment settings cannot enable stream delivery through `loadConfig`; production Compose no longer starts these services.
@@ -110,7 +110,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Reaction rating engine (applause/boo) — `votes/rating-engine.ts`
 - Group-membership voting — `groups/voting.ts`
 - Neutral gaps in two-way/four-quadrant fields (uncounted bands; shared by counting and rendering) — `packages/shared/src/index.ts` (`quadrantOfField`, `fieldSplitOffsets`)
-- Curtain-light entry: cursors hidden until first touch per stage, enter at a neutral point, relative steering, touch pulses — `apps/server/src/cursors/cursor-pipeline.ts`, `cursors/relative-trackpad.ts`, `engine/phase-engine.ts` (`curtainFor`, `curtainInput`); native `touch: "start"` flag in `apps/native/src/StageCompanion.tsx`
+- Curtain-light entry: cursors hidden until first touch per stage, enter at a neutral point, relative steering, touch pulses — `apps/server/src/cursors/cursor-pipeline.ts`, `cursors/relative-trackpad.ts`, `engine/phase-engine.ts` (`curtainFor`, `curtainInput`); browser `touch: "start"` flag in `apps/phone/src/App.tsx`
 - Final vote snapshot persistence — `persistence/admin-data.ts`
 
 ## Group branching
@@ -178,7 +178,7 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 
 ## Native participant app — `apps/native`
 
-- Dark Stage companion screens separate setup/device diagnostics from live participation, without internal narration, subtitles, scene titles or header artwork, with full-width cursor control, accessible directional controls, and an animated playback activity field driven only by foreground cue playback (background music excluded; not an amplitude meter). Respects reduced motion and stops animation in background; recovery/paused/closed-voting states retain server authority — `src/StageCompanion.tsx`, `src/stage-state.ts`. Display video remains on the shared screen; no phone image/video source exists in the current protocol.
+- Dark Stage companion screens separate setup/device diagnostics from live participation, without internal narration, subtitles, scene titles or header artwork, without a cursor pad (cursor voting is browser-only), and with an animated playback activity field driven only by foreground cue playback (background music excluded; not an amplitude meter). Respects reduced motion and stops animation in background; recovery/paused/closed-voting states retain server authority — `src/StageCompanion.tsx`, `src/stage-state.ts`. Display video remains on the shared screen; no phone image/video source exists in the current protocol.
 
 - iOS/Android system action notifications for group selection, phone voting/cursors and reaction windows; permission requested on join, tap opens the app, duplicate suppression and cleanup on answer/phase change/leave. Alerts are silent to preserve show audio. Live delivery depends on WebSocket reception; force-quit/offline delivery is not supported. Requires a new native build and locked-device acceptance — `src/action-prompt.ts`, `src/notifications.ts`.
 

@@ -65,8 +65,6 @@ export default function App() {
   const activity = useRef(new PlaybackActivity());
   const player = useRef<ShowPlayer | null>(null);
   const latest = useRef<Snapshot | null>(null);
-  const seq = useRef(0);
-  const inputTime = useRef(0);
   const operation = useRef(false);
   const authorized = useRef(false);
   const occupantId = useRef<string | null>(null);
@@ -220,15 +218,6 @@ export default function App() {
     const s = latest.current;
     if (s && authorized.current && view.canAct && view.voting?.method === 'phone-buttons' && !view.voting.closed) { acknowledgeAction('vote'); connection.current?.send({ t: 'button_vote', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, outcome }); }
   }
-  function point(x: number, y: number, touchStart = false) {
-    const s = latest.current;
-    // A touch start is never throttled: it is what reveals and pulses the cursor.
-    if (!s || !authorized.current || !view.cursorOpen || (!touchStart && Date.now() - inputTime.current < 50)) return;
-    acknowledgeAction('vote');
-    inputTime.current = Date.now();
-    connection.current?.send({ t: 'input', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, seq: seq.current++,
-      x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)), ...(touchStart ? { touch: 'start' as const } : {}) });
-  }
   // Video wall: fetch this tablet's slice whenever the loaded clip changes.
   const slice = wall?.clip ?? null;
   useEffect(() => {
@@ -264,7 +253,7 @@ export default function App() {
     onUpdate={() => void run(updateApp)} onLeave={leave}
     onPause={() => { player.current?.setEnabled(false); setPaused(true); setPlaying(false); }}
     onResume={() => { player.current?.setEnabled(true); setPaused(false); }}
-    onVote={vote} onPoint={point}
+    onVote={vote}
     onGroup={groupId => {
       const s = latest.current;
       if (s && authorized.current && view.canAct) {

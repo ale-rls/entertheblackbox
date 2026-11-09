@@ -6,7 +6,7 @@ The native participant app is in `apps/native`. It provides downloaded personal 
 
 - Name/device-label admission, secure participant lease storage scoped to server and installation, reconnect/backoff, heartbeat recovery, and foreground reconnection.
 - Timestamped native MP3 playback, late-join seeking, drift correction, background audio capability, lock-screen controls, device pause/resume, and stop on silent scenes/show end.
-- Per-group audio overrides, group selection, cursor positioning, phone-button votes, reactions. Narration text, subtitles and scene titles stay off participant screens. The existing server chooses branches.
+- Per-group audio overrides, group selection, phone-button votes, reactions. The app has no cursor voting: in-app participants vote physically or with buttons; cursor voting is the browser client's. Narration text, subtitles and scene titles stay off participant screens. The existing server chooses branches.
 - Persistent downloaded audio, SHA-256 and byte-count verification, immutable releases, a release pinned to the server’s active show, and preservation of the previous selection after failed downloads.
 - Existing Admin timing telemetry via protocol pings. Download readiness is shown on the phone before joining; this scaffold does not add an Admin fleet provisioning screen.
 - Automatic latest-show preparation before every join, without silently joining on stale content after a network error.
@@ -18,7 +18,7 @@ The native player does not implement the browser's optional post-show movement-r
 
 The native UI uses a dark stage-focused layout without header artwork or footer branding. Enter a name on the welcome screen; **Device settings** contains the venue, download/inspect actions and app updates. During a session, **Device details** exposes connection/audio diagnostics without allowing content updates. Leaving returns to setup.
 
-Live scenes show participant guidance and group, server-provided voting/group choices and reaction windows. Cursor input occupies the full screen width, with drag control and accessible direction buttons. Closed or expired votes and disconnected sessions cannot submit answers. Native lock-screen pauses are reflected in the resume control.
+Live scenes show participant guidance and group, server-provided voting/group choices and reaction windows. Cursor votes show "Move to your answer in the room" and no input. Closed or expired votes and disconnected sessions cannot submit answers. Native lock-screen pauses are reflected in the resume control.
 
 The full-width audio field is a playback activity animation driven by the native scheduler's playing foreground cue, excluding the music bed. It is not a measured waveform or a guarantee of audible output. Animation stops when paused/backgrounded and stays static with Reduce Motion enabled. Existing videos/images remain on the shared display; the current protocol has no participant-phone media source.
 

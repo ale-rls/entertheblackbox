@@ -12,7 +12,7 @@ describe('Stage companion state boundaries', () => {
   it('preserves choices but disables action during reconnect or admission failure', () => {
     for (const status of ['Connecting', 'Disconnected — retrying', 'Join rejected: full']) {
       const state = stageState({ ...input, status, voting: vote, groups });
-      expect(state.canAct).toBe(false); expect(state.cursorOpen).toBe(false); expect(state.ratingOpen).toBe(false);
+      expect(state.canAct).toBe(false); expect(state.ratingOpen).toBe(false);
       expect(state.title).not.toBe('Choose');
     }
     expect(stageState({ ...input, status: 'Connected', voting: vote }).canAct).toBe(true);
@@ -25,12 +25,12 @@ describe('Stage companion state boundaries', () => {
     for (const participantState of ['finished', 'unassigned'] as const) expect(stageState({ ...input, snapshot: { ...snapshot, participantState }, voting: vote }).canAct).toBe(false);
     expect(stageState({ ...input, now: 99 }).canAct).toBe(false);
   });
-  it('distinguishes physical, phone cursor, hidden cursor and closed vote states', () => {
-    expect(stageState({ ...input, voting: { ...vote, method: 'physical' } })).toMatchObject({ cursorOpen: false, body: 'Move to your answer in the room.' });
-    expect(stageState({ ...input, voting: { ...vote, method: 'phone-cursor' } }).cursorOpen).toBe(true);
-    expect(stageState({ ...input, voting: { ...vote, method: 'phone-cursor', closed: true } })).toMatchObject({ cursorOpen: false, title: 'Voting has closed' });
-    const hidden = { ...snapshot, phase: { ...snapshot.phase, showCursors: false } } as Snapshot;
-    expect(stageState({ ...input, snapshot: hidden, voting: { ...vote, method: 'phone-cursor' } }).cursorOpen).toBe(false);
+  it('never offers a cursor: physical and cursor votes happen in the room, buttons in the app', () => {
+    expect(stageState({ ...input, voting: { ...vote, method: 'physical' } })).toMatchObject({ body: 'Move to your answer in the room.' });
+    expect(stageState({ ...input, voting: { ...vote, method: 'phone-cursor' } })).toMatchObject({ body: 'Move to your answer in the room.' });
+    expect(stageState({ ...input, voting: { ...vote, method: 'phone-buttons' } })).toMatchObject({ body: 'Choose your answer.' });
+    expect(stageState({ ...input, voting: { ...vote, method: 'phone-cursor', closed: true } })).toMatchObject({ title: 'Voting has closed' });
+    expect(stageState(input)).not.toHaveProperty('cursorOpen');
   });
   it('keeps the group and rating actions in their server-owned windows', () => {
     expect(stageState({ ...input, groups }).title).toBe('Choose your group');
@@ -55,11 +55,11 @@ it('visualizes actual playing layers, excluding music-only scenes, but never sch
 });
 
 
-it('reveals new show actions, dismisses answered buttons and retains continuous cursor voting', () => {
+it('reveals new show actions and dismisses answered buttons', () => {
   const s = { ...input, voting: vote };
   expect(showModeAction(s, null)).toBe(true);
   expect(showModeAction(s, 's:0:1:vote')).toBe(false);
-  expect(showModeAction({ ...s, voting: { ...vote, method: 'phone-cursor' } }, 's:0:1:vote')).toBe(true);
+  expect(showModeAction({ ...s, voting: { ...vote, method: 'phone-cursor' } }, null)).toBe(false);
   expect(showModeAction({ ...s, now: 1100 }, null)).toBe(false);
   expect(showModeAction({ ...s, status: 'Disconnected — retrying' }, null)).toBe(false);
   expect(showModeAction({ ...input, groups }, null)).toBe(true);

@@ -36,9 +36,8 @@ export function stageState(s: StageInput) {
   const canAct = admitted && active;
   const rating = p && 'rating' in p ? p.rating : null;
   const ratingOpen = !!(canAct && rating && (!rating.windows || rating.windows.some(w => s.now - p!.startedAt >= w.startAtMs && s.now - p!.startedAt < w.endAtMs)));
-  const cursorOpen = !!(canAct && p && ((p.kind === 'idle' || p.kind === 'video') || (voting?.method === 'phone-cursor' && !voting.closed)) &&
-    (!('showCursors' in p) || p.showCursors !== false));
-  const controls = { canAct, cursorOpen, ratingOpen, voting, groups };
+  // The app never steers a cursor: tablets vote physically or with buttons; cursors are the browser's.
+  const controls = { canAct, ratingOpen, voting, groups };
   const screen = (title: string, body: string) => ({ ...controls, title, body });
   if (!s.connected) {
     if (s.error) return screen('Something needs attention', 'Check the details below, then try again.');
@@ -57,7 +56,7 @@ export function stageState(s: StageInput) {
   if (s.snapshot?.participantState === 'unassigned') return screen('Waiting for your group', 'The performance will continue here when you’re assigned.');
   if (groups && canAct) return screen('Choose your group', 'Follow the instruction in the room.');
   if (voting) return screen(voting.closed || !active ? 'Voting has closed' : 'Choose your answer',
-    voting.closed || !active ? 'Look at the main screen for what happens next.' : voting.method === 'physical' ? 'Move to your answer in the room.' : voting.method === 'phone-cursor' ? 'Drag your cursor to your answer on the main screen.' : 'Choose your answer.');
+    voting.closed || !active ? 'Look at the main screen for what happens next.' : voting.method === 'phone-buttons' ? 'Choose your answer.' : 'Move to your answer in the room.');
   if (!p || p.kind === 'idle') return screen('You’re in', 'Keep your headphones on. The performance will begin shortly.');
   if (p.kind === 'video' || p.kind === 'video-position-question') return screen('Look at the screen', 'Follow the film on the main screen.');
   if (p.kind === 'group-branch') return screen('Follow your group', 'Listen to the instruction for your assigned group.');
@@ -66,11 +65,11 @@ export function stageState(s: StageInput) {
 }
 
 
-/** Cursor voting remains interactive after its first movement. Other answers dismiss the prompt. */
+/** An answer dismisses the prompt. */
 export function showModeAction(s: StageInput, answered: string | null) {
   const state = stageState(s);
   const prompt = actionPrompt(s.snapshot, s.voting, s.groups, s.now);
-  return state.canAct && !!prompt && (prompt.key !== answered || state.voting?.method === 'phone-cursor');
+  return state.canAct && !!prompt && prompt.key !== answered;
 }
 
 /** Show-mode text fades after this long without a touch. */
