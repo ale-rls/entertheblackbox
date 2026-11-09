@@ -78,3 +78,15 @@ export const SHOW_TEXT_IDLE_MS = 4_000;
 export function showModeTextVisible(input: { showMode: boolean; needsAction: boolean; problem: boolean; idleMs: number }): boolean {
   return !input.showMode || input.needsAction || input.problem || input.idleMs < SHOW_TEXT_IDLE_MS;
 }
+
+/** After someone holds "exit", the app returns to show mode once the screen has been untouched this long. */
+export const SHOW_MODE_RETURN_MS = 60_000;
+/**
+ * Show mode is the default while admitted: entered on admission and after a reconnect, and
+ * re-entered after a manual exit (or a failed attempt) once the screen has been idle.
+ */
+export function shouldEnterShowMode(input: { admitted: boolean; showMode: boolean; settingsOpen: boolean; exitedAt: number | null; lastTouchAt: number; now: number }): boolean {
+  if (!input.admitted || input.showMode || input.settingsOpen) return false;
+  if (input.exitedAt === null) return true;
+  return input.now - Math.max(input.exitedAt, input.lastTouchAt) >= SHOW_MODE_RETURN_MS;
+}

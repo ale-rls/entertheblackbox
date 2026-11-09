@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ClockTiming } from '@entertheblackbox/protocol';
 import type { Snapshot } from './cues';
 import type { Voting, Groups } from './action-prompt';
-import { PlaybackActivity, playbackState, SHOW_TEXT_IDLE_MS, showModeTextVisible, stageState, showModeAction, type StageInput } from './stage-state';
+import { PlaybackActivity, playbackState, SHOW_TEXT_IDLE_MS, showModeTextVisible, stageState, showModeAction, shouldEnterShowMode, SHOW_MODE_RETURN_MS, type StageInput } from './stage-state';
 const snapshot: Snapshot = { t: 'snapshot', v: 2, sessionId: 's', phaseEpoch: 1, serverTime: 100,
   phase: { id: 'n', kind: 'narration', text: 'Listen to the room', durationMs: 1000, next: 'end', scenarioVersion: 'v', startedAt: 100, deadlineAt: 1100 } };
 const vote: Voting = { t: 'voting_options', v: 2, sessionId: 's', phaseEpoch: 1, method: 'phone-buttons', question: 'Choose', options: [{ id: 'a', label: 'A' }] };
@@ -89,5 +89,20 @@ describe('show-mode text fade', () => {
     expect(showModeTextVisible({ ...idle, needsAction: true })).toBe(true);
     expect(showModeTextVisible({ ...idle, problem: true })).toBe(true);
     expect(showModeTextVisible({ ...idle, showMode: false })).toBe(true);
+  });
+});
+
+describe('show mode by default', () => {
+  const base = { admitted: true, showMode: false, settingsOpen: false, exitedAt: null, lastTouchAt: 0, now: 100_000 };
+  it('enters as soon as the device is admitted, also after a reconnect', () => {
+    expect(shouldEnterShowMode(base)).toBe(true);
+    expect(shouldEnterShowMode({ ...base, admitted: false })).toBe(false);
+    expect(shouldEnterShowMode({ ...base, showMode: true })).toBe(false);
+    expect(shouldEnterShowMode({ ...base, settingsOpen: true })).toBe(false);
+  });
+  it('returns after a manual exit once the screen has been untouched for a minute', () => {
+    expect(shouldEnterShowMode({ ...base, exitedAt: 50_000, lastTouchAt: 50_000 })).toBe(false);
+    expect(shouldEnterShowMode({ ...base, exitedAt: 50_000 - SHOW_MODE_RETURN_MS, lastTouchAt: 50_000 })).toBe(false);
+    expect(shouldEnterShowMode({ ...base, exitedAt: 30_000, lastTouchAt: 100_000 - SHOW_MODE_RETURN_MS })).toBe(true);
   });
 });

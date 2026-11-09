@@ -4,7 +4,7 @@ import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, 
 import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
 import type { ShowManifest } from '@entertheblackbox/show-content';
 import type { StageInput } from './stage-state';
-import { stageState, showModeAction, showModeTextVisible, SHOW_TEXT_IDLE_MS } from './stage-state';
+import { stageState, showModeAction, showModeTextVisible, shouldEnterShowMode, SHOW_TEXT_IDLE_MS } from './stage-state';
 import { contrastText } from './surface';
 
 type Props = StageInput & {
@@ -61,6 +61,8 @@ function AudioField({ playing, compact }: { playing: boolean; compact: boolean }
 export function StageCompanion(props: Props) {
   const [showMode, setShowMode] = useState(false);
   const [modeError, setModeError] = useState('');
+  /** When someone last left show mode by hand (or entering failed); null re-enters as soon as admitted. */
+  const [exitedAt, setExitedAt] = useState<number | null>(null);
   const [pinScreen, setPinScreen] = useState(false);
   const modeBusy = useRef(false);
   const mounted = useRef(true);
@@ -85,7 +87,7 @@ export function StageCompanion(props: Props) {
         try { await ShowScreen.pin(); }
         catch { setModeError('Screen pinning unavailable. Hold Exit show mode to return to device controls.'); }
       }
-    } catch { setModeError('Could not keep the screen awake. Try entering show mode again.'); }
+    } catch { setModeError('Could not keep the screen awake. Try entering show mode again.'); setExitedAt(Date.now()); }
     finally { modeBusy.current = false; }
   }
   useEffect(() => {
@@ -96,7 +98,7 @@ export function StageCompanion(props: Props) {
       void ShowScreen?.setActive(false).catch(() => setModeError('Could not release screen pinning. Use Android’s unpin gesture.'));
     };
   }, [showMode]);
-  useEffect(() => { if (!props.connected) setShowMode(false); }, [props.connected]);
+  useEffect(() => { if (!props.connected) { setShowMode(false); setExitedAt(null); } }, [props.connected]);
   const { onShowMode } = props;
   useEffect(() => { onShowMode?.(showMode); }, [showMode, onShowMode]);
   const [settings, setSettings] = useState(false);
@@ -127,6 +129,19 @@ export function StageCompanion(props: Props) {
     const timer = setTimeout(() => setIdle(true), SHOW_TEXT_IDLE_MS);
     return () => clearTimeout(timer);
   }, [showMode, lastTouch]);
+  // Show mode is the default: enter on admission, after a reconnect, and again after an idle minute.
+  const admitted = props.connected && props.status === 'Connected' && !rejected;
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => {
+    if (showMode || !admitted) return;
+    const timer = setInterval(() => setClock(Date.now()), 5_000);
+    return () => clearInterval(timer);
+  }, [showMode, admitted]);
+  useEffect(() => {
+    if (shouldEnterShowMode({ admitted, showMode, settingsOpen: settings, exitedAt, lastTouchAt: lastTouch, now: Date.now() })) void enterShowMode();
+  // enterShowMode only reads refs and setters; re-running on its identity would retrigger every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admitted, showMode, settings, exitedAt, lastTouch, clock]);
   const textVisible = showModeTextVisible({ showMode, needsAction, problem, idleMs: idle ? SHOW_TEXT_IDLE_MS : 0 });
   useEffect(() => {
     if (reduceMotion) { textOpacity.setValue(textVisible ? 1 : 0); return; }
@@ -137,7 +152,7 @@ export function StageCompanion(props: Props) {
   return <View style={styles.wallRoot}>
     {showMode && props.wall}
     <SafeAreaView style={[styles.screen, showMode && { backgroundColor: props.wallVisible ? 'transparent' : props.surface.color }]}
-    onStartShouldSetResponderCapture={() => { if (showMode) setLastTouch(Date.now()); return false; }}>
+    onStartShouldSetResponderCapture={() => { setLastTouch(Date.now()); return false; }}>
     <StatusBar hidden={showMode} barStyle="light-content" backgroundColor="#090a0b" />
     <ScrollView key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
       {props.admission?.active && <View style={styles.page}><Text style={styles.buttonText}>{props.admission.program ? 'Welcome. Waiting for the show to start.' : 'Choose your audience'}</Text>{props.admission.choices.map(g => <Action key={g.id} label={g.label} selected={props.admission?.program?.groupId === g.id} disabled={!normal} onPress={() => props.onAdmissionGroup?.(g.id)} />)}</View>}
@@ -198,7 +213,7 @@ export function StageCompanion(props: Props) {
       {!settings && <Animated.View style={showMode ? { opacity: textOpacity } : undefined}><AudioField playing={props.playing && !props.paused && !rejected} compact={showMode || hasChoices} /></Animated.View>}
       {!!modeError && <Text accessibilityRole="alert" style={styles.error}>{modeError}</Text>}
       {showMode && <Animated.View style={[styles.exitWrap, { opacity: textOpacity }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Exit show mode" accessibilityHint="Hold for two seconds" delayLongPress={2000} onLongPress={() => { setModeError(''); setShowMode(false); }} style={styles.exitMode}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Exit show mode" accessibilityHint="Hold for two seconds" delayLongPress={2000} onLongPress={() => { setModeError(''); setExitedAt(Date.now()); setShowMode(false); }} style={styles.exitMode}>
           <Text style={[styles.exitText, { color: surfaceText }]}>Hold to exit show mode</Text>
         </Pressable>
       </Animated.View>}
@@ -207,7 +222,7 @@ export function StageCompanion(props: Props) {
           {ShowScreen && !rejected && <>
             <Action label="Enter show mode" onPress={() => void enterShowMode()} />
             {Platform.OS === 'android' && <Action label={pinScreen ? 'Screen pinning: on' : 'Screen pinning: off'} selected={pinScreen} onPress={() => setPinScreen(!pinScreen)} />}
-            <Text style={styles.muted}>Show mode keeps the screen awake between actions; the operator can set its color. Hold the exit control for two seconds. Android asks you to confirm screen pinning to restrict Home and app switching.</Text>
+            <Text style={styles.muted}>Show mode is on by default and returns after a minute without touches. It keeps the screen awake between actions; the operator can set its color. Hold the exit control for two seconds. Android asks you to confirm screen pinning to restrict Home and app switching.</Text>
           </>}
           {!props.paused && !rejected && <Action label="Pause audio" onPress={props.onPause} />}
           <Action label={rejected ? 'Back to setup' : 'Leave show'} onPress={props.onLeave} />

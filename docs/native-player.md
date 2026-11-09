@@ -180,6 +180,8 @@ On physical iPhone and Android release builds, allow notifications, join, lock t
 
 Admin → Display settings → Phone show surface sets the resting show-mode background. The server pushes it over the show WebSocket as a `surface` message stamped with an `applyAt` server time (60 ms ahead). Each device waits on its measured clock offset, so all tablets switch on the same frame. New joiners receive the current colour immediately. Black clears the color; interaction and recovery controls remain visible when needed.
 
+Show mode is the default. The app enters it as soon as it is admitted and again after a reconnect. Holding **Hold to exit show mode** leaves it for device controls; after 60 seconds without a touch (or with Device details closed and nobody touching the screen) the app returns to show mode by itself.
+
 In show mode, text and the transparent **Hold to exit show mode** control fade out after 4 seconds without a touch, and any touch brings them back. Action prompts (votes, group choice) and problems (reconnecting, errors) never fade.
 
 ### Colour instrument
