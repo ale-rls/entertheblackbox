@@ -572,6 +572,7 @@ describe("WebSocket lifecycle", () => {
     await vi.waitFor(async () => {
       const status = (await runtime.app.inject({ method: "GET", url: "/api/admin/status", headers: { authorization: "Bearer operator" } })).json();
       expect(Object.fromEntries(status.participants.map((p: { name: string; groupId: string | null }) => [p.name, p.groupId]))).toEqual({ T01: "ki", Web: "theater" });
+      expect(status.participants.map((p: { name: string; client: string; phaseId: string }) => [p.name, p.client, p.phaseId])).toEqual([["T01", "native", "idle"], ["Web", "web", "idle"]]);
     });
     legacyApp.close(); browser.close();
   });

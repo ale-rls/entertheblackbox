@@ -4,6 +4,7 @@ import { NativeAudioCoverage } from './NativeAudioCoverage.js';
 import { SurfaceInstrument } from "./SurfaceInstrument.js";
 import { VideoWall } from "./VideoWall.js";
 import { SceneTiming } from "./SceneTiming.js";
+import { AudienceOverview } from "./AudienceOverview.js";
 import { GroupSelectionStart } from "./GroupSelectionStart.js";
 import type { TimingMonitor } from "@entertheblackbox/protocol";
 import { ServerClock } from "@entertheblackbox/shared";
@@ -47,6 +48,9 @@ export type Status = {
     lastSeenAt: number;
     groupId?: string | null;
     state?: "choosing" | "unassigned" | "active" | "finished";
+    client?: "native" | "web" | null;
+    phaseId?: string;
+    phaseStartedAt?: number;
   }>;
   groups?: Array<{ id: string; label: string; color?: string }>;
   sessionId: string | null;
@@ -775,6 +779,7 @@ export function App() {
 
           </div>
         </section>
+        {activeTab === "show" && <AudienceOverview status={status} clock={clock} sceneTitle={sceneTitle} stale={statusStale} />}
 
         <div hidden={activeTab !== "setup"} className="admin-setup-content">          <section className="admin-session-schedule" aria-labelledby="admin-lobby-heading">
             <div className="admin-section-heading"><h3 id="admin-lobby-heading">Lobby schedule</h3><StatusLabel status={lobbyInfo?.nextStartAt ? "info" : "warning"}>{lobbyInfo?.nextStartAt ? "Scheduled" : "Manual start"}</StatusLabel></div>
