@@ -118,6 +118,8 @@ export const joinSchema = z.object({
   installationId: nonEmpty,
   roomId: nonEmpty,
   name: z.string().trim().min(1).max(40),
+  /** The physical device's label (e.g. a loan tablet's sticker), separate from the participant's name. */
+  deviceLabel: z.string().trim().min(1).max(40).optional(),
   // Deliberately not nonEmpty: a returning participant with a still-valid
   // participantLease doesn't need a grant at all (admission/controller.ts's
   // returningParticipant bypass), and an empty/garbage grant otherwise

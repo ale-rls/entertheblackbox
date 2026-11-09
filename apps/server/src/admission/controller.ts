@@ -119,7 +119,7 @@ export class AdmissionController {
     this.retiredLeases.set(old.participantLease, old.leaseExpiresAt);
     this.options.onSocketClosed?.(old.socket);
     this.registry.removeLease(old.participantLease);
-    const admitted = this.registry.admit({ participantLease: issued.token, clientId: issued.claims.clientId, name: old.name, client: old.client, leaseExpiresAt: issued.claims.expiresAt, socket: old.socket, now });
+    const admitted = this.registry.admit({ participantLease: issued.token, clientId: issued.claims.clientId, name: old.name, client: old.client, deviceLabel: old.deviceLabel, leaseExpiresAt: issued.claims.expiresAt, socket: old.socket, now });
     if (!admitted.ok) throw new Error('Could not reserve replacement occupant');
     state.occupantId = admitted.participant.clientId;
     state.requireOccupantId = true;
@@ -308,6 +308,7 @@ export class AdmissionController {
       clientId,
       name: parsed.message.name,
       client: participantClientOf(parsed.message),
+      deviceLabel: parsed.message.deviceLabel,
       leaseExpiresAt: issuedLease.claims.expiresAt,
       socket,
       now,

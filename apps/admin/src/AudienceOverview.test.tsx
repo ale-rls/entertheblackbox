@@ -11,9 +11,10 @@ const participant = (clientId: string, name: string, groupId: string | null, cli
 const status = {
   groups: [{ id: "ki", label: "KI · Bühne", color: "#f55" }, { id: "theater", label: "Theater · Saal", color: "#55f" }, { id: "empty", label: "Empty" }],
   participants: [
-    participant("t2", "T02", "ki", "native", "vorhang", 8000),
+    { ...participant("t2", "T02", "ki", "native", "vorhang", 8000), deviceLabel: "T02" },
     participant("t1", "T01", "ki", "native", "vorhang", 8000, false),
     participant("w1", "Ada", "theater", "web", "vorhang", 8000),
+    { ...participant("t3", "Bo", "ki", "native", "vorhang", 8000), deviceLabel: "T03" },
     participant("w2", "Late", null, "web", "vorhang", 8000),
   ],
   timingMonitors: [{ id: "phone:t2", label: "T02", kind: "phone", phaseId: "vorhang", phaseEpoch: 1, connected: true, mediaExpected: true, reportAgeMs: 0,
@@ -25,15 +26,16 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(10000); vi.stubGlobal("I
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 it("counts each group with online devices and flags people without a group", () => {
-  expect(audienceSummary(status).map(({ id, total, online }) => [id, total, online])).toEqual([["ki", 2, 1], ["theater", 1, 1], [null, 1, 1]]);
+  expect(audienceSummary(status).map(({ id, total, online }) => [id, total, online])).toEqual([["ki", 3, 2], ["theater", 1, 1], [null, 1, 1]]);
 });
 
 it("shows every device's group, client and current cue, and filters by group", async () => {
   const clock = new ServerClock(); clock.addSample(10000, 10000, 10000);
   await act(async () => root.render(<AudienceOverview status={status} clock={clock} sceneTitle={(id) => id === "vorhang" ? "Vorhang · GO" : id} stale={false} />));
-  expect(host.textContent).toContain("App 2 · Web 2");
+  expect(host.textContent).toContain("App 3 · Web 2");
   const rows = () => [...host.querySelectorAll("tbody tr")].map((row) => [...row.children].map((cell) => cell.textContent));
   expect(rows()).toEqual([
+    ["BoApp · T03", "KI · Bühne", "Vorhang · GO", "0:02", "—"],
     ["T01App · offline", "KI · Bühne", "Vorhang · GO", "0:02", "—"],
     ["T02App", "KI · Bühne", "Vorhang · GO", "0:02", "playing 1:01"],
     ["AdaWeb", "Theater · Saal", "Vorhang · GO", "0:02", "—"],

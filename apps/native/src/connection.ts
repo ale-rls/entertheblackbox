@@ -4,7 +4,7 @@ import { encodeMessage, parseServerMessage, PROTOCOL_VERSION, SHOW_ENDED_CLOSE_C
 export type Socket = Pick<WebSocket, 'readyState' | 'send' | 'close' | 'onopen' | 'onmessage' | 'onclose' | 'onerror'>;
 type Options = {
   capabilities?: string[];
-  origin: string; installationId: string; roomId: string; name: string; clientVersion: string;
+  origin: string; installationId: string; roomId: string; name: string; deviceLabel?: string | undefined; clientVersion: string;
   lease: string | null; saveLease: (lease: string | null) => void;
   message: (message: ServerToClientMessage) => void; status: (status: string) => void;
   ended: () => void; factory?: (url: string) => Socket;
@@ -43,7 +43,7 @@ export class NativeConnection {
       if (this.socket !== socket || this.stopped) return;
       this.lastReceived = Date.now();
       this.options.status('Joining');
-      this.send({ t: 'join', v: PROTOCOL_VERSION, name: this.options.name,
+      this.send({ t: 'join', v: PROTOCOL_VERSION, name: this.options.name, ...(this.options.deviceLabel ? { deviceLabel: this.options.deviceLabel } : {}),
         installationId: this.options.installationId, roomId: this.options.roomId,
         capabilities: this.options.capabilities ?? [], client: 'native',
         clientVersion: this.options.clientVersion, ...(this.options.lease ? { participantLease: this.options.lease } : {}) });

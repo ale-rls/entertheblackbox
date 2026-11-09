@@ -49,6 +49,7 @@ export type Status = {
     groupId?: string | null;
     state?: "choosing" | "unassigned" | "active" | "finished";
     client?: "native" | "web" | null;
+    deviceLabel?: string | null;
     phaseId?: string;
     phaseStartedAt?: number;
   }>;
@@ -727,7 +728,7 @@ export function App() {
       {connectedToken && (activeTab === "devices" || audioOnly) && <NativeAudioCoverage key={connectedToken} token={connectedToken} />}
       {connectedToken && status?.admission && activeTab === 'tasks' && <AdmissionPrograms token={connectedToken} state={status.admission} participants={status.participants} groups={status.groups ?? []} />}
       {connectedToken && status?.tasks && activeTab === 'tasks' && <ParticipantTasks token={connectedToken} state={status.tasks} sessionId={status.sessionId ?? ''} phaseId={status.phaseId ?? ''} phaseEpoch={status.phaseEpoch ?? 0} participants={status.participants} refresh={tasks => setStatus(current => current ? { ...current, tasks } : current)} />}
-      {connectedToken && status && activeTab === "instrument" && !audioOnly && <SurfaceInstrument token={connectedToken} participants={status.participants} />}
+      {connectedToken && status && activeTab === "instrument" && !audioOnly && <SurfaceInstrument token={connectedToken} participants={status.participants.map((participant) => ({ ...participant, name: participant.deviceLabel ?? participant.name }))} />}
       {connectedToken && activeTab === "wall" && !audioOnly && <VideoWall key={connectedToken} token={connectedToken} pocketbaseUrl={POCKETBASE_URL} />}
       {status && (activeTab === "devices" || audioOnly) && <ShowClockPanel clock={clock} status={status} stale={statusStale} receivedAt={statusReceivedAt} />}
 
@@ -830,7 +831,7 @@ export function App() {
           {status.participants.length === 0 ? <p className="sc-tool-copy">Nobody has joined this session yet.</p> : <ul className="admin-participant-list">
             {status.participants.map((participant) => <li key={participant.clientId}>
               <span className="admin-participant-color" style={{ backgroundColor: participant.color }} />
-              <div><strong>{participant.name}</strong>{participant.state && <span>{({ choosing: "Choosing a group", unassigned: "Needs a group — choose on phone or assign here", active: "Active", finished: "Finished — other groups continue" })[participant.state]}</span>}<span>{(() => { const path = status.groupPaths.find((p) => p.memberIds.includes(participant.clientId)); return path ? `${status.groups?.find((g) => g.id === participant.groupId)?.label ?? path.label} · ${path.done ? "Waiting at reunion" : path.phaseTitle}` : status.groupPathsStarted ? "Waiting / needs assignment" : `${status.groups?.find((g) => g.id === participant.groupId)?.label ?? "Unassigned"} · ${sceneTitle(status.phaseId ?? "idle")}`; })()}</span><span>joined {new Date(participant.joinedAt).toLocaleTimeString([], { timeStyle: "short" })}</span>
+              <div><strong>{participant.name}</strong>{participant.deviceLabel && participant.deviceLabel !== participant.name && <span>Tablet {participant.deviceLabel}</span>}{participant.state && <span>{({ choosing: "Choosing a group", unassigned: "Needs a group — choose on phone or assign here", active: "Active", finished: "Finished — other groups continue" })[participant.state]}</span>}<span>{(() => { const path = status.groupPaths.find((p) => p.memberIds.includes(participant.clientId)); return path ? `${status.groups?.find((g) => g.id === participant.groupId)?.label ?? path.label} · ${path.done ? "Waiting at reunion" : path.phaseTitle}` : status.groupPathsStarted ? "Waiting / needs assignment" : `${status.groups?.find((g) => g.id === participant.groupId)?.label ?? "Unassigned"} · ${sceneTitle(status.phaseId ?? "idle")}`; })()}</span><span>joined {new Date(participant.joinedAt).toLocaleTimeString([], { timeStyle: "short" })}</span>
                 {(status.groups?.length ?? 0) > 0 && <label className="sc-tool-label"><span>{status.groupPathsStarted ? "Move to group · current playback position" : "Audience group"}</span><select disabled={busy} className="sc-tool-select" value={participant.groupId ?? ""} onChange={(event) => void assignGroup(participant.clientId, event.target.value)}>
                   <option value="" disabled>Unassigned</option>
                   {status.groups!.map((group) => <option key={group.id} value={group.id} disabled={status.groupDestinations ? !status.groupDestinations.includes(group.id) : status.groupPathsStarted && !status.groupPaths.some((path) => path.groupId === group.id && path.acceptingParticipants !== false)}>{group.label}{(status.groupDestinations ? !status.groupDestinations.includes(group.id) : status.groupPathsStarted && !status.groupPaths.some((path) => path.groupId === group.id && path.acceptingParticipants !== false)) ? " · unavailable" : ""}</option>)}

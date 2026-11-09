@@ -96,7 +96,8 @@ export default function App() {
     setDeviceLabel(label);
     void (label.trim() ? SecureStore.setItemAsync(DEVICE_LABEL_KEY, label.trim()) : SecureStore.deleteItemAsync(DEVICE_LABEL_KEY)).catch(() => setError('Could not save the device label'));
   }
-  const joinName = (deviceLabel.trim() || name).trim();
+  // The person and the tablet are separate: the participant's name, else the tablet's label.
+  const joinName = (name.trim() || deviceLabel.trim()).trim();
   const prompt = taskAlert(task, serverNow) ?? actionPrompt(snapshot, voting, groups, serverNow);
   useEffect(() => {
     alerts.current?.update(connected && status === 'Connected' && notificationsEnabled && prompt?.key !== answered ? prompt : null);
@@ -167,11 +168,12 @@ export default function App() {
     await ShowPlayer.configure();
     joinedOrigin.current = base;
     const c = new NativeConnection({
-      capabilities: ['participant-tasks-v1', 'occupant-handover-v1', ...(AudioScheduler.supportsAdmissionPrograms() ? ['admission-programs-v1'] : [])], origin: base, ...config, name: joinName,
+      capabilities: ['participant-tasks-v1', 'occupant-handover-v1', ...(AudioScheduler.supportsAdmissionPrograms() ? ['admission-programs-v1'] : [])], origin: base, ...config, name: joinName, deviceLabel: deviceLabel.trim() || undefined,
       clientVersion: process.env.EXPO_PUBLIC_SERVER_BUILD_VERSION ?? '0.0.0-dev', lease,
       saveLease: value => { void (value ? SecureStore.setItemAsync(leaseKey, value) : SecureStore.deleteItemAsync(leaseKey)).catch(() => setError('Could not save this device identity')); },
       status: value => { authorized.current = value === 'Connected'; setStatus(value); },
-      ended: () => { leave(); setStatus('Show ended. Join again for the next performance.'); },
+      // The next person on this tablet enters their own name.
+      ended: () => { leave(); setName(''); setStatus('Show ended. Join again for the next performance.'); },
       message: message => {
         if (message.t === 'identity') {
           if (occupantId.current !== null && occupantId.current !== message.clientId) {
