@@ -1,3 +1,4 @@
+import { admissionSources } from './admission.js';
 import { monitorMediaSources } from "./monitors.js";
 import { curtainLightIssues } from "./curtain.js";
 import type { MediaManifest, Phase, Scenario } from "./schema.js";
@@ -70,6 +71,8 @@ export function validateScenario(
   const errors: ScenarioIssue[] = [];
   const warnings: ScenarioIssue[] = [];
 
+  for (const path of scenario.admission?.paths ?? []) if (!scenario.groups?.some(g => g.id === path.groupId)) errors.push({ severity: 'error', code: 'unknown-group', message: `Admission references unknown group ${path.groupId}` });
+  for (const src of admissionSources(scenario.admission)) if (mediaManifest && !mediaManifest.files.some(f => f.src === src)) errors.push({ severity: 'error', code: 'missing-media', message: `Admission audio missing from manifest: ${src}` });
   const byId = new Map<string, Phase>();
   const groupIds = new Set((scenario.groups ?? []).map((group) => group.id));
   if (scenario.monitorGroupId !== undefined && !groupIds.has(scenario.monitorGroupId)) errors.push({
@@ -267,5 +270,11 @@ export function validateScenario(
     }
   }
 
+  if (scenario.handoverTaskId && !scenario.participantTasks?.some(t => t.id === scenario.handoverTaskId)) errors.push({ severity: 'error', code: 'broken-target', message: `Unknown handover task ${scenario.handoverTaskId}` });
+  for (const task of scenario.participantTasks ?? []) {
+    for (const option of task.options) if (option.roleId && !scenario.participantRoles?.some(r => r.id === option.roleId)) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} references unknown role ${option.roleId}` });
+    for (const id of task.groupIds) if (!scenario.groups?.some(g => g.id === id)) errors.push({ severity: 'error', code: 'unknown-group', message: `Task ${task.id} targets unknown group ${id}` });
+  }
+  for (const phase of scenario.phases) if (phase.kind === 'narration' && phase.taskId && !scenario.participantTasks?.some(t => t.id === phase.taskId)) errors.push({ severity: 'error', code: 'broken-target', phaseId: phase.id, message: `Unknown task ${phase.taskId}` });
   return { ok: errors.length === 0, errors, warnings };
 }

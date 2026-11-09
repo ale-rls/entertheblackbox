@@ -1,3 +1,5 @@
+import { admissionProgramSchema } from '@entertheblackbox/scenario';
+import { participantTaskSchema, taskRecipientSchema } from '@entertheblackbox/scenario';
 import { monitorIdSchema } from "@entertheblackbox/scenario";
 import { z } from "zod";
 import {
@@ -110,6 +112,7 @@ export const joinSchema = z.object({
   t: z.literal("join"),
   v,
   clientVersion: nonEmpty,
+  capabilities: z.array(z.string().max(80)).max(20).optional(),
   installationId: nonEmpty,
   roomId: nonEmpty,
   name: z.string().trim().min(1).max(40),
@@ -126,6 +129,7 @@ export const joinSchema = z.object({
 
 export const inputSchema = z.object({
   t: z.literal("input"),
+  occupantId: z.string().optional(),
   v,
   sessionId: nonEmpty,
   phaseEpoch: z.number().int().nonnegative(),
@@ -179,6 +183,7 @@ export const pingSchema = z.object({
  */
 export const reactionSchema = z.object({
   t: z.literal("reaction"),
+  occupantId: z.string().optional(),
   v,
   sessionId: nonEmpty,
   phaseEpoch: z.number().int().nonnegative(),
@@ -188,6 +193,7 @@ export const reactionSchema = z.object({
 /** Participant choice during an authored self-select group branch. */
 export const groupSelectionSchema = z.object({
   t: z.literal("group_selection"),
+  occupantId: z.string().optional(),
   v,
   sessionId: nonEmpty,
   phaseEpoch: z.number().int().nonnegative(),
@@ -197,6 +203,7 @@ export const groupSelectionSchema = z.object({
 /** A direct phone-button answer, represented by one of the active field's stable outcome IDs. */
 export const buttonVoteSchema = z.object({
   t: z.literal("button_vote"),
+  occupantId: z.string().optional(),
   v,
   sessionId: nonEmpty,
   phaseEpoch: z.number().int().nonnegative(),
@@ -217,7 +224,23 @@ export const wallStatusSchema = z.object({
   detail: z.string().max(300).optional(),
 });
 
+export const admissionChoiceSchema = z.object({ t: z.literal('admission_choice'), occupantId: z.string().optional(), v, generation: z.string(), groupId: z.string() });
+export const admissionStateSchema = z.object({ t: z.literal('admission_state'), v, generation: z.string(), scenarioVersion: z.string(),
+  revision: z.number().int(), anchor: z.number().nullable(), program: admissionProgramSchema.nullable(),
+  choices: z.array(z.object({ id: z.string(), label: z.string() })), active: z.boolean(),
+});
+export const participantTaskResponseSchema = z.object({
+  t: z.literal('participant_task_response'), occupantId: z.string().optional(), v, sessionId: z.string(), instanceId: z.string(), optionId: z.string(),
+});
+export const participantTaskStateSchema = z.object({
+  t: z.literal('participant_task'), v, sessionId: z.string(),
+  task: z.object({ id: z.string(), template: participantTaskSchema, deadlineAt: z.number(),
+    status: z.enum(['open', 'closed', 'cancelled']), recipient: taskRecipientSchema }).nullable(),
+});
+
 export const phoneToServerSchema = z.discriminatedUnion("t", [
+  admissionChoiceSchema,
+  participantTaskResponseSchema,
   wallStatusSchema,
   joinSchema,
   inputSchema,
@@ -294,6 +317,8 @@ export const displayToServerSchema = z.discriminatedUnion("t", [
 
 /** Everything the server can receive over a socket. */
 export const clientToServerSchema = z.discriminatedUnion("t", [
+  admissionChoiceSchema,
+  participantTaskResponseSchema,
   wallStatusSchema,
   joinSchema,
   inputSchema,
@@ -487,7 +512,7 @@ export const identitySchema = z.object({
 export const joinRejectedSchema = z.object({
   t: z.literal("join_rejected"),
   v,
-  reason: z.enum(["expired_grant", "room_full", "rate_limited", "show_in_progress"]),
+  reason: z.enum(["expired_grant", "room_full", "rate_limited", "show_in_progress", "update_required"]),
   retryAfterMs: z.number().int().positive().optional(),
 });
 
@@ -598,6 +623,8 @@ export const wallSchema = z.object({
 
 /** Everything a client can receive from the server. */
 export const serverToClientSchema = z.union([
+  admissionStateSchema,
+  participantTaskStateSchema,
   snapshotSchema,
   phaseMessageSchema,
   presenceSchema,

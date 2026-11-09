@@ -40,6 +40,7 @@ export type AdmissionControllerOptions = {
   buildVersion?: string;
   /** Allows a visitor to join from the stable public URL without a signed QR query token. */
   allowPublicJoin?: boolean;
+  requiredCapabilities?: () => string[];
   isNewParticipantAllowed?: () => boolean;
   onClientMessage?: (message: ClientToServerMessage, socket: WebSocket, request: IncomingMessage) => void;
   onParticipantJoin?: (participant: ParticipantRecord, socket: WebSocket) => void;
@@ -47,7 +48,7 @@ export type AdmissionControllerOptions = {
   onMessageError?: (error: unknown, socket: WebSocket, request: IncomingMessage) => void;
 };
 
-type SocketState = { joined: boolean };
+type SocketState = { joined: boolean; occupantId?: string; requireOccupantId?: boolean; capabilities?: string[] };
 
 function asBytes(raw: RawData): unknown {
   if (Array.isArray(raw)) return Buffer.concat(raw);
@@ -91,6 +92,7 @@ export class AdmissionController {
   private readonly socketStates = new WeakMap<WebSocket, SocketState>();
   private readonly issuedJoinGrants = new Map<string, number>();
   private readonly revokedJoinGrants = new Map<string, number>();
+  private readonly retiredLeases = new Map<string, number>();
   private lastVisitEndedAt: number | null = null;
 
   constructor(options: AdmissionControllerOptions) {
@@ -104,6 +106,24 @@ export class AdmissionController {
       options.disconnectGraceMs,
     );
     this.rateLimiter = options.rateLimiter ?? new InMemoryIpRateLimiter();
+  }
+
+  handover(participantId: string): ParticipantRecord {
+    const old = this.registry.values().find(p => p.clientId === participantId);
+    if (!old?.socket || old.socket.readyState !== 1) throw new Error('Handover requires a connected device');
+    const state = this.socketStates.get(old.socket);
+    if (!state?.capabilities?.includes('occupant-handover-v1')) throw new Error('Update the native app before handing over this device');
+    const now = this.now();
+    const issued = issueParticipantLease({ secret: this.options.secret, installationId: this.options.installationId, clientId: createClientId(), ttlMs: this.options.policy.participantLeaseTtlMs, now });
+    this.retiredLeases.set(old.participantLease, old.leaseExpiresAt);
+    this.options.onSocketClosed?.(old.socket);
+    this.registry.removeLease(old.participantLease);
+    const admitted = this.registry.admit({ participantLease: issued.token, clientId: issued.claims.clientId, name: old.name, leaseExpiresAt: issued.claims.expiresAt, socket: old.socket, now });
+    if (!admitted.ok) throw new Error('Could not reserve replacement occupant');
+    state.occupantId = admitted.participant.clientId;
+    state.requireOccupantId = true;
+    this.send(old.socket, { t: 'identity', v: PROTOCOL_VERSION, clientId: admitted.participant.clientId, color: admitted.participant.color, sessionId: typeof this.options.sessionId === 'function' ? this.options.sessionId() : this.options.sessionId ?? 'idle', participantLease: issued.token, leaseExpiresAt: issued.claims.expiresAt });
+    return admitted.participant;
   }
 
   get participantLeaseTtlMs(): number {
@@ -178,6 +198,11 @@ export class AdmissionController {
       this.close(socket, 1008, "invalid client message");
       return;
     }
+    const commandState = this.socketStates.get(socket);
+    const command = parsed.message;
+    if (command.t === 'input' || command.t === 'reaction' || command.t === 'group_selection' || command.t === 'button_vote' || command.t === 'participant_task_response' || command.t === 'admission_choice') {
+      if ((commandState?.requireOccupantId || command.occupantId !== undefined) && command.occupantId !== commandState?.occupantId) return;
+    }
     const clientMessageResult = this.options.onClientMessage?.(parsed.message, socket, request) as unknown;
     if (isPromiseLike(clientMessageResult)) await clientMessageResult;
     if (parsed.message.t === "ping") {
@@ -192,6 +217,16 @@ export class AdmissionController {
     }
     if (parsed.message.t !== "join") return;
 
+    for (const [token, expires] of this.retiredLeases) if (expires <= this.now()) this.retiredLeases.delete(token);
+    if (parsed.message.participantLease && this.retiredLeases.has(parsed.message.participantLease)) {
+      this.send(socket, { t: 'join_rejected', v: PROTOCOL_VERSION, reason: 'expired_grant' }); return;
+    }
+    const capabilities = parsed.message.capabilities ?? [];
+    if ((this.options.requiredCapabilities?.() ?? []).some(cap => !capabilities.includes(cap))) {
+      this.send(socket, { t: 'reload', v: PROTOCOL_VERSION, minVersion: 'Update the native app for participant tasks and admission programs', reason: 'assets' });
+      this.send(socket, { t: 'join_rejected', v: PROTOCOL_VERSION, reason: 'update_required' });
+      return;
+    }
     const state = this.socketStates.get(socket);
     if (!state || state.joined) {
       this.close(socket, 1008, "socket already joined");
@@ -281,6 +316,9 @@ export class AdmissionController {
     }
     if (admitted.replacedSocket) this.close(admitted.replacedSocket, 4001, "lease replaced");
     state.joined = true;
+    state.occupantId = admitted.participant.clientId;
+    state.capabilities = capabilities;
+    state.requireOccupantId = capabilities.includes("occupant-handover-v1");
     this.send(socket, {
       t: "identity",
       v: PROTOCOL_VERSION,

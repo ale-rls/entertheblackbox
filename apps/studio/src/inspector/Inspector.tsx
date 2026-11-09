@@ -1,3 +1,7 @@
+import { RoleEditor } from './RoleEditor.js';
+import { AdmissionEditor } from './AdmissionEditor.js';
+import { TaskEditor } from './TaskEditor.js';
+import type { ParticipantTask } from '@entertheblackbox/scenario';
 import { MonitorEditor, type MediaTarget } from "./MonitorEditor.js";
 import { useEffect, useState } from "react";
 import type { StudioProject } from "@entertheblackbox/studio-adapter";
@@ -13,6 +17,10 @@ import { CurtainSharedEditor, CurtainStageEditor } from "./CurtainLightEditor.js
 import { curtainStagePhaseIds, type CurtainLightConfig } from "../../../../packages/scenario/src/index.js";
 
 type Props = {
+  onHandoverTaskChange?: (id: string) => void;
+  onRolesChange?: (roles: NonNullable<StudioProject['scenario']['participantRoles']>) => void;
+  onAdmissionChange?: (value: StudioProject['scenario']['admission']) => void;
+  onTasksChange?: (tasks: ParticipantTask[]) => void;
   project: StudioProject;
   selectedId: string | undefined;
   localMedia: Array<{ src: string; durationMs?: number; previewUrl?: string }>;
@@ -32,7 +40,7 @@ const numberValue = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export function Inspector({ project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onCurtainLightChange }: Props) {
+export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChange, onTasksChange, project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onCurtainLightChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   const [copiedArena, setCopiedArena] = useState<Arena | null>(null);
@@ -57,6 +65,10 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
   if (!phase) return <aside className="inspector" aria-label="Properties inspector"><h2>Show properties</h2><p className="sc-tool-copy">Select a runtime phase to edit it.</p>
     <label className="sc-tool-label"><span>Ghost cursor fill target<small>targetAudienceSize</small></span><input className="sc-tool-field" type="number" min="0" value={project.scenario.targetAudienceSize ?? 0} onChange={(event) => onTargetAudienceSizeChange(numberValue(event.target.value, project.scenario.targetAudienceSize ?? 0))} /></label>
     <p className="sc-tool-copy field-hint">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghost cursors.</p>
+    {onAdmissionChange && <AdmissionEditor config={project.scenario.admission} groups={project.scenario.groups ?? []} sources={[...new Set([...project.manifest.files, ...localMedia].map(f => f.src).filter(src => /\.mp3$/i.test(src)))]} onChange={onAdmissionChange} />}
+    {onHandoverTaskChange && <label>Task for a replacement occupant<select value={project.scenario.handoverTaskId ?? ''} onChange={e => onHandoverTaskChange(e.target.value)}><option value="">No automatic task</option>{(project.scenario.participantTasks ?? []).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select><small>Admin handover preserves device setup and audience, creates a new participant identity, retires old roles and reopens this task.</small></label>}
+    {onRolesChange && <RoleEditor roles={project.scenario.participantRoles ?? []} onChange={onRolesChange} />}
+    {onTasksChange && <TaskEditor roles={project.scenario.participantRoles ?? []} tasks={project.scenario.participantTasks ?? []} groups={project.scenario.groups ?? []} onChange={onTasksChange} />}
     <fieldset><legend>Audience groups <small>groups</small></legend>
       {(project.scenario.groups ?? []).map((group, index) => <div key={group.id}>
         <label className="sc-tool-label"><span>Group ID</span><input className="sc-tool-field" value={group.id} onChange={(event) => { const id = event.target.value; const groups = (project.scenario.groups ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, id } : item); onGroupsChange(groups, (project.scenario.initialGroupIds ?? []).map((value) => value === group.id ? id : value)); }} /></label>
@@ -195,6 +207,11 @@ export function Inspector({ project, selectedId, localMedia, onRename, onChange,
         <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, subtitles: [...(phase.subtitles ?? []), { text: "New subtitle", startAtMs: 0, endAtMs: Math.min(phase.expectedDurationMs, 5_000) }] })}>Add subtitle</button>
       </fieldset>
     </>}
+    {phase.kind === 'narration' && <fieldset><legend>Participant task and operator gate</legend>
+      <label>Task template<select value={phase.taskId ?? ''} onChange={e => { const { taskId: _, ...rest } = phase; onChange(e.target.value ? { ...rest, taskId: e.target.value } : rest); }}><option value="">No task</option>{(project.scenario.participantTasks ?? []).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>
+      <label><input type="checkbox" checked={phase.waitForGo ?? false} onChange={e => onChange({ ...phase, waitForGo: e.target.checked })} />Wait for operator GO</label>
+      <p>GO is in Admin → Tasks. Responses close at the task deadline; a held scene continues only when the operator confirms readiness.</p>
+    </fieldset>}
     {phase.kind === "narration" && <fieldset><legend>Audio + text</legend>
       <p className="sc-tool-copy field-hint">Introduce the next question with phone audio and monitor text. Connect this scene to a Position question; set its duration to cover the introduction.</p>
       {text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}

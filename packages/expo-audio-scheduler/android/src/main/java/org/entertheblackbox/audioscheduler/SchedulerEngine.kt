@@ -28,8 +28,19 @@ data class LayerSpec(
   val volume: Float,
   val startAt: Double?,
   val endAt: Double?,
-  val resyncThresholdMs: Double
-)
+  val resyncThresholdMs: Double,
+  val repeatEveryMs: Double?
+) {
+  fun window(now: Double): Pair<Double, Double>? {
+    val start = startAt ?: return null
+    val end = endAt ?: return null
+    val period = repeatEveryMs ?: return start to end
+    if (period <= 0) return start to end
+    var cycle = max(0.0, kotlin.math.floor((now - start) / period))
+    if (now >= end + cycle * period) cycle += 1
+    return (start + cycle * period) to (end + cycle * period)
+  }
+}
 
 data class LayerTiming(
   val id: String,
@@ -68,6 +79,7 @@ class SharedClock {
 private class LayerRuntime(val id: String, var spec: LayerSpec, val player: ExoPlayer) {
   var state = "loading"
   var error: String? = null
+  var scheduledWindowStart: Double? = null
   var prepared = false
   var startRunnable: Runnable? = null
   var endRunnable: Runnable? = null
@@ -286,8 +298,8 @@ class SchedulerEngine private constructor(private val context: Context) {
   private fun applyEnd(layer: LayerRuntime) {
     layer.endRunnable?.let { handler.removeCallbacks(it) }
     layer.endRunnable = null
-    val end = layer.spec.endAt ?: return
     val now = clock.now() ?: return
+    val end = layer.spec.window(now)?.second ?: layer.spec.endAt ?: return
     val runnable = Runnable {
       if (layers[layer.id] !== layer) return@Runnable
       layer.player.pause()
@@ -308,8 +320,8 @@ class SchedulerEngine private constructor(private val context: Context) {
       layer.state = "paused"
       return
     }
-    val start = layer.spec.startAt
-    if (start == null) {
+    val originalStart = layer.spec.startAt
+    if (originalStart == null) {
       player.play()
       layer.state = "playing"
       return
@@ -323,7 +335,10 @@ class SchedulerEngine private constructor(private val context: Context) {
       layer.state = "waiting"
       return
     }
-    val end = layer.spec.endAt
+    val window = layer.spec.window(now)
+    val start = window?.first ?: originalStart
+    layer.scheduledWindowStart = start
+    val end = window?.second ?: layer.spec.endAt
     if (end != null && now >= end) {
       player.pause()
       layer.state = "ended"
@@ -420,8 +435,10 @@ class SchedulerEngine private constructor(private val context: Context) {
   private fun maintain() {
     val now = clock.now()
     for (layer in layers.values) {
-      val start = layer.spec.startAt ?: continue
+      val originalStart = layer.spec.startAt ?: continue
       if (paused || now == null) continue
+      if (layer.spec.repeatEveryMs != null && layer.scheduledWindowStart != layer.spec.window(now)?.first) schedule(layer)
+      val start = layer.scheduledWindowStart ?: originalStart
       // Armed before the clock was first set.
       if (layer.state == "waiting" && layer.prepared && layer.startRunnable == null) schedule(layer)
       if (layer.state != "playing" || !layer.player.isPlaying) continue
@@ -439,8 +456,8 @@ class SchedulerEngine private constructor(private val context: Context) {
     val now = clock.now()
     latest = Snapshot(paused, layers.values.sortedBy { it.id }.map { layer ->
       val position = if (layer.prepared) layer.player.currentPosition.toDouble() else null
-      val start = layer.spec.startAt
-      val end = layer.spec.endAt
+      val start = now?.let { layer.spec.window(it)?.first } ?: layer.spec.startAt
+      val end = now?.let { layer.spec.window(it)?.second } ?: layer.spec.endAt
       val target = if (start != null && now != null && now >= start && (end == null || now < end)) now - start else null
       val drift = if (position != null && target != null) position - target else null
       LayerTiming(layer.id, layer.state, position, target, drift, layer.error)

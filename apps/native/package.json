@@ -30,7 +30,8 @@
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "0.83.10",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@entertheblackbox/scenario": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

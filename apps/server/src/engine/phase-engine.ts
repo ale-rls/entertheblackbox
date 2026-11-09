@@ -1,3 +1,5 @@
+import { AdmissionPrograms } from '../admission/admission-program.js';
+import { TaskEngine } from '../prompts/task-engine.js';
 import {
   DISPLAY_REPLACED_CLOSE_CODE,
   encodeMessage,
@@ -113,6 +115,7 @@ export type PhaseEngineOptions = {
   policy?: Partial<PhaseEnginePolicy>;
   now?: () => number;
   sessionIdFactory?: () => string;
+  onTasksChanged?: (sessionId: string, tasks: ReturnType<TaskEngine["all"]>, revision: number) => void;
   onCheckpoint?: (checkpoint: PhaseCheckpoint) => void;
   onPhaseDeadline?: (event: PhaseDeadlineEvent) => void;
   onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
@@ -278,7 +281,7 @@ export class PhaseEngine {
   private readonly onLobbyScheduleChanged: ((startTimes: readonly number[]) => void) | undefined;
   private readonly groupSelection: PhaseEngineOptions["groupSelection"];
 
-  constructor(options: PhaseEngineOptions, private readonly path?: { timelineId: string; stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; routingEpochFor: (id: string) => number; assignParticipant: (id: string, groupId: string) => TransitionResult; onPhase: (phase: Phase, startedAt: number) => void; displayForGroup: (groupId: string) => WebSocket | undefined }) {
+  constructor(options: PhaseEngineOptions, private readonly path?: { tasks: TaskEngine; timelineId: string; stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; routingEpochFor: (id: string) => number; assignParticipant: (id: string, groupId: string) => TransitionResult; onPhase: (phase: Phase, startedAt: number) => void; displayForGroup: (groupId: string) => WebSocket | undefined }) {
     this.options = options;
     this.scenario = options.scenario;
     this.registry = options.registry;
@@ -293,6 +296,8 @@ export class PhaseEngine {
     this.autoStartOnFirstParticipant = options.autoStartOnFirstParticipant ?? true;
     this.onLobbyScheduleChanged = options.onLobbyScheduleChanged;
     this.groupSelection = options.groupSelection;
+    if (path) this.tasks = path.tasks;
+    else this.tasks.configureRoles(this.scenario.participantRoles ?? []);
     this.onCheckpoint = options.onCheckpoint;
     this.onPhaseDeadline = options.onPhaseDeadline;
     this.onSessionEnded = options.onSessionEnded;
@@ -342,6 +347,103 @@ export class PhaseEngine {
 
   get currentPhaseId(): string {
     return this.phaseId;
+  }
+
+  retireOccupant(participantId: string): void {
+    this.tasks.endOccupant(participantId);
+    this.bindings.retireParticipant(participantId);
+    this.votes.removeParticipant(participantId, this.now());
+    this.selectionCohort.delete(participantId);
+    for (const path of this.paths.values()) { path.members.delete(participantId); path.engine.retireOccupant(participantId); }
+    this.pushTasks(true);
+  }
+  welcomeReplacement(participant: ParticipantRecord, groupId: string | null): void {
+    if (!participant.socket) return;
+    this.participantJoined(participant.socket, participant);
+    if (groupId) this.adminAssignGroup(participant.clientId, groupId);
+    if (this.scenario.handoverTaskId && this.lifecycle === 'active') { try { this.openTask(this.scenario.handoverTaskId, [participant.clientId]); } catch(error) { this.taskError = error instanceof Error ? error.message : 'Handover task failed'; } this.pushTasks(true); }
+  }
+  private admissionPrograms = new AdmissionPrograms();
+  get admissionStatus() { return { generation: this.admissionPrograms.generation, active: this.lifecycle !== 'active', config: this.scenario.admission ?? null, participants: this.admissionPrograms.status(this.scenario.admission?.paths ?? [], this.now()) }; }
+  admissionCommand(id: string, generation: string, groupId?: string): void {
+    if (this.lifecycle === 'active' || generation !== this.admissionPrograms.generation) throw new Error('Admission is closed or changed');
+    if (!this.registry.values().some(p => p.clientId === id)) throw new Error('Unknown participant');
+    const group = groupId ?? this.groupSelection?.current(id);
+    if (!group || !this.scenario.admission?.paths.some(p => p.groupId === group)) throw new Error('Choose a configured admission group');
+    this.groupSelection?.select(id, group);
+    this.admissionPrograms.ensure(id, group, this.now(), true);
+    for (const [socket, participantId] of this.participantIds) if (id === participantId) { this.send(socket, this.getSnapshotMessage()); this.sendAdmission(socket); }
+  }
+  private sendAdmission(socket: WebSocket): void {
+    const id = this.participantIds.get(socket);
+    if (!id || this.path) return;
+    const config = this.scenario.admission;
+    if (!config) return;
+    const active = this.lifecycle !== 'active' && !!config;
+    const groupId = this.groupSelection?.current(id);
+    const program = active ? config?.paths.find(p => p.groupId === groupId) ?? null : null;
+    const record = program ? this.admissionPrograms.ensure(id, program.groupId, this.now()) : undefined;
+    this.send(socket, { t: 'admission_state', v: PROTOCOL_VERSION, generation: this.admissionPrograms.generation, scenarioVersion: this.scenario.version,
+      active, revision: record?.revision ?? 0, anchor: record?.anchor ?? null, program,
+      choices: active && config?.assignment === 'self-select' ? (this.scenario.groups ?? []).filter(g => config.paths.some(p => p.groupId === g.id)).map(g => ({ id: g.id, label: g.label })) : [] });
+  }
+
+  private tasks = new TaskEngine();
+  private taskError: string | null = null;
+  private lastTaskState = '';
+  get taskStatus() {
+    const phase = this.currentPhase();
+    return { roles: this.scenario.participantRoles ?? [], assignments: this.tasks.roleAssignments(), templates: this.scenario.participantTasks ?? [], instances: this.tasks.all().filter(t => t.phaseId === null || t.phaseId === this.phaseId && t.phaseEpoch === this.phaseEpoch), error: this.taskError,
+      waitingForGo: phase.kind === 'narration' && !!phase.waitForGo,
+      paths: this.taskPaths().map(engine => ({ phaseId: engine.currentPhaseId, phaseEpoch: engine.currentPhaseEpoch, ...engine.taskStatusLocal() })) };
+  }
+  private taskPaths(): PhaseEngine[] { return [...this.paths.values()].flatMap(({engine}) => [engine, ...engine.taskPaths()]); }
+  private taskStatusLocal() { return { instances: this.tasks.all().filter(t => t.phaseId === null || t.phaseId === this.phaseId && t.phaseEpoch === this.phaseEpoch), error: this.taskError, waitingForGo: this.currentPhase().kind === 'narration' && !!(this.currentPhase() as { waitForGo?: boolean }).waitForGo }; }
+  taskCommand(command: { action: 'open' | 'close' | 'cancel' | 'go' | 'assign-role' | 'withdraw-role'; roleId?: string | undefined; participantId?: string | undefined; templateId?: string | undefined; instanceId?: string | undefined; participantIds?: string[] | undefined; phaseId: string; phaseEpoch: number; sessionId: string }): void {
+    if (command.sessionId !== this.sessionId) throw new Error('Stale session');
+    if (command.phaseId !== this.phaseId || command.phaseEpoch !== this.phaseEpoch) {
+      const child = this.taskPaths().find(engine => engine.currentPhaseId === command.phaseId && engine.currentPhaseEpoch === command.phaseEpoch);
+      if (child) { child.taskCommand(command); return; }
+      throw new Error('Stale scene');
+    }
+    if (this.lifecycle !== 'active') throw new Error('Start the show before operating tasks');
+    if (command.action === 'assign-role' || command.action === 'withdraw-role') {
+      if (!this.registry.values().some(p => p.clientId === command.participantId)) throw new Error('Unknown participant');
+      if (command.action === 'assign-role') this.tasks.assignRole(command.participantId!, command.roleId ?? '', 'operator', this.now());
+      else this.tasks.withdraw(command.participantId!, command.roleId ?? '');
+    } else if (command.action === 'go') {
+      const phase = this.currentPhase();
+      if (phase.kind !== 'narration' || !phase.waitForGo) throw new Error('Scene is not waiting for GO');
+      this.advanceTo(phase.next, this.now(), 'operator-go');
+    } else if (command.action === 'open') this.openTask(command.templateId ?? '', command.participantIds);
+    else if (!this.tasks.close(command.instanceId ?? '', command.action === 'cancel')) throw new Error('Unknown task');
+    this.pushTasks(true);
+  }
+  private openTask(templateId: string, selected?: string[], graph = false): void {
+    const template = this.scenario.participantTasks?.find(t => t.id === templateId);
+    if (!template) throw new Error('Unknown published task template');
+    const roster = this.registry.values().map(p => p.clientId);
+    const ids = [...new Set(roster)].filter(id => (!selected || selected.includes(id)) && (!template.groupIds.length || template.groupIds.includes(this.groupSelection?.current(id) ?? '')));
+    this.tasks.open(template, this.sessionId, ids, this.now(), graph ? { id: this.phaseId, epoch: this.phaseEpoch } : null);
+    this.taskError = null;
+  }
+  private sendTask(socket: WebSocket): void {
+    if (!this.scenario.participantTasks?.length) return;
+    const id = this.participantIds.get(socket);
+    if (!id) return;
+    const state = this.tasks.current(id, this.sessionId);
+    this.send(socket, { t: 'participant_task', v: PROTOCOL_VERSION, sessionId: this.sessionId,
+      task: state ? { id: state.task.id, template: state.task.template, deadlineAt: state.task.deadlineAt, status: state.task.status, recipient: state.recipient } : null });
+  }
+  private pushTasks(force = false): void {
+    this.tasks.tick(this.now());
+    const key = JSON.stringify(this.tasks.all());
+    if (!force && key === this.lastTaskState) return;
+    this.lastTaskState = key;
+    const tasks = this.tasks.all();
+    const revision = this.tasks.nextExportRevision();
+    for (const sessionId of new Set(tasks.map(t => t.sessionId))) this.options.onTasksChanged?.(sessionId, tasks.filter(t => t.sessionId === sessionId), revision);
+    for (const socket of this.participantSockets) this.sendTask(socket);
   }
 
   get currentSessionId(): string {
@@ -449,6 +551,8 @@ export class PhaseEngine {
     if (!this.scenario.phases.some((phase) => phase.id === target)) return { ok: false, reason: "invalid-target" };
     this.lifecycle = "active";
     this.routingEpochs.clear();
+    this.tasks.cancelAll();
+    this.tasks.clearRoles();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
     this.joinMovementRecordingForConnectedParticipants();
@@ -604,6 +708,7 @@ export class PhaseEngine {
         this.send(socket, this.getSnapshotMessage());
         this.sendGroupSelectionOptions(socket);
         this.sendVotingOptions(socket);
+        this.sendAdmission(socket);
       }
       return { ok: true };
     }
@@ -706,6 +811,8 @@ export class PhaseEngine {
     // recordings stay correctly bounded to one live playthrough each.
     this.movement.finalizeSession(now);
     this.routingEpochs.clear();
+    this.tasks.cancelAll();
+    this.tasks.clearRoles();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
     this.joinMovementRecordingForConnectedParticipants();
@@ -782,6 +889,7 @@ export class PhaseEngine {
       return;
     }
 
+    this.pushTasks();
     const phase = this.currentPhase();
 
     if (phase.kind === "group-branch") {
@@ -893,6 +1001,8 @@ export class PhaseEngine {
     this.send(socket, this.getSnapshotMessage());
     this.sendGroupSelectionOptions(socket);
     this.sendVotingOptions(socket);
+    this.sendTask(socket);
+    this.sendAdmission(socket);
     this.queueQuestionStatus();
     if (this.lifecycle === "idle" && this.registry.connectedCount >= 1) {
       this.startLobby(this.now());
@@ -924,6 +1034,17 @@ export class PhaseEngine {
   }
 
   handleClientMessage(message: ClientToServerMessage, socket: WebSocket, _request?: IncomingMessage): void {
+    if (message.t === 'admission_choice') {
+      const id = this.participantIds.get(socket);
+      if (id && this.scenario.admission?.assignment === 'self-select') { try { this.admissionCommand(id, message.generation, message.groupId); } catch { this.sendAdmission(socket); } }
+      return;
+    }
+
+    if (message.t === 'participant_task_response') {
+      const id = this.participantIds.get(socket);
+      if (id && message.sessionId === this.sessionId && this.tasks.respond(message.instanceId, message.sessionId, id, message.optionId, this.now())) { this.pushTasks(true); return; }
+    }
+
     if (!this.path && (message.t === "ping" || message.t === "display_heartbeat")) {
       const participantId = this.participantIds.get(socket);
       const isPhone = message.t === "ping" && participantId !== undefined;
@@ -1332,9 +1453,13 @@ export class PhaseEngine {
   }
 
   private startSession(now: number): void {
+    this.admissionPrograms.reset();
+    if (this.scenario.admission) for (const socket of this.participantSockets) this.send(socket, { t: 'admission_state', v: PROTOCOL_VERSION, generation: this.admissionPrograms.generation, scenarioVersion: this.scenario.version, active: false, revision: 0, anchor: null, program: null, choices: [] });
     if (this.deadlineAt !== null) this.consumeScheduledStart(this.deadlineAt);
     this.lifecycle = "active";
     this.routingEpochs.clear();
+    this.tasks.cancelAll();
+    this.tasks.clearRoles();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
     this.joinMovementRecordingForConnectedParticipants();
@@ -1356,6 +1481,8 @@ export class PhaseEngine {
   }
 
   private enterPhase(target: string, now: number, reason: string): void {
+    this.tasks.cancelPhase(this.phaseId, this.phaseEpoch);
+    if (target === "idle" && !this.path) { this.tasks.cancelAll(); this.tasks.clearRoles(); }
     this.clearPaths();
     if (this.path && (target === this.path.stopAt || target === "idle")) {
       this.pathDone = true;
@@ -1401,8 +1528,10 @@ export class PhaseEngine {
       : phase.kind === "position-question"
         ? now + phase.durationMs
         : null;
+    if (phase.kind === "narration" && phase.waitForGo) this.deadlineAt = null;
     this.deadlineNotified = false;
     if (phase.kind === "idle") {
+      this.admissionPrograms.reset();
       this.lifecycle = "idle";
       this.sessionId = "idle";
       this.sessionStartedAt = null;
@@ -1414,6 +1543,11 @@ export class PhaseEngine {
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
     this.path?.onPhase(phase, this.phaseStartedAt);
+    if (phase.kind === 'narration' && phase.taskId) {
+      try { this.openTask(phase.taskId, undefined, true); }
+      catch (error) { this.taskError = error instanceof Error ? error.message : 'Task failed'; }
+    }
+    this.pushTasks(true);
     if ((phase.kind === "video" || phase.kind === "video-position-question") && phase.rating) {
       this.ratings.begin({
         sessionId: this.sessionId,
@@ -1855,11 +1989,12 @@ export class PhaseEngine {
         autoStartOnFirstParticipant: false,
         ...(this.groupSelection === undefined ? {} : { groupSelection: this.groupSelection }),
         ...(this.options.participantLeaseTtlMs === undefined ? {} : { participantLeaseTtlMs: this.options.participantLeaseTtlMs }),
+        ...(this.options.onTasksChanged === undefined ? {} : { onTasksChanged: this.options.onTasksChanged }),
         ...(this.options.onVoteSnapshotEnqueued === undefined ? {} : { onVoteSnapshotEnqueued: this.options.onVoteSnapshotEnqueued }),
         ...(this.options.onCueEvent === undefined ? {} : { onCueEvent: this.options.onCueEvent }),
         ...(this.options.onParticipantPhase === undefined ? {} : { onParticipantPhase: this.options.onParticipantPhase }),
       }, {
-        timelineId: branch.groupId, stopAt: phase.next, waitingPhase: phase, nextEpoch: () => this.nextEpoch(),
+        tasks: this.tasks, timelineId: branch.groupId, stopAt: phase.next, waitingPhase: phase, nextEpoch: () => this.nextEpoch(),
         routingEpochFor: (id) => this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0,
         assignParticipant: (id, groupId) => this.path?.assignParticipant(id, groupId) ?? this.adminAssignGroup(id, groupId),
         onPhase: (localPhase, startedAt) => this.options.onParticipantPhase?.([...members], localPhase, startedAt),
@@ -1891,7 +2026,7 @@ export class PhaseEngine {
   }
 
   private clearPaths(): void {
-    for (const { engine } of this.paths.values()) engine.stop();
+    for (const { engine } of this.paths.values()) { engine.tasks.cancelPhase(engine.phaseId, engine.phaseEpoch); engine.stop(); }
     this.paths.clear();
     this.pathsStarted = false;
     for (const socket of this.groupDisplays.values()) this.sendBlankDisplay(socket);

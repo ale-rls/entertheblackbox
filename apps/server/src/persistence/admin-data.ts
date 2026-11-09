@@ -1,3 +1,4 @@
+import type { TaskInstance } from '@entertheblackbox/scenario';
 import type { AdminDataSource, AdminExport } from "../admin/index.js";
 import type { PhaseCheckpoint } from "../engine/phase-engine.js";
 import type {
@@ -172,11 +173,18 @@ export class PocketBaseAdminDataSource implements AdminDataSource {
       this.client.pb.collection<MovementRecordingRecord>("movement_recordings")
         .getFullList({ filter, sort: "startedAt" }),
     ]);
-    if (checkpoints.length === 0 && snapshots.length === 0 && movementRecordings.length === 0) return null;
 
+    const taskEvents = await this.client.pb.collection<{ detail: { tasks?: TaskInstance[]; revision?: number } }>('admin_audit').getFullList({ filter: this.client.pb.filter('action = {:action} && detail.sessionId = {:sessionId}', { action: 'participant-task-state', sessionId }), sort: 'at,created' });
+    if (checkpoints.length === 0 && snapshots.length === 0 && movementRecordings.length === 0 && taskEvents.length === 0) return null;
+    const taskById = new Map<string, TaskInstance>();
+    for (const event of taskEvents.sort((a,b) => (a.detail?.revision ?? 0) - (b.detail?.revision ?? 0))) for (const task of event.detail?.tasks ?? []) taskById.set(task.id, task);
+    const participantTasks = [...taskById.values()];
+    const tasksCsv = [['instanceId','templateId','participantId','optionId','status','sequence','respondedAt','deadlineAt'], ...participantTasks.flatMap(t => t.recipients.map(r => [t.id,t.template.id,r.participantId,r.optionId,r.status,r.sequence,r.respondedAt,t.deadlineAt]))].map(row => row.map(csvEscape).join(',')).join('\n');
     const votes = snapshots.flatMap((snapshot) => snapshot.votes);
     return {
+      tasksCsv,
       json: {
+        participantTasks,
         sessionId,
         checkpoints: checkpoints.map((c) => ({
           kind: c.kind, reason: c.reason, phaseId: c.phaseId, phaseEpoch: c.phaseEpoch,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GroupBranchPhase, Scenario } from "@entertheblackbox/scenario";
+import { scenarioSchema, type GroupBranchPhase, type Scenario } from "@entertheblackbox/scenario";
 import { GroupManager } from "./group-manager.js";
 
 const scenario = {
@@ -76,4 +76,20 @@ describe("GroupManager", () => {
     groups.assign("one", "b");
     expect(groups.votingMethodFor("one")).toBe("phone-buttons");
   });
+});
+
+it('preserves admission audience choices when entering the show', () => {
+  const scenario = scenarioSchema.parse({ version:'admission-test', entryPhaseId:'intro', groups:[{id:'a',label:'A'},{id:'b',label:'B'}], initialGroupIds:['a','b'], phases:[{kind:'idle',id:'idle'},{kind:'narration',id:'intro',text:'Welcome',durationMs:1000,next:'idle'}] });
+  const manager=new GroupManager(scenario);manager.assign('one','b');manager.assign('two','b');manager.beginSession(['one','two'],true);expect(manager.groupFor('one')).toBe('b');expect(manager.groupFor('two')).toBe('b');
+});
+
+it('stops counting a handed-over occupant when balancing the next participant', () => {
+  const scenario = scenarioSchema.parse({ version:'retire-test', entryPhaseId:'intro', groups:[{id:'a',label:'A'},{id:'b',label:'B'}], initialGroupIds:['a','b'], phases:[{kind:'idle',id:'idle'},{kind:'narration',id:'intro',text:'Welcome',durationMs:1000,next:'idle'}] });
+  const manager = new GroupManager(scenario);
+  for (const id of ['old-1', 'old-2', 'stays']) manager.assign(id, 'a');
+  for (const id of ['b-1', 'b-2']) manager.assign(id, 'b');
+  // Without retirement group a counts 3 against b's 2 and the replacement would land in b.
+  manager.retireParticipant('old-1'); manager.retireParticipant('old-2');
+  expect(manager.groupFor('old-1')).toBeNull();
+  expect(manager.ensureParticipant('replacement')).toBe('a');
 });

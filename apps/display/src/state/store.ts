@@ -71,6 +71,8 @@ export function displayReducer(
 
   const m = action.message;
   switch (m.t) {
+    case "admission_state":
+    case "participant_task": return state;
     case "snapshot":
     case "phase": {
       // Stale-epoch guard: a delayed frame from a previous phase must not

@@ -45,6 +45,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Local draft autosave/recovery — `apps/studio/src/io.ts`, `model.ts`
 - Versioned export + authenticated publish (non-disruptive to a live session) — admin `/api/admin/publish`, `apps/server/src/readiness.ts`
 - Studio↔runtime adapter — `packages/studio-adapter`
+- Admission program, participant task and role editors (Show properties) — `apps/studio/src/inspector/AdmissionEditor.tsx`, `TaskEditor.tsx`, `RoleEditor.tsx`; contracts in `packages/scenario/src/admission.ts`, `tasks.ts`. See [participant workflows](docs/participant-workflows.md).
 
 ## Participant experience — `apps/native`
 
@@ -88,6 +89,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Participant roster + group (re)assignment
 - Downloadable high-resolution PNG export of the configured participant join QR code
 - Session export (JSON/CSV) — `apps/server/src/persistence/admin-data.ts`
+- Participant tasks: send published templates, per-path GO gates, role assignment/withdrawal, tablet handover, task results CSV — `apps/admin/src/ParticipantTasks.tsx`, `AdmissionPrograms.tsx`, `/api/admin/tasks`, `/api/admin/handover`
 - Error log / audit log
 - Admin API rate limiting — `apps/server/src/admission/rate-limit.ts`
 
@@ -95,6 +97,8 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - QR-based admission with signed join grants — `admission/qr.ts`, `tokens.ts`
 - Participant registry, capacity limits, returning-participant lease/reconnect — `admission/registry.ts`
+- Per-path admission programs (intro + loop clocks per device), capability-gated join with compatible update notice, occupant handover with `occupantId` validation of queued commands — `admission/admission-program.ts`, `admission/controller.ts`
+- Server-arbitrated participant tasks and capacity-limited roles; restart cancels old-session tasks — `apps/server/src/prompts/task-engine.ts`
 - Per-IP join rate limiting
 - Late-join toggle, printed/hidden phone join URL
 - Cursor pipeline (batching/throttling) → **apps/realtime-ws-coolify**
@@ -180,6 +184,7 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 - Automatic active-show verification/download before every join (failed checks block admission; joined sessions pin their release), verified persistent MP3 downloads, per-group server cues, late-join seeking, pause/resume, reconnect and timing reports — `src/content.ts`, `src/cues.ts`, `src/player.ts`, `src/connection.ts`
 - Native clock-scheduled playback: cues become layers anchored to server time, started/offset/stopped and drift-corrected in Swift/Kotlin so narration plays with the screen locked; narration runs a fixed 400 ms behind its phase so every phone starts it at 0:00 (video phase audio stays on the display clock); lock-screen controls, call/headphone interruptions, Android foreground media service — `packages/expo-audio-scheduler` (Expo module + config plugin), `src/player.ts`. Changes need a new EAS build.
 - Participant name/identity, group selection, cursor/buttons/reactions, narration/subtitles — `src/App.tsx`; existing protocol and authoritative server
+- Admission audio programs and participant task cards (outcome UI, alerts); identity rotation on handover clears occupant-scoped state. Locked-device and multi-cycle playback need physical acceptance — `src/admission-program.ts`, `src/ParticipantTaskCard.tsx`, `src/player.ts`, `packages/expo-audio-scheduler`. See [participant workflows](docs/participant-workflows.md).
 - Coolify persists published native releases and channel pointers in the frontend’s `native-shows` volume across redeployments (`deploy/coolify/docker-compose.yml`).
 - Unified show publication with SHA-256 immutable visual/audio assets, unique scenario versions and native releases pinned to the running show — `apps/server/src/publication.ts`, `packages/show-content`; legacy content-channel URLs alias the active release.
 - Store submission package: production profile sets `STORE_BUILD=1` (phone-only iOS, Android overlay permission removed), EAS Metadata App Store listing/age rating in `apps/native/store.config.json`, Play internal-track draft submit; all store answers and blockers in [store submission guide](docs/store-submission.md). Icon/splash, store join screen and reviewer demo session are not done yet.

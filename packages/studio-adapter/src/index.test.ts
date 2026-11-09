@@ -125,3 +125,19 @@ describe("Studio runtime adapter", () => {
     expect(() => compileStudioGraph(project)).toThrow(/entryPhaseId/);
   });
 });
+
+it('round-trips admission, roles, templates, replacement tasks and scene gates together', () => {
+  const raw = {
+    version: 'workflow-test', entryPhaseId: 'welcome', cyclesAllowed: false,
+    groups: [{id:'ki',label:'Stage'},{id:'audience',label:'Audience'}],
+    admission: {assignment:'self-select',paths:[{groupId:'ki',intro:[{src:'intro.mp3',durationMs:1000}],loop:[{durationMs:1000}]}]},
+    participantRoles:[{id:'helper',label:'Helper',capacity:2}],
+    participantTasks:[{id:'volunteer',title:'Volunteer',question:'Join?',notificationBody:'Please respond',durationMs:1000,groupIds:['ki'],fullMessage:'Full',options:[{id:'yes',label:'Yes',message:'Assigned',roleId:'helper',capacity:2}]}],
+    handoverTaskId:'volunteer',
+    phases:[{kind:'idle',id:'idle'},{kind:'narration',id:'welcome',text:'Welcome',durationMs:1000,next:'idle',taskId:'volunteer',waitForGo:true}],
+  };
+  const manifest={files:[{src:'intro.mp3',bytes:10,hash:'test'}]};
+  const project=parseRuntimeScenario(raw,manifest);
+  expect(validateStudioProject(project).filter(i=>i.severity==='error')).toEqual([]);
+  expect(compileStudioGraph(project)).toEqual({scenario:raw,manifest});
+});

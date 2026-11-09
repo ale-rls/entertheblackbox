@@ -17,11 +17,12 @@ export class GroupManager {
     this.curtainStages = curtainStagePhaseIds(scenario);
   }
 
-  beginSession(participantIds: readonly string[]): void {
+  beginSession(participantIds: readonly string[], preserveMembership = false): void {
+    const previous = preserveMembership ? new Map(this.membership) : new Map<string, string>();
     this.membership.clear();
     this.answers.clear();
     this.awaitingSelection.clear();
-    for (const participantId of participantIds) this.ensureParticipant(participantId);
+    for (const participantId of participantIds) { const group = previous.get(participantId); if (group && this.scenario.groups?.some(g => g.id === group)) this.membership.set(participantId, group); else this.ensureParticipant(participantId); }
   }
 
   endSession(): void {
@@ -40,6 +41,8 @@ export class GroupManager {
     this.membership.set(participantId, groupId);
     return groupId;
   }
+
+  retireParticipant(participantId: string): void { this.membership.delete(participantId); this.awaitingSelection.delete(participantId); }
 
   groupFor(participantId: string): string | null {
     return this.membership.get(participantId) ?? null;

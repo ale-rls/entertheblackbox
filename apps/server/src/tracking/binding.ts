@@ -86,6 +86,12 @@ export class BindingRegistry {
    * claimed it, or null when nobody has. Callers fall back to the anonymous
    * `gid:<n>` participant so unbound bodies still count toward a vote.
    */
+  retireParticipant(participantId: string): void {
+    const player = this.players.get(participantId);
+    if (player?.gid !== null && player?.gid !== undefined) this.byGid.delete(player.gid);
+    this.players.delete(participantId);
+  }
+
   participantForGid(gid: number): string | null {
     return this.byGid.get(gid) ?? null;
   }

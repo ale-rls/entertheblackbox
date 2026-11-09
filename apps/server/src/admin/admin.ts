@@ -48,7 +48,7 @@ const wallCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("loop"), loop: z.boolean() }),
 ]);
 
-export type AdminExport = { json: unknown; csv: string };
+export type AdminExport = { json: unknown; csv: string; tasksCsv?: string };
 export interface AdminDataSource {
   recentErrors(): Promise<readonly unknown[]>;
   exportSession(sessionId: string): Promise<AdminExport | null>;
@@ -63,6 +63,7 @@ export interface AdminDataSource {
 }
 
 export type RegisterAdminOptions = {
+  handover?: (participantId: string) => string;
   onPublishing?: (busy: boolean) => void;
   registerRehearsals?: (app: FastifyInstance) => void;
   waitingVideos?: () => Promise<readonly { src: string; url: string; available: boolean }[]>;
@@ -278,6 +279,36 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       return { configured: true, display };
     });
 
+    admin.post<{ Body: unknown }>('/handover', async (request, reply) => {
+      const parsed = z.object({ participantId: z.string(), sessionId: z.string(), phaseEpoch: z.number().int() }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Invalid handover' });
+      const engine = options.engine();
+      if (!engine || !options.handover) return reply.code(503).send({ error: 'Handover unavailable' });
+      if (parsed.data.sessionId !== engine.currentSessionId || parsed.data.phaseEpoch !== engine.currentPhaseEpoch) return reply.code(409).send({ error: 'Show state changed' });
+      try { const replacementId = options.handover(parsed.data.participantId); options.data?.audit({ action: 'participant-handover', at: new Date().toISOString(), detail: { ...parsed.data, replacementId } }); return { replacementId }; }
+      catch (error) { return reply.code(409).send({ error: error instanceof Error ? error.message : 'Handover failed' }); }
+    });
+    admin.post<{ Body: unknown }>('/admission-program', async (request, reply) => {
+      const parsed = z.object({ participantId: z.string(), generation: z.string(), groupId: z.string().optional() }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Invalid admission command' });
+      const engine = options.engine();
+      if (!engine) return reply.code(503).send({ error: 'Show unavailable' });
+      try { engine.admissionCommand(parsed.data.participantId, parsed.data.generation, parsed.data.groupId); }
+      catch (error) { return reply.code(409).send({ error: error instanceof Error ? error.message : 'Admission failed' }); }
+      options.data?.audit({ action: 'admission-program', at: new Date().toISOString(), detail: parsed.data });
+      return engine.admissionStatus;
+    });
+    admin.post<{ Body: unknown }>('/tasks', async (request, reply) => {
+      const parsed = z.object({ action: z.enum(['open', 'close', 'cancel', 'go', 'assign-role', 'withdraw-role']), sessionId: z.string(), phaseId: z.string(), phaseEpoch: z.number().int(), roleId: z.string().optional(), participantId: z.string().optional(), templateId: z.string().optional(), instanceId: z.string().optional(), participantIds: z.array(z.string()).min(1).optional() }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Invalid task command' });
+      const engine = options.engine();
+      if (!engine) return reply.code(503).send({ error: 'Show unavailable' });
+      try { engine.taskCommand(parsed.data); }
+      catch (error) { return reply.code(409).send({ error: error instanceof Error ? error.message : 'Task command failed' }); }
+      options.data?.audit({ action: 'participant-task', at: new Date().toISOString(), detail: parsed.data });
+      return engine.taskStatus;
+    });
+
     admin.get("/status", async (_request, reply) => {
       reply.header("cache-control", "no-store");
       const engine = options.engine();
@@ -286,6 +317,8 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       const flowScenes = new Map((engine?.adminFlow.scenes ?? []).map((scene) => [scene.id, scene]));
       return {
         audio: await options.audioStatus?.() ?? { configured: false, players: [] },
+        admission: engine?.admissionStatus ?? null,
+        tasks: engine?.taskStatus ?? null,
         healthy: true,
         ready: options.ready,
         phoneJoinUrl: options.phoneJoinUrl ?? null,
@@ -532,6 +565,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
     admin.get<{ Params: { sessionId: string }; Querystring: { format?: string } }>("/sessions/:sessionId/export", async (request, reply) => {
       const result = await options.data?.exportSession(request.params.sessionId);
       if (!result) return reply.code(404).send({ error: "session_not_found" });
+      if (request.query.format === 'tasks-csv') return reply.type('text/csv; charset=utf-8').send(result.tasksCsv ?? '');
       if (request.query.format === "csv") return reply.type("text/csv; charset=utf-8").send(result.csv);
       return result.json;
     });

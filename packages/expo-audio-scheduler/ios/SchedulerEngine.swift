@@ -9,6 +9,14 @@ struct LayerSpec {
   let startAt: Double?
   let endAt: Double?
   let resyncThresholdMs: Double
+  let repeatEveryMs: Double?
+  func window(_ now: Double) -> (start: Double, end: Double)? {
+    guard let startAt, let endAt else { return nil }
+    guard let period = repeatEveryMs, period > 0 else { return (startAt, endAt) }
+    var cycle = max(0, floor((now - startAt) / period))
+    if now >= endAt + cycle * period { cycle += 1 }
+    return (startAt + cycle * period, endAt + cycle * period)
+  }
 }
 
 struct LayerTiming {
@@ -50,6 +58,7 @@ private final class LayerRuntime {
   var spec: LayerSpec
   let item: AVPlayerItem
   let player: AVQueuePlayer
+  var scheduledWindowStart: Double?
   var looper: AVPlayerLooper?
   var statusObservation: NSKeyValueObservation?
   var state = "loading"
@@ -68,6 +77,7 @@ private final class LayerRuntime {
     if spec.loop {
       looper = AVPlayerLooper(player: player, templateItem: item)
     } else {
+      player.actionAtItemEnd = .pause
       player.insert(item, after: nil)
     }
   }
@@ -240,14 +250,17 @@ final class SchedulerEngine {
       layer.state = "paused"
       return
     }
-    guard let start = layer.spec.startAt else {
+    guard let originalStart = layer.spec.startAt else {
       layer.player.play()
       layer.state = "playing"
       return
     }
     guard layer.item.status == .readyToPlay else { layer.state = "loading"; return }
     guard let now = clock.now() else { layer.state = "waiting"; return }
-    if let end = layer.spec.endAt, now >= end - SchedulerEngine.startLeadMs {
+    let window = layer.spec.window(now)
+    let start = window?.start ?? originalStart
+    layer.scheduledWindowStart = start
+    if let end = window?.end ?? layer.spec.endAt, now >= end - SchedulerEngine.startLeadMs {
       layer.player.pause()
       layer.state = "ended"
       return
@@ -329,14 +342,16 @@ final class SchedulerEngine {
         fail(layer, item.error?.localizedDescription ?? "Could not load \(layer.spec.url.lastPathComponent)")
         continue
       }
-      guard layer.isAnchored, !paused, let start = layer.spec.startAt else { continue }
+      guard layer.isAnchored, !paused, let originalStart = layer.spec.startAt else { continue }
+      if let now, layer.spec.repeatEveryMs != nil, let window = layer.spec.window(now), layer.scheduledWindowStart != window.start { schedule(layer) }
+      let start = layer.scheduledWindowStart ?? originalStart
       if layer.state == "waiting" && layer.item.status == .readyToPlay {
         if layer.lastScheduledHostMs == -Double.infinity { schedule(layer) }
         else if let now, now >= start { layer.state = "playing" }
       }
       guard layer.state == "playing", let now else { continue }
       let position = layer.player.currentTime().seconds * 1000
-      let ended = (layer.spec.endAt.map { now >= $0 } ?? false) ||
+      let ended = (layer.spec.window(now).map { now >= $0.end } ?? false) ||
         (layer.item.duration.seconds.isFinite && position >= layer.item.duration.seconds * 1000 - 1)
       if ended && layer.player.rate == 0 {
         layer.state = "ended"
@@ -357,9 +372,8 @@ final class SchedulerEngine {
       let seconds = layer.player.currentTime().seconds
       let position = seconds.isFinite && layer.state != "loading" ? max(0, seconds * 1000) : nil
       var target: Double?
-      if let start = layer.spec.startAt, let now, now >= start, layer.spec.endAt.map({ now < $0 }) ?? true {
-        target = now - start
-      }
+      if let now, let start = layer.spec.window(now)?.start ?? layer.spec.startAt, now >= start,
+         (layer.spec.window(now)?.end ?? layer.spec.endAt).map({ now < $0 }) ?? true { target = now - start }
       let drift = position.flatMap { p in target.map { p - $0 } }
       return LayerTiming(id: layer.id, state: layer.state, positionMs: position, targetMs: target, driftMs: drift, error: layer.error)
     }

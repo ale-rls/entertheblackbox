@@ -1,3 +1,5 @@
+import AudioScheduler from '@entertheblackbox/expo-audio-scheduler';
+import { ParticipantTaskCard, taskAlert, type ParticipantTaskState } from './ParticipantTaskCard';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -40,6 +42,8 @@ export default function App() {
   const [error, setError] = useState('');
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [voting, setVoting] = useState<Voting | null>(null);
+  const [admission, setAdmission] = useState<Extract<ServerToClientMessage, { t: 'admission_state' }> | null>(null);
+  const [task, setTask] = useState<ParticipantTaskState | null>(null);
   const [groups, setGroups] = useState<Groups | null>(null);
   const [notificationStatus, setNotificationStatus] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -65,6 +69,7 @@ export default function App() {
   const inputTime = useRef(0);
   const operation = useRef(false);
   const authorized = useRef(false);
+  const occupantId = useRef<string | null>(null);
   const surfaceGeneration = useRef(0);
   const surfaceTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
   function later(work: () => void, delayMs: number) {
@@ -94,7 +99,7 @@ export default function App() {
     void (label.trim() ? SecureStore.setItemAsync(DEVICE_LABEL_KEY, label.trim()) : SecureStore.deleteItemAsync(DEVICE_LABEL_KEY)).catch(() => setError('Could not save the device label'));
   }
   const joinName = (deviceLabel.trim() || name).trim();
-  const prompt = actionPrompt(snapshot, voting, groups, serverNow);
+  const prompt = taskAlert(task, serverNow) ?? actionPrompt(snapshot, voting, groups, serverNow);
   useEffect(() => {
     alerts.current?.update(connected && status === 'Connected' && notificationsEnabled && prompt?.key !== answered ? prompt : null);
   }, [connected, status, notificationsEnabled, prompt?.key, answered]);
@@ -106,7 +111,7 @@ export default function App() {
     alerts.current?.update(null); setNotificationsEnabled(false); setAnswered(null);
     connection.current?.stop(); player.current?.dispose(); connection.current = null; player.current = null; resetSurface();
     setWall(null); setWallPlayback(null);
-    latest.current = null; authorized.current = false; setSnapshot(null); setVoting(null); setGroups(null); setIdentity(null);
+    latest.current = null; occupantId.current = null; authorized.current = false; setSnapshot(null); setAdmission(null); setTask(null); setVoting(null); setGroups(null); setIdentity(null);
     setConnected(false); setPaused(false); setPlaying(false); setError(''); setNotificationStatus(''); setStatus('Disconnected'); setAudioStatus('Audio stopped');
   }
   useEffect(() => {
@@ -163,23 +168,34 @@ export default function App() {
     } catch { setNotificationStatus('Notifications unavailable. Keep the app open for show actions.'); }
     await ShowPlayer.configure();
     joinedOrigin.current = base;
-    const c = new NativeConnection({ origin: base, ...config, name: joinName,
+    const c = new NativeConnection({
+      capabilities: ['participant-tasks-v1', 'occupant-handover-v1', ...(AudioScheduler.supportsAdmissionPrograms() ? ['admission-programs-v1'] : [])], origin: base, ...config, name: joinName,
       clientVersion: process.env.EXPO_PUBLIC_SERVER_BUILD_VERSION ?? '0.0.0-dev', lease,
       saveLease: value => { void (value ? SecureStore.setItemAsync(leaseKey, value) : SecureStore.deleteItemAsync(leaseKey)).catch(() => setError('Could not save this device identity')); },
       status: value => { authorized.current = value === 'Connected'; setStatus(value); },
       ended: () => { leave(); setStatus('Show ended. Join again for the next performance.'); },
       message: message => {
-        if (message.t === 'identity') { resetSurface(); setIdentity({ name: joinName, color: message.color }); player.current?.startMusic(); }
+        if (message.t === 'identity') {
+          if (occupantId.current !== null && occupantId.current !== message.clientId) {
+            latest.current = null; setSnapshot(null); setTask(null); setVoting(null); setGroups(null); setAdmission(null); setAnswered(null);
+            alerts.current?.update(null); player.current?.setAdmission(null); player.current?.setCue(null);
+          }
+          occupantId.current = message.clientId;
+          resetSurface(); setIdentity({ name: joinName, color: message.color }); player.current?.startMusic(); }
         if (message.t === 'surface') scheduleSurface(message, c);
         if (message.t === 'wall') setWall(current => acceptWall(current, message));
+        if (message.t === 'admission_state') { setAdmission(message); player.current?.setAdmission(message); }
+        if (message.t === 'participant_task' && message.sessionId === latest.current?.sessionId) setTask(message);
         if (message.t === 'reload') setError(`Server requests compatible app content (${message.minVersion}). Leave before checking app updates.`);
-        if (message.t === 'join_rejected') { player.current?.setEnabled(false); player.current?.setCue(null); setError(`Join rejected: ${message.reason}`); }
+        if (message.t === 'join_rejected') { player.current?.setEnabled(false); player.current?.setCue(null); setError(message.reason === 'update_required' ? 'Install the current native app build to join this show.' : `Join rejected: ${message.reason}`); }
         if (message.t === 'snapshot' || message.t === 'phase') {
           if (message.phase.scenarioVersion !== latestShow.scenarioVersion) {
             leave(); setError('The active show changed. Tap Update show & join to download it.'); return;
           }
           if (!acceptsSnapshot(latest.current, message)) return;
+          if (latest.current?.sessionId !== message.sessionId) setTask(null);
           latest.current = message; setServerNow(c.clock.now()); setSnapshot(message); setVoting(null); setGroups(null);
+          if (message.phase.kind !== 'idle') { setAdmission(null); player.current?.setAdmission(null); }
           player.current?.setCue(cueFromSnapshot(message));
         }
         if ((message.t === 'voting_options' || message.t === 'group_selection_options') &&
@@ -238,7 +254,7 @@ export default function App() {
       serverNow={() => connection.current?.clock.now() ?? Date.now()} onPlayback={setWallPlayback} />
     : null;
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
-  return <StageCompanion answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
+  return <StageCompanion admission={admission} onAdmissionGroup={groupId => { if (admission && authorized.current) connection.current?.send({ t: 'admission_choice', v: PROTOCOL_VERSION, generation: admission.generation, groupId }); }} participantTask={<ParticipantTaskCard state={task} now={serverNow} enabled={connected && status === 'Connected'} respond={optionId => { if (task?.task && authorized.current) connection.current?.send({ t: 'participant_task_response', v: PROTOCOL_VERSION, sessionId: task.sessionId, instanceId: task.task.id, optionId }); }} />} taskVisible={!!task?.task && task.task.status !== 'cancelled'} answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
     paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
     surface={visibleSurface(surface)} wall={wallLayer} wallVisible={!!wallLayer && wall?.startAt != null} onShowMode={setShowMode} origin={origin} name={name} deviceLabel={deviceLabel} onDeviceLabel={saveDeviceLabel} manifest={manifest} identity={identity} clockText={clockText}
     notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}

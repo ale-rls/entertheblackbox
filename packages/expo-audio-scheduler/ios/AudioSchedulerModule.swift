@@ -6,6 +6,7 @@ struct LayerConfig: Record {
   @Field var volume: Double = 1
   @Field var startAt: Double? = nil
   @Field var endAt: Double? = nil
+  @Field var repeatEveryMs: Double? = nil
   @Field var resyncThresholdMs: Double = 250
 }
 
@@ -28,6 +29,7 @@ public class AudioSchedulerModule: Module {
 
   public func definition() -> ModuleDefinition {
     Name("AudioScheduler")
+    Function("supportsAdmissionPrograms") { true }
 
     Events("onPausedChange", "onLayerError")
 
@@ -59,7 +61,7 @@ public class AudioSchedulerModule: Module {
         throw Exception(name: "InvalidUri", description: "Layer \(id) needs a file URI, got \(config.uri)")
       }
       self.engine.setLayer(id, LayerSpec(url: url, loop: config.loop, volume: Float(config.volume),
-        startAt: config.startAt, endAt: config.endAt, resyncThresholdMs: config.resyncThresholdMs))
+        startAt: config.startAt, endAt: config.endAt, resyncThresholdMs: config.resyncThresholdMs, repeatEveryMs: config.repeatEveryMs))
     }.runOnQueue(.main)
 
     AsyncFunction("clearLayer") { (id: String) in

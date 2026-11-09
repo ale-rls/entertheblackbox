@@ -96,3 +96,6 @@ export type { MediaKind } from "./media-kind.js";
 export { quadrantOf } from "@entertheblackbox/shared";
 
 export * from "./monitors.js";
+
+export * from './tasks.js';
+export * from './admission.js';

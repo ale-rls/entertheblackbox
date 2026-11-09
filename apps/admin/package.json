@@ -18,7 +18,8 @@
     "pocketbase": "^0.27.3",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "@entertheblackbox/scenario": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^18.3.17",

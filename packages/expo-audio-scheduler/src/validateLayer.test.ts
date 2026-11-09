@@ -12,3 +12,9 @@ it('rejects combinations the native schedulers do not implement', () => {
   expect(() => validateLayer({ uri: 'file:///a.mp3', endAt: 1000 })).toThrow('endAt needs startAt');
   expect(() => validateLayer({ uri: 'file:///a.mp3', volume: 1.5 })).toThrow('volume');
 });
+
+it('requires repeat periods to contain a finite positive anchored window', () => {
+  expect(() => validateLayer({uri:'file://loop.mp3',startAt:1000,endAt:2000,repeatEveryMs:1000})).not.toThrow();
+  for (const period of [0,999,Infinity,NaN]) expect(() => validateLayer({uri:'file://loop.mp3',startAt:1000,endAt:2000,repeatEveryMs:period})).toThrow();
+  expect(() => validateLayer({uri:'file://loop.mp3',repeatEveryMs:1000})).toThrow();
+});
