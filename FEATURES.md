@@ -206,7 +206,7 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 
 ### Native foreground show mode
 
-Participants can enter an awake, black waiting screen that reveals group choice, voting, rating windows and timed subtitles. Continuous cursor voting stays visible while open. Hold the exit control for two seconds to restore device controls. Android Back is consumed during show mode; optional system screen pinning restricts Home and app switching after Android confirmation. Managed devices can allowlist the app for lock task mode. Power-button locking and Android's unpin gesture remain available. Requires a new native build containing ShowScreen; older binaries keep their existing controls.
+The app enters an awake, black waiting screen as soon as it is admitted (and again after a reconnect); it reveals group choice, button voting, tasks and rating windows. Hold the exit control for two seconds to restore device controls; after 60 s without a touch the app returns to show mode — `shouldEnterShowMode` in `apps/native/src/stage-state.ts`. Android Back is consumed during show mode; optional system screen pinning restricts Home and app switching after Android confirmation. Managed devices can allowlist the app for lock task mode. Power-button locking and Android's unpin gesture remain available. Requires a new native build containing ShowScreen; older binaries keep their existing controls.
 
 Implemented in apps/native and the ShowScreen module bundled with packages/expo-audio-scheduler.
 
