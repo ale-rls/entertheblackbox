@@ -102,6 +102,7 @@ describe("PhoneConnection", () => {
 
     connection.start();
     sockets[0]!.onopen?.(new Event("open"));
+    expect(JSON.parse(sockets[0]!.sent[0]!)).toMatchObject({ t: "join", capabilities: ["participant-tasks-v1"] });
     sockets[0]!.serverClose(SHOW_ENDED_CLOSE_CODE);
 
     expect(loadLease("inst-a", storage)).toBeNull();

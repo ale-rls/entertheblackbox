@@ -30,6 +30,7 @@ export type PhoneState = {
   routingEpoch: number;
   /** Cursor input is accepted in the lobby, videos, and position questions. */
   inputOpen: boolean;
+  curtainLight: boolean;
   currentGroup: NonNullable<Extract<ServerToClientMessage, { t: "snapshot" }>["currentGroup"]> | null;
   phoneAudioActive: boolean;
   participantState: "choosing" | "unassigned" | "active" | "finished";
@@ -41,6 +42,7 @@ export type PhoneState = {
   /** One phone text field: an active subtitle takes precedence over the scene title. */
   phoneDisplayText: string | null;
   voting: Extract<ServerToClientMessage, { t: "voting_options" }> | null;
+  task: Extract<ServerToClientMessage, { t: "participant_task" }> | null;
   groupSelection: Extract<ServerToClientMessage, { t: "group_selection_options" }> | null;
   phaseTiming: {
     startedAt: number;
@@ -58,6 +60,7 @@ export const initialPhoneState: PhoneState = {
   synchronizedPhase: null,
   routingEpoch: 0,
   inputOpen: false,
+  curtainLight: false,
   currentGroup: null,
   phoneAudioActive: false,
   participantState: "active",
@@ -67,6 +70,7 @@ export const initialPhoneState: PhoneState = {
   ratingCandidateLabel: null,
   phoneDisplayText: null,
   voting: null,
+  task: null,
   groupSelection: null,
   phaseTiming: null,
 };
@@ -105,7 +109,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
   const m = action.message;
   switch (m.t) {
     case "identity":
-      return { ...state, ...(m.sessionId !== state.sessionId ? { phaseEpoch: -1, routingEpoch: 0 } : {}), join: { kind: "accepted", identity: m }, sessionId: m.sessionId };
+      return { ...state, ...(m.sessionId !== state.sessionId || (state.join.kind === "accepted" && state.join.identity.clientId !== m.clientId) ? { task: null } : {}), ...(m.sessionId !== state.sessionId ? { phaseEpoch: -1, routingEpoch: 0 } : {}), join: { kind: "accepted", identity: m }, sessionId: m.sessionId };
     case "join_rejected":
       return {
         ...state,
@@ -130,6 +134,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
       };
       return {
         ...state,
+        task: m.sessionId === state.sessionId ? state.task : null,
         sessionId: m.sessionId,
         phaseEpoch: m.phaseEpoch,
         routingEpoch,
@@ -138,6 +143,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         phoneAudioActive: m.phoneAudioActive ?? false,
         participantState: m.participantState ?? "active",
         synchronizedPhase: m.phase.kind === "video" && m.phase.phoneAudioMode === "synchronized" ? m.phase : null,
+        curtainLight: m.phase.voteTreatment?.type === "curtain-light",
         inputOpen: m.phase.kind === "idle" ||
           ((m.phase.kind === "video" || m.phase.kind === "position-question" || m.phase.kind === "video-position-question") && m.phase.showCursors !== false),
         phaseTiming,
@@ -146,6 +152,8 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         ...temporalFields(phaseTiming, receivedAtMs),
       };
     }
+    case "participant_task":
+      return m.sessionId === state.sessionId ? { ...state, task: m } : state;
     case "group_selection_options":
       if (m.sessionId !== state.sessionId || m.phaseEpoch !== state.phaseEpoch) return state;
       return { ...state, groupSelection: m };

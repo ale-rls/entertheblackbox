@@ -47,11 +47,12 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Studio↔runtime adapter — `packages/studio-adapter`
 - Admission program, participant task and role editors (Show properties) — `apps/studio/src/inspector/AdmissionEditor.tsx`, `TaskEditor.tsx`, `RoleEditor.tsx`; contracts in `packages/scenario/src/admission.ts`, `tasks.ts`. See [participant workflows](docs/participant-workflows.md).
 
-## Participant experience — `apps/native`
+## Participant experience — `apps/native` and `apps/phone`
 
 - Native iOS/Android app for both audiences and all loan tablets: identity, group choices, cursor/buttons/reactions, downloaded narration and background music. See the native section below.
-- `/`, `/phone/`, and `/phone-janus/` serve native-app joining instructions, never the retired browser controller — `apps/server/src/static.ts`.
-- Retained `apps/phone`, Icecast/Liquidsoap and Janus source/tests are historical. Environment settings cannot enable stream delivery through `loadConfig`; production Compose no longer starts these services.
+- Browser voting at `/phone/`: name/lease admission, group selection, cursor/button votes and reactions alongside native participants. `/` and legacy `/phone-janus/` redirect there. Keep the page foregrounded; personal audio requires the native app — `apps/phone`, `apps/server/src/static.ts`.
+- Browser participant tasks: capability-aware joining, timed choices and outcome messages, with responses disabled after expiry or disconnect — `apps/phone/src/ParticipantTaskCard.tsx`. Admission-program audio and tablet handover remain native-only.
+- Retained browser audio, Icecast/Liquidsoap and Janus source/tests are historical. Environment settings cannot enable stream delivery through `loadConfig`; production Compose no longer starts these services.
 
 ## Display / installation screen — `apps/display`
 

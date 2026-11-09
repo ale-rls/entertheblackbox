@@ -1,9 +1,6 @@
+import { ParticipantTaskCard } from "./ParticipantTaskCard.js";
 import { rehearsalId, runtimeApi, runtimeWebSocket } from "@entertheblackbox/protocol";
-import { PhoneClockMonitor } from "./PhoneClockMonitor.js";
-import type { SynchronizedAudio } from "./lib/synchronized-audio.js";
-import { SynchronizedPhoneAudio } from "./SynchronizedPhoneAudio";
 import { useEffect, useMemo, useReducer, useRef, useState, type FormEvent } from "react";
-import { PhoneAudio } from "./PhoneAudio.js";
 import { PROTOCOL_VERSION } from "@entertheblackbox/protocol";
 import { PhoneConnection, type EndedPhoneSession } from "./lib/connection.js";
 import { RealtimeCursorPublisher } from "./lib/realtimeWsClient.js";
@@ -35,8 +32,7 @@ const baseConfig = {
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };
 
-const janusRoute = /^\/phone-janus(?:\/|$)/.test(location.pathname);
-type JoinConfig = { installationId: string; roomId: string; audioEnabled?: boolean; janusAudioEnabled?: boolean };
+type JoinConfig = { installationId: string; roomId: string };
 type ConsentStatus = "prompt" | "submitting" | "granted" | "deleted";
 type ConsentState = {
   session: EndedPhoneSession;
@@ -61,6 +57,7 @@ function storeParticipantName(name: string): void {
 }
 
 const REJECTION_TEXT: Record<string, string> = {
+  update_required: "This show requires the native app. Please ask the entrance team for help joining.",
   expired_grant: "This code has expired — scan the QR on the screen again.",
   room_full: "The room is full right now. Watch the screen and try again soon.",
   rate_limited: "Connection retries paused briefly. Reconnecting automatically…",
@@ -69,12 +66,9 @@ const REJECTION_TEXT: Record<string, string> = {
 
 export function App() {
   const [state, dispatch] = useReducer(phoneReducer, initialPhoneState);
-  const synchronizedTiming = useRef<(() => ReturnType<SynchronizedAudio["getTiming"]>) | null>(null);
   const [name, setName] = useState(loadParticipantName);
   const [submittedName, setSubmittedName] = useState<string | null>(null);
   const [joinConfig, setJoinConfig] = useState<JoinConfig | null>(null);
-  const [audioIdentity, setAudioIdentity] = useState<{ clientId: string; participantLease: string } | null>(null);
-  const [audioBridgeUrl, setAudioBridgeUrl] = useState<string | null>(null);
   const [configError, setConfigError] = useState("");
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
@@ -113,18 +107,15 @@ export function App() {
         ...joinConfig,
         name: submittedName,
         onMessage: (message) => {
-          // A fresh identity means a new registration is about to happen --
-          // drop any stale override so it can't briefly out-race the new one.
-          if (message.t === "identity") { setAudioIdentity(message); setAudioBridgeUrl(null); }
-          if (message.t === "audio_bridge_changed" && !janusRoute) setAudioBridgeUrl(message.streamUrl);
+          // This server response requests native-only workflows, not a new web bundle.
+          // The following update_required rejection explains how to join.
+          if (message.t === "reload" && message.minVersion.startsWith("Update the native app")) return;
           dispatch({ type: "server-message", message, receivedAtMs: Date.now() });
         },
         onSocketOpen: () => dispatch({ type: "socket-open" }),
         onSocketLost: () => dispatch({ type: "socket-lost" }),
         onSessionEnded: (session) => {
           if (rehearsalId()) return;
-          setAudioIdentity(null);
-          setAudioBridgeUrl(null);
           if (session !== null && session.sessionId !== "idle" && session.sessionId !== "lobby") {
             setConsent({ session, deadlineAt: Date.now() + CONSENT_TIMEOUT_MS, status: "prompt", error: null });
           } else {
@@ -249,21 +240,23 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [connection, state.phaseEpoch, state.phaseTiming?.startedAt]);
 
-  const sendPosition = (delivery: "move" | "final" = "move") => {
+  const sendPosition = (delivery: "move" | "final" | "start" = "move") => {
     if (!state.inputOpen || state.sessionId === null) return;
     const now = Date.now();
     const shouldSend =
-      delivery === "final"
+      delivery === "start" ? true : delivery === "final"
         ? throttle.shouldFlushFinal(now)
         : throttle.shouldSend(now);
     if (!shouldSend) return;
-    realtimeWs.current?.send(position.current.x, position.current.y);
+    // Curtain-light coordinates are finger samples; only the server knows the cursor position.
+    if (!state.curtainLight) realtimeWs.current?.send(position.current.x, position.current.y);
     connection?.send({
       t: "input",
       v: PROTOCOL_VERSION,
       sessionId: state.sessionId,
       phaseEpoch: state.phaseEpoch,
       seq: seq.current++,
+      ...(delivery === "start" ? { touch: "start" as const } : {}),
       x: position.current.x,
       y: position.current.y,
     });
@@ -282,11 +275,23 @@ export function App() {
     });
   };
 
+  const fingerPosition = (e: React.PointerEvent<HTMLDivElement>): TrackpadState => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return {
+      x: Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width))),
+      y: Math.max(0, Math.min(1, (e.clientY - rect.top) / Math.max(1, rect.height))),
+    };
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     cursorSurfaceSize.current = trackpadSurfaceSize(window.innerWidth, window.innerHeight);
     scheduleCursorPaint();
     lastPointer.current = { x: e.clientX, y: e.clientY };
+    if (state.curtainLight) {
+      position.current = fingerPosition(e);
+      sendPosition("start");
+    }
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -294,7 +299,7 @@ export function App() {
     if (last === null) return;
     const surface = trackpadSurfaceSize(window.innerWidth, window.innerHeight);
     cursorSurfaceSize.current = surface;
-    position.current = applyDelta(
+    position.current = state.curtainLight ? fingerPosition(e) : applyDelta(
       position.current,
       e.clientX - last.x,
       e.clientY - last.y,
@@ -346,7 +351,7 @@ export function App() {
   return (
     <main
       className="phone-root"
-      style={{ touchAction: "none", userSelect: "none" }}
+      style={{ touchAction: state.task?.task && state.task.task.status !== "cancelled" ? "pan-y" : "none", userSelect: "none" }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {submittedName === null ? (
@@ -354,6 +359,7 @@ export function App() {
           <form className="join-card" onSubmit={join}>
             <p className="join-eyebrow">Enter the Blackbox</p>
             <h1>Join the session</h1>
+            <p>Vote with this phone. Keep this page open and watch the shared screen. Personal show audio requires the native app.</p>
             {state.join.kind === "ended" && <p className="join-message">That show has ended. You can join the next session.</p>}
             <label htmlFor="participant-name">Your name</label>
             <input
@@ -413,7 +419,7 @@ export function App() {
           {state.participantState === "finished" && <p className="phone-phase-text" role="status">Deine Gruppe ist fertig. Die anderen Gruppen machen noch weiter.</p>}
           {state.participantState === "unassigned" && !state.groupSelection && <p className="phone-phase-text" role="status">Du bist noch keiner Gruppe zugeteilt. Bitte melde dich beim Team.</p>}
           {state.participantState !== "finished" && state.participantState !== "unassigned" && state.phoneDisplayText !== null && <p className="phone-phase-text" aria-live="polite">{state.phoneDisplayText}</p>}
-          {identity && state.inputOpen && <div className="live-cursor-field" aria-hidden="true"><span
+          {identity && state.inputOpen && !state.curtainLight && <div className="live-cursor-field" aria-hidden="true"><span
               ref={cursorMarker}
               className="live-cursor-dot"
               style={{
@@ -475,14 +481,11 @@ export function App() {
         </div>
       )}
 
-      {audioIdentity && connection && <SynchronizedPhoneAudio timingRef={synchronizedTiming} key={audioIdentity.clientId} clock={connection.clock} cue={state.synchronizedPhase?.phoneAudioSrc ? {
-        key: `${state.sessionId}:${state.routingEpoch}:${state.phaseEpoch}`,
-        src: state.synchronizedPhase.phoneAudioSrc,
-        startedAt: state.synchronizedPhase.startedAt,
-        endsAt: state.synchronizedPhase.startedAt + state.synchronizedPhase.expectedDurationMs,
-      } : null} />}
-      {(janusRoute ? joinConfig?.janusAudioEnabled : joinConfig?.audioEnabled) && audioIdentity && <PhoneAudio autoStart={!janusRoute} transport={janusRoute ? "janus" : "icecast"} key={audioIdentity.clientId} participantLease={audioIdentity.participantLease} streamUrlOverride={audioBridgeUrl} sceneKey={JSON.stringify([state.phaseEpoch, state.phaseTiming?.startedAt, state.currentGroup?.id])} suspended={state.synchronizedPhase !== null} active={state.phoneAudioActive} />}
-      {identity && connection && <PhoneClockMonitor connection={connection} state={state} timingRef={synchronizedTiming} />}
+      <ParticipantTaskCard state={state.task} enabled={state.join.kind === "accepted"} clock={connection?.clock}
+        respond={(instanceId, optionId) => {
+          if (state.join.kind !== "accepted" || !state.sessionId) return;
+          connection?.send({ t: "participant_task_response", v: PROTOCOL_VERSION, sessionId: state.sessionId, instanceId, optionId });
+        }} />
       <footer className="hud">
         {state.currentGroup && <span className="phone-current-group" aria-label="Deine Gruppe" style={{ color: state.currentGroup.color }}>{state.currentGroup.label}</span>}
         {identity && (

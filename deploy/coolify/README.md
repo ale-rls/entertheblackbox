@@ -2,8 +2,8 @@
 
 The production stack runs `frontend` (server, display/monitors, Studio and Admin),
 `realtime`, and `pocketbase`. Participant devices use the native iOS/Android app
-with downloaded audio. Browser participant clients and Icecast/Liquidsoap/Janus
-services are retired.
+with downloaded audio. Audience phones can also vote through `/phone/` without personal audio.
+Icecast/Liquidsoap/Janus services remain retired.
 
 ## Deploy
 
@@ -12,7 +12,7 @@ services are retired.
 2. Configure variables from `.env.example`: public HTTPS PocketBase/frontend,
    WSS relay, installation identity, distinct display/join secrets and existing
    PocketBase credentials. `PHONE_JOIN_BASE_URL` still ends in `/phone/`; that
-   address now displays native-app joining instructions for printed QR codes.
+   address opens the browser voting controller for printed QR codes.
 3. Assign public domains to frontend (port 80), realtime (9001) and PocketBase
    (8090). Keep existing PocketBase and native-shows volumes.
 4. Deploy, then check `/healthz`, `/readyz`, `/admin/` and `/studio/` on frontend.
@@ -29,7 +29,7 @@ Coolify when deploying the new stack. Remove their domains and unused secrets.
 Do not delete existing volumes as part of this change: historical audio volumes
 remain declared for preservation, but no running service mounts them. The server
 ignores legacy streaming environment variables, including stale saved values.
-The default production build no longer builds or serves `apps/phone`.
+The production build includes `apps/phone` for voting only. Rehearse joining, group selection, cursor voting, reconnecting and vote closure with browser and native devices together. Browser participants must keep the page open and their phone awake.
 
 The native-shows volume is mounted at `/app/content/media/native-shows`. Back it
 up with PocketBase. It contains immutable downloaded-audio releases and atomic

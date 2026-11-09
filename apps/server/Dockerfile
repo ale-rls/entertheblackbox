@@ -76,6 +76,7 @@ RUN test -n "$VITE_POCKETBASE_URL" \
   && case "$REALTIME_WS_URL" in wss://*) true ;; *) false ;; esac
 
 RUN pnpm --filter @entertheblackbox/display build \
+  && pnpm --filter @entertheblackbox/phone build \
   && pnpm --filter @entertheblackbox/admin build \
   && pnpm --filter @entertheblackbox/studio build
 
@@ -88,7 +89,7 @@ RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 # tsx runs the server's TypeScript directly at runtime (no compile step),
 # so the runtime image keeps workspace source, installed server/browser node_modules
 # (pnpm's symlinked structure ties packages/* into apps/server's
-# resolution), and the three built client bundles.
+# resolution), and the four built client bundles.
 COPY --from=build /app /app
 
 # Must match the build stage's BUILD_VERSION (see comment there) --

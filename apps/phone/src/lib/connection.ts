@@ -92,6 +92,7 @@ export class PhoneConnection {
         installationId: this.options.installationId,
         roomId: this.options.roomId,
         name: this.options.name,
+        capabilities: ["participant-tasks-v1"],
         ...(lease === null ? {} : { participantLease: lease }),
       });
       this.send({ t: "ping", v: PROTOCOL_VERSION, clientTime: this.now() });
