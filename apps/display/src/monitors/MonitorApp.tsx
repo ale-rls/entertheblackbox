@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
 import { activeMonitorCue, type MonitorId } from "@entertheblackbox/scenario";
 import { rehearsalId, runtimeWebSocket } from "@entertheblackbox/protocol";
 import type { ServerClock } from "@entertheblackbox/shared";
@@ -9,6 +9,7 @@ import { useMedia } from "../media/useMedia.js";
 import { FullscreenControl } from "../components/FullscreenControl.js";
 import { performReload } from "../lib/kiosk.js";
 import { monitorVideoTime } from "./playback.js";
+import { monitorAnswerColor } from "./answerColor.js";
 import "./monitors.css";
 
 declare const __BUILD_VERSION__: string | undefined;
@@ -46,7 +47,9 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   const url = media.visualSrc === src ? media.videoUrl : null;
   const ready = media.status.state === "ready";
   const key = `${state.sessionId}:${state.phaseEpoch}:${cue?.startMs}`;
-  return <main className="monitor-root" aria-label={`Monitor ${monitorId}`}>
+  const answerColor = monitorAnswerColor(phase, monitorId);
+  const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
+  return <main className="monitor-root" aria-label={`Monitor ${monitorId}`} style={accent}>
     {ready && cue?.kind === "text" && <div className="monitor-text">{cue.text}</div>}
     {ready && cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
     {ready && cue?.kind === "image" && url && <figure className="monitor-image"><img src={url} alt={cue.text ?? ""} style={{ objectFit: cue.fit }} onError={() => setError("Image could not be decoded")} />{cue.text && <figcaption>{cue.text}</figcaption>}</figure>}

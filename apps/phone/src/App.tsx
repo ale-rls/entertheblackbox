@@ -404,6 +404,7 @@ export function App() {
                     key={option.id}
                     type="button"
                     disabled={state.voting?.closed}
+                    style={option.color === undefined ? undefined : { "--group-color": option.color } as React.CSSProperties}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
                       event.stopPropagation();
