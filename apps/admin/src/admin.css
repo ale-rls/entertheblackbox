@@ -265,3 +265,17 @@
 .video-wall-upload-list li[data-state="done"] { border-left-color: var(--sc-tool-color-success); }
 .video-wall-upload-list li[data-state="error"] { border-left-color: var(--sc-tool-color-danger); }
 .video-wall-upload-list li[data-state="uploading"] { border-left-color: var(--sc-tool-color-info); }
+
+/* Audience: group head counts and the cue each device is on. */
+.admin-audience { grid-column: 1 / -1; }
+.admin-audience-summary { display: flex; flex-wrap: wrap; gap: var(--sc-tool-space-2); margin-block: var(--sc-tool-space-3); }
+.admin-audience-chip { display: inline-flex; align-items: center; gap: var(--sc-tool-space-2); min-height: 40px; padding: 0 var(--sc-tool-space-3); border: 1px solid var(--sc-tool-color-rule-strong); background: var(--sc-tool-color-surface-1); color: var(--sc-tool-color-text); font: inherit; cursor: pointer; }
+.admin-audience-chip[aria-pressed="true"] { border-color: var(--sc-tool-color-action); background: var(--sc-tool-color-surface-2); }
+.admin-audience-chip[data-warning] { border-color: var(--sc-tool-color-warning); }
+.admin-audience-chip small { color: var(--sc-tool-color-text-muted); }
+.admin-audience-swatch { width: 10px; height: 10px; border-radius: 50%; }
+.admin-audience-table { width: 100%; border-collapse: collapse; }
+.admin-audience-table th, .admin-audience-table td { padding: var(--sc-tool-space-2); border-bottom: 1px solid var(--sc-tool-color-rule); text-align: start; vertical-align: top; }
+.admin-audience-table th[scope="row"] small { display: block; color: var(--sc-tool-color-text-muted); font-weight: normal; }
+.admin-audience-table tr[data-offline] { opacity: .6; }
+.admin-audience-missing { color: var(--sc-tool-color-warning); }

@@ -160,6 +160,10 @@ export type ParticipantPresence = {
   connected: boolean;
   joinedAt: number;
   lastSeenAt: number;
+  client: "native" | "web" | null;
+  /** The scene this participant's timeline is on right now (their group path, else the shared one). */
+  phaseId: string;
+  phaseStartedAt: number;
 };
 
 export type AdminFlowRoute = {
@@ -517,7 +521,14 @@ export class PhaseEngine {
       connected: participant.socket !== undefined && isOpen(participant.socket),
       joinedAt: participant.joinedAt,
       lastSeenAt: participant.lastSeenAt,
+      client: participant.client ?? null,
+      ...this.participantCue(participant.clientId),
     }));
+  }
+
+  private participantCue(id: string): { phaseId: string; phaseStartedAt: number } {
+    const child = this.pathForParticipant(id);
+    return child ? child.participantCue(id) : { phaseId: this.phaseId, phaseStartedAt: this.phaseStartedAt };
   }
 
   get lobbyStartTimes(): readonly number[] {
