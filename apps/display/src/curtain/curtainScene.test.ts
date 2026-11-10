@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CurtainTreatment } from "@entertheblackbox/protocol";
 import { curtainVoteField, resolveCurtainSettings, type TwoQuadrantField } from "@entertheblackbox/shared";
 import { CurtainScene } from "./curtainScene.js";
-import { coverCrop, encodeLightMap } from "./curtainRenderer.js";
+import { coverCrop, encodeLightMap, FABRIC_FS } from "./curtainRenderer.js";
 
 const field = curtainVoteField<TwoQuadrantField>({ type: "two-quadrant", axis: "x", variant: "split", labels: { minLabel: "No", maxLabel: "Yes" } });
 const treatment: CurtainTreatment = {
@@ -54,5 +54,14 @@ describe("renderer helpers", () => {
   it("encodes light maps with headroom above 1", () => {
     const out = encodeLightMap(new Float32Array([0, 1, 4]), new Uint8Array(4));
     expect([...out]).toEqual([0, 128, 255, 255]);
+  });
+});
+
+describe("curtain fabric shader", () => {
+  it("samples the rendered cursor-flood buffer with v flipped, so floods sit under their cores", () => {
+    // Sprites write y-down positions as clip y = 1 - 2y; a framebuffer stores clip +1 at v = 1,
+    // while the fabric pass's uv has v = 0 at the top of the screen.
+    expect(FABRIC_FS).toContain("texture(cursorLight, vec2(uv.x, 1. - uv.y))");
+    expect(FABRIC_FS).not.toContain("texture(cursorLight, uv)");
   });
 });

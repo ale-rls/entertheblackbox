@@ -25,7 +25,7 @@ const FULLSCREEN_VS = `#version 300 es
 in vec2 p; out vec2 uv;
 void main(){ uv = vec2(p.x * .5 + .5, .5 - p.y * .5); gl_Position = vec4(p, 0., 1.); }`;
 
-const FABRIC_FS = `#version 300 es
+export const FABRIC_FS = `#version 300 es
 precision highp float;
 in vec2 uv; out vec4 o;
 uniform sampler2D tex;      // packed curtain frame (2560x1408)
@@ -66,7 +66,9 @@ void main(){
   vec3 P = vec3(q.x * ASPECT, q.y, depth(q) * RELIEF);
   vec3 albedo = vec3(.12 + luma * .55);
   vec3 poolLight = pow(texture(pool, uv).rgb, vec3(2.)) * ${POOL_ENCODE_RANGE.toFixed(1)};
-  vec3 crowd = texture(cursorLight, uv).rgb * cursorScale;
+  // The cursor buffer is a rendered framebuffer: its rows run bottom-up, unlike
+  // the CPU-uploaded pool and text textures, so flip v to keep floods under their cores.
+  vec3 crowd = texture(cursorLight, vec2(uv.x, 1. - uv.y)).rgb * cursorScale;
   // Many overlapping floods compress instead of clipping the fabric to white.
   crowd = crowd / (1. + crowd * .6);
   vec3 light = poolLight + crowd;
