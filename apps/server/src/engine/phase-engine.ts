@@ -302,7 +302,13 @@ export class PhaseEngine {
     this.onLobbyScheduleChanged = options.onLobbyScheduleChanged;
     this.groupSelection = options.groupSelection;
     if (path) this.tasks = path.tasks;
-    else this.tasks.configureRoles(this.scenario.participantRoles ?? []);
+    else {
+      this.tasks.configureRoles(this.scenario.participantRoles ?? []);
+      this.tasks.configureWorkflow(this.scenario.participantTasks ?? [], {
+        assignGroup: (id, group) => this.adminAssignGroup(id, group).ok,
+        winner: question => this.taskVoteWinners.get(question) ?? null,
+      });
+    }
     this.onCheckpoint = options.onCheckpoint;
     this.onPhaseDeadline = options.onPhaseDeadline;
     this.onSessionEnded = options.onSessionEnded;
@@ -395,15 +401,16 @@ export class PhaseEngine {
 
   private tasks = new TaskEngine();
   private taskError: string | null = null;
+  private taskVoteWinners = new Map<string, string | null>();
   private lastTaskState = '';
   get taskStatus() {
     const phase = this.currentPhase();
-    return { roles: this.scenario.participantRoles ?? [], assignments: this.tasks.roleAssignments(), templates: this.scenario.participantTasks ?? [], instances: this.tasks.all().filter(t => t.phaseId === null || t.phaseId === this.phaseId && t.phaseEpoch === this.phaseEpoch), error: this.taskError,
+    return { roles: this.scenario.participantRoles ?? [], assignments: this.tasks.roleAssignments(), templates: this.scenario.participantTasks ?? [], instances: this.tasks.all().filter(t => t.phaseId === null || t.template.persistAcrossPhases || t.phaseId === this.phaseId && t.phaseEpoch === this.phaseEpoch), error: this.taskError,
       waitingForGo: phase.kind === 'narration' && !!phase.waitForGo,
       paths: this.taskPaths().map(engine => ({ phaseId: engine.currentPhaseId, phaseEpoch: engine.currentPhaseEpoch, ...engine.taskStatusLocal() })) };
   }
   private taskPaths(): PhaseEngine[] { return [...this.paths.values()].flatMap(({engine}) => [engine, ...engine.taskPaths()]); }
-  private taskStatusLocal() { return { instances: this.tasks.all().filter(t => t.phaseId === null || t.phaseId === this.phaseId && t.phaseEpoch === this.phaseEpoch), error: this.taskError, waitingForGo: this.currentPhase().kind === 'narration' && !!(this.currentPhase() as { waitForGo?: boolean }).waitForGo }; }
+  private taskStatusLocal() { return { instances: this.tasks.all().filter(t => t.phaseId === null || t.template.persistAcrossPhases || t.phaseId === this.phaseId && t.phaseEpoch === this.phaseEpoch), error: this.taskError, waitingForGo: this.currentPhase().kind === 'narration' && !!(this.currentPhase() as { waitForGo?: boolean }).waitForGo }; }
   taskCommand(command: { action: 'open' | 'close' | 'cancel' | 'go' | 'assign-role' | 'withdraw-role'; roleId?: string | undefined; participantId?: string | undefined; templateId?: string | undefined; instanceId?: string | undefined; participantIds?: string[] | undefined; phaseId: string; phaseEpoch: number; sessionId: string }): void {
     if (command.sessionId !== this.sessionId) throw new Error('Stale session');
     if (command.phaseId !== this.phaseId || command.phaseEpoch !== this.phaseEpoch) {
@@ -438,7 +445,7 @@ export class PhaseEngine {
     const group = this.groupSelection?.current(participantId) ?? '';
     let added = false;
     for (const task of this.tasks.all()) {
-      if (task.sessionId !== this.sessionId || task.status !== 'open' || task.phaseId !== this.phaseId || task.phaseEpoch !== this.phaseEpoch) continue;
+      if (task.sessionId !== this.sessionId || task.status !== 'open' || task.phaseId === null || (!task.template.persistAcrossPhases && (task.phaseId !== this.phaseId || task.phaseEpoch !== this.phaseEpoch))) continue;
       if (task.template.groupIds.length && !task.template.groupIds.includes(group)) continue;
       if (this.tasks.addRecipient(task.id, participantId, this.now())) added = true;
     }
@@ -577,6 +584,7 @@ export class PhaseEngine {
     this.lifecycle = "active";
     this.routingEpochs.clear();
     this.tasks.cancelAll();
+    this.taskVoteWinners.clear();
     this.tasks.clearRoles();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
@@ -838,6 +846,7 @@ export class PhaseEngine {
     this.movement.finalizeSession(now);
     this.routingEpochs.clear();
     this.tasks.cancelAll();
+    this.taskVoteWinners.clear();
     this.tasks.clearRoles();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
@@ -1486,6 +1495,7 @@ export class PhaseEngine {
     this.lifecycle = "active";
     this.routingEpochs.clear();
     this.tasks.cancelAll();
+    this.taskVoteWinners.clear();
     this.tasks.clearRoles();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
@@ -1526,6 +1536,7 @@ export class PhaseEngine {
       return;
     }
     const phase = this.requirePhase(target);
+    if ('cancelParticipantTasks' in phase && phase.cancelParticipantTasks) this.tasks.cancelAll();
     this.selectionCohort = phase.kind === "group-branch" ? new Set(this.registry.values().filter((participant) =>
       !phase.sourceGroupIds || phase.sourceGroupIds.includes(this.groupSelection?.current(participant.clientId) ?? "")
     ).map((participant) => participant.clientId)) : new Set();
@@ -1570,7 +1581,7 @@ export class PhaseEngine {
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
     this.path?.onPhase(phase, this.phaseStartedAt);
-    if (phase.kind === 'narration' && phase.taskId) {
+    if ((phase.kind === 'narration' || phase.kind === 'video') && phase.taskId) {
       try { this.openTask(phase.taskId, undefined, true); }
       catch (error) { this.taskError = error instanceof Error ? error.message : 'Task failed'; }
     }
@@ -1836,6 +1847,10 @@ export class PhaseEngine {
     phase: Extract<Phase, { kind: "position-question" | "video-position-question" }>,
     now: number,
   ): void {
+    const counts = Object.entries(resolution.quadrantCounts);
+    const maxCount = Math.max(0, ...counts.map(([, count]) => count));
+    const leaders = counts.filter(([, count]) => count === maxCount);
+    this.taskVoteWinners.set(phase.id, maxCount > 0 && leaders.length === 1 ? leaders[0]![0] : null);
     for (const socket of this.participantSockets) this.sendVotingOptions(socket);
     this.options.onCueEvent?.({
       type: "result",

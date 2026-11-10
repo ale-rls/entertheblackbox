@@ -223,7 +223,8 @@ export class AdmissionController {
       this.send(socket, { t: 'join_rejected', v: PROTOCOL_VERSION, reason: 'expired_grant' }); return;
     }
     const capabilities = parsed.message.capabilities ?? [];
-    if ((this.options.requiredCapabilities?.() ?? []).some(cap => !capabilities.includes(cap))) {
+    const participantClient = participantClientOf(parsed.message);
+    if ((this.options.requiredCapabilities?.() ?? []).some(cap => !(cap === 'participant-task-routing-v1' && participantClient === 'web') && !capabilities.includes(cap))) {
       this.send(socket, { t: 'reload', v: PROTOCOL_VERSION, minVersion: 'Update the native app for participant tasks and admission programs', reason: 'assets' });
       this.send(socket, { t: 'join_rejected', v: PROTOCOL_VERSION, reason: 'update_required' });
       return;

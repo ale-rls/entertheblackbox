@@ -32,3 +32,15 @@ export function targetPosition(cue: Cue, serverNow: number): number | null {
   if (serverNow < cue.startedAt || (cue.endsAt !== null && serverNow >= cue.endsAt)) return null;
   return Math.max(0, (serverNow - cue.startedAt) / 1000);
 }
+
+/** Personal task audio follows its response clock and takes precedence over scene narration. */
+export function cueForPlayback(snapshot: Snapshot, task: Extract<ServerToClientMessage, { t: 'participant_task' }> | null, now: number): Cue | null {
+  const state = task?.sessionId === snapshot.sessionId ? task.task : null;
+  const audio = state?.recipient.audio;
+  if (state && state.status !== 'cancelled' && !['cancelled', 'withdrawn', 'expired'].includes(state.recipient.status) && audio && now < audio.startedAt + audio.durationMs) {
+    if (snapshot.phase.kind === 'idle' || snapshot.participantState === 'finished' || snapshot.participantState === 'unassigned') return null;
+    return { key: `${snapshot.sessionId}:task:${state.id}:${audio.startedAt}:${audio.src}`, src: audio.src,
+      startedAt: audio.startedAt, endsAt: audio.startedAt + audio.durationMs, scenarioVersion: snapshot.phase.scenarioVersion };
+  }
+  return cueFromSnapshot(snapshot);
+}

@@ -222,3 +222,9 @@ Implemented in apps/native and the ShowScreen module bundled with packages/expo-
 - Optional `monitorGroupId` makes M1–M4 follow that audience’s independent path, clears cues while it waits, and returns to the shared timeline at reunion — scenario schema/validation and server phase engine.
 
 - Studio phone audio uses the same audio-filtered library picker for default tracks, audience-specific replacements and group-selection audio; explicit default/silence states and removal controls explain what each audience hears — Studio Inspector and media picker.
+
+### Automatic personal task routing
+
+Participant tasks can play introduction and outcome recordings, assign audience groups after capped role acceptance, and open follow-up tasks after recordings finish. Roles share capacity across task instances. Vote-based recordings use the previous question plurality and an explicit tie/empty fallback. Persistent workflows survive scene changes and admit eligible late arrivals; scene cancellation and show restart stop them. Native playback follows each response clock; show-content publishing bundles all recordings. Native clients require participant-task-routing-v1; theater browser access remains supported. Implemented in packages/scenario, apps/server/src/prompts, apps/server/src/engine, packages/show-content and apps/native. Tablet routing retains occupant identity; identity reset remains a separate handover operation.
+
+Studio exposes task attachments on both video and narration scenes and shows their audience, recordings, group/role assignments and follow-up task routes in the scene inspector.

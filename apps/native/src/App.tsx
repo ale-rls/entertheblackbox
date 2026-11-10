@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { serverOrigin, type ShowChannel, type ShowManifest } from '@entertheblackbox/show-content';
 import { PROTOCOL_VERSION, type ServerToClientMessage, type SurfaceMessage, type WallMessage } from '@entertheblackbox/protocol';
 import { NativeConnection } from './connection';
-import { acceptsSnapshot, cueFromSnapshot, type Snapshot } from './cues';
+import { acceptsSnapshot, cueForPlayback, type Snapshot } from './cues';
 import { downloadShow, downloadWallSlice, loadShow } from './content';
 import { ShowPlayer } from './player';
 import { StageCompanion } from './StageCompanion';
@@ -43,7 +43,9 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [voting, setVoting] = useState<Voting | null>(null);
   const [admission, setAdmission] = useState<Extract<ServerToClientMessage, { t: 'admission_state' }> | null>(null);
-  const [task, setTask] = useState<ParticipantTaskState | null>(null);
+  const [task, setTaskState] = useState<ParticipantTaskState | null>(null);
+  const taskRef = useRef<ParticipantTaskState | null>(null);
+  function setTask(value: ParticipantTaskState | null) { taskRef.current = value; setTaskState(value); }
   const [groups, setGroups] = useState<Groups | null>(null);
   const [notificationStatus, setNotificationStatus] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -117,7 +119,8 @@ export default function App() {
     const listener = AppState.addEventListener('change', state => { if (state === 'active') connection.current?.resume(); });
     const playbackTimer = setInterval(() => {
       const p = player.current;
-      const cue = latest.current ? cueFromSnapshot(latest.current) : null;
+      const cue = latest.current ? cueForPlayback(latest.current, taskRef.current, connection.current?.clock.now() ?? Date.now()) : null;
+      p?.setCue(cue);
       setPlaying(!!p && activity.current.sample(p.timing(), cue?.key ?? null) && !p.isPaused());
     }, 250);
     const timer = setInterval(() => {
@@ -168,7 +171,7 @@ export default function App() {
     await ShowPlayer.configure();
     joinedOrigin.current = base;
     const c = new NativeConnection({
-      capabilities: ['participant-tasks-v1', 'occupant-handover-v1', ...(AudioScheduler.supportsAdmissionPrograms() ? ['admission-programs-v1'] : [])], origin: base, ...config, name: joinName, deviceLabel: deviceLabel.trim() || undefined,
+      capabilities: ['participant-tasks-v1', 'participant-task-routing-v1', 'occupant-handover-v1', ...(AudioScheduler.supportsAdmissionPrograms() ? ['admission-programs-v1'] : [])], origin: base, ...config, name: joinName, deviceLabel: deviceLabel.trim() || undefined,
       clientVersion: process.env.EXPO_PUBLIC_SERVER_BUILD_VERSION ?? '0.0.0-dev', lease,
       saveLease: value => { void (value ? SecureStore.setItemAsync(leaseKey, value) : SecureStore.deleteItemAsync(leaseKey)).catch(() => setError('Could not save this device identity')); },
       status: value => { authorized.current = value === 'Connected'; setStatus(value); },
@@ -185,7 +188,7 @@ export default function App() {
         if (message.t === 'surface') scheduleSurface(message, c);
         if (message.t === 'wall') setWall(current => acceptWall(current, message));
         if (message.t === 'admission_state') { setAdmission(message); player.current?.setAdmission(message); }
-        if (message.t === 'participant_task' && message.sessionId === latest.current?.sessionId) setTask(message);
+        if (message.t === 'participant_task' && message.sessionId === latest.current?.sessionId) { setTask(message); player.current?.setCue(cueForPlayback(latest.current, message, c.clock.now())); }
         if (message.t === 'reload') setError(`Server requests compatible app content (${message.minVersion}). Leave before checking app updates.`);
         if (message.t === 'join_rejected') { player.current?.setEnabled(false); player.current?.setCue(null); setError(message.reason === 'update_required' ? 'Install the current native app build to join this show.' : `Join rejected: ${message.reason}`); }
         if (message.t === 'snapshot' || message.t === 'phase') {
@@ -196,7 +199,7 @@ export default function App() {
           if (latest.current?.sessionId !== message.sessionId) setTask(null);
           latest.current = message; setServerNow(c.clock.now()); setSnapshot(message); setVoting(null); setGroups(null);
           if (message.phase.kind !== 'idle') { setAdmission(null); player.current?.setAdmission(null); }
-          player.current?.setCue(cueFromSnapshot(message));
+          player.current?.setCue(cueForPlayback(message, taskRef.current, c.clock.now()));
         }
         if ((message.t === 'voting_options' || message.t === 'group_selection_options') &&
           message.sessionId === latest.current?.sessionId && message.phaseEpoch === latest.current?.phaseEpoch) {
