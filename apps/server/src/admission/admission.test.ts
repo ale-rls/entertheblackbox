@@ -572,3 +572,10 @@ it('rejects queued commands from the former occupant after handover on the same 
   for(const occupantId of [undefined,previous.clientId,replacement.clientId]) s.emit('message',Buffer.from(JSON.stringify({...command,...(occupantId?{occupantId}:{})})));
   expect(received).toHaveBeenCalledTimes(1);expect(received.mock.calls[0]![0]).toMatchObject({occupantId:replacement.clientId});
 });
+
+it('requires personal routing on native clients without blocking theater browsers', () => {
+ const c=controller({allowPublicJoin:true,requiredCapabilities:()=>['participant-tasks-v1','participant-task-routing-v1']});
+ const web=socket();join(c,web,'',undefined,undefined,undefined,['participant-tasks-v1']);expect(lastMessage(web)).toMatchObject({t:'identity'});
+ const oldNative=socket();join(c,oldNative,'',undefined,undefined,undefined,['participant-tasks-v1','occupant-handover-v1']);expect(lastMessage(oldNative)).toMatchObject({t:'join_rejected',reason:'update_required'});
+ const native=socket();join(c,native,'',undefined,undefined,undefined,['participant-tasks-v1','occupant-handover-v1','participant-task-routing-v1']);expect(lastMessage(native)).toMatchObject({t:'identity'});
+});

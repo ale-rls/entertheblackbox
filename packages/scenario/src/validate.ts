@@ -1,3 +1,4 @@
+import { taskAudioSources } from './tasks.js';
 import { admissionSources } from './admission.js';
 import { monitorMediaSources } from "./monitors.js";
 import { curtainLightIssues } from "./curtain.js";
@@ -274,10 +275,19 @@ export function validateScenario(
   }
 
   if (scenario.handoverTaskId && !scenario.participantTasks?.some(t => t.id === scenario.handoverTaskId)) errors.push({ severity: 'error', code: 'broken-target', message: `Unknown handover task ${scenario.handoverTaskId}` });
+  const taskIds = new Set<string>();
   for (const task of scenario.participantTasks ?? []) {
+    if (taskIds.has(task.id)) errors.push({ severity: 'error', code: 'broken-target', message: `Duplicate task ${task.id}` });
+    taskIds.add(task.id);
+    for (const option of task.options) {
+      if (option.groupId && !scenario.groups?.some(g => g.id === option.groupId)) errors.push({ severity: 'error', code: 'unknown-group', message: `Task ${task.id} assigns unknown group ${option.groupId}` });
+      if (option.nextTaskId && !scenario.participantTasks?.some(t => t.id === option.nextTaskId)) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} references unknown follow-up ${option.nextTaskId}` });
+      if (option.audioByVote && !scenario.phases.some(p => p.id === option.audioByVote!.questionId && (p.kind === 'position-question' || p.kind === 'video-position-question'))) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} references unknown vote ${option.audioByVote.questionId}` });
+    }
     for (const option of task.options) if (option.roleId && !scenario.participantRoles?.some(r => r.id === option.roleId)) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} references unknown role ${option.roleId}` });
     for (const id of task.groupIds) if (!scenario.groups?.some(g => g.id === id)) errors.push({ severity: 'error', code: 'unknown-group', message: `Task ${task.id} targets unknown group ${id}` });
   }
-  for (const phase of scenario.phases) if (phase.kind === 'narration' && phase.taskId && !scenario.participantTasks?.some(t => t.id === phase.taskId)) errors.push({ severity: 'error', code: 'broken-target', phaseId: phase.id, message: `Unknown task ${phase.taskId}` });
+  for (const phase of scenario.phases) if ((phase.kind === 'narration' || phase.kind === 'video') && phase.taskId && !scenario.participantTasks?.some(t => t.id === phase.taskId)) errors.push({ severity: 'error', code: 'broken-target', phaseId: phase.id, message: `Unknown task ${phase.taskId}` });
+  for (const src of taskAudioSources(scenario.participantTasks)) if (mediaManifest && !mediaManifest.files.some(f => f.src === src)) errors.push({ severity: 'error', code: 'missing-media', message: `Task audio missing from manifest: ${src}` });
   return { ok: errors.length === 0, errors, warnings };
 }

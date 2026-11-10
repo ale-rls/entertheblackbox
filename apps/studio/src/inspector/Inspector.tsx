@@ -220,10 +220,12 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
         <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={() => onChange({ ...phase, subtitles: [...(phase.subtitles ?? []), { text: "New subtitle", startAtMs: 0, endAtMs: Math.min(phase.expectedDurationMs, 5_000) }] })}>Add subtitle</button>
       </fieldset>
     </>}
-    {phase.kind === 'narration' && <fieldset><legend>Participant task and operator gate</legend>
+    {(phase.kind === 'narration' || phase.kind === 'video') && <fieldset><legend>Participant task and operator gate</legend>
       <label>Task template<select value={phase.taskId ?? ''} onChange={e => { const { taskId: _, ...rest } = phase; onChange(e.target.value ? { ...rest, taskId: e.target.value } : rest); }}><option value="">No task</option>{(project.scenario.participantTasks ?? []).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select></label>
-      <label><input type="checkbox" checked={phase.waitForGo ?? false} onChange={e => onChange({ ...phase, waitForGo: e.target.checked })} />Wait for operator GO</label>
-      <p>GO is in Admin → Tasks. Responses close at the task deadline; a held scene continues only when the operator confirms readiness.</p>
+      {phase.kind === 'narration' && <label><input type="checkbox" checked={phase.waitForGo ?? false} onChange={e => onChange({ ...phase, waitForGo: e.target.checked })} />Wait for operator GO</label>}
+      <p>The selected task opens when this scene starts, alongside its media. Task choices are personal routes; they do not create separate scene branches.</p>
+      {phase.kind === 'narration' && <p>GO is in Admin → Tasks. Responses close at the task deadline; a held scene continues only when the operator confirms readiness.</p>}
+      <TaskFlow taskId={phase.taskId} tasks={project.scenario.participantTasks ?? []} />
     </fieldset>}
     {phase.kind === "narration" && <fieldset><legend>Audio + text</legend>
       <p className="sc-tool-copy field-hint">Introduce the next question with phone audio and monitor text. Connect this scene to a Position question; set its duration to cover the introduction.</p>
@@ -567,4 +569,26 @@ function CountedStatuses({ phase, onChange }: { phase: Extract<Phase, { kind: "p
 
 function Compiled({ project }: { project: StudioProject }) {
   return <details><summary>Scenario JSON</summary><pre>{compiledJson(project)}</pre></details>;
+}
+
+/** Show personal routes without adding fake runtime edges to the scene graph. */
+function TaskFlow({ taskId, tasks, visited = [] }: { taskId: string | undefined; tasks: ParticipantTask[]; visited?: string[] }) {
+  if (!taskId) return null;
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return <p role="alert">Missing task: {taskId}</p>;
+  if (visited.includes(taskId)) return <p>Returns to task: {task.title} ({task.id})</p>;
+  return <section aria-label={`Task flow ${task.id}`}>
+    <h4>{task.title} · {task.id}</h4>
+    <p>Audience: {task.groupIds.length ? task.groupIds.join(', ') : 'all eligible participants'}. {task.persistAcrossPhases ? 'Continues across scenes.' : 'Ends when this scene changes.'}</p>
+    {task.audio && <p>Introduction audio: {task.audio.src}</p>}
+    <ul>{task.options.map(option => <li key={option.id}>
+      <strong>{option.label}</strong>
+      {option.groupId && <p>Assign group: {option.groupId}</p>}
+      {option.roleId && <p>Assign role: {option.roleId}</p>}
+      {option.capacity !== undefined && <p>Maximum accepted: {option.capacity}</p>}
+      {option.audio && <p>Outcome audio: {option.audio.src}</p>}
+      {option.audioByVote && <p>Outcome audio follows vote: {option.audioByVote.questionId}. Fallback: {option.audioByVote.fallback.src}</p>}
+      {option.nextTaskId && <TaskFlow taskId={option.nextTaskId} tasks={tasks} visited={[...visited, taskId]} />}
+    </li>)}</ul>
+  </section>;
 }

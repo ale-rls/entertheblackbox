@@ -10,7 +10,7 @@ export function taskAlert(state: ParticipantTaskState | null, now: number) {
 }
 export function ParticipantTaskCard({ state, now, enabled, respond }: { state: ParticipantTaskState | null; now: number; enabled: boolean; respond: (optionId: string) => void }) {
   const task = state?.task;
-  if (!task || task.status === 'cancelled') return null;
+  if (!task || task.status === 'cancelled' || task.recipient.status === 'cancelled') return null;
   const canAnswer = enabled && !!taskAlert(state, now);
   return <View style={{ padding: 20, gap: 12, backgroundColor: '#202226', borderRadius: 12 }}>
     <Text accessibilityRole="header" style={{ color: 'white', fontSize: 22 }}>{task.template.question}</Text>

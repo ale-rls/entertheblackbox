@@ -68,3 +68,10 @@ it('includes admission intro and loop audio in the immutable native release',asy
   await writeFile(path,JSON.stringify(scenario));await writeFile(join(root,'intro.mp3'),'intro');await writeFile(join(root,'waiting.mp3'),'loop');
   const release=await publishShow(path,root,'rehearsal');expect(release.files.map(f=>f.src)).toEqual(expect.arrayContaining(['intro.mp3','waiting.mp3']));
 });
+
+it('bundles every personal task recording including vote alternatives and fallback',async()=>{
+ const root=await fixture();const path=join(root,'scenario.json');const scenario=JSON.parse(await readFile(path,'utf8'));
+ scenario.participantTasks=[{id:'job',title:'Job',question:'Choose',notificationBody:'Choose',durationMs:1000,audio:{src:'intro.mp3',durationMs:1000},options:[{id:'yes',label:'Yes',audioByVote:{questionId:'rule',clips:{red:{src:'red.mp3',durationMs:1000}},fallback:{src:'fallback.mp3',durationMs:1000}}}]}];
+ for(const name of ['intro.mp3','red.mp3','fallback.mp3'])await writeFile(join(root,name),name);
+ await writeFile(path,JSON.stringify(scenario));const release=await publishShow(path,root,'rehearsal');expect(release.files.map(f=>f.src)).toEqual(expect.arrayContaining(['intro.mp3','red.mp3','fallback.mp3']));
+});

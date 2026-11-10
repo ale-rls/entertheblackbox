@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NARRATION_START_DELAY_MS, acceptsSnapshot, cueFromSnapshot, targetPosition, type Snapshot } from './cues';
+import { NARRATION_START_DELAY_MS, acceptsSnapshot, cueFromSnapshot, cueForPlayback, targetPosition, type Snapshot } from './cues';
 const snapshot: Snapshot = { t: 'snapshot', v: 2, sessionId: 'session', phaseEpoch: 4, serverTime: 1000,
   phoneAudioActive: true, currentGroup: { id: 'blue', label: 'Blue' },
   phase: { id: 'voice', kind: 'narration', text: 'Test', durationMs: 10000, next: 'idle', scenarioVersion: 'one',
@@ -34,4 +34,14 @@ describe('server cues', () => {
     expect(acceptsSnapshot(snapshot, { ...snapshot, phaseEpoch: 1, routingEpoch: 1 })).toBe(true);
     expect(acceptsSnapshot(snapshot, { ...snapshot, sessionId: 'new', phaseEpoch: 0 })).toBe(true);
   });
+});
+
+it('plays personal task audio on a silent shared scene, preserves its response clock, and stops cancelled or old-session audio', () => {
+ const s={...snapshot, phoneAudioActive:false};
+ const task:any={t:'participant_task',v:2,sessionId:s.sessionId,task:{id:'personal',status:'closed',recipient:{status:'answered',audio:{src:'choice.mp3',durationMs:2000,startedAt:1400}}}};
+ expect(cueForPlayback(s,task,1200)).toMatchObject({src:'choice.mp3',startedAt:1400,endsAt:3400});
+ expect(cueForPlayback({...s,phaseEpoch:9},task,2000)?.key).toBe(cueForPlayback(s,task,2000)?.key);
+ expect(cueForPlayback(s,task,3400)).toBeNull();
+ expect(cueForPlayback(s,{...task,sessionId:'old'},2000)).toBeNull();
+ task.task.status='cancelled';expect(cueForPlayback(s,task,2000)).toBeNull();
 });

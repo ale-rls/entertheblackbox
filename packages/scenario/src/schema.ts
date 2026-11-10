@@ -41,6 +41,7 @@ const phoneAudioByGroupSchema = z.record(groupIdSchema, phoneAudioFileSchema).op
 export const votingMethodSchema = z.enum(["physical", "phone-cursor", "phone-buttons"]);
 const outgoingCueSchema = z.string().trim().min(1).max(120);
 const phoneAudioFields = {
+  cancelParticipantTasks: z.boolean().optional(),
   monitorCues: monitorCuesSchema.optional(),
   /** Fallback/broadcast MP3. Used for every participant without a group-specific override. */
   phoneAudioSrc: phoneAudioSrcSchema,
@@ -273,6 +274,7 @@ export const subtitleSchema = z.object({
 
 export const videoPhaseSchema = z.object({
   kind: z.literal("video"),
+  taskId: z.string().min(1).optional(),
   ...phoneAudioFields,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
