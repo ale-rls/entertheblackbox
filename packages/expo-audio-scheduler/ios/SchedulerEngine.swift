@@ -106,6 +106,8 @@ final class SchedulerEngine {
   private static let resyncGraceMs = 1000.0
 
   private var layers: [String: LayerRuntime] = [:]
+  /// Layers detached by `fadeOutLayer`: no longer addressable or reported, released when silent.
+  private var fading: [ObjectIdentifier: (layer: LayerRuntime, timer: DispatchSourceTimer)] = [:]
   private var paused = false
   private var configured = false
   private var nowPlaying: [String: Any] = [:]
@@ -226,6 +228,45 @@ final class SchedulerEngine {
     refreshSnapshot()
   }
 
+  /// Detaches a layer and ramps its volume to silence over `durationMs`, then releases it. The id is
+  /// free immediately, so a replacement can start while this one fades. The ramp runs on a native
+  /// main-queue timer, which keeps firing in the background while audio is playing. A layer that
+  /// isn't audible (or a paused engine) is released at once.
+  func fadeOutLayer(_ id: String, durationMs: Double) {
+    guard let layer = layers.removeValue(forKey: id) else { return }
+    defer { refreshSnapshot() }
+    guard !paused, durationMs > 0, layer.state == "playing", layer.player.rate > 0 else {
+      layer.release()
+      return
+    }
+    let key = ObjectIdentifier(layer)
+    let from = layer.player.volume
+    let startedAt = SharedClock.hostNowMs()
+    let timer = DispatchSource.makeTimerSource(queue: .main)
+    timer.schedule(deadline: .now(), repeating: .milliseconds(30), leeway: .milliseconds(10))
+    timer.setEventHandler { [weak self] in
+      guard let self, self.fading[key] != nil else { return }
+      let progress = (SharedClock.hostNowMs() - startedAt) / durationMs
+      if progress >= 1 {
+        self.finishFade(key)
+      } else {
+        layer.player.volume = from * Float(1 - progress)
+      }
+    }
+    fading[key] = (layer, timer)
+    timer.resume()
+  }
+
+  private func finishFade(_ key: ObjectIdentifier) {
+    guard let entry = fading.removeValue(forKey: key) else { return }
+    entry.timer.cancel()
+    entry.layer.release()
+  }
+
+  private func releaseFading() {
+    for key in Array(fading.keys) { finishFade(key) }
+  }
+
   private func fail(_ layer: LayerRuntime, _ message: String) {
     layer.state = "error"
     layer.error = message
@@ -285,6 +326,8 @@ final class SchedulerEngine {
   func pause(reason: String) {
     guard !paused else { return }
     paused = true
+    // A fade can't be resumed meaningfully; pausing silences it for good.
+    releaseFading()
     for layer in layers.values where layer.state != "error" {
       layer.player.pause()
       if layer.state != "ended" { layer.state = "paused" }
@@ -307,6 +350,7 @@ final class SchedulerEngine {
   func reset() {
     for layer in layers.values { layer.release() }
     layers.removeAll()
+    releaseFading()
     paused = false
     clock.clear()
     timer?.cancel()

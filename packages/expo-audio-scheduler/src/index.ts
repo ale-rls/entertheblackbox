@@ -14,6 +14,8 @@ declare class AudioSchedulerModule extends NativeModule<AudioSchedulerEvents> {
   /** Adds or replaces a layer. Same id and uri updates timing and volume without restarting playback. */
   setLayer(id: string, layer: Layer): Promise<void>;
   clearLayer(id: string): Promise<void>;
+  supportsFadeOut?(): boolean;
+  fadeOutLayer?(id: string, durationMs: number): Promise<void>;
   /** Pauses every layer; new layers stay paused until `resume`. */
   pause(): Promise<void>;
   /** Resumes every layer; anchored layers rejoin at the current clock position. */
@@ -35,6 +37,14 @@ const AudioScheduler = {
     return native.setLayer(id, layer);
   },
   clearLayer: (id: string) => native.clearLayer(id),
+  /** True on builds whose native scheduler can fade a layer out (older installs only hard-stop). */
+  supportsFadeOut: () => native.supportsFadeOut?.() === true,
+  /**
+   * Ramps a playing layer to silence over `durationMs` natively (works with the screen locked),
+   * then releases it. The id is free at once for a replacement. Builds without native fade
+   * support fall back to `clearLayer`.
+   */
+  fadeOutLayer: (id: string, durationMs: number) => native.fadeOutLayer ? native.fadeOutLayer(id, durationMs) : native.clearLayer(id),
   pause: () => native.pause(),
   resume: () => native.resume(),
   isPaused: () => native.isPaused(),

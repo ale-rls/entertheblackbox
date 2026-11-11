@@ -15,6 +15,9 @@ AudioScheduler.setClock(serverClock.now());           // call whenever you have 
 await AudioScheduler.setLayer('bed', { uri: bedUri, loop: true, volume: 0.2 });
 // Anchored: file position 0 plays at clock time startAt; a past startAt starts mid-file.
 await AudioScheduler.setLayer('cue', { uri: cueUri, startAt: cue.startedAt, endAt: cue.endsAt });
+// Skipped while sounding: ramp to silence natively over 3 s, then release. The id is free at once;
+// a layer that already ended is released immediately. Older builds fall back to clearLayer.
+await AudioScheduler.fadeOutLayer('cue', 3000);
 
 AudioScheduler.addListener('onPausedChange', ({ paused, reason }) => { /* remote | interruption | route | api */ });
 AudioScheduler.getTiming(); // [{ id, state, positionMs, targetMs, driftMs, error }]

@@ -58,6 +58,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Fullscreen show playback (video, still+audio, subtitles) — `PhaseVideo.tsx`, `PhaseImageAudio.tsx`, `PhaseSubtitles.tsx`
 - Video handoff between phases (pre-buffered next clip) — `PhaseVideoHandoff.tsx`, `apps/server/src/engine/video.ts`
+- Skipped phase audio fades out over 3 s: video sound, extra audio and image+MP3 audio that is still playing when the show moves on continue from a detached copy that ramps to silence while the picture cuts as before; the outgoing Blob URL is held for the fade. Natural ends, paused and muted media are untouched — `apps/display/src/media/skipFade.ts`, `PhaseVideoHandoff.tsx`, `PhaseImageAudio.tsx`, `media/mediaStore.ts` (`holdUrl`)
 - Live cursor field (real + ghost cursors) — `cursors/CursorCanvas.tsx`, `cursorField.ts` ← **apps/realtime-ws-coolify** + server ghost pool
 - Spectrum glow / cursor-density heat — `cursors/spectrumGlow.ts`
 - Curtain-light votes for curtain-light groups and for votes flagged `curtainLightVote` on any timeline (WebGL2 relit packed curtain video, answer pools from the counting geometry, instanced per-cursor lights with touch pulses, white labels with dark halos, fade into the next scene) — `curtain/*`, geometry in `packages/shared/src/curtain.ts`; see `docs/curtain-light-voting.md`
@@ -124,6 +125,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 ## Audio (personal + ambient)
 
 - Native downloaded narration and looping background music, immutable release verification, group-targeted cues and clock-scheduled playback — `apps/native`, `packages/show-content`, `packages/expo-audio-scheduler`.
+- Native skipped-audio fade: a cue replaced or cleared while sounding, and admission audio cut by the show start, fade out over 3 s via the scheduler's native `fadeOutLayer` (works locked); builds without it hard-stop — `apps/native/src/player.ts`, `packages/expo-audio-scheduler` (iOS/Android `SchedulerEngine`).
 - Main projection video/image soundtracks remain supported in `apps/display`. Stage monitor videos are muted.
 - Native cue delivery while locked requires venue acceptance on the actual devices. No browser/streaming fallback is supported.
 

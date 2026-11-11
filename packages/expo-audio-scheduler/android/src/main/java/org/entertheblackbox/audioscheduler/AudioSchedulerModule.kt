@@ -32,6 +32,7 @@ class AudioSchedulerModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("AudioScheduler")
     Function("supportsAdmissionPrograms") { true }
+    Function("supportsFadeOut") { true }
 
     Events("onPausedChange", "onLayerError")
 
@@ -72,6 +73,10 @@ class AudioSchedulerModule : Module() {
 
     AsyncFunction("clearLayer") { id: String ->
       engine.clearLayer(id)
+    }.runOnQueue(Queues.MAIN)
+
+    AsyncFunction("fadeOutLayer") { id: String, durationMs: Double ->
+      engine.fadeOutLayer(id, durationMs)
     }.runOnQueue(Queues.MAIN)
 
     AsyncFunction("pause") {

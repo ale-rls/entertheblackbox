@@ -1,11 +1,12 @@
 import { followMediaClock, type ServerClock } from "@entertheblackbox/shared";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   PROTOCOL_VERSION,
   type DisplayToServerMessage,
   type PhaseSnapshotMessage,
 } from "@entertheblackbox/protocol";
 import { useVideoPlaybackDiagnostics } from "../media/useVideoPlaybackDiagnostics.js";
+import { fadeOutSkippedAudio } from "../media/skipFade.js";
 
 type ImageAudioPhase = Extract<PhaseSnapshotMessage, { kind: "video" | "video-position-question" }> & { audioSrc: string };
 
@@ -58,6 +59,12 @@ export function PhaseImageAudio({
   useEffect(() => () => {
     if (tailTimer.current !== null) clearTimeout(tailTimer.current);
   }, [completePhase]);
+  // Layout cleanup runs before the element is removed and before the clock
+  // follower pauses it, so audio still sounding here was skipped: fade it out.
+  useLayoutEffect(() => {
+    const audio = diagnostics.ref;
+    return () => { fadeOutSkippedAudio(audio.current); };
+  }, [diagnostics.ref]);
   const handleEnded = () => {
     const tailDurationMs = clock ? Math.max(0, phase.startedAt + phase.expectedDurationMs - clock.now()) : phase.tailDurationMs ?? 0;
     if (tailDurationMs === 0) {

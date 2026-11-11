@@ -94,6 +94,9 @@ export class MediaStore {
   private manifest: MediaManifest | null = null;
   private readonly blobUrls = new Map<string, string>(); // src -> object URL
   private pinned: string | null = null;
+  /** Sources whose URL a fading copy still reads (src -> hold count). */
+  private readonly held = new Map<string, number>();
+  private lastKeep: ReadonlySet<string> = new Set();
   private stopped = false;
 
   constructor(deps: MediaStoreDeps = {}) {
@@ -114,6 +117,7 @@ export class MediaStore {
 
   stop(): void {
     this.stopped = true;
+    this.held.clear();
     this.retainOnly(new Set()); // revoke every live Blob URL on teardown
   }
 
@@ -259,10 +263,26 @@ export class MediaStore {
     this.pinned = src;
   }
 
-  /** Revoke every Blob URL not in the keep set (active + plausible next). */
+  /**
+   * Keep an object URL alive for `ms` even if its phase is over, so skipped audio can fade out
+   * from a detached copy. Afterwards it is revoked unless the current phase still needs it.
+   */
+  holdUrl(url: string, ms: number): void {
+    const src = [...this.blobUrls].find(([, value]) => value === url)?.[0];
+    if (src === undefined || this.stopped) return;
+    this.held.set(src, (this.held.get(src) ?? 0) + 1);
+    setTimeout(() => {
+      const remaining = (this.held.get(src) ?? 1) - 1;
+      if (remaining > 0) this.held.set(src, remaining); else this.held.delete(src);
+      this.retainOnly(this.lastKeep);
+    }, ms);
+  }
+
+  /** Revoke every Blob URL not in the keep set (active + plausible next) or held by a fade. */
   retainOnly(keepSrcs: ReadonlySet<string>): void {
+    this.lastKeep = keepSrcs;
     for (const [src, url] of this.blobUrls) {
-      if (!keepSrcs.has(src) && src !== this.pinned) {
+      if (!keepSrcs.has(src) && src !== this.pinned && !this.held.has(src)) {
         this.revokeObjectUrl(url);
         this.blobUrls.delete(src);
       }
