@@ -1,4 +1,4 @@
-import { createScriptRoom } from "./script-room.js";
+import { createScriptRoom, type ShowScriptOptions } from "./script-room.js";
 import { backgroundMusicSchema, type BackgroundMusic } from "@entertheblackbox/show-content";
 import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings } from "@entertheblackbox/protocol";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -64,6 +64,8 @@ export interface AdminDataSource {
 }
 
 export type RegisterAdminOptions = {
+  /** The active show's actor script and the cue its scenes have fired. */
+  showScript?: ShowScriptOptions;
   handover?: (participantId: string) => string;
   onPublishing?: (busy: boolean) => void;
   registerRehearsals?: (app: FastifyInstance) => void;
@@ -175,7 +177,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
   };
   const now = options.now ?? (() => Date.now());
   let publishBusy = false;
-  const scriptRoom = createScriptRoom();
+  const scriptRoom = createScriptRoom(options.showScript);
   scriptRoom.registerReader(app);
 
   app.register(async (admin) => {

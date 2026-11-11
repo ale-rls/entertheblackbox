@@ -2,6 +2,7 @@ import { taskAudioSources } from './tasks.js';
 import { admissionSources } from './admission.js';
 import { monitorMediaSources } from "./monitors.js";
 import { curtainLightIssues } from "./curtain.js";
+import { scriptParagraphs } from "./actor-script.js";
 import type { MediaManifest, Phase, Scenario } from "./schema.js";
 
 /**
@@ -24,7 +25,8 @@ export type ScenarioIssue = {
     | "missing-media"
     | "unreachable-phase"
     | "unmarked-cycle"
-    | "curtain-light";
+    | "curtain-light"
+    | "script-cue";
   phaseId?: string;
   message: string;
 };
@@ -74,6 +76,15 @@ export function validateScenario(
 
   for (const path of scenario.admission?.paths ?? []) if (!scenario.groups?.some(g => g.id === path.groupId)) errors.push({ severity: 'error', code: 'unknown-group', message: `Admission references unknown group ${path.groupId}` });
   for (const src of admissionSources(scenario.admission)) if (mediaManifest && !mediaManifest.files.some(f => f.src === src)) errors.push({ severity: 'error', code: 'missing-media', message: `Admission audio missing from manifest: ${src}` });
+  const scriptLength = scenario.actorScript ? scriptParagraphs(scenario.actorScript.text).length : 0;
+  for (const phase of scenario.phases) for (const cue of phase.scriptCues ?? []) {
+    if (cue.paragraph >= scriptLength) errors.push({
+      severity: "error", code: "script-cue", phaseId: phase.id,
+      message: scriptLength === 0
+        ? `Script cue at ${cue.startMs} ms needs an actor script on the show`
+        : `Script cue at ${cue.startMs} ms points to paragraph ${cue.paragraph + 1}, but the script has ${scriptLength}`,
+    });
+  }
   const byId = new Map<string, Phase>();
   const groupIds = new Set((scenario.groups ?? []).map((group) => group.id));
   if (scenario.monitorGroupId !== undefined && !groupIds.has(scenario.monitorGroupId)) errors.push({

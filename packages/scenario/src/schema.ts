@@ -1,6 +1,7 @@
 import { admissionConfigSchema } from './admission.js';
 import { participantTaskSchema, participantRoleSchema } from './tasks.js';
 import { monitorCuesSchema } from "./monitors.js";
+import { actorScriptSchema, scriptCuesSchema } from "./actor-script.js";
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
 import { extraAudioCombinationError, mediaCombinationError } from "./media-kind.js";
@@ -43,6 +44,8 @@ const outgoingCueSchema = z.string().trim().min(1).max(120);
 const phoneAudioFields = {
   cancelParticipantTasks: z.boolean().optional(),
   monitorCues: monitorCuesSchema.optional(),
+  /** Timed jumps of the shared actor script reader, relative to scene start. */
+  scriptCues: scriptCuesSchema.optional(),
   /** Fallback/broadcast MP3. Used for every participant without a group-specific override. */
   phoneAudioSrc: phoneAudioSrcSchema,
   /** Per-group MP3 overrides, keyed by stable authored group id. */
@@ -244,6 +247,7 @@ export const idlePhaseSchema = z.object({
   kind: z.literal("idle"),
   id: z.literal("idle"),
   monitorCues: monitorCuesSchema.optional(),
+  scriptCues: scriptCuesSchema.optional(),
 });
 
 /**
@@ -542,6 +546,7 @@ export const groupAssignmentSchema = z.discriminatedUnion("type", [
  */
 export const groupBranchPhaseSchema = z.object({
   monitorCues: monitorCuesSchema.optional(),
+  scriptCues: scriptCuesSchema.optional(),
   kind: z.literal("group-branch"),
   outgoingCues: z.array(outgoingCueSchema).max(32).optional(),
   id: phaseIdSchema,
@@ -610,6 +615,8 @@ const canonicalScenarioSchema = z.object({
   groups: z.array(audienceGroupSchema).min(2, "a show with groups needs at least two groups").refine((groups) => new Set(groups.map((group) => group.id)).size === groups.length, {
     message: "group ids must be unique",
   }).optional(),
+  /** Shared actor script; scenes move its reader with scriptCues. */
+  actorScript: actorScriptSchema.optional(),
   /** Stage monitors follow this group while its independent path is active. */
   monitorGroupId: groupIdSchema.optional(),
   /** Optional balanced assignment performed as the audience joins the lobby. */

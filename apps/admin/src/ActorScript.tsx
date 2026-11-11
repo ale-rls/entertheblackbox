@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./actor-script.css";
 
-type Script = { title: string; paragraphs: string[]; cue: number; revision: string };
+type Script = { title: string; paragraphs: string[]; cue: number; revision: string; source?: "show" | "admin" };
 type Snapshot = { script: Script | null; readerToken?: string | null };
 async function request(token: string, actor: boolean, path = "", init?: RequestInit): Promise<Snapshot> {
   const response = await fetch(actor ? "/api/actor-script" : `/api/admin/script${path}`, {
@@ -72,15 +72,17 @@ export function ScriptPanel({ token }: { token: string }) {
   };
   const link = state?.readerToken ? `${window.location.origin}/admin/#actor-script=${state.readerToken}` : "";
   return <section className="sc-tool-panel script-panel"><h2>Shared actor script</h2>
-    <p>Paste a plain-text script. Blank lines separate cues. Actors open the reader link on their own devices; only operators can advance the shared cue.</p>
-    <p>The script stays in server memory until cleared or the server restarts. Loading a replacement revokes the previous reader link.</p>
+    <p>Actors open the reader link on their own devices; only operators and the show's scene cues move the shared cue.</p>
+    {state?.script?.source === "show" && <p role="status">Using the published show's script. Its scenes move the cue automatically; Previous, Next and Cue here override it until the next scene cue. The reader link stays the same across server restarts.</p>}
+    {state?.script?.source === "admin" && <p role="status">Using a script loaded here. It overrides the show's script and ignores scene cues until cleared, and is lost on server restart.</p>}
+    <p>To override, paste a plain-text script. Blank lines separate cues. Loading a replacement revokes the previous reader link.</p>
     <form onSubmit={e => { e.preventDefault(); void update("", "PUT", { title, text }); }}>
       <label>Script title<input required maxLength={160} value={title} onChange={e => setTitle(e.target.value)} /></label>
       <label>Script text<textarea required maxLength={200000} rows={8} value={text} onChange={e => setText(e.target.value)} /></label>
       <button disabled={busy || !title.trim() || !text.trim()}>Load script{state?.script ? " and replace current" : ""}</button>
     </form>
     {error && <p role="alert">{error}</p>}
-    {link && <div className="script-share"><label>Read-only actor link<input readOnly value={link} onFocus={e => e.target.select()} /></label><a href={link} target="_blank" rel="noreferrer">Open actor reader ↗</a><button disabled={busy} onClick={() => void update("/rotate-link", "POST")}>Replace reader link</button><button disabled={busy} onClick={() => void update("", "DELETE")}>Clear script and revoke link</button></div>}
+    {link && <div className="script-share"><label>Read-only actor link<input readOnly value={link} onFocus={e => e.target.select()} /></label><a href={link} target="_blank" rel="noreferrer">Open actor reader ↗</a><button disabled={busy} onClick={() => void update("/rotate-link", "POST")}>Replace reader link</button><button disabled={busy || state?.script?.source === "show"} onClick={() => void update("", "DELETE")}>{state?.script?.source === "admin" ? "Clear loaded script and revoke link" : "Clear script and revoke link"}</button></div>}
     {state?.script && <fieldset disabled={busy}><ScriptReader script={state.script} onCue={cue => void update("/cue", "PATCH", { revision: state.script!.revision, cue })} /></fieldset>}
   </section>;
 }

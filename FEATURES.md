@@ -236,4 +236,5 @@ Studio exposes task attachments on both video and narration scenes and shows the
 
 ## Actor script reader
 
-- **Admin → Script** loads a private plain-text script, advances shared paragraph cues, and creates/revokes read-only actor links. Actors follow the cue or scroll independently and adjust text size. Server memory only; restart clears the script. No audience/show-control permissions on reader links. Apps: `admin`, `server`. See [actor script guide](docs/actor-script.md).
+- **Studio → Show properties → Actor script** stores the show's script in the draft and publishes it with the show; per-scene **Actor script cues** (`scriptCues`, ms from scene start → paragraph) move the shared reader on the main timeline. The server loads it automatically with a restart-stable reader link; cues are stripped from client snapshots. Apps/packages: `studio`, `server`, `admin`, `scenario`.
+- **Admin → Script** loads a private plain-text script, advances shared paragraph cues, and creates/revokes read-only actor links. Actors follow the cue or scroll independently and adjust text size. An Admin-loaded script overrides the show's until cleared and lives in server memory only. No audience/show-control permissions on reader links. Apps: `admin`, `server`. See [actor script guide](docs/actor-script.md).
