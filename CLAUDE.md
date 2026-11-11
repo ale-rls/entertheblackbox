@@ -158,3 +158,7 @@ runtime fingerprint still require a new production build and installation.
 Never override the fingerprint to force compatibility. Show content publishing
 and server deployment remain separate from app updates. Preparing a channel is
 not itself a request to publish an OTA release. See [the native player guide](docs/native-player.md).
+
+The `/check-app-update` skill (`.claude/skills/check-app-update/`) checks whether
+the **Android preview** app needs an EAS Update or a new EAS build, compared
+with main and the live show, and asks before shipping either.
