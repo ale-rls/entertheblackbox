@@ -9,6 +9,7 @@ import { stageState, showModeAction, showModeTextVisible, shouldEnterShowMode, S
 import type { ActionPrompt } from './action-prompt';
 import { ActionAttention } from './ActionAttention';
 import { contrastText } from './surface';
+import { musicVolumeLabel, stepMusicVolume } from './music-volume';
 
 type Props = StageInput & {
   actionPrompt?: ActionPrompt | null;
@@ -20,11 +21,32 @@ type Props = StageInput & {
   wall?: React.ReactNode; wallVisible?: boolean; onShowMode?: (active: boolean) => void; name: string; deviceLabel: string; manifest: ShowManifest | null;
   identity: { name: string; color: string } | null; clockText: string; playing: boolean;
   notificationStatus: string; appChannel: string;
+  /** Participant music volume (0–1); null follows the show default. */
+  musicVolume: number | null; onMusicVolume: (value: number | null) => void;
   onOrigin: (value: string) => void; onName: (value: string) => void; onDeviceLabel: (value: string) => void;
   onPrepare: (download: boolean) => void; onJoin: () => void; onUpdate: () => void; onLeave: () => void;
   onPause: () => void; onResume: () => void; onVote: (id: string) => void; onGroup: (id: string) => void;
   onReaction: (kind: 'applause' | 'boo') => void;
 };
+/** Background-music volume, in 10% steps. `showDefault` is undefined before a show is downloaded, null when the show has no music. */
+function MusicVolume({ volume, showDefault, onChange }: { volume: number | null; showDefault: number | null | undefined; onChange: (value: number | null) => void }) {
+  if (showDefault === null) return <><Text style={styles.label}>Music volume</Text><Text style={styles.muted}>No background music in this show.</Text></>;
+  const effective = volume ?? showDefault ?? 0.2;
+  const label = showDefault === undefined && volume === null ? 'Show default' : musicVolumeLabel(volume, showDefault ?? null);
+  const step = (direction: 1 | -1) => onChange(stepMusicVolume(effective, direction));
+  return <>
+    <Text style={styles.label}>Music volume</Text>
+    <View accessible accessibilityRole="adjustable" accessibilityLabel="Music volume" accessibilityValue={{ text: label }}
+      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+      onAccessibilityAction={event => step(event.nativeEvent.actionName === 'increment' ? 1 : -1)} style={[styles.row, { alignItems: 'center' }]}>
+      <Action label="−" disabled={effective <= 0} onPress={() => step(-1)} />
+      <Text style={styles.text}>{label}</Text>
+      <Action label="+" disabled={effective >= 1} onPress={() => step(1)} />
+    </View>
+    {volume !== null && <Action label="Use show default" onPress={() => onChange(null)} />}
+    <Text style={styles.muted}>Background music only; show audio and cues are unchanged. Saved on this device.</Text>
+  </>;
+}
 function Action({ label, onPress, disabled = false, primary = false, selected = false }: {
   label: string; onPress: () => void; disabled?: boolean; primary?: boolean; selected?: boolean;
 }) {
@@ -183,6 +205,7 @@ export function StageCompanion(props: Props) {
           <Action label="Check & install app update" disabled={props.busy} onPress={props.onUpdate} />
           <Text style={styles.muted}>App software: {props.appChannel}. Show content updates automatically when you join.</Text>
         </>}
+        <MusicVolume volume={props.musicVolume} showDefault={props.manifest ? props.manifest.backgroundMusic?.volume ?? null : undefined} onChange={props.onMusicVolume} />
         <Text style={styles.text}>{props.status}</Text>
         {props.manifest && <Text style={styles.muted}>Show {props.manifest.scenarioVersion} · {props.manifest.files.length} files · {props.manifest.revision.slice(0, 8)}</Text>}
         {props.connected && <><Text style={styles.text}>{props.audioStatus}</Text><Text style={styles.muted}>{props.clockText}</Text></>}

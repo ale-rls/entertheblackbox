@@ -41,6 +41,8 @@ export class ShowPlayer {
   }
   private bedUri: string | null = null;
   private musicStarted = false;
+  /** Participant's music volume (0–1); null follows the published show default. */
+  private musicVolume: number | null = null;
   private cue: Cue | null = null;
   private cueUri: string | null = null;
   private cueApplied = false;
@@ -77,8 +79,19 @@ export class ShowPlayer {
     // scheduler keeps new layers paused until resume.
     if (this.musicStarted || !this.bedUri || this.disposed) return;
     this.musicStarted = true;
-    AudioScheduler.setLayer(BED, { uri: this.bedUri, loop: true, volume: this.manifest.backgroundMusic!.volume })
-      .catch(error => this.fail(error));
+    this.applyMusic();
+  }
+  /** Sets the participant's background-music volume (null = show default); applies live without restarting the loop. */
+  setMusicVolume(volume: number | null) {
+    const next = volume === null ? null : Math.min(1, Math.max(0, volume));
+    if (next === this.musicVolume) return;
+    this.musicVolume = next;
+    if (this.musicStarted) this.applyMusic();
+  }
+  private applyMusic() {
+    if (!this.bedUri || this.disposed) return;
+    const volume = this.musicVolume ?? this.manifest.backgroundMusic!.volume;
+    AudioScheduler.setLayer(BED, { uri: this.bedUri, loop: true, volume }).catch(error => this.fail(error));
   }
   setCue(cue: Cue | null) {
     if (this.cue?.key === cue?.key && this.cue?.endsAt === cue?.endsAt) return;

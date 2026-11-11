@@ -12,6 +12,7 @@ import { NativeConnection } from './connection';
 import { acceptsSnapshot, cueForPlayback, type Snapshot } from './cues';
 import { downloadShow, downloadWallSlice, loadShow } from './content';
 import { ShowPlayer } from './player';
+import { MUSIC_VOLUME_KEY, parseMusicVolume } from './music-volume';
 import { StageCompanion } from './StageCompanion';
 import { PlaybackActivity, stageState } from './stage-state';
 import { actionPrompt } from './action-prompt';
@@ -35,6 +36,8 @@ export default function App() {
   const [surface, setSurface] = useState(initialSurface);
   const [name, setName] = useState('');
   const [deviceLabel, setDeviceLabel] = useState('');
+  const [musicVolume, setMusicVolume] = useState<number | null>(null);
+  const musicVolumeRef = useRef<number | null>(null);
   const [manifest, setManifest] = useState<ShowManifest | null>(null);
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -96,7 +99,13 @@ export default function App() {
   }
   useEffect(() => {
     void SecureStore.getItemAsync(DEVICE_LABEL_KEY).then(value => { if (value) setDeviceLabel(value); }).catch(() => { /* Unlabelled until set. */ });
+    void SecureStore.getItemAsync(MUSIC_VOLUME_KEY).then(value => setMusicVolume(parseMusicVolume(value))).catch(() => { /* Show default until set. */ });
   }, []);
+  useEffect(() => { musicVolumeRef.current = musicVolume; player.current?.setMusicVolume(musicVolume); }, [musicVolume]);
+  function saveMusicVolume(value: number | null) {
+    setMusicVolume(value);
+    void (value === null ? SecureStore.deleteItemAsync(MUSIC_VOLUME_KEY) : SecureStore.setItemAsync(MUSIC_VOLUME_KEY, String(value))).catch(() => setError('Could not save the music volume'));
+  }
   function saveDeviceLabel(value: string) {
     const label = value.slice(0, 40);
     setDeviceLabel(label);
@@ -218,6 +227,7 @@ export default function App() {
       },
     });
     player.current = new ShowPlayer(latestShow, c.clock, setAudioStatus);
+    player.current.setMusicVolume(musicVolumeRef.current);
     connection.current = c; setConnected(true); c.start();
   }
   async function updateApp() {
@@ -260,7 +270,7 @@ export default function App() {
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
   return <StageCompanion actionPrompt={activePrompt} admission={admission} onAdmissionGroup={groupId => { if (admission && authorized.current) connection.current?.send({ t: 'admission_choice', v: PROTOCOL_VERSION, generation: admission.generation, groupId }); }} participantTask={<ParticipantTaskCard state={task} now={serverNow} enabled={connected && status === 'Connected'} respond={optionId => { if (task?.task && authorized.current) connection.current?.send({ t: 'participant_task_response', v: PROTOCOL_VERSION, sessionId: task.sessionId, instanceId: task.task.id, optionId }); }} />} taskVisible={!!task?.task && task.task.status !== 'cancelled'} answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
     paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
-    surface={visibleSurface(surface)} wall={wallLayer} wallVisible={!!wallLayer && wall?.startAt != null} onShowMode={setShowMode} origin={origin} name={name} deviceLabel={deviceLabel} onDeviceLabel={saveDeviceLabel} manifest={manifest} identity={identity} clockText={clockText}
+    surface={visibleSurface(surface)} wall={wallLayer} wallVisible={!!wallLayer && wall?.startAt != null} onShowMode={setShowMode} origin={origin} name={name} deviceLabel={deviceLabel} onDeviceLabel={saveDeviceLabel} musicVolume={musicVolume} onMusicVolume={saveMusicVolume} manifest={manifest} identity={identity} clockText={clockText}
     notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}
     onOrigin={value => { setOrigin(value); setManifest(null); }}
     onName={setName}
