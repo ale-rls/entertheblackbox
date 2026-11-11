@@ -49,6 +49,7 @@ function join(
   ip?: string,
   forwarded?: string,
   capabilities?: string[],
+  client?: "native" | "web",
 ): void {
   controller.handleConnection(s, request(ip, forwarded));
   s.emit("message", Buffer.from(JSON.stringify({
@@ -56,6 +57,7 @@ function join(
     v: 2,
     clientVersion: "test",
     ...(capabilities ? { capabilities } : {}),
+    ...(client ? { client } : {}),
     installationId: "inst-1",
     roomId: "room-1",
     name: "Test participant",
@@ -560,7 +562,7 @@ it('hands a connected device to a fresh occupant and rejects the retired lease',
   expect(replacement).toMatchObject({deviceLabel:'T07',client:'native'});
   expect(replacement.clientId).not.toBe(before.clientId);expect(c.registry.values()).toHaveLength(1);expect(lastMessage(s)).toMatchObject({t:'identity',clientId:replacement.clientId});
   const stale=socket();join(c,stale,'',before.participantLease);expect(lastMessage(stale)).toMatchObject({t:'join_rejected',reason:'expired_grant'});
-  const reconnect=socket();join(c,reconnect,'',replacement.participantLease);expect(lastMessage(reconnect)).toMatchObject({t:'identity',clientId:replacement.clientId});
+  const reconnect=socket();join(c,reconnect,'',replacement.participantLease,undefined,undefined,['occupant-handover-v1']);expect(lastMessage(reconnect)).toMatchObject({t:'identity',clientId:replacement.clientId});
 });
 it('gives older native clients a parseable upgrade explanation before capability rejection', () => {
   const c=controller({allowPublicJoin:true,requiredCapabilities:()=>['admission-programs-v1']});const s=socket();join(c,s,'');
@@ -578,4 +580,45 @@ it('requires personal routing on native clients without blocking theater browser
  const web=socket();join(c,web,'',undefined,undefined,undefined,['participant-tasks-v1']);expect(lastMessage(web)).toMatchObject({t:'identity'});
  const oldNative=socket();join(c,oldNative,'',undefined,undefined,undefined,['participant-tasks-v1','occupant-handover-v1']);expect(lastMessage(oldNative)).toMatchObject({t:'join_rejected',reason:'update_required'});
  const native=socket();join(c,native,'',undefined,undefined,undefined,['participant-tasks-v1','occupant-handover-v1','participant-task-routing-v1']);expect(lastMessage(native)).toMatchObject({t:'identity'});
+});
+
+describe("client-bound recovery", () => {
+  it("keeps same-name browser and native identities separate while preserving genuine reconnect", () => {
+    const c = controller({ allowPublicJoin: true });
+    const native = socket(); join(c, native, "", undefined, undefined, undefined, [], "native");
+    const first = lastMessage(native);
+    const browser = socket(); join(c, browser, "", first.participantLease, undefined, undefined, [], "web");
+    expect(lastMessage(browser).clientId).not.toBe(first.clientId);
+    expect(c.registry.values().map(p => [p.name, p.client])).toEqual([["Test participant", "native"], ["Test participant", "web"]]);
+    expect(native.readyState).toBe(1);
+    const reconnect = socket(); join(c, reconnect, "", first.participantLease, undefined, undefined, [], "native");
+    expect(lastMessage(reconnect)).toMatchObject({ clientId: first.clientId, participantLease: first.participantLease });
+  });
+  it("preserves channel binding after registry pruning", () => {
+    let now = 1000; const c = controller({ allowPublicJoin: true, now: () => now, disconnectGraceMs: 100 });
+    const native = socket(); join(c, native, "", undefined, undefined, undefined, [], "native");
+    const first = lastMessage(native); native.close(); now += 101; c.registry.pruneExpired(now);
+    expect(c.registry.values()).toHaveLength(0);
+    const browser = socket(); join(c, browser, "", first.participantLease, undefined, undefined, [], "web");
+    expect(lastMessage(browser).clientId).not.toBe(first.clientId);
+    const reconnect = socket(); join(c, reconnect, "", first.participantLease, undefined, undefined, [], "native");
+    expect(lastMessage(reconnect).clientId).toBe(first.clientId);
+  });
+  it("applies fresh admission restrictions to an incompatible lease", () => {
+    let allowed = true; const c = controller({ allowPublicJoin: true, isNewParticipantAllowed: () => allowed });
+    const native = socket(); join(c, native, "", undefined, undefined, undefined, [], "native"); allowed = false;
+    const browser = socket(); join(c, browser, "", lastMessage(native).participantLease, undefined, undefined, [], "web");
+    expect(lastMessage(browser)).toMatchObject({ t: "join_rejected", reason: "show_in_progress" });
+    expect(c.registry.values()).toHaveLength(1);
+  });
+  it("accepts known legacy recovery but starts fresh for unknown unbound identities", () => {
+    const c = controller({ allowPublicJoin: true });
+    const legacy = issueParticipantLease({ secret: "this-is-a-test-secret", installationId: "inst-1", clientId: "legacy", ttlMs: 100000, now: 1000 });
+    c.registry.admit({ participantLease: legacy.token, clientId: "legacy", name: "Test participant", client: "native", leaseExpiresAt: legacy.claims.expiresAt, socket: socket(), now: 1000 });
+    const reconnect = socket(); join(c, reconnect, "", legacy.token, undefined, undefined, [], "native");
+    expect(lastMessage(reconnect).clientId).toBe("legacy");
+    c.registry.removeLease(legacy.token);
+    const browser = socket(); join(c, browser, "", legacy.token, undefined, undefined, [], "web");
+    expect(lastMessage(browser).clientId).not.toBe("legacy");
+  });
 });
