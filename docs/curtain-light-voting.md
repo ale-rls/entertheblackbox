@@ -51,8 +51,8 @@ capped. Areas never move or grow with popularity.
 
 Each cursor is a bright centre with a soft flood, tinted toward nearby answer
 colours. Its flood strengthens once it stands in a counting area. The title
-and labels stay visible throughout: a word is cut dark out of a lit pool or
-drawn pale on unlit fabric.
+and labels stay visible throughout in white, with a soft dark halo for contrast
+over both lit pools and unlit fabric.
 
 ## Entry and identification
 

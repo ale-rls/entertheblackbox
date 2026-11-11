@@ -8,3 +8,5 @@
 .monitor-image figcaption { position: absolute; bottom: 5%; width: 90%; left: 5%; text-align: center; font-size: 4vw; white-space: pre-wrap; text-shadow: 0 2px 8px #000; }
 .monitor-status { position: absolute; left: 1rem; bottom: 1rem; max-width: 90%; padding: .8rem 1rem; background: #111e; border: 1px solid #666; font-size: 16px; }
 .monitor-status p { margin: .3rem 0; }
+
+.monitor-countdown { position: absolute; right: 4vw; top: 3vh; color: #fff; font-size: clamp(40px, 8vw, 160px); font-variant-numeric: tabular-nums; line-height: 1; text-shadow: 0 2px 12px #000; }

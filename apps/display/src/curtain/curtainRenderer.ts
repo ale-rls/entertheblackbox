@@ -31,7 +31,7 @@ in vec2 uv; out vec4 o;
 uniform sampler2D tex;      // packed curtain frame (2560x1408)
 uniform sampler2D pool;     // answer-pool light, sqrt-encoded linear RGB
 uniform sampler2D cursorLight; // accumulated cursor floods, linear RGB
-uniform sampler2D txt;      // text at output size: alpha coverage, red ink
+uniform sampler2D txt;      // text at output size: RGBA lettering and shadow
 uniform bool hasTex;
 uniform vec4 crop;          // clip-space crop: xy offset, zw size (cover fit)
 uniform float baked, folds, shine, shadow, opacity, cursorScale;
@@ -84,10 +84,8 @@ void main(){
   c = (1. - exp(-c * 1.15)) * .9;
   vec3 shown = pow(c, vec3(1. / 2.2));
   vec4 t = texture(txt, uv);
-  // Ink is chosen per word on the CPU (red channel): letters cut dark out of
-  // a lit pool, or pale on unlit fabric, so a word never changes mid-way.
-  vec3 ink = mix(vec3(.02), vec3(.86), t.r);
-  o = vec4(mix(shown, ink, t.a), opacity);
+  // Preserve white lettering and its dark halo from the CPU text canvas.
+  o = vec4(mix(shown, t.rgb, t.a), opacity);
 }`;
 
 /** Instanced Gaussian sprite: used for both cursor floods (into a buffer) and cores (on screen). */
@@ -296,7 +294,7 @@ export class CurtainRenderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, columns, rows, 0, gl.RGBA, gl.UNSIGNED_BYTE, this.poolEncoded);
   }
 
-  /** Upload the text layer: alpha is coverage, red is the ink (0 dark, 1 pale). */
+  /** Upload white lettering and its dark halo as an RGBA text layer. */
   uploadText(text: HTMLCanvasElement): void {
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.textTexture);

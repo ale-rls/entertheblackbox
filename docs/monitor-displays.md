@@ -41,8 +41,10 @@ Video sound is always muted. Use native audio for participant narration.
 
 Question-first/answers-second can be authored as two cues at different offsets.
 Labels are authored explicitly; floor axes are not guessed from question text.
-Countdowns can be authored as timed text cues or video; there is no automatic
-question countdown/axis-routing helper. Ensure the main phase lasts long enough
+A white countdown appears automatically over nonblank monitor cues while a
+positioning vote is open, using its server deadline (or video voting window).
+It disappears when the vote closes or resolves; untimed votes and blank screens
+have no countdown. Axis routing remains authored. Ensure the main phase lasts long enough
 for its monitor cues. A phase transition always cancels its remaining cues.
 
 **Timing owner:** monitors follow the main server timeline by default. Set scenario `monitorGroupId` to a declared audience group to follow its independent scene clock instead, including reconnects and operator jumps. While that path waits for reunion, screens clear; at reunion they follow the shared scene again. This requires a server build supporting `monitorGroupId`.

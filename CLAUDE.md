@@ -85,7 +85,8 @@ file as part of the same PR — don't let it drift into a stale snapshot.
 - **Attract clips must be named `attract-*.mp4`** in `apps/display/src/assets/`.
   Any other name is silently ignored by the glob in `IdleAttract.tsx`, and a
   bare `*.mp4` would pull in the rendered `credits.mp4`. First clip by filename
-  is the A/hold clip. Empty playlist is a supported state: static centred QR.
+  is the A/hold clip. Empty playlist is a supported state: black on main/group idle displays,
+  static centred QR on signage kiosks.
 - **The display uses a service worker.** After rebuilding, hard-refresh or you
   will debug a stale bundle. README has the full recovery steps.
 - **Studio publishes all show outputs together.** File → Publish show prepares
