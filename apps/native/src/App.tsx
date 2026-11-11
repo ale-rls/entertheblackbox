@@ -16,6 +16,7 @@ import { StageCompanion } from './StageCompanion';
 import { PlaybackActivity, stageState } from './stage-state';
 import { actionPrompt } from './action-prompt';
 import { createActionAlerts, enableActionNotifications } from './notifications';
+import { createForegroundAttention } from './foreground-attention';
 import { applySurface, expireSurface, initialSurface, surfaceDelay, visibleSurface } from './surface';
 import { acceptWall, wallStatus, type WallPlayback, type WallSliceState } from './wall';
 import { WallVideo } from './WallVideo';
@@ -49,6 +50,9 @@ export default function App() {
   const [groups, setGroups] = useState<Groups | null>(null);
   const [notificationStatus, setNotificationStatus] = useState('');
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [foreground, setForeground] = useState(AppState.currentState === 'active');
+  const attention = useRef<ReturnType<typeof createForegroundAttention> | null>(null);
+  if (!attention.current) attention.current = createForegroundAttention(() => setNotificationStatus('Could not play the action cue. Follow the on-screen prompt.'));
   const [answered, setAnswered] = useState<string | null>(null);
   const alerts = useRef<ReturnType<typeof createActionAlerts> | null>(null);
   if (!alerts.current) alerts.current = createActionAlerts(() => setNotificationStatus('Could not show an alert. Keep the app open for show actions.'));
@@ -104,11 +108,17 @@ export default function App() {
   useEffect(() => {
     alerts.current?.update(connected && status === 'Connected' && notificationsEnabled && prompt?.key !== answered ? prompt : null);
   }, [connected, status, notificationsEnabled, prompt?.key, answered]);
+  const activePrompt = connected && status === 'Connected' && prompt?.key !== answered ? prompt : null;
+  useEffect(() => {
+    attention.current?.update(foreground && !paused ? activePrompt : null);
+  }, [foreground, paused, activePrompt?.key]);
+  useEffect(() => () => { attention.current?.update(null); }, []);
   function acknowledgeAction(kind: 'group' | 'vote' | 'rating') {
     if (!prompt || !(kind === 'rating' ? /:rating:\d+$/.test(prompt.key) : prompt.key.endsWith(`:${kind}`))) return;
     setAnswered(prompt?.key ?? null); alerts.current?.update(null);
   }
   function leave() {
+    attention.current?.update(null);
     alerts.current?.update(null); setNotificationsEnabled(false); setAnswered(null);
     connection.current?.stop(); player.current?.dispose(); connection.current = null; player.current = null; resetSurface();
     setWall(null); setWallPlayback(null);
@@ -116,7 +126,7 @@ export default function App() {
     setConnected(false); setPaused(false); setPlaying(false); setError(''); setNotificationStatus(''); setStatus('Disconnected'); setAudioStatus('Audio stopped');
   }
   useEffect(() => {
-    const listener = AppState.addEventListener('change', state => { if (state === 'active') connection.current?.resume(); });
+    const listener = AppState.addEventListener('change', state => { setForeground(state === 'active'); if (state === 'active') connection.current?.resume(); });
     const playbackTimer = setInterval(() => {
       const p = player.current;
       const cue = latest.current ? cueForPlayback(latest.current, taskRef.current, connection.current?.clock.now() ?? Date.now()) : null;
@@ -248,7 +258,7 @@ export default function App() {
       serverNow={() => connection.current?.clock.now() ?? Date.now()} onPlayback={setWallPlayback} />
     : null;
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
-  return <StageCompanion admission={admission} onAdmissionGroup={groupId => { if (admission && authorized.current) connection.current?.send({ t: 'admission_choice', v: PROTOCOL_VERSION, generation: admission.generation, groupId }); }} participantTask={<ParticipantTaskCard state={task} now={serverNow} enabled={connected && status === 'Connected'} respond={optionId => { if (task?.task && authorized.current) connection.current?.send({ t: 'participant_task_response', v: PROTOCOL_VERSION, sessionId: task.sessionId, instanceId: task.task.id, optionId }); }} />} taskVisible={!!task?.task && task.task.status !== 'cancelled'} answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
+  return <StageCompanion actionPrompt={activePrompt} admission={admission} onAdmissionGroup={groupId => { if (admission && authorized.current) connection.current?.send({ t: 'admission_choice', v: PROTOCOL_VERSION, generation: admission.generation, groupId }); }} participantTask={<ParticipantTaskCard state={task} now={serverNow} enabled={connected && status === 'Connected'} respond={optionId => { if (task?.task && authorized.current) connection.current?.send({ t: 'participant_task_response', v: PROTOCOL_VERSION, sessionId: task.sessionId, instanceId: task.task.id, optionId }); }} />} taskVisible={!!task?.task && task.task.status !== 'cancelled'} answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
     paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
     surface={visibleSurface(surface)} wall={wallLayer} wallVisible={!!wallLayer && wall?.startAt != null} onShowMode={setShowMode} origin={origin} name={name} deviceLabel={deviceLabel} onDeviceLabel={saveDeviceLabel} manifest={manifest} identity={identity} clockText={clockText}
     notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}
