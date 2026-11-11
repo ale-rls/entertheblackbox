@@ -9,6 +9,12 @@ import type { Cue } from './cues';
 
 const CUE = 'cue';
 const BED = 'bed';
+/**
+ * Audio removed while still audible (a skip, the show starting during the admission loop, a
+ * handover) fades out over this long instead of cutting. The native scheduler releases layers
+ * that have already finished at once, so natural ends are unaffected.
+ */
+export const SKIP_FADE_MS = 3000;
 type MediaTiming = ClockTiming['media'][number];
 
 /**
@@ -27,7 +33,7 @@ export class ShowPlayer {
     if (key === this.admissionKey) return;
     this.admissionKey = key;
     this.queue(async () => {
-      for (const id of this.admissionIds) await AudioScheduler.clearLayer(id);
+      for (const id of this.admissionIds) await AudioScheduler.fadeOutLayer(id, SKIP_FADE_MS);
       this.admissionIds = [];
       if (!state?.active || !state.program || state.anchor === null || state.scenarioVersion !== this.manifest.scenarioVersion) return;
       AudioScheduler.setClock(this.clock.now());
@@ -82,6 +88,9 @@ export class ShowPlayer {
   }
   setCue(cue: Cue | null) {
     if (this.cue?.key === cue?.key && this.cue?.endsAt === cue?.endsAt) return;
+    // A different cue replaces the layer: let the outgoing one fade. The same cue with a new end
+    // is only retimed by the scheduler, without restarting or fading.
+    if (this.cueApplied && this.cue?.key !== cue?.key) this.queue(() => AudioScheduler.fadeOutLayer(CUE, SKIP_FADE_MS));
     this.cue = null; this.cueUri = null; this.cueApplied = false;
     if (!cue) { this.clearCue('Waiting for the next cue'); return; }
     if (cue.scenarioVersion !== this.manifest.scenarioVersion) {
@@ -93,7 +102,7 @@ export class ShowPlayer {
     this.applyCue();
   }
   private clearCue(status: string) {
-    this.queue(() => AudioScheduler.clearLayer(CUE));
+    this.queue(() => AudioScheduler.fadeOutLayer(CUE, SKIP_FADE_MS));
     this.report(status);
   }
   private applyCue() {

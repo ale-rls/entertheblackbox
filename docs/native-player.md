@@ -82,6 +82,10 @@ Cues still *arrive* through JavaScript over the WebSocket. Android delivers sock
 
 The module is native code: changing it needs a new EAS build, not an EAS update.
 
+### Skipped audio fades out
+
+Audio that is removed while still sounding fades out over 3 s (`SKIP_FADE_MS`) instead of cutting. This happens when an operator skips ahead or a different cue replaces the current one, when the show starts during an admission loop, or on a handover. `fadeOutLayer` detaches the layer and ramps its volume on a native timer, so the fade works with the screen locked. The next cue starts at once on the freed layer, overlapping the fade. Cues that already ended, the same cue being retimed, and the music bed are never faded. Builds made before native fade support fall back to a hard stop (`supportsFadeOut()` is false). Leaving the show and pausing still stop immediately.
+
 Before production, use installed builds on each supported iPhone/Android model. Keep devices locked for the full show, including at least ten minutes of music without narration, then exercise repeated operator skips, timed advances, group changes and reconnects. Verify music remains audible and every correct narration starts at the show position. Check lock-screen pause/resume stops/starts both layers, phone calls and headphone removal, and leave/show end cleanup. Record cue-to-ear delay at audience-scale load. These physical checks have not been performed by automated tests.
 
 ## Show content and application software
@@ -162,6 +166,7 @@ Cue scheduling is native (see **Native audio scheduling**), but cue *reception* 
 
 - Run the full show on a real iPhone and Android, with wired headphones first, then the intended Bluetooth devices. Record audible cue-to-ear skew against the main display; the reported drift is playback-position telemetry, not an acoustic measurement.
 - Lock both devices for at least ten minutes, including a long silent section. Trigger a new cue and change groups while locked; confirm the right audio actually starts.
+- Skip a cue while it plays, and start the show during an admission loop, locked and unlocked: the old audio fades out over about 3 s while the next cue starts.
 - Exercise late joining, switching groups to an older phase epoch, track end, silent phases, phone calls, unplugged headphones, native lock-screen pause and explicit resume.
 - Disconnect Wi-Fi: the current local track may finish, but unknown future branches cannot be inferred offline. Restore Wi-Fi and verify the device seeks into the current cue rather than replaying its start.
 - Interrupt a download and test corrupted audio; the previous complete show stays selected. Verify new app/show updates are unavailable while joined.

@@ -103,6 +103,7 @@ class SchedulerEngine private constructor(private val context: Context) {
   companion object {
     private const val MAINTAIN_INTERVAL_MS = 250L
     private const val RESYNC_GRACE_MS = 1000L
+    private const val FADE_STEP_MS = 30L
 
     @Volatile
     private var instance: SchedulerEngine? = null
@@ -123,10 +124,12 @@ class SchedulerEngine private constructor(private val context: Context) {
     private set
   var paused = false
     private set
-  val hasLayers get() = layers.isNotEmpty()
+  val hasLayers get() = layers.isNotEmpty() || fading.isNotEmpty()
 
   private val handler = Handler(Looper.getMainLooper())
   private val layers = LinkedHashMap<String, LayerRuntime>()
+  /** Layers detached by `fadeOutLayer`: no longer addressable or reported, released when silent. */
+  private val fading = mutableListOf<LayerRuntime>()
   private var configured = false
   private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
   private var focusRequest: AudioFocusRequest? = null
@@ -207,7 +210,7 @@ class SchedulerEngine private constructor(private val context: Context) {
 
   private fun updateWakeLock() {
     // Holds the CPU awake so scheduled starts fire on time even between audible layers.
-    if (configured && !paused && layers.isNotEmpty()) {
+    if (configured && !paused && hasLayers) {
       if (!wakeLock.isHeld) wakeLock.acquire()
     } else if (wakeLock.isHeld) {
       wakeLock.release()
@@ -272,6 +275,47 @@ class SchedulerEngine private constructor(private val context: Context) {
     updateWakeLock()
     notifySession()
     refreshSnapshot()
+  }
+
+  /**
+   * Detaches a layer and ramps its volume to silence over [durationMs] on the main looper, then
+   * releases it. The id is free immediately, so a replacement can start while this one fades.
+   * Native Handler callbacks keep running with the screen locked. A layer that isn't audible
+   * (or a paused engine) is released at once.
+   */
+  fun fadeOutLayer(id: String, durationMs: Double) {
+    val layer = layers.remove(id) ?: return
+    if (paused || durationMs <= 0 || layer.state != "playing" || !layer.player.isPlaying) {
+      release(layer)
+    } else {
+      cancelTimers(layer)
+      fading.add(layer)
+      val from = layer.player.volume
+      val startedAt = SystemClock.elapsedRealtime()
+      handler.post(object : Runnable {
+        override fun run() {
+          if (!fading.contains(layer)) return
+          val progress = (SystemClock.elapsedRealtime() - startedAt) / durationMs
+          if (progress >= 1.0) {
+            fading.remove(layer)
+            release(layer)
+            updateWakeLock()
+            notifySession()
+            return
+          }
+          layer.player.volume = (from * (1.0 - progress)).toFloat()
+          handler.postDelayed(this, FADE_STEP_MS)
+        }
+      })
+    }
+    updateWakeLock()
+    notifySession()
+    refreshSnapshot()
+  }
+
+  private fun releaseFading() {
+    for (layer in fading) release(layer)
+    fading.clear()
   }
 
   private fun release(layer: LayerRuntime) {
@@ -382,6 +426,8 @@ class SchedulerEngine private constructor(private val context: Context) {
   fun pause(reason: String) {
     if (paused) return
     paused = true
+    // A fade can't be resumed meaningfully; pausing silences it for good.
+    releaseFading()
     for (layer in layers.values) {
       if (layer.state == "error") continue
       cancelTimers(layer)
@@ -411,6 +457,7 @@ class SchedulerEngine private constructor(private val context: Context) {
   fun reset() {
     for (layer in layers.values) release(layer)
     layers.clear()
+    releaseFading()
     paused = false
     clock.clear()
     if (configured) {

@@ -15,6 +15,7 @@ import { applyKioskGuards, performReload } from "./lib/kiosk.js";
 import { IDLE_PLACEHOLDER, startHeartbeat } from "./lib/heartbeat.js";
 import { startQrGrantRefresh } from "./qr/refreshGrant.js";
 import { useMedia } from "./media/useMedia.js";
+import { setSkipFadeUrlHold } from "./media/skipFade.js";
 import { displayReducer, initialDisplayState } from "./state/store.js";
 import { Countdown } from "./components/Countdown.js";
 import { QrBadge } from "./components/QrBadge.js";
@@ -338,6 +339,11 @@ export function App() {
   useEffect(() => {
     void media.showMedia(phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc);
   }, [phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc, media.store]);
+  // Skipped audio fades out from a detached copy; keep its Blob URL alive meanwhile.
+  useEffect(() => {
+    setSkipFadeUrlHold((url, ms) => media.store.holdUrl(url, ms));
+    return () => setSkipFadeUrlHold(null);
+  }, [media.store]);
 
   // A signage kiosk (e.g. a lobby entrance screen) never renders show
   // content -- just its configured background loop and the live join QR,

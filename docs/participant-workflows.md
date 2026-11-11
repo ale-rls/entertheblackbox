@@ -61,7 +61,8 @@ checked on real iOS and Android devices on the venue network:
 
 1. Admission intro → loop over at least three loop cycles, on iOS and Android,
    with the screen locked. The iOS check covers the retained-queue-item fix.
-2. The move from admission audio to the first show cue: no overlap, no gap
+2. The move from admission audio to the first show cue: the admission audio
+   fades out over 3 s under the first cue (skipped audio fade), with no gap
    longer than the authored one.
 3. Task notifications on a locked device, the outcome screen after answering,
    and capacity races between two devices answering at the same moment.

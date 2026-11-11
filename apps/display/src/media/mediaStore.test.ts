@@ -210,6 +210,33 @@ describe("Blob URL lifecycle", () => {
     expect(store.activeBlobCount).toBe(1);
   });
 
+  it("keeps a held URL alive until the fade ends, then revokes it if no phase needs it", async () => {
+    const { caches } = fakeCaches();
+    const revoke = vi.fn();
+    const store = new MediaStore({
+      caches,
+      fetchFn: fakeFetch(),
+      digest: fakeDigest,
+      createObjectUrl: (blob) => `blob:${blob.size}`,
+      revokeObjectUrl: revoke,
+      sleep: async () => {},
+    });
+    await store.sync(manifest);
+    const a = await store.getBlobUrl("a.mp4");
+    await store.getBlobUrl("b.mp4");
+    vi.useFakeTimers();
+    try {
+      store.holdUrl(a!, 4000);
+      store.retainOnly(new Set(["b.mp4"]));
+      expect(revoke).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(4000);
+      expect(revoke).toHaveBeenCalledWith("blob:3");
+      expect(store.activeBlobCount).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("revokes all Blob URLs on stop()", async () => {
     const { caches } = fakeCaches();
     const revoke = vi.fn();

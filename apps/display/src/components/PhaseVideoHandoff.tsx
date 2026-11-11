@@ -2,6 +2,7 @@ import type { ServerClock } from "@entertheblackbox/shared";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DisplayToServerMessage, PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import { PhaseVideo } from "./PhaseVideo.js";
+import { fadeOutSkippedAudio } from "../media/skipFade.js";
 
 type VideoPhase = Extract<
   PhaseSnapshotMessage,
@@ -58,6 +59,9 @@ export function PhaseVideoHandoff({
 
     if (desiredKey === null) {
       if (currentSlot !== null) {
+        // Still sounding means the show moved on before the media ended: fade its audio out.
+        fadeOutSkippedAudio(videoRefs.current[currentSlot]);
+        fadeOutSkippedAudio(audioRefs.current[currentSlot]);
         videoRefs.current[currentSlot]?.pause();
         audioRefs.current[currentSlot]?.pause();
         activeSlotRef.current = null;
@@ -71,7 +75,10 @@ export function PhaseVideoHandoff({
 
     if (current !== null && current.key !== desiredKey) {
       // Pause without removing the element: an ended/paused video continues to
-      // paint its last decoded frame while the next Blob is prepared.
+      // paint its last decoded frame while the next Blob is prepared. Audio that
+      // is still sounding was skipped and fades out from a detached copy.
+      fadeOutSkippedAudio(videoRefs.current[currentSlot!]);
+      fadeOutSkippedAudio(audioRefs.current[currentSlot!]);
       videoRefs.current[currentSlot!]?.pause();
       audioRefs.current[currentSlot!]?.pause();
       onVideoElement?.(null);

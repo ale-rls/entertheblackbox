@@ -3,7 +3,7 @@ import { ServerClock } from '@entertheblackbox/shared';
 const scheduler = vi.hoisted(() => ({
   listeners: [] as ((event: { paused: boolean; reason: string }) => void)[],
   timing: [] as { id: string; state: string; positionMs: number | null; targetMs: number | null; driftMs: number | null; error: string | null }[],
-  configure: vi.fn(async () => {}), setClock: vi.fn(), setLayer: vi.fn(async (_id: string, _layer: unknown) => {}), clearLayer: vi.fn(async (_id: string) => {}),
+  configure: vi.fn(async () => {}), setClock: vi.fn(), setLayer: vi.fn(async (_id: string, _layer: unknown) => {}), clearLayer: vi.fn(async (_id: string) => {}), fadeOutLayer: vi.fn(async (_id: string, _ms: number) => {}),
   pause: vi.fn(async () => {}), resume: vi.fn(async () => {}), reset: vi.fn(async () => {}),
   getTiming: vi.fn(), removeListener: vi.fn(), addListener: vi.fn(),
 }));
@@ -43,14 +43,30 @@ it('waits for a measured clock before scheduling, then schedules from housekeepi
 it('fails closed on a different show version or missing source', async () => {
   const { p, status } = setup(); p.setCue({ ...cue, scenarioVersion: 'other' }); await p.settled();
   expect(status).toHaveBeenCalledWith(expect.stringContaining('Show changed')); expect(scheduler.setLayer).not.toHaveBeenCalled();
-  expect(scheduler.clearLayer).toHaveBeenCalledWith('cue');
+  expect(scheduler.fadeOutLayer).toHaveBeenCalledWith('cue', 3000);
   p.setCue({ ...cue, src: 'missing.mp3' }); expect(status).toHaveBeenCalledWith(expect.stringContaining('Missing downloaded'));
 });
 it('clears the cue layer on a silent phase and reschedules only on a real cue change', async () => {
   const { p } = setup(); p.setCue(cue); p.setCue({ ...cue }); await p.settled();
   expect(scheduler.setLayer).toHaveBeenCalledOnce();
   p.setCue({ ...cue, endsAt: 12000 }); await p.settled(); expect(scheduler.setLayer).toHaveBeenCalledTimes(2);
-  p.setCue(null); await p.settled(); expect(scheduler.clearLayer).toHaveBeenCalledWith('cue');
+  expect(scheduler.fadeOutLayer).not.toHaveBeenCalled();
+  p.setCue(null); await p.settled(); expect(scheduler.fadeOutLayer).toHaveBeenCalledWith('cue', 3000);
+});
+it('fades the outgoing cue out over 3 s before the next cue takes the layer, and never fades the bed', async () => {
+  const { p } = setup({ withMusic: true }); p.startMusic();
+  p.setCue(cue); await p.settled();
+  p.setCue({ ...cue, key: 'next', src: 'voice.mp3', startedAt: 4000 }); await p.settled();
+  expect(scheduler.fadeOutLayer).toHaveBeenCalledOnce();
+  expect(scheduler.fadeOutLayer).toHaveBeenCalledWith('cue', 3000);
+  expect(scheduler.fadeOutLayer.mock.invocationCallOrder[0]).toBeLessThan(scheduler.setLayer.mock.invocationCallOrder.at(-1)!);
+  expect(scheduler.setLayer).toHaveBeenLastCalledWith('cue', { uri: 'file://b.mp3', startAt: 4000, endAt: 11000 });
+  expect(scheduler.fadeOutLayer).not.toHaveBeenCalledWith('bed', expect.anything());
+});
+it('does not fade when nothing was scheduled yet', async () => {
+  const { p } = setup({ calibrated: false });
+  p.setCue(cue); p.setCue({ ...cue, key: 'next' }); await p.settled();
+  expect(scheduler.fadeOutLayer).not.toHaveBeenCalled();
 });
 it('starts the looping bed once and leaves it alone across cue changes, then releases everything on leave', async () => {
   const { p } = setup({ withMusic: true });
@@ -101,7 +117,8 @@ it('serializes admission cleanup before the first active show cue',async()=>{
   p.setAdmission({t:'admission_state',v:2,generation:'lobby',scenarioVersion:'one',revision:1,anchor:1000,active:true,choices:[],program:{groupId:'ki',intro:[],loop:[{src:cue.src,durationMs:10000}]}});
   await p.settled();expect(scheduler.setLayer).toHaveBeenCalledWith('admission-loop-0',expect.objectContaining({repeatEveryMs:10000}));
   p.setAdmission(null);p.setCue(cue);await p.settled();
-  expect(scheduler.clearLayer.mock.invocationCallOrder.at(-1)).toBeLessThan(scheduler.setLayer.mock.invocationCallOrder.at(-1)!);
+  expect(scheduler.fadeOutLayer).toHaveBeenCalledWith('admission-loop-0',3000);
+  expect(scheduler.fadeOutLayer.mock.invocationCallOrder.at(-1)).toBeLessThan(scheduler.setLayer.mock.invocationCallOrder.at(-1)!);
 });
 it('waits for a retired player to release admission audio before configuring the next join',async()=>{
   const {p}=setup();let release!:()=>void;
