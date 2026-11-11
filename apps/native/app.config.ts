@@ -7,7 +7,7 @@ const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? 'b9d7bb05-42d6-4711-
 const store = process.env.STORE_BUILD === '1';
 const config: ExpoConfig = {
   name: 'Enter the Blackbox', slug: 'enter-the-blackbox', scheme: 'entertheblackbox',
-  version: '1.4.0', orientation: 'portrait', icon: './assets/icon.png',
+  version: '1.5.0', orientation: 'portrait', icon: './assets/icon.png',
   owner: process.env.EXPO_OWNER ?? 'manusnijhoff',
   runtimeVersion: { policy: 'fingerprint' },
   // Shows never reload themselves mid-performance. Updates are requested explicitly while disconnected.
