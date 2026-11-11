@@ -1633,3 +1633,30 @@ describe("authored stage monitor connections", () => {
     expect(mixed.closes[0]?.code).toBe(1008);
   });
 });
+
+describe("native clients do not supply phone cursors", () => {
+  it.each([false, true])("excludes native from display presence and vote cohort (late join: %s)", (late) => {
+    let now = 1000;
+    let snapshot: FinalVoteSnapshot | undefined;
+    const { engine, registry } = setup({ now: () => now, interactiveIdleTimeoutMs: 1000, onVoteSnapshotEnqueued: s => { snapshot = s; } });
+    const web = new MockSocket(); const native = new MockSocket(); const display = new MockSocket();
+    connectDisplay(engine, display as unknown as WebSocket);
+    addParticipant(registry, web as unknown as WebSocket, now, "web");
+    engine.participantJoined(web as unknown as WebSocket, registry.get("lease-web"));
+    const joinNative = () => {
+      expect(registry.admit({ participantLease: "native-lease", clientId: "native", name: "App", client: "native", leaseExpiresAt: now + 10000, socket: native as unknown as WebSocket, now }).ok).toBe(true);
+      engine.participantJoined(native as unknown as WebSocket, registry.get("native-lease"));
+    };
+    if (!late) joinNative();
+    now = 1100; engine.tick(now); now = finishVideo(engine);
+    if (late) joinNative();
+    const epoch = engine.currentPhaseEpoch;
+    engine.handleClientMessage({ t: "input", v: 2, sessionId: "session-1", phaseEpoch: epoch, seq: 1, x: .9, y: .9 }, native as unknown as WebSocket);
+    engine.handleClientMessage({ t: "input", v: 2, sessionId: "session-1", phaseEpoch: epoch, seq: 1, x: .1, y: .1 }, web as unknown as WebSocket);
+    expect(display.sent.filter(m => m.t === "presence").at(-1).count).toBe(1);
+    expect(native.sent.some(m => m.t === "snapshot" || m.t === "phase")).toBe(true);
+    expect(engine.connectedParticipantCount).toBe(2);
+    now = 1400; engine.tick(now);
+    expect(snapshot?.votes.map(v => v.participantId)).toEqual(["web"]);
+  });
+});

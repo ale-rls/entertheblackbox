@@ -1016,9 +1016,9 @@ export class PhaseEngine {
     this.participantSockets.add(socket);
     if (_participant !== undefined) {
       this.participantIds.set(socket, _participant.clientId);
-      this.cursors.join(_participant.clientId, _participant.color);
-      if (this.lifecycle === "active") this.movement.join(_participant.clientId, _participant.name, this.sessionId, this.now());
-      this.votes.addParticipant({
+      if (_participant.client !== "native") this.cursors.join(_participant.clientId, _participant.color);
+      if (_participant.client !== "native" && this.lifecycle === "active") this.movement.join(_participant.clientId, _participant.name, this.sessionId, this.now());
+      if (this.isPositionVoter(_participant)) this.votes.addParticipant({
         participantId: _participant.clientId,
         connected: true,
         lastHeartbeatAt: _participant.lastSeenAt,
@@ -1228,6 +1228,7 @@ export class PhaseEngine {
           this.matches(message.sessionId, this.phaseId, message.phaseEpoch)
         ) {
           const participantId = this.participantIds.get(socket);
+          if (participantId !== undefined && this.registry.values().find(p => p.clientId === participantId)?.client === "native") return;
           const curtain = this.lifecycle === "active" && !this.pathDone ? this.curtainFor(this.currentPhase()) : null;
           if (participantId !== undefined && curtain !== null) {
             this.curtainInput(participantId, message, curtain);
@@ -1257,6 +1258,12 @@ export class PhaseEngine {
       default:
         return;
     }
+  }
+
+  private isPositionVoter(participant: ParticipantRecord): boolean {
+    // Native devices never supply cursor votes. Explicit button questions and
+    // tracked physical input remain available to their authored audiences.
+    return participant.client !== "native" || this.groupSelection?.method?.(participant.clientId) === "phone-buttons";
   }
 
   recordInput(now = this.now(), participantId?: string, x?: number, y?: number): boolean {
@@ -1506,7 +1513,7 @@ export class PhaseEngine {
 
   private joinMovementRecordingForConnectedParticipants(): void {
     for (const participant of this.registry.values()) {
-      if (participant.socket === undefined || !isOpen(participant.socket)) continue;
+      if (participant.client === "native" || participant.socket === undefined || !isOpen(participant.socket)) continue;
       this.movement.join(participant.clientId, participant.name, this.sessionId, this.now());
     }
   }
@@ -1803,7 +1810,7 @@ export class PhaseEngine {
     phaseStartedAt: number,
     phaseDeadline: number,
   ): void {
-    const participants: VoteParticipantSeed[] = this.registry.values().map((participant) => ({
+    const participants: VoteParticipantSeed[] = this.registry.values().filter(p => this.isPositionVoter(p)).map((participant) => ({
       participantId: participant.clientId,
       connected: participant.socket !== undefined,
       lastHeartbeatAt: participant.lastSeenAt,
@@ -2054,7 +2061,7 @@ export class PhaseEngine {
         child.participantSockets.add(socket);
         child.participantIds.set(socket, id);
         const participant = this.registry.values().find((participant) => participant.clientId === id);
-        if (participant) child.cursors.join(id, participant.color);
+        if (participant && participant.client !== "native") child.cursors.join(id, participant.color);
       }
       const display = this.path?.displayForGroup(branch.groupId) ?? this.groupDisplays.get(branch.groupId);
       if (display) {

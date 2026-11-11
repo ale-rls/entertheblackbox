@@ -568,11 +568,11 @@ describe("WebSocket lifecycle", () => {
     const legacyApp = await openWebSocket(port);
     await joinParticipant(legacyApp, runtime, { name: "T01", capabilities: ["participant-tasks-v1", "occupant-handover-v1"] });
     const browser = await openWebSocket(port);
-    await joinParticipant(browser, runtime, { name: "Web", client: "web", capabilities: ["participant-tasks-v1"] });
+    await joinParticipant(browser, runtime, { name: "T01", client: "web", capabilities: ["participant-tasks-v1"], participantLease: runtime.admission.registry.values()[0]!.participantLease });
     await vi.waitFor(async () => {
       const status = (await runtime.app.inject({ method: "GET", url: "/api/admin/status", headers: { authorization: "Bearer operator" } })).json();
-      expect(Object.fromEntries(status.participants.map((p: { name: string; groupId: string | null }) => [p.name, p.groupId]))).toEqual({ T01: "ki", Web: "theater" });
-      expect(status.participants.map((p: { name: string; client: string; phaseId: string }) => [p.name, p.client, p.phaseId])).toEqual([["T01", "native", "idle"], ["Web", "web", "idle"]]);
+      expect(status.participants.map((p: { client: string; groupId: string | null }) => [p.client, p.groupId])).toEqual([["native", "ki"], ["web", "theater"]]);
+      expect(status.participants.map((p: { name: string; client: string; phaseId: string }) => [p.name, p.client, p.phaseId])).toEqual([["T01", "native", "idle"], ["T01", "web", "idle"]]);
     });
     legacyApp.close(); browser.close();
   });

@@ -13,12 +13,12 @@ const scenario=scenarioSchema.parse({version:'workflow-test',entryPhaseId:'task'
 class Socket {readyState=1;sent:any[]=[];send(raw:string){this.sent.push(JSON.parse(raw));}close(){this.readyState=3;}}
 function setup(){let now=100;let seq=0;const registry=new ParticipantRegistry(10);const membership=new Map<string,string>();
  const engine=new PhaseEngine({scenario,registry,installationId:'i',roomId:'r',showId:'show',displayToken:'display',now:()=>now,autoStartOnFirstParticipant:false,sessionIdFactory:()=>`session-${++seq}`,groupSelection:{current:id=>membership.get(id)??null,select:(id,g)=>{membership.set(id,g);}}});
- const phone=(id:string,group='ki')=>{const socket=new Socket();membership.set(id,group);const record=registry.admit({clientId:id,participantLease:`lease-${id}`,name:id,leaseExpiresAt:1e9,socket:socket as unknown as WebSocket,now});if(!record.ok)throw new Error('admit');engine.participantJoined(socket as unknown as WebSocket,record.participant);return socket;};
+ const phone=(id:string,group='ki',client:'native'|'web'='web')=>{const socket=new Socket();membership.set(id,group);const record=registry.admit({clientId:id,participantLease:`lease-${id}`,name:id,client,leaseExpiresAt:1e9,socket:socket as unknown as WebSocket,now});if(!record.ok)throw new Error('admit');engine.participantJoined(socket as unknown as WebSocket,record.participant);return socket;};
  return {engine,phone,tick:(value:number)=>{now=value;engine.tick(now);},respond:(socket:Socket,id:string,option='yes',sessionId=engine.currentSessionId)=>engine.handleClientMessage({t:'participant_task_response',v:2,sessionId,instanceId:id,optionId:option},socket as unknown as WebSocket)};
 }
 describe('connected participant workflows',()=>{
  it('targets the authored audience, holds for GO after responses expire, and rejects stale commands',()=>{
-  const h=setup();const a=h.phone('a');const b=h.phone('b');const outside=h.phone('outside','audience');h.engine.adminStart();
+  const h=setup();const a=h.phone('a','ki','native');const b=h.phone('b','ki','native');const outside=h.phone('outside','audience');h.engine.adminStart();
   const task=h.engine.taskStatus.instances[0]!;expect(task.recipients.map(r=>r.participantId)).toEqual(['a','b']);
   expect(outside.sent.filter(m=>m.t==='participant_task').at(-1).task).toBeNull();h.respond(b,task.id);h.respond(a,task.id);
   expect(h.engine.taskStatus.assignments).toMatchObject([{participantId:'b',roleId:'helper'}]);

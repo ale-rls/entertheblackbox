@@ -115,7 +115,7 @@ export class AdmissionController {
     const state = this.socketStates.get(old.socket);
     if (!state?.capabilities?.includes('occupant-handover-v1')) throw new Error('Update the native app before handing over this device');
     const now = this.now();
-    const issued = issueParticipantLease({ secret: this.options.secret, installationId: this.options.installationId, clientId: createClientId(), ttlMs: this.options.policy.participantLeaseTtlMs, now });
+    const issued = issueParticipantLease({ secret: this.options.secret, installationId: this.options.installationId, clientId: createClientId(), client: old.client, ttlMs: this.options.policy.participantLeaseTtlMs, now });
     this.retiredLeases.set(old.participantLease, old.leaseExpiresAt);
     this.options.onSocketClosed?.(old.socket);
     this.registry.removeLease(old.participantLease);
@@ -236,16 +236,21 @@ export class AdmissionController {
     }
     const now = this.now();
     this.registry.pruneExpired(now);
-    const lease = parsed.message.participantLease
+    const verifiedLease = parsed.message.participantLease
       ? verifyParticipantLease(parsed.message.participantLease, {
           secret: this.options.secret,
           installationId: this.options.installationId,
           now,
         })
       : null;
-    const knownLease = parsed.message.participantLease && lease
+    const existing = parsed.message.participantLease && verifiedLease
       ? this.registry.get(parsed.message.participantLease)
       : undefined;
+    // Bind recovery to its original client channel, including after pruning.
+    // Legacy leases only recover while their channel is known in the registry.
+    const leaseClient = verifiedLease?.client ?? existing?.client;
+    const lease = leaseClient === participantClient ? verifiedLease : null;
+    const knownLease = lease ? existing : undefined;
     // A valid lease issued during the current visit marks a returning
     // participant: the registry may have dropped their record after the
     // disconnect grace (phone asleep) and their QR grant is likely expired,
@@ -301,6 +306,7 @@ export class AdmissionController {
           secret: this.options.secret,
           installationId: this.options.installationId,
           clientId,
+          client: participantClient,
           ttlMs: this.options.policy.participantLeaseTtlMs,
           now,
         });

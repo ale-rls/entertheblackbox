@@ -1,3 +1,4 @@
+import type { ParticipantClient } from "@entertheblackbox/protocol";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 export type JoinGrantClaims = {
@@ -9,6 +10,8 @@ export type JoinGrantClaims = {
 };
 
 export type ParticipantLeaseClaims = {
+  /** Absent only on legacy leases. */
+  client?: ParticipantClient;
   installationId: string;
   clientId: string;
   issuedAt: number;
@@ -109,6 +112,7 @@ export function issueParticipantLease(options: {
   secret: string;
   installationId: string;
   clientId: string;
+  client?: ParticipantClient | undefined;
   ttlMs: number;
   now?: number;
 }): { token: string; claims: ParticipantLeaseClaims } {
@@ -116,6 +120,7 @@ export function issueParticipantLease(options: {
   const claims: ParticipantLeaseClaims = {
     installationId: options.installationId,
     clientId: options.clientId,
+    ...(options.client === undefined ? {} : { client: options.client }),
     issuedAt,
     expiresAt: issuedAt + options.ttlMs,
     nonce: nonce(),
