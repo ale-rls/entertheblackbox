@@ -60,10 +60,10 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Video handoff between phases (pre-buffered next clip) — `PhaseVideoHandoff.tsx`, `apps/server/src/engine/video.ts`
 - Live cursor field (real + ghost cursors) — `cursors/CursorCanvas.tsx`, `cursorField.ts` ← **apps/realtime-ws-coolify** + server ghost pool
 - Spectrum glow / cursor-density heat — `cursors/spectrumGlow.ts`
-- Curtain-light votes for curtain-light groups and for votes flagged `curtainLightVote` on any timeline (WebGL2 relit packed curtain video, answer pools from the counting geometry, instanced per-cursor lights with touch pulses, per-word adaptive labels, fade into the next scene) — `curtain/*`, geometry in `packages/shared/src/curtain.ts`; see `docs/curtain-light-voting.md`
+- Curtain-light votes for curtain-light groups and for votes flagged `curtainLightVote` on any timeline (WebGL2 relit packed curtain video, answer pools from the counting geometry, instanced per-cursor lights with touch pulses, white labels with dark halos, fade into the next scene) — `curtain/*`, geometry in `packages/shared/src/curtain.ts`; see `docs/curtain-light-voting.md`
 - Quadrant/zone overlays, vote-close countdown — `QuadrantOverlay.tsx`, `VoteCloseCountdown.tsx`, `VideoQuestionOverlay.tsx`
 - Ghost cursors (replayed past-participant cursors filling a sparse room) — `apps/server/src/ghosts/ghost-cursor-player.ts`
-- Idle attract loop (`attract-*.mp4` playlist, perspective-calibrated QR marker tracking) — `IdleAttract.tsx`, `idle/*`
+- Idle attract loop (`attract-*.mp4` playlist, no QR on main/group idle displays; perspective-calibrated QR marker tracking remains for signage kiosks) — `IdleAttract.tsx`, `idle/*`
 - Join QR code / corner QR for late joiners — `QrBadge.tsx`, `qr/*`, `apps/server/src/admission/qr.ts`
 - Lobby countdown + printed join URL — `LobbyCountdown.tsx`
 - Display authentication (build-time token, installation/room resolved live from `/api/status`; one authenticated main display, plus one per active group and one per signage kiosk) — `lib/resolveInstallation.ts`, `apps/server/src/engine/phase-engine.ts`
@@ -202,6 +202,7 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 
 - Four independent authenticated `/display/?monitor=M1` … `M4` pages; replacement affects only that monitor, never the main projection — `apps/server/src/engine/phase-engine.ts`, `apps/display/src/monitors/MonitorApp.tsx`.
 - Per-phase video, image/caption, text, placeholder and blank sequences with offsets, optional durations, fit and looping; missing screens and gaps are black — `packages/scenario/src/monitors.ts`.
+- Automatic server-clock countdown on visible nonblank monitor cues during open positioning votes (plain or video-timed); hidden for resolved, closed or untimed votes — `apps/display/src/monitors/countdown.ts`.
 - Answer colour coding and Optik: monitor N draws text and captions in the phase's Nth answer colour (outcome order, authored `answerColors` or the resolved curtain colours); phases without colours stay white — `apps/display/src/monitors/answerColor.ts`.
 - Studio inspector controls, shared media-library selection and usage tracking, schema/export validation and display-preview links — `apps/studio/src/inspector/MonitorEditor.tsx`.
 - Complete manifest predownload with byte/hash verification and retries, cached Blob playback, main server clock alignment, late-join seeking and reconnect recovery — existing display `mediaStore`, `DisplayConnection`, monitor playback.

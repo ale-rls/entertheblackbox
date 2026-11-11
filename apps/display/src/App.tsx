@@ -369,8 +369,8 @@ export function App() {
         <IdleAttract
           key={waitingVideoUrl}
           {...(waitingVideoUrl ? { videoUrls: [waitingVideoUrl] } : {})}
-          grant={state.qrGrant}
-          qrHidden={state.qrHidden}
+          grant={null}
+          qrHidden
           clock={connection.clock}
           mediaVisible={idleMediaVisible}
         />

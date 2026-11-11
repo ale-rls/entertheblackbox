@@ -90,7 +90,7 @@ vi.mock("./lib/heartbeat.js", () => ({
 }));
 
 vi.mock("./components/IdleAttract.js", () => ({
-  IdleAttract: ({ videoUrls, mediaVisible }: { videoUrls?: string[]; mediaVisible?: boolean }) => <div data-testid="idle-attract" data-url={videoUrls?.[0]} data-visible={mediaVisible}>idle attract</div>,
+  IdleAttract: ({ videoUrls, mediaVisible, qrHidden }: { videoUrls?: string[]; mediaVisible?: boolean; qrHidden: boolean }) => <div data-testid="idle-attract" data-url={videoUrls?.[0]} data-visible={mediaVisible} data-qr-hidden={qrHidden}>idle attract</div>,
 }));
 vi.mock("./components/LobbyCountdown.js", () => ({ LobbyCountdown: () => null }));
 vi.mock("./cursors/CursorCanvas.js", () => ({
@@ -132,6 +132,14 @@ afterEach(async () => {
 });
 
 describe("App media-readiness gate", () => {
+  it("suppresses the idle join QR on the normal projection", async () => {
+    harness.mediaStatus = { state: "ready" };
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+    expect(document.querySelector('[data-testid="idle-attract"]')?.getAttribute("data-qr-hidden")).toBe("true");
+    expect(document.querySelector(".qr-badge")).toBeNull();
+  });
   it("unmounts all media, QR, controls and cursors while group paths own the show, then resumes shared rendering", async () => {
     harness.mediaStatus = { state: "ready" };
     document.body.innerHTML = '<div id="root"></div>';

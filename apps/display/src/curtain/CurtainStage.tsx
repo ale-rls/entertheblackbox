@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import type { CurtainTreatment } from "@entertheblackbox/protocol";
-import { poolCoverageAt, type PositionField } from "@entertheblackbox/shared";
+import type { PositionField } from "@entertheblackbox/shared";
 import type { ServerClock } from "../lib/serverClock.js";
 import type { CursorField } from "../cursors/cursorField.js";
 import { CurtainRenderer } from "./curtainRenderer.js";
@@ -42,25 +42,11 @@ function fitFont(ctx: CanvasRenderingContext2D, text: string, size: number, maxW
   return current;
 }
 
-/**
- * Ink for one text item, decided once for the whole word: dark letters cut
- * out of a lit pool, pale letters on unlit fabric. Encoded in the red
- * channel (255 = pale) and read by the fabric shader.
- */
-function inkFor(scene: CurtainScene, x0: number, x1: number, y: number): "dark" | "pale" {
-  // Dark only when the whole word sits in light; any unlit part makes it pale.
-  const samples = 9;
-  for (let i = 0; i < samples; i += 1) {
-    if (poolCoverageAt(scene.pools, x0 + (x1 - x0) * (i / (samples - 1)), y) < 0.3) return "pale";
-  }
-  return "dark";
-}
-
-function paint(ctx: CanvasRenderingContext2D, ink: "dark" | "pale", text: string, x: number, y: number, size: number): void {
-  ctx.fillStyle = ink === "dark" ? "rgb(0 0 0)" : "rgb(255 255 255)";
-  // Pale words get a soft dark halo so they also hold over a lit edge.
-  ctx.shadowColor = ink === "pale" ? "rgb(0 0 0 / 70%)" : "transparent";
-  ctx.shadowBlur = ink === "pale" ? size * 0.35 : 0;
+/** White lettering with a dark halo stays readable over every answer pool. */
+function paint(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number): void {
+  ctx.fillStyle = "rgb(255 255 255)";
+  ctx.shadowColor = "rgb(0 0 0 / 70%)";
+  ctx.shadowBlur = size * 0.35;
   ctx.fillText(text, x, y);
   ctx.shadowBlur = 0;
 }
@@ -74,14 +60,12 @@ function drawText(canvas: HTMLCanvasElement, question: string, scene: CurtainSce
   // Title: centre top, 4.2% of width, top edge at 5% of height, at most 88% wide.
   ctx.textBaseline = "top";
   const titleSize = fitFont(ctx, question, width * 0.042, width * 0.88);
-  const titleWidth = ctx.measureText(question).width / width;
-  paint(ctx, inkFor(scene, 0.5 - titleWidth / 2, 0.5 + titleWidth / 2, 0.05 + titleSize / height / 2), question, width / 2, height * 0.05, titleSize);
+  paint(ctx, question, width / 2, height * 0.05, titleSize);
   // Answer words: 2.8% of width, centred on each pool, at most 24% wide.
   ctx.textBaseline = "middle";
   for (const label of scene.labels) {
     const size = fitFont(ctx, label.text, width * 0.028, width * 0.24);
-    const labelWidth = ctx.measureText(label.text).width / width;
-    paint(ctx, inkFor(scene, label.x - labelWidth / 2, label.x + labelWidth / 2, label.y), label.text, label.x * width, label.y * height, size);
+    paint(ctx, label.text, label.x * width, label.y * height, size);
   }
 }
 
