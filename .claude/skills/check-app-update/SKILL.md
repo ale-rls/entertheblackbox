@@ -128,8 +128,13 @@ one `AskUserQuestion` round. Offer only the paths the verdict allows, plus
 
 - **EAS Update (preview, Android).** Free. Testers leave the show and tap
   **Check & install app update**. From `apps/native` in the clean main checkout:
-  `npx eas-cli update --channel preview --environment preview --platform android --message '<summary> (main <short sha>)'`.
-  Avoid `pnpm update:preview`, because it also publishes iOS.
+  `ALLOW_INSECURE_LAN=1 npx eas-cli update --channel preview --environment preview --platform android --message '<summary> (main <short sha>)'`.
+  The flag is required: `eas update` ignores the build profile's `env` in
+  `eas.json`, so without the flag the update gets a different fingerprint than
+  the build. Check that the `Runtime version` it prints equals the build's
+  runtime. If it does not, phones ignore the update: tell the user and
+  republish with the flag. Avoid `pnpm update:preview`, because it also
+  publishes iOS.
 - **EAS build (preview, Android).** Costs build credits and takes about ten
   minutes. Every tester installs the new APK from the build link. From
   `apps/native` in the clean main checkout:
