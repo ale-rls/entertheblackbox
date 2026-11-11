@@ -97,7 +97,9 @@ file as part of the same PR — don't let it drift into a stale snapshot.
 ## Authoring a show (scenario JSON or Studio backup)
 
 These bit us when generating a show from a script. The generated backup itself
-is show content: keep it out of git.
+is show content: keep it out of git. The `/update-show` skill
+(`.claude/skills/update-show/`) is the procedure for revising a show from a
+backup file or a PocketBase Studio draft.
 
 - **Always lay out show nodes left to right in playback order.** Entry is
   leftmost, later scenes advance right, parallel branches use separate rows,
