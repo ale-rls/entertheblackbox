@@ -230,3 +230,7 @@ Implemented in apps/native and the ShowScreen module bundled with packages/expo-
 Participant tasks can play introduction and outcome recordings, assign audience groups after capped role acceptance, and open follow-up tasks after recordings finish. Roles share capacity across task instances. Vote-based recordings use the previous question plurality and an explicit tie/empty fallback. Persistent workflows survive scene changes and admit eligible late arrivals; scene cancellation and show restart stop them. Native playback follows each response clock; show-content publishing bundles all recordings. Native clients require participant-task-routing-v1; theater browser access remains supported. Implemented in packages/scenario, apps/server/src/prompts, apps/server/src/engine, packages/show-content and apps/native. Tablet routing retains occupant identity; identity reset remains a separate handover operation.
 
 Studio exposes task attachments on both video and narration scenes and shows their audience, recordings, group/role assignments and follow-up task routes in the scene inspector.
+
+## Actor script reader
+
+- **Admin → Script** loads a private plain-text script, advances shared paragraph cues, and creates/revokes read-only actor links. Actors follow the cue or scroll independently and adjust text size. Server memory only; restart clears the script. No audience/show-control permissions on reader links. Apps: `admin`, `server`. See [actor script guide](docs/actor-script.md).
