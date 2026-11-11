@@ -1,3 +1,4 @@
+import { ScriptPanel } from "./ActorScript.js";
 import { AdmissionPrograms, type AdmissionStatus } from './AdmissionPrograms.js';
 import { ParticipantTasks, type TaskStatus } from './ParticipantTasks.js';
 import { NativeAudioCoverage } from './NativeAudioCoverage.js';
@@ -249,7 +250,7 @@ function sceneKindLabel(kind: FlowScene["kind"]): string {
 
 export function App() {
   const [activeTab, setActiveTab] = useState(() => {
-    try { const saved = localStorage.getItem("admin-view"); return ["show", "devices", "displays", "setup"].includes(saved ?? "") ? saved! : "show"; } catch { return "show"; }
+    try { const saved = localStorage.getItem("admin-view"); return ["show", "devices", "displays", "setup", "script"].includes(saved ?? "") ? saved! : "show"; } catch { return "show"; }
   });
   const selectTab = (tab: string) => { setActiveTab(tab); try { localStorage.setItem("admin-view", tab); } catch {} };
 
@@ -721,10 +722,11 @@ export function App() {
           <button className="sc-tool-button" onClick={() => selectTab("devices")}>{status.connectedParticipants} participants</button>
           <StatusLabel status={statusStale ? "warning" : status.ready ? "success" : "danger"}>{statusStale ? "Updates stale" : status.ready ? "Server connected" : "Server not ready"}</StatusLabel>
         </div>}
-        {!audioOnly && <nav className="admin-tabs" aria-label="Admin views">{["show", "tasks", "devices", "instrument", "wall", "displays", "setup"].map(tab => <button key={tab} className="sc-tool-button" aria-pressed={activeTab === tab} onClick={() => selectTab(tab)}>{tab[0]!.toUpperCase() + tab.slice(1)}</button>)}</nav>}
+        {!audioOnly && <nav className="admin-tabs" aria-label="Admin views">{["show", "tasks", "devices", "instrument", "wall", "displays", "script", "setup"].map(tab => <button key={tab} className="sc-tool-button" aria-pressed={activeTab === tab} onClick={() => selectTab(tab)}>{tab[0]!.toUpperCase() + tab.slice(1)}</button>)}</nav>}
 
       </div>
 
+      {connectedToken && activeTab === "script" && !audioOnly && <ScriptPanel token={connectedToken} />}
       {connectedToken && (activeTab === "devices" || audioOnly) && <NativeAudioCoverage key={connectedToken} token={connectedToken} />}
       {connectedToken && status?.admission && activeTab === 'tasks' && <AdmissionPrograms token={connectedToken} state={status.admission} participants={status.participants} groups={status.groups ?? []} />}
       {connectedToken && status?.tasks && activeTab === 'tasks' && <ParticipantTasks token={connectedToken} state={status.tasks} sessionId={status.sessionId ?? ''} phaseId={status.phaseId ?? ''} phaseEpoch={status.phaseEpoch ?? 0} participants={status.participants} refresh={tasks => setStatus(current => current ? { ...current, tasks } : current)} />}

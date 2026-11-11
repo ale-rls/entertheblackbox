@@ -1,3 +1,4 @@
+import { createScriptRoom } from "./script-room.js";
 import { backgroundMusicSchema, type BackgroundMusic } from "@entertheblackbox/show-content";
 import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings } from "@entertheblackbox/protocol";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -174,6 +175,8 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
   };
   const now = options.now ?? (() => Date.now());
   let publishBusy = false;
+  const scriptRoom = createScriptRoom();
+  scriptRoom.registerReader(app);
 
   app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -192,6 +195,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       if (!isAuthorized) return reply.code(401).send({ error: "unauthorized" });
     });
 
+    admin.register(async (scriptAdmin) => scriptRoom.registerAdmin(scriptAdmin));
     options.registerRehearsals?.(admin);
     admin.get("/audio/native-coverage", async (_request, reply) => {
       reply.header("cache-control", "no-store");
