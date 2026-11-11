@@ -72,6 +72,8 @@ Use **Publish** (top right) in Studio served by the venue server. It validates a
 
 Upload an audible MP3 in Studio's **Media library**, choose it in **Publish show**, and set the volume (greater than zero, at most 1; default 0.2). The server syncs and freezes it with the release. Choose **No background music** to omit the bed. Music settings are included in the published scenario and restored when importing that publication. Missing or changed files stop publication.
 
+The published volume is only the default. Participants can change it under **Device settings → Music volume** (also reachable as **Device details** during a show) in 10% steps, including 0%. The setting is saved on the device, applies immediately without restarting the loop, affects only the music bed (not cues), and **Use show default** returns to the published value.
+
 The downloaded music loops beneath narration, including gaps and temporary connection loss. Pause stops both layers; resume returns narration to the current show position. Leaving or ending the session releases both layers. Install the app version with music support before using music; older clients cannot verify that extended manifest.
 
 ## Native audio scheduling

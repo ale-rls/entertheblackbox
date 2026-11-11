@@ -52,6 +52,19 @@ it('clears the cue layer on a silent phase and reschedules only on a real cue ch
   p.setCue({ ...cue, endsAt: 12000 }); await p.settled(); expect(scheduler.setLayer).toHaveBeenCalledTimes(2);
   p.setCue(null); await p.settled(); expect(scheduler.clearLayer).toHaveBeenCalledWith('cue');
 });
+it('applies the participant music volume live, before and after the bed starts, and falls back to the show default', async () => {
+  const { p } = setup({ withMusic: true });
+  p.setMusicVolume(0.6);
+  expect(scheduler.setLayer).not.toHaveBeenCalled();
+  p.startMusic();
+  expect(scheduler.setLayer).toHaveBeenLastCalledWith('bed', { uri: 'file://c.mp3', loop: true, volume: 0.6 });
+  p.setMusicVolume(0); p.setMusicVolume(0);
+  expect(scheduler.setLayer).toHaveBeenLastCalledWith('bed', { uri: 'file://c.mp3', loop: true, volume: 0 });
+  p.setMusicVolume(null);
+  expect(scheduler.setLayer).toHaveBeenLastCalledWith('bed', { uri: 'file://c.mp3', loop: true, volume: 0.2 });
+  expect(scheduler.setLayer).toHaveBeenCalledTimes(3);
+  expect(scheduler.clearLayer).not.toHaveBeenCalledWith('bed');
+});
 it('starts the looping bed once and leaves it alone across cue changes, then releases everything on leave', async () => {
   const { p } = setup({ withMusic: true });
   p.startMusic(); p.startMusic();
