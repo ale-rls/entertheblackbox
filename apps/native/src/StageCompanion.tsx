@@ -6,9 +6,12 @@ import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
 import type { ShowManifest } from '@entertheblackbox/show-content';
 import type { StageInput } from './stage-state';
 import { stageState, showModeAction, showModeTextVisible, shouldEnterShowMode, SHOW_TEXT_IDLE_MS } from './stage-state';
+import type { ActionPrompt } from './action-prompt';
+import { ActionAttention } from './ActionAttention';
 import { contrastText } from './surface';
 
 type Props = StageInput & {
+  actionPrompt?: ActionPrompt | null;
   admission?: Extract<ServerToClientMessage, { t: 'admission_state' }> | null; onAdmissionGroup?: (id: string) => void;
   participantTask?: React.ReactNode; taskVisible?: boolean;
   answered: string | null;
@@ -60,6 +63,8 @@ function AudioField({ playing, compact }: { playing: boolean; compact: boolean }
   </View>;
 }
 export function StageCompanion(props: Props) {
+  const scroll = useRef<ScrollView>(null);
+  useEffect(() => { if (props.actionPrompt) scroll.current?.scrollTo({ y: 0, animated: false }); }, [props.actionPrompt?.key]);
   const [showMode, setShowMode] = useState(false);
   const [modeError, setModeError] = useState('');
   /** When someone last left show mode by hand (or entering failed); null re-enters as soon as admitted. */
@@ -155,7 +160,8 @@ export function StageCompanion(props: Props) {
     <SafeAreaView style={[styles.screen, showMode && { backgroundColor: props.wallVisible ? 'transparent' : props.surface.color }]}
     onStartShouldSetResponderCapture={() => { setLastTouch(Date.now()); return false; }}>
     <StatusBar hidden={showMode} barStyle="light-content" backgroundColor="#090a0b" />
-    <ScrollView key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
+    {props.actionPrompt && <ActionAttention key={props.actionPrompt.key} prompt={props.actionPrompt} />}
+    <ScrollView ref={scroll} key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
       {props.admission?.active && <View style={styles.page}><Text style={styles.buttonText}>{props.admission.program ? 'Welcome. Waiting for the show to start.' : 'Choose your audience'}</Text>{props.admission.choices.map(g => <Action key={g.id} label={g.label} selected={props.admission?.program?.groupId === g.id} disabled={!normal} onPress={() => props.onAdmissionGroup?.(g.id)} />)}</View>}
       {props.participantTask}
       {!showMode && <View style={styles.header}><View style={styles.identity}>
