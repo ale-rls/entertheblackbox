@@ -26,6 +26,7 @@ export type ScenarioIssue = {
     | "unreachable-phase"
     | "unmarked-cycle"
     | "curtain-light"
+    | "script-cue"
     | "unused-rank-outcome";
   phaseId?: string;
   message: string;
