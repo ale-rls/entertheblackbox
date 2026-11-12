@@ -23,10 +23,15 @@ describe("monitor answer colour", () => {
   it("uses the server-resolved curtain colours when the phase has no own map", () => {
     expect(monitorAnswerColor(phase({ field, voteTreatment: { answerColors: colors } }), "M3")).toBe("#f5d90a");
   });
+  it("repeats the answers around the monitors when a question has fewer than four", () => {
+    const twoZones = phase({ field: { ...field, zones: field.zones.slice(0, 2) }, answerColors: colors });
+    expect(["M1", "M2", "M3", "M4"].map(id => monitorAnswerColor(twoZones, id as "M1"))).toEqual(["#e5484d", "#3e63dd", "#e5484d", "#3e63dd"]);
+    const split = phase({ field: { type: "two-quadrant", axis: "x", variant: "split", labels: { minLabel: "a", maxLabel: "b" } }, answerColors: { min: "#f5d90a", max: "#3e63dd" } });
+    expect(["M1", "M2", "M3", "M4"].map(id => monitorAnswerColor(split, id as "M1"))).toEqual(["#f5d90a", "#3e63dd", "#f5d90a", "#3e63dd"]);
+  });
   it("stays uncoloured without authored colours, a field, or a matching zone", () => {
     expect(monitorAnswerColor(phase({ field }), "M1")).toBeNull();
     expect(monitorAnswerColor(phase({ kind: "narration" }), "M1")).toBeNull();
-    expect(monitorAnswerColor(phase({ field: { ...field, zones: field.zones.slice(0, 2) }, answerColors: colors }), "M3")).toBeNull();
     expect(monitorAnswerColor(null, "M1")).toBeNull();
   });
 });
