@@ -72,10 +72,10 @@ export function renamePhase(project: StudioProject, currentId: string, nextId: s
 
 export function changePhaseKind(phase: Phase, kind: PhaseKind): Phase {
   if (phase.kind === kind) return phase;
-  if (kind === "idle") return { id: "idle", monitorCues: phase.monitorCues, kind };
-  if (kind === "video") return { id: phase.id, monitorCues: phase.monitorCues, kind, src: "media/new-video.mp4", expectedDurationMs: 1_000, next: "idle" };
+  if (kind === "idle") return { id: "idle", monitorCues: phase.monitorCues, scriptCues: phase.scriptCues, kind };
+  if (kind === "video") return { id: phase.id, monitorCues: phase.monitorCues, scriptCues: phase.scriptCues, kind, src: "media/new-video.mp4", expectedDurationMs: 1_000, next: "idle" };
   if (kind === "video-position-question") return {
-    id: phase.id, monitorCues: phase.monitorCues,
+    id: phase.id, monitorCues: phase.monitorCues, scriptCues: phase.scriptCues,
     kind,
     src: "media/new-video.mp4",
     expectedDurationMs: 40_000,
@@ -95,14 +95,14 @@ export function changePhaseKind(phase: Phase, kind: PhaseKind): Phase {
     next: { type: "quadrant-plurality", map: { q1: "idle", q2: "idle", q3: "idle", q4: "idle" }, tie: "idle", empty: "idle", countedStatuses: [...QUESTION_DEFAULTS.countedStatuses] },
   };
   if (kind === "group-branch") return {
-    id: phase.id, monitorCues: phase.monitorCues, kind, title: "Divide audience", durationMs: 5_000,
+    id: phase.id, monitorCues: phase.monitorCues, scriptCues: phase.scriptCues, kind, title: "Divide audience", durationMs: 5_000,
     assignment: { type: "balanced" },
     branches: [{ groupId: "group-a", weight: 1 }, { groupId: "group-b", weight: 1 }],
     next: "idle",
   };
-  if (kind === "narration") return { id: phase.id, monitorCues: phase.monitorCues, kind, text: "New narration text", durationMs: 5_000, next: "idle" };
+  if (kind === "narration") return { id: phase.id, monitorCues: phase.monitorCues, scriptCues: phase.scriptCues, kind, text: "New narration text", durationMs: 5_000, next: "idle" };
   return {
-    id: phase.id, monitorCues: phase.monitorCues, kind, text: "New position question",
+    id: phase.id, monitorCues: phase.monitorCues, scriptCues: phase.scriptCues, kind, text: "New position question",
     field: {
       type: "four-quadrant",
       xAxis: { minLabel: "Left", maxLabel: "Right" },

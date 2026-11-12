@@ -3,6 +3,7 @@ import { AdmissionEditor } from './AdmissionEditor.js';
 import { TaskEditor } from './TaskEditor.js';
 import type { ParticipantTask } from '@entertheblackbox/scenario';
 import { MonitorEditor, type MediaTarget } from "./MonitorEditor.js";
+import { ActorScriptEditor, ScriptCueEditor } from "./ScriptEditor.js";
 import { useEffect, useState } from "react";
 import type { StudioProject } from "@entertheblackbox/studio-adapter";
 import type { Arena } from "../../../../packages/shared/src/index.js";
@@ -34,6 +35,7 @@ type Props = {
   onGroupsChange: (groups: NonNullable<StudioProject["scenario"]["groups"]>, initialGroupIds: string[]) => void;
   onGroupByClientChange?: (value: StudioProject["scenario"]["groupByClient"]) => void;
   onCurtainLightChange?: (config: CurtainLightConfig | undefined) => void;
+  onActorScriptChange?: (script: StudioProject["scenario"]["actorScript"]) => void;
 };
 
 const numberValue = (value: string, fallback: number) => {
@@ -41,7 +43,7 @@ const numberValue = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChange, onTasksChange, project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onGroupByClientChange, onCurtainLightChange }: Props) {
+export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChange, onTasksChange, project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onGroupByClientChange, onCurtainLightChange, onActorScriptChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   const [copiedArena, setCopiedArena] = useState<Arena | null>(null);
@@ -68,6 +70,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
     <p className="sc-tool-copy field-hint">Live + replayed past-participant cursors are topped up to this count on display. 0 disables ghost cursors.</p>
     {onAdmissionChange && <AdmissionEditor config={project.scenario.admission} groups={project.scenario.groups ?? []} sources={[...new Set([...project.manifest.files, ...localMedia].map(f => f.src).filter(src => /\.mp3$/i.test(src)))]} onChange={onAdmissionChange} />}
     {onHandoverTaskChange && <label>Task for a replacement occupant<select value={project.scenario.handoverTaskId ?? ''} onChange={e => onHandoverTaskChange(e.target.value)}><option value="">No automatic task</option>{(project.scenario.participantTasks ?? []).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select><small>Admin handover preserves device setup and audience, creates a new participant identity, retires old roles and reopens this task.</small></label>}
+    {onActorScriptChange && <ActorScriptEditor script={project.scenario.actorScript} onChange={onActorScriptChange} />}
     {onRolesChange && <RoleEditor roles={project.scenario.participantRoles ?? []} onChange={onRolesChange} />}
     {onTasksChange && <TaskEditor roles={project.scenario.participantRoles ?? []} tasks={project.scenario.participantTasks ?? []} groups={project.scenario.groups ?? []} onChange={onTasksChange} />}
     <fieldset><legend>Audience groups <small>groups</small></legend>
@@ -511,6 +514,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
       </details>}
     </fieldset>}
     <MonitorEditor phase={phase} onChange={onChange} onChooseMedia={onChooseMedia} />
+    <ScriptCueEditor phase={phase} script={project.scenario.actorScript} onChange={onChange} />
     <details><summary>Advanced settings</summary>
     {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
       {(phase.kind === "position-question" || phase.kind === "video-position-question") && number("Connection stale after (ms)", "connectionStaleAfterMs", phase.connectionStaleAfterMs, (connectionStaleAfterMs) => onChange({ ...phase, connectionStaleAfterMs }))}

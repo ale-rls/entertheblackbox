@@ -1,3 +1,4 @@
+import { firedScriptCueIndex } from "@entertheblackbox/scenario";
 import { nativeAudioCoverage } from './admin/native-audio.js';
 import { preparePublication } from "./publication.js";
 import { readFile } from "node:fs/promises";
@@ -382,6 +383,18 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     },
     ready: readiness.ready,
     phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
+    ...(readiness.ready ? { showScript: {
+      script: readiness.scenario.actorScript,
+      scenarioVersion: readiness.scenario.version,
+      linkSecret: config.joinGrantSecret,
+      timeline: () => {
+        if (!engine) return null;
+        const phase = engine.getSnapshot();
+        const cues = readiness.scenario.phases.find((item) => item.id === phase.id)?.scriptCues;
+        const index = firedScriptCueIndex(cues, Date.now() - phase.startedAt);
+        return index < 0 || !cues ? null : { key: `${engine.currentSessionId}:${engine.currentPhaseEpoch}:${index}`, paragraph: cues[index]!.paragraph };
+      },
+    } } : {}),
     onPublishing: (busy) => { publishing = busy; if (!busy) options.onPublicationEnded?.(); },
     startedAt,
     trustProxy: config.trustProxy,
