@@ -6,6 +6,7 @@ import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
 import type { ShowManifest } from '@entertheblackbox/show-content';
 import type { StageInput } from './stage-state';
 import { tabletTextFromSnapshot } from './tablet-text';
+import { TabletScript } from './TabletScript';
 import { stageState, showModeAction, showModeTextVisible, shouldEnterShowMode, SHOW_TEXT_IDLE_MS } from './stage-state';
 import type { ActionPrompt } from './action-prompt';
 import { ActionAttention } from './ActionAttention';
@@ -192,6 +193,7 @@ export function StageCompanion(props: Props) {
       {!settings && tabletText && <View style={styles.tabletText} accessibilityLiveRegion="polite">
         <Text style={[styles.tabletTextBody, showMode && { color: surfaceText }]}>{tabletText}</Text>
       </View>}
+      {!settings && props.snapshot?.tabletScript && <TabletScript script={props.snapshot.tabletScript} color={showMode ? surfaceText : '#e4e5e6'} />}
       {!showMode && <View style={styles.header}><View style={styles.identity}>
         <Text style={styles.identityName}>{props.identity?.name ?? 'SETUP'}</Text>
         {props.connected && <Text style={styles.muted}>{props.snapshot?.currentGroup?.label ?? 'Waiting for group'}</Text>}

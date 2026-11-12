@@ -741,3 +741,20 @@ describe("group-following stage monitors", () => {
     expect(validateScenario(value).errors.some(e => e.code === "unknown-group" && e.message.includes("monitorGroupId"))).toBe(true);
   });
 });
+
+it("sends the tablet script excerpt only to the groups a scene names, with their speaker", () => {
+  const configured = scenarioSchema.parse({ ...scenario,
+    actorScript: { title: "Act 1", text: "Prologue\n\nBUILDER: First line\n\nACTOR: Reply\n\nEpilogue", speakersByGroup: { b: "BUILDER" } },
+    phases: scenario.phases.map((phase) => phase.id === "film" ? { ...phase, tabletScript: { fromParagraph: 1, toParagraph: 2, groupIds: ["b", "c"] } } : phase) });
+  expect(validateScenario(configured).errors).toEqual([]);
+  const h = setup(configured); const display = h.display();
+  const a = h.phone("one"), b = h.phone("two"), c = h.phone("three"); h.engine.adminStart();
+  h.choose(a, "a"); h.choose(b, "b"); h.choose(c, "c");
+  h.tick(100);
+  expect(b.snapshot).toMatchObject({ phase: { id: "film" }, tabletScript: { title: "Act 1", paragraphs: ["BUILDER: First line", "ACTOR: Reply"], speaker: "BUILDER" } });
+  expect(c.snapshot.tabletScript).toEqual({ title: "Act 1", paragraphs: ["BUILDER: First line", "ACTOR: Reply"] });
+  expect(a.snapshot.phase.id).toBe("vote");
+  // Nobody outside the named groups, and no display, ever receives the script text.
+  for (const socket of [a, display]) expect(JSON.stringify(socket.sent)).not.toContain("First line");
+  h.engine.stop();
+});

@@ -83,3 +83,20 @@ describe("tablet text by group", () => {
     expect(scene(removed).tabletTextByGroup).toEqual({ actors: "Actors only" });
   });
 });
+
+describe("tablet script groups", () => {
+  it("carries scene groups and speakers through group renames and removals", () => {
+    const value = parseRuntimeScenario({
+      version: "test", entryPhaseId: "scene", cyclesAllowed: false,
+      groups: [{ id: "a", label: "Actors" }, { id: "b", label: "Builders" }, { id: "c", label: "Chorus" }],
+      actorScript: { title: "Act", text: "A: one\n\nB: two", speakersByGroup: { a: "A", b: "B" } },
+      phases: [{ kind: "idle", id: "idle" },
+        { kind: "narration", id: "scene", text: "Display", durationMs: 100, next: "idle", tabletScript: { fromParagraph: 0, toParagraph: 1, groupIds: ["a", "b"] } }],
+    }, { files: [] });
+    const scene = (s: typeof value.scenario) => (s.phases.find((phase) => phase.id === "scene") as { tabletScript?: { groupIds: string[] } }).tabletScript;
+    const renamed = updateGroupCatalogue(value.scenario, [{ id: "actors", label: "Actors" }, { id: "b", label: "Builders" }, { id: "c", label: "Chorus" }], []);
+    expect([scene(renamed)?.groupIds, renamed.actorScript?.speakersByGroup]).toEqual([["actors", "b"], { actors: "A", b: "B" }]);
+    const removed = updateGroupCatalogue(renamed, [{ id: "actors", label: "Actors" }, { id: "c", label: "Chorus" }], []);
+    expect([scene(removed)?.groupIds, removed.actorScript?.speakersByGroup]).toEqual([["actors"], { actors: "A" }]);
+  });
+});

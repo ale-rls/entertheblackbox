@@ -37,6 +37,8 @@ export function updateGroupCatalogue(scenario: Scenario, groups: Group[], initia
       phoneAudioByGroup: Object.fromEntries(Object.entries(phase.phoneAudioByGroup).filter(([id]) => ids.has(remap(id))).map(([id, src]) => [remap(id), src])),
     } : {}), ...(phase.tabletTextByGroup ? {
       tabletTextByGroup: Object.fromEntries(Object.entries(phase.tabletTextByGroup).filter(([id]) => ids.has(remap(id))).map(([id, text]) => [remap(id), text])),
+    } : {}), ...(phase.tabletScript ? {
+      tabletScript: { ...phase.tabletScript, groupIds: phase.tabletScript.groupIds.map(remap).filter((id) => ids.has(id)) },
     } : {}) };
     const branches = phase.branches.map((branch) => ({ ...branch, groupId: remap(branch.groupId) })).filter((branch) => ids.has(branch.groupId));
     if (branches.length < 2) throw new Error(`“${phase.title ?? phase.id}” would have fewer than two options. Add a replacement group to that scene first.`);
@@ -55,6 +57,12 @@ export function updateGroupCatalogue(scenario: Scenario, groups: Group[], initia
   // initial group, but discarding it here makes selecting the second impossible.
   const monitorGroupId = scenario.monitorGroupId === undefined ? undefined : remap(scenario.monitorGroupId);
   const byClient = Object.fromEntries(Object.entries(scenario.groupByClient ?? {}).map(([client, id]) => [client, id === undefined ? undefined : remap(id)]).filter(([, id]) => id !== undefined && ids.has(id)));
-  return { ...scenario, monitorGroupId: monitorGroupId !== undefined && ids.has(monitorGroupId) ? monitorGroupId : undefined, groups, phases: phases as Scenario["phases"], initialGroupIds: initial.length ? initial : undefined,
+  const speakers = scenario.actorScript?.speakersByGroup
+    ? Object.fromEntries(Object.entries(scenario.actorScript.speakersByGroup).map(([id, name]) => [remap(id), name]).filter(([id]) => ids.has(id!)))
+    : undefined;
+  const actorScript = scenario.actorScript && speakers !== undefined
+    ? (({ speakersByGroup: _, ...rest }) => Object.keys(speakers).length ? { ...rest, speakersByGroup: speakers } : rest)(scenario.actorScript)
+    : scenario.actorScript;
+  return { ...scenario, actorScript, monitorGroupId: monitorGroupId !== undefined && ids.has(monitorGroupId) ? monitorGroupId : undefined, groups, phases: phases as Scenario["phases"], initialGroupIds: initial.length ? initial : undefined,
     groupByClient: Object.keys(byClient).length ? byClient : undefined };
 }

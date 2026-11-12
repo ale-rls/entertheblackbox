@@ -13,6 +13,7 @@ import {
   type ServerToClientMessage,
 } from "@entertheblackbox/protocol";
 import type { Scenario, Phase, VotingMethod } from "@entertheblackbox/scenario";
+import { scriptParagraphs, tabletScriptExcerpt } from "@entertheblackbox/scenario";
 import {
   curtainFieldCenter,
   curtainVoteField,
@@ -235,6 +236,7 @@ export class PhaseEngine {
   private pathsStarted = false;
   private pathDone = false;
   private readonly scenario: Scenario;
+  private readonly actorScriptParagraphs: string[];
   private readonly registry: ParticipantRegistry;
   private readonly installationId: string;
   private readonly roomId: string;
@@ -289,6 +291,7 @@ export class PhaseEngine {
   constructor(options: PhaseEngineOptions, private readonly path?: { tasks: TaskEngine; timelineId: string; stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; routingEpochFor: (id: string) => number; assignParticipant: (id: string, groupId: string) => TransitionResult; onPhase: (phase: Phase, startedAt: number) => void; displayForGroup: (groupId: string) => WebSocket | undefined }) {
     this.options = options;
     this.scenario = options.scenario;
+    this.actorScriptParagraphs = options.scenario.actorScript ? scriptParagraphs(options.scenario.actorScript.text) : [];
     this.registry = options.registry;
     this.installationId = options.installationId;
     this.roomId = options.roomId;
@@ -2196,7 +2199,11 @@ export class PhaseEngine {
       const phoneAudioActive = participantState !== "unassigned" && !this.pathDone && (phase.kind === "idle" ? false
         : phase.kind === "group-branch" ? !!phase.branches.find((branch) => branch.groupId === groupId)?.phoneAudioSrc
         : !!((groupId === null ? undefined : phase.phoneAudioByGroup?.[groupId]) ?? phase.phoneAudioSrc));
+      // The script is private to the cast: only participants the scene names receive its excerpt.
+      const tabletScript = participantState === "unassigned" || participantState === "finished" || phase.kind === "idle" || phase.kind === "group-branch"
+        ? null : tabletScriptExcerpt(this.scenario.actorScript, this.actorScriptParagraphs, phase.tabletScript, currentGroup?.id ?? null);
       socket.send(encodeMessage({ ...message, currentGroup, participantState, phoneAudioActive,
+        ...(tabletScript ? { tabletScript } : {}),
         routingEpoch: this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0 }));
     } else socket.send(encodeMessage(message));
   }

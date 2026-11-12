@@ -67,6 +67,12 @@ export const curtainTreatmentSchema = z.object({
   entry: z.object({ x: z.number().finite(), y: z.number().finite() }).nullable(),
 });
 
+const tabletScriptExcerptSchema = z.object({
+  title: z.string().max(160),
+  paragraphs: z.array(z.string()).max(2_000),
+  speaker: z.string().max(60).optional(),
+});
+
 export const phaseSnapshotSchema = z.intersection(
   phaseSchema,
   z.object({
@@ -347,6 +353,8 @@ export const snapshotSchema = z.object({
   currentGroup: audienceGroupSchema.nullable().optional(),
   participantState: z.enum(["choosing", "unassigned", "active", "finished"]).optional(),
   phoneAudioActive: z.boolean().optional(),
+  /** Actor script excerpt for this participant only; never sent to groups the scene does not name. */
+  tabletScript: tabletScriptExcerptSchema.optional(),
   phaseEpoch: z.number().int().nonnegative(),
   phase: phaseSnapshotSchema,
   serverTime: timestamp,
@@ -360,6 +368,8 @@ export const phaseMessageSchema = z.object({
   currentGroup: audienceGroupSchema.nullable().optional(),
   participantState: z.enum(["choosing", "unassigned", "active", "finished"]).optional(),
   phoneAudioActive: z.boolean().optional(),
+  /** Actor script excerpt for this participant only; never sent to groups the scene does not name. */
+  tabletScript: tabletScriptExcerptSchema.optional(),
   phaseEpoch: z.number().int().nonnegative(),
   phase: phaseSnapshotSchema,
   serverTime: timestamp,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actorScriptSchema, firedScriptCueIndex, scriptCuesSchema, scriptParagraphs } from "./actor-script.js";
+import { actorScriptSchema, firedScriptCueIndex, scriptCuesSchema, scriptLines, scriptParagraphs, tabletScriptExcerpt, tabletScriptSchema } from "./actor-script.js";
 import { scenarioSchema } from "./schema.js";
 import { validateScenario } from "./validate.js";
 
@@ -28,5 +28,35 @@ describe("actor script contracts", () => {
     expect(validateScenario(parse({ title: "Show", text: "A\n\nB" }, [{ startMs: 0, paragraph: 1 }])).errors).toEqual([]);
     expect(validateScenario(parse({ title: "Show", text: "A\n\nB" }, [{ startMs: 0, paragraph: 2 }])).errors).toEqual([expect.objectContaining({ code: "script-cue", phaseId: "intro" })]);
     expect(validateScenario(parse(undefined, [{ startMs: 0, paragraph: 0 }])).errors).toEqual([expect.objectContaining({ code: "script-cue" })]);
+  });
+});
+
+describe("tablet script", () => {
+  it("marks the speaker's lines, continuations included, but not stage directions or other speakers", () => {
+    const lines = scriptLines("VECTOR: Oracle, check the message.\nIt matters.\n[Pause.]\nORACLE: Checked.\nNote: not a speaker", "Vector");
+    expect(lines.map((line) => line.own)).toEqual([true, true, false, false, false]);
+    expect(scriptLines("VECTOR: Hi").every((line) => !line.own)).toBe(true);
+    // A mixed-case "Word:" is ordinary text, so it does not start a speech.
+    expect(scriptLines("Kandidat:in 2 spricht\nVECTOR: Ja", "VECTOR").map((line) => line.own)).toEqual([false, true]);
+  });
+  it("gives the excerpt only to the named groups, with their speaker", () => {
+    const script = { title: "Act", text: "a\n\nb\n\nc", speakersByGroup: { lead: "VECTOR" } };
+    const paragraphs = scriptParagraphs(script.text);
+    const config = tabletScriptSchema.parse({ fromParagraph: 1, toParagraph: 2, groupIds: ["lead", "chorus"] });
+    expect(tabletScriptExcerpt(script, paragraphs, config, "lead")).toEqual({ title: "Act", paragraphs: ["b", "c"], speaker: "VECTOR" });
+    expect(tabletScriptExcerpt(script, paragraphs, config, "chorus")).toEqual({ title: "Act", paragraphs: ["b", "c"] });
+    expect(tabletScriptExcerpt(script, paragraphs, config, "audience")).toBeNull();
+    expect(tabletScriptExcerpt(script, paragraphs, config, null)).toBeNull();
+    expect(tabletScriptExcerpt(script, paragraphs, { ...config, groupIds: [] }, null)?.paragraphs).toEqual(["b", "c"]);
+    expect(tabletScriptSchema.safeParse({ fromParagraph: 2, toParagraph: 1 }).success).toBe(false);
+  });
+  it("validates the range and groups against the show", () => {
+    const show = scenarioSchema.parse({ version: "v", entryPhaseId: "scene",
+      groups: [{ id: "lead", label: "Lead" }, { id: "chorus", label: "Chorus" }],
+      actorScript: { title: "Act", text: "a\n\nb", speakersByGroup: { ghost: "X" } },
+      phases: [{ id: "idle", kind: "idle" }, { id: "scene", kind: "narration", text: "t", durationMs: 1000, next: "idle",
+        tabletScript: { fromParagraph: 0, toParagraph: 5, groupIds: ["nobody"] } }] });
+    expect(validateScenario(show).errors.map((issue) => issue.message)).toEqual(expect.arrayContaining([
+      'Actor script speaker is set for unknown group "ghost"', "Tablet script ends at paragraph 6, but the script has 2", 'Tablet script shows to unknown group "nobody"']));
   });
 });

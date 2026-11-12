@@ -1,7 +1,7 @@
 import { admissionConfigSchema } from './admission.js';
 import { participantTaskSchema, participantRoleSchema } from './tasks.js';
 import { monitorCuesSchema } from "./monitors.js";
-import { actorScriptSchema, scriptCuesSchema } from "./actor-script.js";
+import { actorScriptSchema, scriptCuesSchema, tabletScriptSchema } from "./actor-script.js";
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
 import { extraAudioCombinationError, mediaCombinationError } from "./media-kind.js";
@@ -46,6 +46,8 @@ const phoneAudioFields = {
   monitorCues: monitorCuesSchema.optional(),
   /** Timed jumps of the shared actor script reader, relative to scene start. */
   scriptCues: scriptCuesSchema.optional(),
+  /** Shows part of the actor script on participants' tablets for this scene. */
+  tabletScript: tabletScriptSchema.optional(),
   /** Fallback/broadcast MP3. Used for every participant without a group-specific override. */
   phoneAudioSrc: phoneAudioSrcSchema,
   /** Per-group MP3 overrides, keyed by stable authored group id. */
