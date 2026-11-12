@@ -510,6 +510,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
         <p className="sc-tool-copy field-hint">Without a group track, listeners use the default. Without either, they hear no scene audio.</p>
       </details>}
     </fieldset>}
+    {phase.kind !== "idle" && phase.kind !== "group-branch" && <TabletTextFields phase={phase} groups={project.scenario.groups ?? []} onChange={onChange} />}
     <MonitorEditor phase={phase} onChange={onChange} onChooseMedia={onChooseMedia} />
     <details><summary>Advanced settings</summary>
     {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
@@ -591,4 +592,32 @@ function TaskFlow({ taskId, tasks, visited = [] }: { taskId: string | undefined;
       {option.nextTaskId && <TaskFlow taskId={option.nextTaskId} tasks={tasks} visited={[...visited, taskId]} />}
     </li>)}</ul>
   </section>;
+}
+
+type TextPhase = Exclude<Phase, { kind: "idle" } | { kind: "group-branch" }>;
+/** Native show-screen text for the whole scene. A group text replaces the default; an empty one hides it. */
+function TabletTextFields({ phase, groups, onChange }: { phase: TextPhase; groups: { id: string; label: string }[]; onChange: (phase: Phase) => void }) {
+  const byGroup = phase.tabletTextByGroup ?? {};
+  function setDefault(value: string) { const { tabletText: _, ...rest } = phase; onChange(value.trim() ? { ...rest, tabletText: value } : rest); }
+  function setGroup(id: string, value: string | undefined) {
+    const next = { ...byGroup };
+    if (value === undefined) delete next[id]; else next[id] = value;
+    const { tabletTextByGroup: _, ...rest } = phase;
+    onChange(Object.keys(next).length ? { ...rest, tabletTextByGroup: next } : rest);
+  }
+  return <fieldset><legend>Tablet text</legend>
+    <p className="sc-tool-copy field-hint">Shown large on participants' tablets for the whole scene, until a scene with other text starts. Scenes without text clear it.</p>
+    <label>Default text<textarea value={phase.tabletText ?? ""} placeholder="No tablet text" onChange={e => setDefault(e.target.value)} /></label>
+    {groups.length > 0 && <details open={Object.keys(byGroup).length > 0 || undefined}><summary>Different text by group{Object.keys(byGroup).length ? ` · ${Object.keys(byGroup).length} set` : ""}</summary>
+      {groups.map(group => <div key={group.id}>
+        {byGroup[group.id] === undefined
+          ? <button type="button" className="sc-tool-button" onClick={() => setGroup(group.id, phase.tabletText ?? "")}>Set text for {group.label}</button>
+          : <>
+            <label>{group.label}<textarea value={byGroup[group.id]} placeholder="No text for this group" onChange={e => setGroup(group.id, e.target.value)} /></label>
+            <button type="button" className="sc-tool-button" onClick={() => setGroup(group.id, undefined)}>{phase.tabletText ? `Use default for ${group.label}` : `Remove text for ${group.label}`}</button>
+          </>}
+      </div>)}
+      <p className="sc-tool-copy field-hint">An empty group text shows that group nothing, even when there is a default.</p>
+    </details>}
+  </fieldset>;
 }

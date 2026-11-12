@@ -150,10 +150,14 @@ export function validateScenario(
             message: `group branch "${phase.id}" references unknown position question "${questionId}"`,
           });
       }
-    } else if (phase.kind !== "idle" && phase.phoneAudioByGroup) {
-      for (const groupId of Object.keys(phase.phoneAudioByGroup)) if (!groupIds.has(groupId)) errors.push({
+    } else if (phase.kind !== "idle") {
+      for (const groupId of Object.keys(phase.phoneAudioByGroup ?? {})) if (!groupIds.has(groupId)) errors.push({
         severity: "error", code: "unknown-group", phaseId: phase.id,
         message: `phase "${phase.id}" targets unknown group "${groupId}"`,
+      });
+      for (const groupId of Object.keys(phase.tabletTextByGroup ?? {})) if (!groupIds.has(groupId)) errors.push({
+        severity: "error", code: "unknown-group", phaseId: phase.id,
+        message: `phase "${phase.id}" shows tablet text to unknown group "${groupId}"`,
       });
     }
     if (phase.kind === "narration" && phase.textByGroup) {

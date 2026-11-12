@@ -35,6 +35,8 @@ export function updateGroupCatalogue(scenario: Scenario, groups: Group[], initia
     if (phase.kind === "idle") return phase;
     if (phase.kind !== "group-branch") return { ...phase, ...(phase.phoneAudioByGroup ? {
       phoneAudioByGroup: Object.fromEntries(Object.entries(phase.phoneAudioByGroup).filter(([id]) => ids.has(remap(id))).map(([id, src]) => [remap(id), src])),
+    } : {}), ...(phase.tabletTextByGroup ? {
+      tabletTextByGroup: Object.fromEntries(Object.entries(phase.tabletTextByGroup).filter(([id]) => ids.has(remap(id))).map(([id, text]) => [remap(id), text])),
     } : {}) };
     const branches = phase.branches.map((branch) => ({ ...branch, groupId: remap(branch.groupId) })).filter((branch) => ids.has(branch.groupId));
     if (branches.length < 2) throw new Error(`“${phase.title ?? phase.id}” would have fewer than two options. Add a replacement group to that scene first.`);
