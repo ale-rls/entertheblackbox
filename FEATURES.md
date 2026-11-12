@@ -155,6 +155,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 ## Tooling / dev & ops scripts
 
 - `pnpm validate-scenario`, `pnpm build-media-manifest`, `pnpm import-show-yaml`, `pnpm generate-idle-marker-tracks` (Python/OpenCV), `pnpm simulate-clients`, PocketBase bootstrap scripts, Playwright e2e suite (`tests/e2e`, quarantined Studio specs), `pnpm import-media`.
+- Claude Code project skills (`.claude/skills/`): `/update-show` (revise a Studio backup or draft), `/check-script-updates` (check a script Google Doc for missing features and text/recording changes against the show; colour legend parser `parse_script.py`), `/check-app-update` (Android preview app vs main and the live show).
 
 ---
 
