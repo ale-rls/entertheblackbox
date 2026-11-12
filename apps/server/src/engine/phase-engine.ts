@@ -863,8 +863,10 @@ export class PhaseEngine {
   getSnapshot(now = this.now()): PhaseSnapshotMessage {
     const phase = this.pathDone && this.path ? { ...this.path.waitingPhase, title: "Waiting for other groups", showCursors: false } : this.currentPhase();
     const curtain = this.curtainFor(phase);
+    // Script cues drive the server-side actor reader only; clients never need them.
+    const { scriptCues: _scriptCues, ...publicPhase } = phase;
     return {
-      ...phase,
+      ...publicPhase,
       // The display lights exactly the field the server counts (same field type, gap applied).
       ...(curtain === null ? {} : { field: curtain.field as never, voteTreatment: curtain.treatment }),
       scenarioVersion: this.scenario.version,
