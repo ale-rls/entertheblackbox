@@ -8,6 +8,14 @@ The script publishes with the show. When the server loads that show, Admin → *
 
 The script is stored in the Studio draft, which anyone who can reach the Studio PocketBase collection can read. Do not commit it to this repository. Script cues are not sent to phones or displays.
 
+## On participant tablets
+
+A scene can also show part of the show's script on participants' tablets, in the native app. Select the scene and use **Tablet script**: pick the first and last paragraph and the groups that see it. With no group selected, every participant sees it. In **Show properties → Actor script → Speakers on tablets**, give each group its speaker name exactly as the script writes it before the colon (for example `VECTOR`). That group's tablets highlight its lines in yellow.
+
+How lines are marked: a line that starts with an upper-case name and a colon (`VECTOR: …`) starts a speech. The lines after it in the same paragraph continue that speech until the next speaker. Lines that are only a stage direction (`[Pause.]`) are never highlighted. Mixed-case words before a colon (`Hinweis: …`) are ordinary text.
+
+The server adds the excerpt to each participant's scene message only for the named groups. Other phones and the displays never receive the text. Tablets show it for the whole scene; it doesn't follow the operator's script cue. Older apps ignore it, and it needs no new build. The script is still private show content: it's stored in the Studio draft and must not go into this repository.
+
 ## Loaded in Admin (override)
 
 In Admin, open **Script**, paste a title and plain-text script, and choose **Load script**. Blank lines separate cue paragraphs; line breaks inside a paragraph are preserved. Scripts may contain up to 200,000 characters and 2,000 paragraphs.

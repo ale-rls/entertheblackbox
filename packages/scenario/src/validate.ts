@@ -87,6 +87,21 @@ export function validateScenario(
   }
   const byId = new Map<string, Phase>();
   const groupIds = new Set((scenario.groups ?? []).map((group) => group.id));
+  for (const groupId of Object.keys(scenario.actorScript?.speakersByGroup ?? {})) if (!groupIds.has(groupId)) errors.push({
+    severity: "error", code: "unknown-group", message: `Actor script speaker is set for unknown group "${groupId}"`,
+  });
+  for (const phase of scenario.phases) {
+    const tablet = phase.kind === "idle" || phase.kind === "group-branch" ? undefined : phase.tabletScript;
+    if (!tablet) continue;
+    if (tablet.toParagraph >= scriptLength) errors.push({
+      severity: "error", code: "script-cue", phaseId: phase.id,
+      message: scriptLength === 0 ? "Tablet script needs an actor script on the show"
+        : `Tablet script ends at paragraph ${tablet.toParagraph + 1}, but the script has ${scriptLength}`,
+    });
+    for (const groupId of tablet.groupIds) if (!groupIds.has(groupId)) errors.push({
+      severity: "error", code: "unknown-group", phaseId: phase.id, message: `Tablet script shows to unknown group "${groupId}"`,
+    });
+  }
   if (scenario.monitorGroupId !== undefined && !groupIds.has(scenario.monitorGroupId)) errors.push({
     severity: "error", code: "unknown-group", message: `monitorGroupId references unknown group "${scenario.monitorGroupId}"`,
   });
