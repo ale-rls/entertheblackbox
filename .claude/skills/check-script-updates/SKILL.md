@@ -50,7 +50,9 @@ share, copy or trash the doc.
 
    It outputs the legend paragraphs, every paragraph with colour-tagged runs
    and table row/column, and paragraphs grouped into scenes (`id`, `version`,
-   `statuses`, `cues`).
+   `statuses`, `cues`). `versionedIds` lists every `ID.vN` heading,
+   including the ones that share a paragraph with the previous scene. Use it for
+   the recording check.
 
 **Check the legend first.** The legend is at the top of the doc, before the first
 table. If it no longer matches the mapping in `parse_script.py`, or
@@ -134,10 +136,11 @@ The script's text is compared with the **live draft's** narration (the public
 endpoints carry media, not text). Media versions are checked against the
 **live hashes**.
 
-If the user also wants "what changed since the last script", fetch an earlier
-revision with `list_file_revisions` + `download_file_content` (`revisionId`)
-and parse it the same way. The Drive revision is what counts as "previous", not
-your own memory of a past run.
+**Earlier script revisions can't be downloaded.** `list_file_revisions` lists
+them, but `download_file_content` with a `revisionId` is not supported (tested
+2026-11-12). So the comparison is script vs show, which is what matters. For
+"what changed in the script since the show was built", compare `modifiedTime`
+with the live draft's `updatedAt` and rely on the purple text.
 
 ## 4. Features: map every cue onto the software
 

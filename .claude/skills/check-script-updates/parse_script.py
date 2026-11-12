@@ -156,7 +156,19 @@ def main():
                       if (r.get("color") and r.get("color") not in TEXT_STATUS)
                       or (r.get("bg") and r.get("bg") not in HIGHLIGHT_CUE)},
                      key=str)
+    # Headings often share a paragraph with the previous scene's text, joined by
+    # line breaks ("...\nK1.2.1.v3\nKopfhörer:"). List every versioned ID found at
+    # the start of any line, so the recording-version check misses none.
+    line_re = re.compile(r"^\s*(KI_NTRO|[KT]\d+(?:\.\d+)*)\.?v(\d+)\b", re.M)
+    versioned = {}
+    for para in p.paragraphs:
+        for m in line_re.finditer(para["text"]):
+            st = sorted({r["status"] for r in para["runs"] if "status" in r})
+            versioned.setdefault((m.group(1), m.group(2)), {"id": m.group(1), "version": m.group(2),
+                                                            "paragraph": para["index"], "statuses": st})
+
     json.dump({"legend": p.legend, "paragraphs": p.paragraphs, "scenes": scenes,
+               "versionedIds": list(versioned.values()),
                "unmappedColours": [list(u) for u in unknown]},
               open(dst, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"{len(p.paragraphs)} paragraphs, {len(scenes)} scenes, "
