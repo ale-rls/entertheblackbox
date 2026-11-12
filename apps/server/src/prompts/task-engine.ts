@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ParticipantRole, RoleAssignment, ParticipantTask, TaskInstance, TaskRecipient } from '@entertheblackbox/scenario';
+import type { ParticipantRole, RoleAssignment, ParticipantTask, TaskInstance, TaskOutcome, TaskRecipient } from '@entertheblackbox/scenario';
 /** Serialized on the server event loop: a claim is committed before another response is processed. */
 export class TaskEngine {
   private instances: TaskInstance[] = [];
@@ -64,27 +64,52 @@ export class TaskEngine {
     if (!task || !r || !option || task.status !== 'open' || this.current(participantId, sessionId)?.task.id !== task.id) return false;
     if (r.status === 'accepted' || r.status === 'answered') return r.optionId === optionId;
     if (r.status !== 'pending' && r.status !== 'full') return false;
-    if (option.capacity !== undefined && task.recipients.filter(r => r.optionId === optionId && r.status === 'accepted').length >= option.capacity) {
-      r.status = 'full'; r.message = task.template.fullMessage; return true;
-    }
-    if (option.roleId) {
-      try { this.assignRole(participantId, option.roleId, task.id, now); }
-      catch (error) { r.status = 'full'; r.message = error instanceof Error ? error.message : 'Role unavailable'; return true; }
-    }
-    if (option.groupId && (!this.workflow || !this.workflow.assignGroup(participantId, option.groupId))) {
-      // Roll back only the role this response just acquired.
-      if (option.roleId) this.assignments = this.assignments.filter(a => !(a.participantId === participantId && a.roleId === option.roleId && a.source === task.id));
-      r.status = 'full'; r.message = 'This route is unavailable. Please ask the operator.'; return true;
-    }
     const winner = option.audioByVote ? this.workflow?.winner(option.audioByVote.questionId) : null;
-    const audio = option.audioByVote ? (winner ? option.audioByVote.clips[winner] : undefined) ?? option.audioByVote.fallback : option.audio;
-    delete r.audio;
-    if (audio) r.audio = { ...audio, startedAt: now + 400 };
-    if (option.nextTaskId) this.followups.push({ sourceId: task.id, participantId, templateId: option.nextTaskId, at: now + (audio?.durationMs ?? 0) + 500 });
-    Object.assign(r, { optionId, status: option.capacity === undefined ? 'answered' : 'accepted', sequence: ++this.sequence, respondedAt: now, message: option.message });
+    const own: TaskOutcome = { roleId: option.roleId, groupId: option.groupId, nextTaskId: option.nextTaskId, message: option.message,
+      audio: option.audioByVote ? (winner ? option.audioByVote.clips[winner] : undefined) ?? option.audioByVote.fallback : option.audio };
+    // Rank and capacity count only responses that took a place, not overflow arrivals.
+    const placed = task.recipients.filter(x => x.optionId === optionId && (x.status === 'accepted' || x.status === 'answered') && x.outcome !== 'overflow').length;
+    const atCapacity = option.capacity !== undefined && placed >= option.capacity;
+    const rank = option.rankOutcomes?.[placed];
+    const first: { outcome: TaskOutcome; label?: string } | null = atCapacity ? null
+      : rank ? { outcome: { ...own, ...Object.fromEntries(Object.entries(rank).filter(([, v]) => v !== undefined)) }, label: `rank-${placed + 1}` }
+      : { outcome: own };
+    let failure = first ? this.apply(task, r, participantId, first.outcome, now) : task.template.fullMessage;
+    let label = first?.label;
+    if (failure !== null && option.overflow) {
+      failure = this.apply(task, r, participantId, { message: '', ...option.overflow }, now);
+      label = 'overflow';
+    }
+    if (failure !== null) {
+      Object.assign(r, { status: 'full', message: failure });
+      // Without a full recording, any introduction that is still playing carries on.
+      if (task.template.fullAudio) r.audio = { ...task.template.fullAudio, startedAt: now + 400 };
+      return true;
+    }
+    delete r.outcome;
+    if (label) r.outcome = label;
+    // Overflow arrivals did not take one of the option's places, so they never count as accepted.
+    Object.assign(r, { optionId, status: option.capacity === undefined || label === 'overflow' ? 'answered' : 'accepted', sequence: ++this.sequence, respondedAt: now });
     // A scene's task stays open to its deadline so late joiners can still be added.
     if (task.phaseId === null && task.recipients.every(r => r.status === 'accepted' || r.status === 'answered')) task.status = 'closed';
     return true;
+  }
+  /** Gives one recipient an outcome. Returns null on success, or the reason it could not be given (nothing kept). */
+  private apply(task: TaskInstance, r: TaskRecipient, participantId: string, outcome: TaskOutcome, now: number): string | null {
+    if (outcome.roleId) {
+      try { this.assignRole(participantId, outcome.roleId, task.id, now); }
+      catch (error) { return error instanceof Error ? error.message : 'Role unavailable'; }
+    }
+    if (outcome.groupId && (!this.workflow || !this.workflow.assignGroup(participantId, outcome.groupId))) {
+      // Roll back only the role this response just acquired.
+      if (outcome.roleId) this.assignments = this.assignments.filter(a => !(a.participantId === participantId && a.roleId === outcome.roleId && a.source === task.id));
+      return 'This route is unavailable. Please ask the operator.';
+    }
+    delete r.audio;
+    if (outcome.audio) r.audio = { ...outcome.audio, startedAt: now + 400 };
+    r.message = outcome.message ?? '';
+    if (outcome.nextTaskId) this.followups.push({ sourceId: task.id, participantId, templateId: outcome.nextTaskId, at: now + (outcome.audio?.durationMs ?? 0) + 500 });
+    return null;
   }
   close(id: string, cancel = false): boolean {
     const task = this.instances.find(t => t.id === id);

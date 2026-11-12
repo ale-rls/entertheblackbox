@@ -150,7 +150,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     trustProxy: config.trustProxy,
     buildVersion: config.buildVersion,
     allowPublicJoin: true,
-    requiredCapabilities: () => readiness.ready ? [...(readiness.scenario.participantTasks?.length ? ['participant-tasks-v1'] : []), ...(readiness.scenario.participantTasks?.some(t => t.audio || t.persistAcrossPhases || t.options.some(o => o.audio || o.audioByVote || o.groupId || o.nextTaskId)) ? ['participant-task-routing-v1'] : []), ...(readiness.scenario.admission ? ['admission-programs-v1'] : [])] : [],
+    requiredCapabilities: () => readiness.ready ? [...(readiness.scenario.participantTasks?.length ? ['participant-tasks-v1'] : []), ...(readiness.scenario.participantTasks?.some(t => t.audio || t.fullAudio || t.persistAcrossPhases || t.options.some(o => o.audio || o.audioByVote || o.groupId || o.nextTaskId || o.rankOutcomes || o.overflow)) ? ['participant-task-routing-v1'] : []), ...(readiness.scenario.admission ? ['admission-programs-v1'] : [])] : [],
     isNewParticipantAllowed: () => config.allowLateJoin || engine?.lifecycleState !== "active",
     onClientMessage: (message, socket, request) => {
       if (message.t === "wall_status") {

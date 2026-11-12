@@ -594,7 +594,11 @@ function TaskFlow({ taskId, tasks, visited = [] }: { taskId: string | undefined;
       {option.audio && <p>Outcome audio: {option.audio.src}</p>}
       {option.audioByVote && <p>Outcome audio follows vote: {option.audioByVote.questionId}. Fallback: {option.audioByVote.fallback.src}</p>}
       {option.nextTaskId && <TaskFlow taskId={option.nextTaskId} tasks={tasks} visited={[...visited, taskId]} />}
+      {option.rankOutcomes?.map((rank, i) => <p key={i}>Response {i + 1}: {[rank.roleId && `role ${rank.roleId}`, rank.groupId && `group ${rank.groupId}`, rank.audio && `audio ${rank.audio.src}`].filter(Boolean).join(', ') || 'option defaults'}</p>)}
+      {option.overflow && <p>When full: {[option.overflow.roleId && `role ${option.overflow.roleId}`, option.overflow.groupId && `group ${option.overflow.groupId}`, option.overflow.audio && `audio ${option.overflow.audio.src}`].filter(Boolean).join(', ') || 'message only'}</p>}
+      {[...(option.rankOutcomes ?? []), ...(option.overflow ? [option.overflow] : [])].map(o => o.nextTaskId).filter((id): id is string => !!id && id !== option.nextTaskId).map(id => <TaskFlow key={id} taskId={id} tasks={tasks} visited={[...visited, taskId]} />)}
     </li>)}</ul>
+    {task.fullAudio && <p>Full option audio: {task.fullAudio.src}</p>}
   </section>;
 }
 
