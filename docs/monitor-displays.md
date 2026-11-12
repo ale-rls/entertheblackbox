@@ -37,7 +37,7 @@ Otherwise it holds until the next cue or phase. No cues means black. Finite
 videos hold their final frame; looping videos wrap against server elapsed time.
 Video sound is always muted. Use native audio for participant narration.
 
-**Colour coding.** Text and captions are set in Optik. During a position question, monitor N draws them in the colour of the phase's Nth answer (M1 = first zone in outcome order, M2 = second, …), taken from the phase's `answerColors` (Studio: per-stage answer colours) or, for a curtain-light vote, its resolved colours. Author the monitor cues in the same order as the zones. Phases without authored colours stay white on black.
+**Colour coding.** Text and captions are set in Optik. During a position question, monitor N draws them in the colour of the phase's Nth answer (M1 = first zone in outcome order, M2 = second, …; with fewer answers than monitors they repeat, so a two-answer question colours M1/M3 with the first answer and M2/M4 with the second), taken from the phase's `answerColors` (Studio: per-stage answer colours) or, for a curtain-light vote, its resolved colours. Author the monitor cues in the same order as the zones. Phases without authored colours stay white on black.
 
 Question-first/answers-second can be authored as two cues at different offsets.
 Labels are authored explicitly; floor axes are not guessed from question text.
