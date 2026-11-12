@@ -50,6 +50,8 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
   background: #050505;
 }
 .layer { position: absolute; inset: 0; }
+/* Its own stacking context: nothing in the video layer (e.g. a scene loop) can rise above the curtain, glow, UI or cursor layers. */
+.layer-video { z-index: 0; }
 .layer-video video { width: 100%; height: 100%; object-fit: cover; }
 .phase-video-slot { position: absolute; inset: 0; z-index: 0; opacity: 0; pointer-events: none; }
 .phase-video-slot-active { z-index: 1; opacity: 1; }
