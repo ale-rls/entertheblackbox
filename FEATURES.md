@@ -40,6 +40,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Local media fallback/import reconciliation — `apps/studio/src/media/local.ts`
 - Device preview (isolated runtime with main/group/monitor display links) — **no longer reachable from the Studio editor**; module and server route remain — `apps/studio/src/preview/DevicePreview.tsx`, `apps/server/src/rehearsal/rehearsal.ts`
 - Runtime validation + branch/display preview — `apps/studio/src/preview/*`
+- Screen minimap (bottom-left of the canvas while a scene is selected): schematic main/group display, M1–M4 (first cue, cue-count pips), native app (portrait) and browser `/phone/` showing what that scene puts on each; empty screens draw dashed; group-path scenes show on the group display and monitors only follow `monitorGroupId` — `apps/studio/src/minimap/*`
 - Diagnostics panel (collapsed by default) — `apps/studio/src/diagnostics/DiagnosticsPanel.tsx`
 - Missing-media warning badge on graph nodes; resizable properties panel (width remembered per browser) — `apps/studio/src/canvas/nodes.tsx`, `apps/studio/src/App.tsx`
 - Local draft autosave/recovery — `apps/studio/src/io.ts`, `model.ts`
