@@ -101,6 +101,10 @@ These bit us when generating a show from a script. The generated backup itself
 is show content: keep it out of git. The `/update-show` skill
 (`.claude/skills/update-show/`) is the procedure for revising a show from a
 backup file or a PocketBase Studio draft.
+The `/check-script-updates` skill (`.claude/skills/check-script-updates/`)
+checks a new script revision (Google Doc link) for cues the software can't do
+yet and for text and recording changes, then hands text-only changes to
+`/update-show`.
 
 - **Always lay out show nodes left to right in playback order.** Entry is
   leftmost, later scenes advance right, parallel branches use separate rows,
