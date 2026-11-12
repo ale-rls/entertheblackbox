@@ -24,7 +24,8 @@ export type ScenarioIssue = {
     | "missing-media"
     | "unreachable-phase"
     | "unmarked-cycle"
-    | "curtain-light";
+    | "curtain-light"
+    | "unused-rank-outcome";
   phaseId?: string;
   message: string;
 };
@@ -282,6 +283,13 @@ export function validateScenario(
     for (const option of task.options) {
       if (option.groupId && !scenario.groups?.some(g => g.id === option.groupId)) errors.push({ severity: 'error', code: 'unknown-group', message: `Task ${task.id} assigns unknown group ${option.groupId}` });
       if (option.nextTaskId && !scenario.participantTasks?.some(t => t.id === option.nextTaskId)) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} references unknown follow-up ${option.nextTaskId}` });
+      for (const [label, outcome] of [...(option.rankOutcomes ?? []).map((o, i) => [`rank ${i + 1}`, o] as const), ...(option.overflow ? [['overflow', option.overflow] as const] : [])]) {
+        if (outcome.groupId && !scenario.groups?.some(g => g.id === outcome.groupId)) errors.push({ severity: 'error', code: 'unknown-group', message: `Task ${task.id} option ${option.id} ${label} assigns unknown group ${outcome.groupId}` });
+        if (outcome.roleId && !scenario.participantRoles?.some(r => r.id === outcome.roleId)) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} option ${option.id} ${label} references unknown role ${outcome.roleId}` });
+        if (outcome.nextTaskId && !scenario.participantTasks?.some(t => t.id === outcome.nextTaskId)) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} option ${option.id} ${label} references unknown follow-up ${outcome.nextTaskId}` });
+      }
+      if (option.overflow && option.capacity === undefined && !option.roleId && !option.rankOutcomes?.some(r => r.roleId)) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} option ${option.id} has an overflow outcome but no capacity or role that can fill up` });
+      if (option.rankOutcomes && option.capacity !== undefined && option.rankOutcomes.length > option.capacity) warnings.push({ severity: 'warning', code: 'unused-rank-outcome', message: `Task ${task.id} option ${option.id} has ${option.rankOutcomes.length} rank outcomes but capacity ${option.capacity}; the extra outcomes are never used` });
       if (option.audioByVote && !scenario.phases.some(p => p.id === option.audioByVote!.questionId && (p.kind === 'position-question' || p.kind === 'video-position-question'))) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} references unknown vote ${option.audioByVote.questionId}` });
     }
     for (const option of task.options) if (option.roleId && !scenario.participantRoles?.some(r => r.id === option.roleId)) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} references unknown role ${option.roleId}` });

@@ -23,6 +23,17 @@ audio and shows task prompts.
   everyone has answered. Anyone who joins, or is moved into its audience
   group, during that window becomes a recipient and gets the prompt.
   Operator-sent tasks still close once every recipient has answered.
+- **Outcomes by order and when full.** An option can give the Nth accepted
+  response its own outcome (`rankOutcomes`: role, group, recording, message,
+  follow-up task; empty fields fall back to the option's own). An option with
+  an `overflow` outcome gives every later response that outcome once it is at
+  capacity, instead of asking them to choose again. Overflow arrivals are
+  `answered`, not `accepted`, and never take one of the option's places. If a
+  rank's role is still held (for example from an earlier task), the response
+  gets the overflow outcome. A task's `fullAudio` plays with `fullMessage`
+  when a chosen option is full and has no overflow. Admin and the task CSV
+  show which outcome each response got (`rank-N` / `overflow`). Studio edits
+  roles, groups and messages; recordings are set in the show data.
 - **Roles** (`scenario.participantRoles`). These are capacity-limited and can
   belong to an exclusive set. Roles come from accepted task options or from
   Admin. Withdrawing a role marks the matching task answer `withdrawn`.

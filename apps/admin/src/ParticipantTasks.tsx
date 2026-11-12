@@ -39,7 +39,7 @@ export function ParticipantTasks({ token, state, sessionId, phaseId, phaseEpoch,
       {path.waitingForGo && <><p>Waiting for operator confirmation that the scene is ready to continue.</p><button disabled={busy} onClick={() => void command('go', undefined, path)}>Ready — GO</button></>}
       {path.instances.map(task => <details key={task.id} open={task.status === 'open'}><summary>{task.template.title} — {task.status} — {task.recipients.filter(r => r.status === 'accepted' || r.status === 'answered').length}/{task.recipients.length} responded</summary>
         <p>Closes: {new Date(task.deadlineAt).toLocaleTimeString()}</p>
-        <ul>{task.recipients.map(r => <li key={r.participantId}>{participants.find(p => p.clientId === r.participantId)?.name ?? r.participantId}: {r.status} {r.optionId ?? ''}{r.sequence !== null ? ` (#${r.sequence})` : ''}</li>)}</ul>
+        <ul>{task.recipients.map(r => <li key={r.participantId}>{participants.find(p => p.clientId === r.participantId)?.name ?? r.participantId}: {r.status} {r.optionId ?? ''}{r.outcome ? ` · ${r.outcome}` : ''}{r.sequence !== null ? ` (#${r.sequence})` : ''}</li>)}</ul>
         <button disabled={busy || task.status !== 'open'} onClick={() => void command('close', task.id, path)}>Close responses</button>
         <button disabled={busy || task.status === 'cancelled'} onClick={() => void command('cancel', task.id, path)}>Cancel task</button>
       </details>)}

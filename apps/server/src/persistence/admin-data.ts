@@ -179,7 +179,7 @@ export class PocketBaseAdminDataSource implements AdminDataSource {
     const taskById = new Map<string, TaskInstance>();
     for (const event of taskEvents.sort((a,b) => (a.detail?.revision ?? 0) - (b.detail?.revision ?? 0))) for (const task of event.detail?.tasks ?? []) taskById.set(task.id, task);
     const participantTasks = [...taskById.values()];
-    const tasksCsv = [['instanceId','templateId','participantId','optionId','status','sequence','respondedAt','deadlineAt'], ...participantTasks.flatMap(t => t.recipients.map(r => [t.id,t.template.id,r.participantId,r.optionId,r.status,r.sequence,r.respondedAt,t.deadlineAt]))].map(row => row.map(csvEscape).join(',')).join('\n');
+    const tasksCsv = [['instanceId','templateId','participantId','optionId','status','sequence','respondedAt','deadlineAt','outcome'], ...participantTasks.flatMap(t => t.recipients.map(r => [t.id,t.template.id,r.participantId,r.optionId,r.status,r.sequence,r.respondedAt,t.deadlineAt,r.outcome ?? '']))].map(row => row.map(csvEscape).join(',')).join('\n');
     const votes = snapshots.flatMap((snapshot) => snapshot.votes);
     return {
       tasksCsv,
