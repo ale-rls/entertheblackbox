@@ -1,6 +1,6 @@
 ---
 name: check-script-updates
-description: Check a new revision of the human-written show script (a Google Doc, the "Ablauf") against the software and the current show — finds cues that need features we lack, says how existing features can realise the rest, lists text changes and voice recordings needed, and hands pure text changes to /update-show. Requires a Google Doc link. Use when asked to check, review or compare a new script version.
+description: Check a new revision of the human-written show script (a Google Doc, the "Ablauf") against the software and the show live on the server — finds cues that need features we lack, says how existing features can realise the rest, lists text changes and voice recordings needed, and hands pure text changes to /update-show. Requires a Google Doc link. Use when asked to check, review or compare a new script version.
 ---
 
 # Check script updates
@@ -11,8 +11,8 @@ saying what plays where. This skill turns one revision into two answers:
 1. **Features:** does every cue have a way to happen in the show software?
 2. **Text:** which scenes changed, and which need a new voice recording?
 
-Steps 1–5 only **read**: the Google Doc, the repo, the Studio draft. Nothing is
-edited, filed or published before the user decides in step 6.
+Steps 1–5 only **read**: the Google Doc, the repo, the live server's public
+endpoints and the Studio drafts. Nothing is edited, filed or published before the user decides in step 6.
 
 The script and everything derived from it is **show content**. Keep exports,
 parsed JSON and reports in the scratchpad, never in this repository; don't
@@ -78,13 +78,61 @@ recording version and should match the media file name. Headings like
 `K1 — …` without a version are sections. Stage directions in `[...]` or italics
 and timings ("Nach 60 Sekunden Pause", "[1:13]") are cues too.
 
-## 3. Pin the baseline show
+## 3. Pin the live show and the baseline draft
 
-Find out what the script is being compared against, following `/update-show`
-step 1–2 (read-only): a Studio backup file, or a PocketBase URL + draft. If
-the user says "the live show", work out which draft is live; don't trust the
-newest draft name. Write the untouched baseline to the scratchpad with
-`exportBackup()`.
+Compare the script with **what's live on the server** by default, and with the
+**latest Studio draft**. A draft can be edited after publishing, so these two
+can differ. Everything here is read-only, uses public endpoints and needs no
+operator sign-in. Default server: `https://bb-frontend.enabler.space`; ask if
+the user means another one.
+
+1. **Live release.** `GET /api/status`. Record `scenarioVersion`
+   (`release-<uuid>`), `showLifecycle` and `scenarioWarnings`. Treat the
+   warnings as findings: unreachable phases, or groups that finish
+   immediately, often explain why a script cue doesn't happen.
+2. **Live phases.** `GET /api/phases` gives phase ID → published media path. The
+   path ends in the file's SHA-256 (`native-shows/assets/<sha256>.<ext>`).
+   `GET /media-manifest.json` lists every published file with its `hash`.
+   `GET /media/native-shows/channels/production.json` gives what native apps
+   download: per-file `sha256`, background music, and its own
+   `scenarioVersion`. Check that this matches step 1; if it doesn't, the apps
+   and the server are out of step, so report it.
+3. **Which draft is live.** The release doesn't name its source draft, and the
+   newest draft name can mislead. List the drafts with
+   `PocketbaseDraftDatabase.list()` (`apps/studio/src/pocketbase-drafts.ts`).
+   Get library hashes (`src` → `hash`) with `PocketbaseMediaLibrary.list()`
+   (`apps/studio/src/media/pocketbase-media.ts`). Run both against the Studio
+   PocketBase URL: ask the user for it, or read it from the live `/studio/`
+   bundle. For each candidate draft, map phase ID → media `src` → `hash` and
+   compare with the live phases from step 2. This rules out old drafts, but
+   it **can't separate close drafts**. `/api/phases` lists only phases that have
+   media, so text-only, group-branch and narration-only phases aren't
+   compared. Several recent drafts can match every live phase. Then run
+   the decisive test: collect every hash the draft references (any string in
+   the draft that is a library `src`) and check that **every live file** (all
+   `media-manifest.json` hashes, all native channel `sha256`s and the background
+   music) is among them. The live draft has zero live files missing. Ignore
+   files that are only in the draft: drafts reference plenty of unused library
+   media, so that count is noise. Tested 2026-11-12: two drafts matched all 32
+   live phases, but only one contained all 97 live files. The other, newer one,
+   was missing 24 and was not live.
+   If no draft has zero missing, report the closest one and every missing
+   file, and don't guess. Caveat: the library keeps only the current hash per
+   `src`, so a file replaced under the same name after publishing shows up as
+   missing.
+4. **Draft vs live.** If the newest draft isn't the live one, diff the two
+   (phases added/removed, transitions, media, narration text). These are
+   unpublished edits that are already waiting, so don't report them as script
+   changes still to do.
+
+Write both untouched baselines (the live draft and the newest draft, if they
+differ) to the scratchpad with `exportBackup()`. If the user gives a backup
+file instead, use it as the baseline and still run steps 1–2, so the report
+says whether that file is what's live.
+
+The script's text is compared with the **live draft's** narration (the public
+endpoints carry media, not text). Media versions are checked against the
+**live hashes**.
 
 If the user also wants "what changed since the last script", fetch an earlier
 revision with `list_file_revisions` + `download_file_content` (`revisionId`)
@@ -149,8 +197,13 @@ changed tags as a recording change.
 Write the full report to `<scratchpad>/script-check <doc title>.md` and give
 the user its absolute path. In chat, give a short summary:
 
-- Script revision checked (title, modified time) and the baseline (draft name +
-  id + `updatedAt`, or backup path + SHA-256).
+- Script revision checked (title, modified time).
+- **Live show:** `scenarioVersion`, lifecycle, the matched draft (name + id +
+  `updatedAt`, or "no exact match" with the differences), the native channel's
+  `scenarioVersion`, and the server's `scenarioWarnings`.
+- **Draft vs live:** unpublished edits in the newest draft, if any.
+- Three comparisons, kept apart: **script vs live**, **script vs newest
+  draft**, **draft vs live**.
 - **Features table:** cue → scene ID(s) → category → evidence → proposed next
   step. For *Missing*, propose the smallest change and whether it needs a
   native build. For *Possible by combining*, give the recipe.
@@ -161,7 +214,9 @@ the user its absolute path. In chat, give a short summary:
 Then decide what happens next, and **ask before acting**:
 
 - **Only text/content changes, no missing features** → offer to run
-  `/update-show` now. Pass on the baseline from step 3, the script revision (the
+  `/update-show` now. Pass on the baseline from step 3 (the newest draft if it
+  already holds wanted unpublished edits; otherwise the live draft; ask if
+  unclear), the script revision (the
   HTML export in the scratchpad), and ask for the media folder holding any new
   recordings. Changed wording without its recording is a gap to report, not a
   text-only swap. Don't apply red text.
