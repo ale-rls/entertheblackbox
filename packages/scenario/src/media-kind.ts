@@ -47,3 +47,9 @@ export function extraAudioCombinationError(
     ? undefined
     : "extraAudioSrc must be an MP3 file";
 }
+
+/** A loop video replaces the still of a still + MP3 scene; a scene video would cover it. */
+export function loopVideoCombinationError(audioSrc: string | undefined, loopVideoSrc: string | undefined): string | undefined {
+  if (loopVideoSrc === undefined || audioSrc !== undefined) return undefined;
+  return "loopVideoSrc needs a still image + MP3 scene; a scene video would cover the loop";
+}

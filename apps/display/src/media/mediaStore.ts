@@ -93,7 +93,7 @@ export class MediaStore {
 
   private manifest: MediaManifest | null = null;
   private readonly blobUrls = new Map<string, string>(); // src -> object URL
-  private pinned: string | null = null;
+  private readonly pinned = new Map<string, string>();
   /** Sources whose URL a fading copy still reads (src -> hold count). */
   private readonly held = new Map<string, number>();
   private lastKeep: ReadonlySet<string> = new Set();
@@ -257,10 +257,11 @@ export class MediaStore {
 
   /**
    * Keep a source's Blob URL alive across phase changes (e.g. the shared
-   * curtain-light video, which spans several votes). Pinning null clears it.
+   * curtain-light video, which spans several votes, or a scene loop video).
+   * Each owner holds one pin; pinning null clears that owner's pin.
    */
-  pin(src: string | null): void {
-    this.pinned = src;
+  pin(src: string | null, owner = "curtain"): void {
+    if (src === null) this.pinned.delete(owner); else this.pinned.set(owner, src);
   }
 
   /**
@@ -282,7 +283,7 @@ export class MediaStore {
   retainOnly(keepSrcs: ReadonlySet<string>): void {
     this.lastKeep = keepSrcs;
     for (const [src, url] of this.blobUrls) {
-      if (!keepSrcs.has(src) && src !== this.pinned && !this.held.has(src)) {
+      if (!keepSrcs.has(src) && ![...this.pinned.values()].includes(src) && !this.held.has(src)) {
         this.revokeObjectUrl(url);
         this.blobUrls.delete(src);
       }

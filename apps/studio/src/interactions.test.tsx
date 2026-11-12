@@ -340,6 +340,29 @@ describe("Studio feedback and keyboard entry", () => {
     expect(node.style.transform).toContain("translate(650px,320px)");
   });
 
+  it("picks a loop video for a narration scene and removes it again", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "voice.mp3", bytes: 100, hash: "voice" },
+      { src: "curtain-loop.mp4", bytes: 100, hash: "loop" },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Audio + text (narration)").click(); });
+    await act(async () => { document.querySelector<HTMLElement>('.react-flow__node[data-id^="narration-"]')!.click(); });
+    expect(document.querySelector('.inspector')!.textContent).toContain("Main display loop");
+    await act(async () => { document.querySelector<HTMLButtonElement>('button[aria-label^="Choose video"][aria-label$="Current media: none"]')!.click(); });
+    const dialog = document.querySelector('[role="dialog"]')!;
+    expect(dialog.textContent).not.toContain("voice.mp3");
+    const row = Array.from(dialog.querySelectorAll('.media-row')).find(item => item.textContent?.includes("curtain-loop.mp4"))!;
+    await act(async () => { row.querySelector<HTMLButtonElement>('button')!.click(); });
+    await flush();
+    const compiled = () => JSON.parse(document.querySelector('.inspector pre')!.textContent!);
+    expect(compiled().phases.find((p: {kind: string}) => p.kind === "narration").loopVideoSrc).toBe("curtain-loop.mp4");
+    await act(async () => { button("Remove loop").click(); });
+    expect(compiled().phases.find((p: {kind: string}) => p.kind === "narration").loopVideoSrc).toBeUndefined();
+  });
+
   it("picks group audio without changing the default or other groups, and restores fallback on removal", async () => {
     media.load.mockResolvedValue({ files: [
       { src: "default.mp3", bytes: 100, hash: "default" },

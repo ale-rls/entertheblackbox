@@ -595,6 +595,11 @@ export function App() {
       closeMediaPicker();
       return;
     }
+    if (phase && phase.kind !== "idle" && phase.kind !== "group-branch" && mediaPicker.target === "loopVideoSrc") {
+      updatePhase({ ...phase, loopVideoSrc: row.src });
+      closeMediaPicker();
+      return;
+    }
     if (!phase || (phase.kind !== "video" && phase.kind !== "video-position-question")) {
       closeMediaPicker();
       return;
@@ -975,6 +980,8 @@ export function App() {
     : undefined;
   const mediaPickerSelectedSrc = groupPickerSrc !== undefined ? groupPickerSrc : monitorPickerCue && "src" in monitorPickerCue ? monitorPickerCue.src : mediaPicker?.target === "phoneAudioSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
     ? mediaPickerPhase.phoneAudioSrc ?? ""
+    : mediaPicker?.target === "loopVideoSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
+    ? mediaPickerPhase.loopVideoSrc ?? ""
     : mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
     ? mediaPicker?.target === "audioSrc"
       ? mediaPickerPhase.audioSrc ?? ""

@@ -17,7 +17,7 @@ export function phaseMediaSources(phase: StudioProject["scenario"]["phases"][num
   const monitors = monitorMediaSources(phase.monitorCues);
   if (phase.kind === "idle") return monitors;
   if (phase.kind === "group-branch") return [...monitors, ...phase.branches.flatMap((branch) => branch.phoneAudioSrc ? [branch.phoneAudioSrc] : [])];
-  const phone = [...monitors, ...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []), ...Object.values(phase.phoneAudioByGroup ?? {})];
+  const phone = [...monitors, ...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []), ...Object.values(phase.phoneAudioByGroup ?? {}), ...(phase.loopVideoSrc ? [phase.loopVideoSrc] : [])];
   if (phase.kind === "position-question" || phase.kind === "narration") return phone;
   return [
     ...phone,

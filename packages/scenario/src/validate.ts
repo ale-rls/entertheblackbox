@@ -211,6 +211,7 @@ export function validateScenario(
           : [
               ...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []),
               ...Object.values(phase.phoneAudioByGroup ?? {}),
+              ...(phase.loopVideoSrc ? [phase.loopVideoSrc] : []),
               ...(phase.kind === "position-question" || phase.kind === "narration" ? [] : [phase.src, ...(phase.audioSrc ? [phase.audioSrc] : []), ...(phase.extraAudioSrc ? [phase.extraAudioSrc] : [])]),
             ]),
       ];

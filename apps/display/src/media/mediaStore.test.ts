@@ -237,6 +237,30 @@ describe("Blob URL lifecycle", () => {
     }
   });
 
+  it("keeps each owner's pinned URL until that owner clears it", async () => {
+    const { caches } = fakeCaches();
+    const revoke = vi.fn();
+    const store = new MediaStore({
+      caches,
+      fetchFn: fakeFetch(),
+      digest: fakeDigest,
+      createObjectUrl: (blob) => `blob:${blob.size}`,
+      revokeObjectUrl: revoke,
+      sleep: async () => {},
+    });
+    await store.sync(manifest);
+    await store.getBlobUrl("a.mp4");
+    await store.getBlobUrl("b.mp4");
+    store.pin("a.mp4");
+    store.pin("b.mp4", "loop");
+    store.retainOnly(new Set());
+    expect(revoke).not.toHaveBeenCalled();
+    store.pin(null, "loop");
+    store.retainOnly(new Set());
+    expect(revoke).toHaveBeenCalledWith("blob:5");
+    expect(revoke).not.toHaveBeenCalledWith("blob:3");
+  });
+
   it("revokes all Blob URLs on stop()", async () => {
     const { caches } = fakeCaches();
     const revoke = vi.fn();

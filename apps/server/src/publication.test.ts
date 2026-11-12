@@ -35,6 +35,14 @@ describe("one show release", () => {
     await expect(readFile(join(root, "native-shows/channels/production.json"))).rejects.toThrow();
     expect(native.files[0].src).toContain("native-shows/assets/");
   });
+  it("freezes a scene's loop video with the other visual assets", async () => {
+    const { root, scenario, manifest, bytes } = await fixture();
+    await writeFile(join(root, "loop.mp4"), bytes);
+    const withLoop = { ...scenario, phases: [{ ...scenario.phases[0], loopVideoSrc: "loop.mp4" }, scenario.phases[1]] };
+    const result = await preparePublication(withLoop, { files: [...manifest.files, { ...manifest.files[1]!, src: "loop.mp4" }] }, root);
+    const intro = result.scenario.phases[0]!;
+    expect(intro.kind === "narration" ? intro.loopVideoSrc : undefined).toMatch(/^native-shows\/assets\/[0-9a-f]{64}\.mp4$/);
+  });
   it("rejects changed and missing source files before saving a release", async () => {
     const { root, scenario, manifest } = await fixture();
     await writeFile(join(root, "monitor.mp4"), "changed");

@@ -103,6 +103,31 @@ describe("scenarioSchema structural rejection", () => {
     expect(heldVideo.success).toBe(true);
   });
 
+  it("accepts a background loop video behind still + MP3 and question scenes and validates its media", () => {
+    const withLoop = {
+      ...baseScenario,
+      phases: baseScenario.phases.map((phase) => phase.id === "intro"
+        ? { ...phase, src: "curtain.png", audioSrc: "voice.mp3", loopVideoSrc: "curtain-loop.mp4" }
+        : phase.id === "q1" ? { ...phase, loopVideoSrc: "curtain-loop.mp4" } : phase),
+    };
+    const parsed = scenarioSchema.safeParse(withLoop);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const files = [
+      { src: "curtain.png", bytes: 1, hash: "image" },
+      { src: "voice.mp3", bytes: 1, hash: "voice" },
+    ];
+    expect(validateScenario(parsed.data, { files: [...files, { src: "curtain-loop.mp4", bytes: 1, hash: "loop" }] }).ok).toBe(true);
+    expect(validateScenario(parsed.data, { files }).errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing-media", phaseId: "intro", message: expect.stringContaining("curtain-loop.mp4") }),
+      expect.objectContaining({ code: "missing-media", phaseId: "q1", message: expect.stringContaining("curtain-loop.mp4") }),
+    ]));
+
+    // A scene video would cover the loop, and the loop must be a video file.
+    expect(parse((s) => ({ ...s, phases: s.phases.map((phase) => phase.id === "intro" ? { ...phase, loopVideoSrc: "curtain-loop.mp4" } : phase) })).success).toBe(false);
+    expect(parse((s) => ({ ...s, phases: s.phases.map((phase) => phase.id === "q1" ? { ...phase, loopVideoSrc: "curtain.png" } : phase) })).success).toBe(false);
+  });
+
   it("accepts an extra MP3 alongside video and includes it in manifest validation", () => {
     const withExtraAudio = {
       ...baseScenario,
