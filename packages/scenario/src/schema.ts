@@ -4,7 +4,7 @@ import { monitorCuesSchema } from "./monitors.js";
 import { actorScriptSchema, scriptCuesSchema, tabletScriptSchema } from "./actor-script.js";
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
-import { extraAudioCombinationError, mediaCombinationError } from "./media-kind.js";
+import { extraAudioCombinationError, loopVideoCombinationError, mediaCombinationError } from "./media-kind.js";
 
 const unitCoordinateSchema = z.number().min(0).max(1);
 /** Width of the uncounted band centred on a field's split lines (curtain-light votes). */
@@ -39,9 +39,16 @@ const phoneAudioFileSchema = z.string().min(1).regex(/^(?![\\/])(?!.*(?:^|[\\/])
 const phoneAudioSrcSchema = phoneAudioFileSchema.optional();
 const groupIdSchema = z.string().min(1, "group id must be non-empty").regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, "group id must use letters, numbers, hyphens, or underscores");
 const phoneAudioByGroupSchema = z.record(groupIdSchema, phoneAudioFileSchema).optional();
+const loopVideoSrcSchema = z.string().min(1).regex(/^(?![\\/])(?!.*(?:^|[\\/])\.\.(?:[\\/]|$))[^:?#]+\.(?:mp4|webm)$/i, "Loop video must reference a local MP4 or WebM video").optional();
 export const votingMethodSchema = z.enum(["physical", "phone-cursor", "phone-buttons"]);
 const outgoingCueSchema = z.string().trim().min(1).max(120);
 const phoneAudioFields = {
+  /**
+   * Muted video the main display loops behind this scene on the server clock (e.g. an idle
+   * curtain). Replaces the still of a still + MP3 scene; consecutive scenes sharing it run on
+   * without a jump. Not for scenes whose own src is a video.
+   */
+  loopVideoSrc: loopVideoSrcSchema,
   cancelParticipantTasks: z.boolean().optional(),
   monitorCues: monitorCuesSchema.optional(),
   /** Timed jumps of the shared actor script reader, relative to scene start. */
@@ -320,6 +327,8 @@ export const videoPhaseSchema = z.object({
   if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem, path: [phase.audioSrc === undefined ? "src" : "audioSrc"] });
   const extraAudioProblem = extraAudioCombinationError(phase.src, phase.audioSrc, phase.extraAudioSrc);
   if (extraAudioProblem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: extraAudioProblem, path: ["extraAudioSrc"] });
+  const loopVideoProblem = loopVideoCombinationError(phase.audioSrc, phase.loopVideoSrc);
+  if (loopVideoProblem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: loopVideoProblem, path: ["loopVideoSrc"] });
   phase.subtitles?.forEach((subtitle, index) => {
     if (subtitle.endAtMs > phase.expectedDurationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "subtitle must end within the phase", path: ["subtitles", index, "endAtMs"] });
   });
@@ -497,6 +506,8 @@ export const videoPositionQuestionPhaseSchema = z.union([
   if (mediaProblem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: mediaProblem, path: [phase.audioSrc === undefined ? "src" : "audioSrc"] });
   const extraAudioProblem = extraAudioCombinationError(phase.src, phase.audioSrc, phase.extraAudioSrc);
   if (extraAudioProblem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: extraAudioProblem, path: ["extraAudioSrc"] });
+  const loopVideoProblem = loopVideoCombinationError(phase.audioSrc, phase.loopVideoSrc);
+  if (loopVideoProblem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: loopVideoProblem, path: ["loopVideoSrc"] });
   const ordered = phase.showAtMs <= phase.openAtMs
     && phase.openAtMs < phase.closeAtMs
     && phase.closeAtMs <= phase.hideAtMs

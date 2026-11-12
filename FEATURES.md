@@ -24,6 +24,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Arena calibration: ellipse or perspective quad corners — `apps/display/src/components/QuadrantOverlay.tsx`
 - Resolution rules: fixed-next, or quadrant-plurality with tie handling / `kleroterion` tie-break
 - Video/still-image phases: video or still+MP3, extra audio layer, tail hold, subtitles, applause/boo windows, skip control, cursor visibility
+- Scene loop video (`loopVideoSrc`): a muted video the main display loops behind narration, position-question and still+MP3 scenes (e.g. an idle curtain), replacing the still. Rejected on scenes whose own `src` is a video. Published and manifest-checked like other visual media — `packages/scenario/src/schema.ts`, `apps/server/src/publication.ts`, Studio Inspector "Main display loop"
 - Synchronized native participant audio — engine in `apps/server`, native clock scheduler in `packages/expo-audio-scheduler`
 - Video-position-question hybrids (timed show/open/close/hide windows) — `apps/display/src/components/VideoQuestionOverlay.tsx`, `VoteCloseCountdown.tsx`
 - Group catalogue & group-branch phases (balanced/self-select/vote-derived/manual, weighted branches, reunion) — [docs/group-branching.md](docs/group-branching.md), `apps/server/src/groups/`
@@ -58,6 +59,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Fullscreen show playback (video, still+audio, subtitles) — `PhaseVideo.tsx`, `PhaseImageAudio.tsx`, `PhaseSubtitles.tsx`
 - Video handoff between phases (pre-buffered next clip) — `PhaseVideoHandoff.tsx`, `apps/server/src/engine/video.ts`
+- Scene loop video: muted, looped on the absolute server clock so scenes in a row sharing a loop continue without a jump and every display shows the same frame; it stays up until an incoming scene video is presented. Pinned in the media store under its own owner beside the curtain-light video — `components/LoopVideo.tsx`, `App.tsx`, `media/mediaStore.ts` (`pin`). Main display only: no native app change
 - Skipped phase audio fades out over 3 s: video sound, extra audio and image+MP3 audio that is still playing when the show moves on continue from a detached copy that ramps to silence while the picture cuts as before; the outgoing Blob URL is held for the fade. Natural ends, paused and muted media are untouched — `apps/display/src/media/skipFade.ts`, `PhaseVideoHandoff.tsx`, `PhaseImageAudio.tsx`, `media/mediaStore.ts` (`holdUrl`)
 - Live cursor field (real + ghost cursors) — `cursors/CursorCanvas.tsx`, `cursorField.ts` ← **apps/realtime-ws-coolify** + server ghost pool
 - Spectrum glow / cursor-density heat — `cursors/spectrumGlow.ts`

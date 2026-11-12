@@ -88,7 +88,7 @@ export type { ScenarioIssue, ValidationResult } from "./validate.js";
 
 export { validateMediaManifest } from "./media.js";
 export type { MediaIssue, StatSize } from "./media.js";
-export { extraAudioCombinationError, mediaCombinationError, mediaKindForSource } from "./media-kind.js";
+export { extraAudioCombinationError, loopVideoCombinationError, mediaCombinationError, mediaKindForSource } from "./media-kind.js";
 export type { MediaKind } from "./media-kind.js";
 
 // Quadrant assignment (half-open boundary convention) is shared domain

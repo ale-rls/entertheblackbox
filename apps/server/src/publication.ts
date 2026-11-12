@@ -20,7 +20,7 @@ export async function preparePublication(input: unknown, manifestInput: unknown,
     if (Array.isArray(value)) return value.map(item => mapMedia(item, replace));
     if (!value || typeof value !== "object") return value;
     return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
-      ["src", "audioSrc", "extraAudioSrc", "phoneAudioSrc"].includes(key) && typeof item === "string"
+      ["src", "audioSrc", "extraAudioSrc", "loopVideoSrc", "phoneAudioSrc"].includes(key) && typeof item === "string"
         ? replace(item)
         : key === "phoneAudioByGroup" && item && typeof item === "object"
           ? Object.fromEntries(Object.entries(item).map(([group, src]) => [group, replace(src as string)]))

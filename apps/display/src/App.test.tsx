@@ -37,6 +37,7 @@ const harness = vi.hoisted(() => {
       onLeave: (clientId: string) => void;
     },
     cursorField: null as null | { size: number },
+    store: { pin: vi.fn(), getBlobUrl: vi.fn(async (src: string) => `blob:${src}`) },
   };
 });
 
@@ -68,7 +69,7 @@ vi.mock("./media/useMedia.js", () => ({
     audioUrl: harness.audioUrl,
     extraAudioUrl: harness.extraAudioUrl,
     showMedia: harness.showMedia,
-    store: {},
+    store: harness.store,
   }),
 }));
 
@@ -128,6 +129,8 @@ afterEach(async () => {
   harness.extraAudioUrl = null;
   harness.connectionOptions = null;
   harness.videoCandidate = null;
+  harness.store.pin.mockClear();
+  harness.store.getBlobUrl.mockClear();
   harness.waitingVideoUrl = "";
 });
 
@@ -321,5 +324,43 @@ describe("App media-readiness gate", () => {
     const title = document.querySelector(".video-title");
     expect(title?.textContent).toBe("A centered statement");
     expect(title?.classList.contains("video-title-centered-xl")).toBe(true);
+  });
+
+  it("loops a scene's background video and keeps it until the next scene's video is presented", async () => {
+    harness.mediaStatus = { state: "ready" };
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+    const send = async (phaseEpoch: number, phase: Record<string, unknown>) => act(async () => {
+      harness.connectionOptions?.onMessage({
+        t: "snapshot", v: PROTOCOL_VERSION, sessionId: "session-1", phaseEpoch, serverTime: 0,
+        phase: { scenarioVersion: "show-1", startedAt: 0, deadlineAt: null, ...phase },
+      } as ServerToClientMessage);
+    });
+
+    await send(1, { kind: "narration", id: "hold", text: "ARBEIT", loopVideoSrc: "curtain-loop.mp4", durationMs: 10_000, next: "opening" });
+    const loop = document.querySelector<HTMLVideoElement>("video.phase-loop-video");
+    expect(loop?.getAttribute("src")).toBe("blob:curtain-loop.mp4");
+    expect(loop?.muted).toBe(true);
+    expect(harness.store.pin).toHaveBeenCalledWith("curtain-loop.mp4", "loop");
+
+    // The opening video is not presented yet: the curtain loop stays up.
+    await send(2, { kind: "video", id: "opening", src: "curtain-open.mp4", expectedDurationMs: 10_000, next: "idle" });
+    expect(document.querySelector("video.phase-loop-video")).not.toBeNull();
+  });
+
+  it("ignores a loop video on a scene whose own video would cover it", async () => {
+    harness.mediaStatus = { state: "ready" };
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+    await act(async () => {
+      harness.connectionOptions?.onMessage({
+        t: "snapshot", v: PROTOCOL_VERSION, sessionId: "session-1", phaseEpoch: 1, serverTime: 0,
+        phase: { kind: "video", id: "film", src: "film.mp4", loopVideoSrc: "curtain-loop.mp4", expectedDurationMs: 10_000, next: "idle", scenarioVersion: "show-1", startedAt: 0, deadlineAt: null },
+      } as ServerToClientMessage);
+    });
+    expect(document.querySelector("video.phase-loop-video")).toBeNull();
+    expect(harness.store.pin).not.toHaveBeenCalled();
   });
 });

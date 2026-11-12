@@ -497,6 +497,12 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
       <label className="sc-tool-label">{label("Transition rule", "next.type")}<select className="sc-tool-select" value={phase.next.type} onChange={(event) => onTransitionChange(event.target.value as "fixed" | "quadrant-plurality", event.currentTarget)}><option value="fixed">Fixed target</option><option value="quadrant-plurality">Quadrant plurality</option></select></label>
       {phase.next.type === "quadrant-plurality" && <CountedStatuses phase={phase} onChange={onChange} />}
     </>}
+    {(phase.kind === "narration" || phase.kind === "position-question"
+      || ((phase.kind === "video" || phase.kind === "video-position-question") && phase.audioSrc !== undefined)) && <fieldset><legend>Main display loop</legend>
+      <p className="sc-tool-copy field-hint">A muted video that loops behind this scene, e.g. the idle curtain. It covers the still image. Scenes in a row with the same loop continue without a jump.</p>
+      {mediaPicker("Loop video (optional)", "loopVideoSrc", phase.loopVideoSrc, "video", "No loop")}
+      {phase.loopVideoSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, loopVideoSrc: undefined })}>Remove loop</button>}
+    </fieldset>}
     {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone audio</legend>
       <p className="sc-tool-copy field-hint">Each listener hears one scene track. A group track replaces the default for that group.</p>
       {mediaPicker(phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? "Synchronized phone soundtrack (MP3)" : "Default track (optional)", "phoneAudioSrc", phase.phoneAudioSrc, "audio", "No default audio")}

@@ -21,6 +21,7 @@ import { Countdown } from "./components/Countdown.js";
 import { QrBadge } from "./components/QrBadge.js";
 import { QuadrantOverlay, questionFieldCenter } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
+import { LoopVideo } from "./components/LoopVideo.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhaseVideoHandoff, type PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
 import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
@@ -336,6 +337,34 @@ export function App() {
   // also gives video -> idle transitions an immediately available frame.
   const idleMediaVisible = isIdle
     || (phaseVideoKey !== null && presentedVideoKey !== phaseVideoKey);
+  // A scene's background loop (e.g. an idle curtain) sits over a still + MP3 scene's
+  // image. It stays up while an incoming scene video is still being presented, so
+  // the curtain never flashes black between the loop and the next video.
+  const phaseLoopSrc = phase !== null && phase !== undefined
+    && (phase.kind === "narration" || phase.kind === "position-question"
+      || ((phase.kind === "video" || phase.kind === "video-position-question") && phase.audioSrc !== undefined))
+    ? phase.loopVideoSrc ?? null
+    : null;
+  const [loopUrl, setLoopUrl] = useState<{ src: string; url: string | null } | null>(null);
+  useEffect(() => {
+    if (phaseLoopSrc === null) return;
+    let cancelled = false;
+    media.store.pin(phaseLoopSrc, "loop");
+    void media.store.getBlobUrl(phaseLoopSrc).then((url) => {
+      if (!cancelled) setLoopUrl({ src: phaseLoopSrc, url });
+      if (url === null) console.warn(`display: loop video "${phaseLoopSrc}" is not in the synced media`);
+    });
+    return () => { cancelled = true; };
+  }, [phaseLoopSrc, media.store, mediaReady]);
+  const loopHeldForHandoff = phaseLoopSrc === null && phaseVideoKey !== null && presentedVideoKey !== phaseVideoKey;
+  const shownLoopUrl = phaseLoopSrc !== null
+    ? (loopUrl?.src === phaseLoopSrc ? loopUrl.url : null)
+    : loopHeldForHandoff ? loopUrl?.url ?? null : null;
+  useEffect(() => {
+    if (phaseLoopSrc !== null || loopHeldForHandoff || loopUrl === null) return;
+    media.store.pin(null, "loop");
+    setLoopUrl(null);
+  }, [phaseLoopSrc, loopHeldForHandoff, loopUrl, media.store]);
   useEffect(() => {
     void media.showMedia(phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc);
   }, [phaseVisualSrc, phaseAudioSrc, phaseExtraAudioSrc, media.store]);
@@ -410,6 +439,7 @@ export function App() {
             send={sendDisplayMessage}
           />
         )}
+        {shownLoopUrl !== null && <LoopVideo key={shownLoopUrl} src={shownLoopUrl} clock={connection.clock} />}
       </section>
 
       {curtainHold !== null && !curtainUnavailable && <section className="layer layer-curtain">
