@@ -1563,3 +1563,111 @@ body:has(.editor),
 .curtain-color input[type="color"] { width: 2rem; height: 1.5rem; padding: 0; border: 0; background: none; }
 .curtain-slider { display: grid; grid-template-columns: 1fr auto; gap: .25rem .5rem; }
 .curtain-slider input { grid-column: 1 / -1; }
+
+/* Screen minimap: what the selected scene puts on every screen. */
+.screen-minimap {
+  --minimap-unit: 3.2rem;
+  position: absolute;
+  z-index: 8;
+  left: var(--sc-tool-space-4);
+  bottom: var(--sc-tool-space-4);
+  display: grid;
+  gap: var(--sc-tool-space-2);
+  padding: var(--sc-tool-space-3);
+  border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong);
+  border-radius: var(--sc-tool-radius-1);
+  background: var(--sc-tool-color-scrim);
+  box-shadow: var(--sc-tool-shadow-1);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.minimap-row { display: flex; align-items: flex-end; gap: var(--sc-tool-space-2); }
+.minimap-screen { margin: 0; display: grid; gap: 2px; pointer-events: auto; }
+.minimap-screen figcaption {
+  color: var(--sc-tool-color-text-muted);
+  font-family: var(--sc-tool-font-mono);
+  font-size: 0.5625rem;
+  letter-spacing: var(--sc-tool-letter-spacing-label);
+  text-transform: uppercase;
+}
+.minimap-glass {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--sc-tool-color-rule-strong);
+  border-radius: 2px;
+  background: black;
+  color: var(--sc-tool-color-text);
+}
+.minimap-main .minimap-glass { width: calc(var(--minimap-unit) * 4); aspect-ratio: 16 / 9; }
+.minimap-M1 .minimap-glass, .minimap-M2 .minimap-glass, .minimap-M3 .minimap-glass, .minimap-M4 .minimap-glass { width: calc(var(--minimap-unit) * 0.95); aspect-ratio: 16 / 9; }
+.minimap-app .minimap-glass { width: calc(var(--minimap-unit) * 1.27); aspect-ratio: 9 / 16; border-radius: 5px; border-width: 2px; }
+.minimap-web .minimap-glass { width: calc(var(--minimap-unit) * 1.27); aspect-ratio: 16 / 10; border-radius: 3px; }
+.minimap-screen[data-empty="true"] .minimap-glass { border-style: dashed; border-color: var(--sc-tool-color-rule); }
+.minimap-screen[data-empty="true"] figcaption { opacity: 0.6; }
+
+/* Displays layer their content; devices stack it. */
+.minimap-stack { position: absolute; inset: 0; }
+.minimap-stack > * { position: absolute; margin: 0; }
+.minimap-app .minimap-stack, .minimap-web .minimap-stack {
+  display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 4px;
+}
+.minimap-app .minimap-stack > *, .minimap-web .minimap-stack > * { position: relative; inset: auto; flex: 0 0 auto; }
+
+.minimap-media { inset: 0; display: grid; place-items: center; }
+.minimap-media.video { background: linear-gradient(135deg, color-mix(in srgb, var(--sc-tool-color-domain-video) 32%, black), color-mix(in srgb, var(--sc-tool-color-domain-video) 8%, black) 70%); }
+.minimap-media.image { background: linear-gradient(180deg, color-mix(in srgb, var(--sc-tool-color-domain-idle) 30%, black), color-mix(in srgb, var(--sc-tool-color-domain-idle) 10%, black)); }
+.minimap-play { width: 0; height: 0; border-block: 5px solid transparent; border-inline-start: 8px solid color-mix(in srgb, white 55%, transparent); }
+.minimap-mountain { position: absolute; inset: 35% 10% 0; background: color-mix(in srgb, white 18%, transparent); clip-path: polygon(0 100%, 35% 20%, 55% 60%, 72% 35%, 100% 100%); }
+.minimap-M1 .minimap-play, .minimap-M2 .minimap-play, .minimap-M3 .minimap-play, .minimap-M4 .minimap-play { border-block-width: 3px; border-inline-start-width: 5px; }
+
+.minimap-text, .minimap-title, .minimap-placeholder {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  font-family: var(--sc-tool-font-sans);
+  font-size: 5px;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.minimap-stack > .minimap-text { inset: 30% 12% auto; -webkit-line-clamp: 4; font-size: 6px; }
+.minimap-stack > .minimap-title { inset: 5% 10% auto; -webkit-line-clamp: 1; font-weight: 600; }
+.minimap-stack > .minimap-placeholder { inset: 15%; -webkit-line-clamp: 3; padding: 2px; border: 1px dashed var(--sc-tool-color-text-muted); color: var(--sc-tool-color-text-muted); font-size: 4px; }
+.minimap-M1 .minimap-stack > .minimap-text, .minimap-M2 .minimap-stack > .minimap-text, .minimap-M3 .minimap-stack > .minimap-text, .minimap-M4 .minimap-stack > .minimap-text { inset: 15% 8% auto; font-size: 4px; }
+.minimap-app .minimap-stack > :is(.minimap-text, .minimap-title, .minimap-placeholder), .minimap-web .minimap-stack > :is(.minimap-text, .minimap-title, .minimap-placeholder) { inset: auto; }
+.minimap-app .minimap-stack > .minimap-text, .minimap-web .minimap-stack > .minimap-text { -webkit-line-clamp: 5; font-size: 5px; text-align: start; }
+.minimap-web .minimap-stack > .minimap-title { -webkit-line-clamp: 2; font-weight: 400; }
+
+.minimap-subtitles { inset: auto 25% 6%; height: 3px; border-radius: 1px; background: color-mix(in srgb, white 70%, transparent); }
+.minimap-qr { right: 4%; bottom: 6%; width: 11%; aspect-ratio: 1; background: repeating-conic-gradient(white 0 25%, black 0 50%) 0 0 / 33% 33%; outline: 1px solid white; }
+.minimap-field { inset: 0; width: 100%; height: 100%; }
+.minimap-cursors { inset: 0; }
+.minimap-cursors > span { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: white; box-shadow: 0 0 3px white; }
+.minimap-rating { inset: auto 6% 6% auto; display: flex; gap: 2px; }
+.minimap-rating > span, .minimap-app .minimap-rating > span, .minimap-web .minimap-rating > span { width: 7px; height: 4px; border-radius: 1px; }
+.minimap-rating .applause { background: var(--sc-tool-color-success); }
+.minimap-rating .boo { background: var(--sc-tool-color-danger); }
+.minimap-app .minimap-rating, .minimap-web .minimap-rating { justify-content: center; }
+.minimap-app .minimap-rating > span, .minimap-web .minimap-rating > span { flex: 1; height: 6px; }
+
+.minimap-buttons { display: flex; flex-wrap: wrap; gap: 2px; }
+.minimap-buttons > span { flex: 1 1 40%; height: 6px; border-radius: 1px; background: var(--minimap-option, var(--sc-tool-color-action)); }
+.minimap-pad { flex: 1 1 auto !important; min-height: 12px; border: 1px solid var(--sc-tool-color-rule-strong); border-radius: 2px; }
+.minimap-pad > span { position: absolute; left: 55%; top: 40%; width: 4px; height: 4px; border-radius: 50%; background: var(--sc-tool-color-domain-entry); }
+.minimap-script { display: grid; gap: 2px; }
+.minimap-script > span { height: 2px; border-radius: 1px; background: var(--sc-tool-color-text-muted); }
+.minimap-task { display: grid; gap: 2px; padding: 3px; border-radius: 2px; background: var(--sc-tool-color-surface-3); }
+.minimap-task > span { height: 2px; background: var(--sc-tool-color-text-muted); }
+.minimap-task > span:first-child { width: 60%; background: var(--sc-tool-color-text); }
+.minimap-audio { display: flex; align-items: center; justify-content: center; gap: 2px; height: 12px; }
+.minimap-audio > span { width: 2px; border-radius: 1px; background: var(--sc-tool-color-domain-video); }
+
+.minimap-cues { position: absolute; left: 3px; bottom: 2px; display: flex; gap: 1px; }
+.minimap-cues > i { width: 2px; height: 2px; border-radius: 50%; background: var(--sc-tool-color-focus-on-dark); }
+
+@media (max-width: 700px) {
+  .screen-minimap { --minimap-unit: 2.4rem; left: var(--sc-tool-space-2); bottom: var(--sc-tool-space-2); }
+}
+@media (forced-colors: active) {
+  .minimap-glass { border-color: CanvasText; }
+}
