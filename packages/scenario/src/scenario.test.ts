@@ -795,3 +795,17 @@ it("validates opt-in synchronized video without changing ordinary videos", () =>
   const regular = scenarioSchema.parse(baseScenario).phases.find((p) => p.id === "intro");
   expect(regular).not.toHaveProperty("phoneAudioMode");
 });
+
+describe("tablet text", () => {
+  const scene = (extra: Record<string, unknown>) => ({ version: "v", entryPhaseId: "scene", groups: [{ id: "chorus", label: "Chorus" }, { id: "leads", label: "Leads" }],
+    phases: [{ id: "idle", kind: "idle" }, { id: "scene", kind: "narration", text: "Display", durationMs: 1000, next: "idle", ...extra }] });
+  it("accepts default and per-group text, including an empty group text", () => {
+    const parsed = scenarioSchema.parse(scene({ tabletText: "All", tabletTextByGroup: { chorus: "" } }));
+    expect(validateScenario(parsed).ok).toBe(true);
+  });
+  it("rejects an empty default and text for an unknown group", () => {
+    expect(scenarioSchema.safeParse(scene({ tabletText: "  " })).success).toBe(false);
+    const result = validateScenario(scenarioSchema.parse(scene({ tabletTextByGroup: { crew: "Lines" } })));
+    expect(result.errors.map((issue) => issue.message)).toContain('phase "scene" shows tablet text to unknown group "crew"');
+  });
+});

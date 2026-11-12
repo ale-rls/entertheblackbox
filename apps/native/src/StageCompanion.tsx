@@ -5,6 +5,7 @@ import { Text, TextInput } from './Text';
 import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
 import type { ShowManifest } from '@entertheblackbox/show-content';
 import type { StageInput } from './stage-state';
+import { tabletTextFromSnapshot } from './tablet-text';
 import { stageState, showModeAction, showModeTextVisible, shouldEnterShowMode, SHOW_TEXT_IDLE_MS } from './stage-state';
 import type { ActionPrompt } from './action-prompt';
 import { ActionAttention } from './ActionAttention';
@@ -177,6 +178,7 @@ export function StageCompanion(props: Props) {
     animation.start(); return () => animation.stop();
   }, [textVisible, reduceMotion, textOpacity]);
   const surfaceText = contrastText(props.surface.color);
+  const tabletText = tabletTextFromSnapshot(props.snapshot);
   return <View style={styles.wallRoot}>
     {showMode && props.wall}
     <SafeAreaView style={[styles.screen, showMode && { backgroundColor: props.wallVisible ? 'transparent' : props.surface.color }]}
@@ -186,6 +188,10 @@ export function StageCompanion(props: Props) {
     <ScrollView ref={scroll} key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
       {props.admission?.active && <View style={styles.page}><Text style={styles.buttonText}>{props.admission.program ? 'Welcome. Waiting for the show to start.' : 'Choose your audience'}</Text>{props.admission.choices.map(g => <Action key={g.id} label={g.label} selected={props.admission?.program?.groupId === g.id} disabled={!normal} onPress={() => props.onAdmissionGroup?.(g.id)} />)}</View>}
       {props.participantTask}
+      {/* Scene text stays readable for the whole scene: it never fades with the idle show-mode text. */}
+      {!settings && tabletText && <View style={styles.tabletText} accessibilityLiveRegion="polite">
+        <Text style={[styles.tabletTextBody, showMode && { color: surfaceText }]}>{tabletText}</Text>
+      </View>}
       {!showMode && <View style={styles.header}><View style={styles.identity}>
         <Text style={styles.identityName}>{props.identity?.name ?? 'SETUP'}</Text>
         {props.connected && <Text style={styles.muted}>{props.snapshot?.currentGroup?.label ?? 'Waiting for group'}</Text>}
@@ -266,6 +272,8 @@ export function StageCompanion(props: Props) {
   </View>;
 }
 const styles = StyleSheet.create({
+  tabletText: { paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16 },
+  tabletTextBody: { color: '#eef0f3', fontSize: 28, lineHeight: 38, fontWeight: '500' },
   exitWrap: { marginTop: 'auto' }, exitMode: { padding: 24, alignItems: 'center', minHeight: 64, backgroundColor: 'transparent' },
   exitText: { fontSize: 13, lineHeight: 20, opacity: .55 },
   identify: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', padding: 24 },

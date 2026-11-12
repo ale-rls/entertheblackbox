@@ -52,6 +52,10 @@ const phoneAudioFields = {
   phoneAudioByGroup: phoneAudioByGroupSchema,
   /** Named one-shot cues emitted to external show-control receivers on phase entry. */
   outgoingCues: z.array(outgoingCueSchema).max(32).optional(),
+  /** Text the native show screen shows for the whole scene, for everyone without a group text. */
+  tabletText: z.string().trim().min(1).max(4000).optional(),
+  /** Per-group tablet text. An empty string shows no text to that group, even when a default exists. */
+  tabletTextByGroup: z.record(groupIdSchema, z.string().trim().max(4000)).optional(),
 };
 
 const phaseIdSchema = z.string().min(1, "phase id must be non-empty");

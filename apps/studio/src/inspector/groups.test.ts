@@ -65,3 +65,21 @@ describe("editable group scene options", () => {
     expect(() => advancePreview(preview, "unknown")).toThrow(/Unknown group/);
   });
 });
+
+describe("tablet text by group", () => {
+  it("survives import and follows group renames and removals", () => {
+    const value = parseRuntimeScenario({
+      version: "test", entryPhaseId: "scene", cyclesAllowed: false,
+      groups: [{ id: "a", label: "Actors" }, { id: "b", label: "Builders" }, { id: "c", label: "Chorus" }],
+      phases: [{ kind: "idle", id: "idle" },
+        { kind: "narration", id: "scene", text: "Display", durationMs: 100, next: "idle",
+          tabletText: "Everyone", tabletTextByGroup: { a: "Actors only", b: "" } }],
+    }, { files: [] });
+    const scene = (s: typeof value.scenario) => s.phases.find((phase) => phase.id === "scene") as { tabletText?: string; tabletTextByGroup?: Record<string, string> };
+    expect(scene(value.scenario)).toMatchObject({ tabletText: "Everyone", tabletTextByGroup: { a: "Actors only", b: "" } });
+    const renamed = updateGroupCatalogue(value.scenario, [{ id: "actors", label: "Actors" }, { id: "b", label: "Builders" }, { id: "c", label: "Chorus" }], []);
+    expect(scene(renamed).tabletTextByGroup).toEqual({ actors: "Actors only", b: "" });
+    const removed = updateGroupCatalogue(renamed, [{ id: "actors", label: "Actors" }, { id: "c", label: "Chorus" }], []);
+    expect(scene(removed).tabletTextByGroup).toEqual({ actors: "Actors only" });
+  });
+});

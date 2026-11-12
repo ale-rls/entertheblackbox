@@ -22,6 +22,10 @@ Live scenes show participant guidance and group, server-provided voting/group ch
 
 The full-width audio field is a playback activity animation driven by the native scheduler's playing foreground cue, excluding the music bed. It is not a measured waveform or a guarantee of audible output. Animation stops when paused/backgrounded and stays static with Reduce Motion enabled. Existing videos/images remain on the shared display; the current protocol has no participant-phone media source.
 
+### Tablet text
+
+A scene can show text on the tablets: `tabletText` for everyone, and `tabletTextByGroup` for a group. Set it in Studio under **Tablet text**. A group text replaces the default, and an empty group text shows that group nothing. The text appears in large type under any task card. It stays for the whole scene, even when the rest of the show-mode text fades, and the next scene replaces or clears it. So repeat the text in each scene where it should stay. In show mode it takes the contrast colour of the operator's resting colour. Apps older than this change ignore the field, and it needs no new build.
+
 ## First local run
 
 Use Node 22.13+ and the repo's pnpm 9.12.2. Run `pnpm install` at the repository root. Expo Go is not the acceptance environment for background playback; install a development or preview build.
