@@ -528,7 +528,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
       {(phase.kind === "position-question" || phase.kind === "video-position-question") && number("Connection stale after (ms)", "connectionStaleAfterMs", phase.connectionStaleAfterMs, (connectionStaleAfterMs) => onChange({ ...phase, connectionStaleAfterMs }))}
     {phase.kind !== "idle" && <fieldset><legend>External show cues</legend>
       {text("Cue names (comma separated)", "outgoingCues", (phase.outgoingCues ?? []).join(", "), (value) => onChange({ ...phase, outgoingCues: value.split(",").map((cue) => cue.trim()).filter(Boolean) }))}
-      <p className="sc-tool-copy field-hint">Sent once to TouchDesigner or another show-control receiver when this scene starts.</p>
+      <p className="sc-tool-copy field-hint">Sent once to show-control receivers (the Ableton MIDI bridge, TouchDesigner) when this scene starts.</p>
     </fieldset>}
     </details>
     <Compiled project={project} />

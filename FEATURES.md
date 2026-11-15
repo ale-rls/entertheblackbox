@@ -142,6 +142,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Authenticated SSE cue feed (TouchDesigner/other receivers) — `cues/feed.ts`, `GET /api/cues`, `docs/touchdesigner-production.md`
 - Per-phase outgoing cue authoring — `packages/scenario`, Studio
+- MIDI bridge for Ableton on the sound MacBook: subscribes to `GET /api/cues` with the display token and turns outgoing cues, scene starts and show end into MIDI notes/CC/program changes through the macOS IAC Driver; JSON mapping file reloaded on save; never replays on (re)connect; `--test`, `--dry-run`, `--list-outputs`. Runs only on the MacBook, not deployed — `apps/midi-bridge`, `pnpm midi-bridge`, [docs/ableton-midi.md](docs/ableton-midi.md)
 
 ## Persistence & data (PocketBase-backed)
 
