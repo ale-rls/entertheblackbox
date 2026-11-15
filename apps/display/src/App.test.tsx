@@ -349,6 +349,39 @@ describe("App media-readiness gate", () => {
     expect(document.querySelector("video.phase-loop-video")).not.toBeNull();
   });
 
+  it("plays room music across scenes, streams library tracks that are not in the synced media, and releases it on stop", async () => {
+    harness.mediaStatus = { state: "ready" };
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+    const message = (data: Record<string, unknown>) => act(async () => { harness.connectionOptions?.onMessage(data as ServerToClientMessage); });
+    const phase = (phaseEpoch: number, id: string) => message({
+      t: "snapshot", v: PROTOCOL_VERSION, sessionId: "session-1", phaseEpoch, serverTime: 0,
+      phase: { kind: "narration", id, text: id, durationMs: 10_000, next: "idle", scenarioVersion: "show-1", startedAt: 0, deadlineAt: null },
+    });
+    const music = (seq: number, track: { src: string; url: string } | null) => message({
+      t: "music", v: PROTOCOL_VERSION, seq, track, startAt: track ? 0 : null, loop: true, gain: { from: 1, to: 1, at: 0, ms: 0 }, stopAt: null,
+    });
+
+    await phase(1, "first");
+    await music(1, { src: "native-shows/assets/bed.mp3", url: "/media/native-shows/assets/bed.mp3" });
+    expect(document.querySelector("audio.music-layer")?.getAttribute("src")).toBe("blob:native-shows/assets/bed.mp3");
+    expect(harness.store.pin).toHaveBeenCalledWith("native-shows/assets/bed.mp3", "music");
+
+    // A new scene without a cue keeps the music.
+    await phase(2, "second");
+    expect(document.querySelector("audio.music-layer")?.getAttribute("src")).toBe("blob:native-shows/assets/bed.mp3");
+
+    // An Admin-picked library track is not in the synced media: stream it from the server.
+    harness.store.getBlobUrl.mockImplementationOnce(async () => null as unknown as string);
+    await music(2, { src: "Ambient Chords.mp3", url: "/media/Ambient%20Chords.mp3" });
+    expect(document.querySelector("audio.music-layer")?.getAttribute("src")).toBe("/media/Ambient%20Chords.mp3");
+
+    await music(3, null);
+    expect(document.querySelector("audio.music-layer")).toBeNull();
+    expect(harness.store.pin).toHaveBeenCalledWith(null, "music");
+  });
+
   it("ignores a loop video on a scene whose own video would cover it", async () => {
     harness.mediaStatus = { state: "ready" };
     document.body.innerHTML = '<div id="root"></div>';

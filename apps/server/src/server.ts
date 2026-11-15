@@ -12,6 +12,7 @@ import { basename } from "node:path";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { readDisplaySettings, readWallLayout, writeDisplaySettings, writeWallLayout } from "./persistence/platform-config.js";
 import { VideoWallController, wallClipsFromMedia } from "./wall/wall.js";
+import { MusicController, musicTracksFromMedia } from "./music/music.js";
 import { SurfaceController } from "./surface/surface.js";
 import { SurfaceEffectRunner } from "./surface/effects.js";
 import { AudioDelivery } from "./audio/audio-delivery.js";
@@ -139,6 +140,17 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     clips: wallClips,
     ...(options.pocketbase ? { ensureLocal: (src: string) => syncMediaFromPocketbase(options.pocketbase!, config.mediaDir, src) } : {}),
   });
+  const musicTracks = async () => {
+    if (!options.pocketbase) return [];
+    await options.pocketbase.ensureAuth();
+    return musicTracksFromMedia(await options.pocketbase.pb.collection<{ src: string; bytes: number }>("media").getFullList({ requestKey: null }));
+  };
+  // Room music on the main display: scene cues plus the Admin override.
+  const music = new MusicController({
+    display: () => engine?.mainDisplaySocket,
+    tracks: musicTracks,
+    ...(options.pocketbase ? { ensureLocal: (src: string) => syncMediaFromPocketbase(options.pocketbase!, config.mediaDir, src) } : {}),
+  });
   if (options.pocketbase) void readWallLayout(options.pocketbase).then((layout) => wall.restoreLayout(layout)).catch(() => { /* Default layout until saved. */ });
   if (options.pocketbase) void readDisplaySettings(options.pocketbase).then((settings) => surface.restoreBase(settings.phoneSurfaceColor)).catch(() => { /* Black until an operator sets a colour. */ });
   const admission = options.admission ?? new AdmissionController({
@@ -183,7 +195,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       participantLeaseTtlMs: admission.participantLeaseTtlMs,
       autoStartOnFirstParticipant: false,
       onParticipantPhase: (ids, phase, startedAt) => audio?.transitionParticipants(ids, phase, startedAt),
-      onPhase: (phase, startedAt) => audio?.transition(phase, (id) => groups?.groupFor(id) ?? null, startedAt),
+      onPhase: (phase, startedAt) => {
+        music.applyScene(phase);
+        audio?.transition(phase, (id) => groups?.groupFor(id) ?? null, startedAt);
+      },
+      onDisplayConnected: (socket) => music.welcome(socket),
       onCueEvent: (event) => { cueFeed.publish(event); },
       groupSelection: {
         current: (participantId) => groups?.groupFor(participantId) ?? null,
@@ -381,6 +397,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       clips: wallClips,
       saveLayout: async (layout) => options.pocketbase ? writeWallLayout(options.pocketbase, layout) : layout,
     },
+    music: { controller: music, tracks: musicTracks },
     ready: readiness.ready,
     phoneJoinUrl: phoneJoinUrl(config.phoneJoinBaseUrl),
     ...(readiness.ready ? { showScript: {

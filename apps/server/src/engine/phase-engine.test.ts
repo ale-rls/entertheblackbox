@@ -71,6 +71,7 @@ function setup(options: {
   qr?: boolean;
   autoStartOnFirstParticipant?: boolean;
   scheduledStartTimes?: number[];
+  onDisplayConnected?: (socket: WebSocket) => void;
 } ) {
   const registry = new ParticipantRegistry(2, 50);
   const checkpoints = options.checkpoints ?? [];
@@ -90,6 +91,7 @@ function setup(options: {
       displayDisconnectTimeoutMs: options.displayDisconnectTimeoutMs ?? 1_000_000,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
+    ...(options.onDisplayConnected === undefined ? {} : { onDisplayConnected: options.onDisplayConnected }),
     ...(options.autoStartOnFirstParticipant === undefined ? {} : { autoStartOnFirstParticipant: options.autoStartOnFirstParticipant }),
     ...(options.scheduledStartTimes === undefined ? {} : { scheduledStartTimes: options.scheduledStartTimes }),
     ...(options.sessionEnds === undefined
@@ -324,6 +326,18 @@ describe("PhaseEngine lifecycle", () => {
     const stranger = new MockSocket();
     engine.handleClientMessage({ t: "qr_grant_request", v: 2 }, stranger as unknown as WebSocket);
     expect(stranger.sent).toEqual([]);
+  });
+
+  it("reports main display connections and exposes the main display socket, not signage kiosks", () => {
+    const connected: WebSocket[] = [];
+    const { engine } = setup({ now: () => 1_000, onDisplayConnected: (socket) => connected.push(socket) });
+    const display = new MockSocket() as unknown as WebSocket;
+    const lobby = new MockSocket() as unknown as WebSocket;
+    expect(engine.mainDisplaySocket).toBeUndefined();
+    connectSignage(engine, lobby, "lobby");
+    connectDisplay(engine, display);
+    expect(connected).toEqual([display]);
+    expect(engine.mainDisplaySocket).toBe(display);
   });
 
   it("pushes QR grants to signage kiosks, and only QR grants", () => {

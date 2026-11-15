@@ -1,6 +1,7 @@
 import { admissionConfigSchema } from './admission.js';
 import { participantTaskSchema, participantRoleSchema } from './tasks.js';
 import { monitorCuesSchema } from "./monitors.js";
+import { musicCueSchema } from "./music.js";
 import { actorScriptSchema, scriptCuesSchema, tabletScriptSchema } from "./actor-script.js";
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
@@ -51,6 +52,8 @@ const phoneAudioFields = {
   loopVideoSrc: loopVideoSrcSchema,
   cancelParticipantTasks: z.boolean().optional(),
   monitorCues: monitorCuesSchema.optional(),
+  /** Room music on the main display: start, change volume or stop when this scene starts. */
+  music: musicCueSchema.optional(),
   /** Timed jumps of the shared actor script reader, relative to scene start. */
   scriptCues: scriptCuesSchema.optional(),
   /** Shows part of the actor script on participants' tablets for this scene. */

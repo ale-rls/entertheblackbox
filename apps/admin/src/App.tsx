@@ -5,6 +5,7 @@ import { NativeAudioCoverage } from './NativeAudioCoverage.js';
 import { SurfaceInstrument } from "./SurfaceInstrument.js";
 import { VideoWall } from "./VideoWall.js";
 import { SceneTiming } from "./SceneTiming.js";
+import { MusicPanel } from "./MusicPanel.js";
 import { AudienceOverview } from "./AudienceOverview.js";
 import { GroupSelectionStart } from "./GroupSelectionStart.js";
 import type { TimingMonitor } from "@entertheblackbox/protocol";
@@ -778,6 +779,7 @@ export function App() {
             <div><button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" disabled={!isActive || busy} onClick={(event) => requestConfirmation("restart", event.currentTarget)}>Restart show</button><span>Create a new session from the entry phase</span></div>
             <div><button className="sc-tool-button" data-sc-tool-variant="danger" type="button" disabled={!canReturnToIdle || busy} onClick={(event) => requestConfirmation("idle", event.currentTarget)}>Return to idle</button><span>Stop the current show</span></div>
           </div>
+          {connectedToken && <MusicPanel token={connectedToken} />}
           </div>
 
           </div>

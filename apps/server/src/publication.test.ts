@@ -43,6 +43,16 @@ describe("one show release", () => {
     const intro = result.scenario.phases[0]!;
     expect(intro.kind === "narration" ? intro.loopVideoSrc : undefined).toMatch(/^native-shows\/assets\/[0-9a-f]{64}\.mp4$/);
   });
+  it("freezes a scene's music track into the release", async () => {
+    const { root, scenario, manifest, bytes } = await fixture();
+    await writeFile(join(root, "bed.mp3"), bytes);
+    const withMusic = { ...scenario, phases: [{ ...scenario.phases[0], music: { action: "play", src: "bed.mp3", volume: 0.5 } }, scenario.phases[1]] };
+    const result = await preparePublication(withMusic, { files: [...manifest.files, { ...manifest.files[1]!, src: "bed.mp3" }] }, root);
+    const intro = result.scenario.phases[0]!;
+    const music = intro.kind === "narration" ? intro.music : undefined;
+    expect(music?.action === "play" ? music.src : undefined).toMatch(/^native-shows\/assets\/[0-9a-f]{64}\.mp3$/);
+    expect(result.mediaManifest.files.some((file) => file.src === (music?.action === "play" ? music.src : ""))).toBe(true);
+  });
   it("rejects changed and missing source files before saving a release", async () => {
     const { root, scenario, manifest } = await fixture();
     await writeFile(join(root, "monitor.mp4"), "changed");

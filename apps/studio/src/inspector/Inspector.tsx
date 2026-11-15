@@ -503,6 +503,33 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
       {mediaPicker("Loop video (optional)", "loopVideoSrc", phase.loopVideoSrc, "video", "No loop")}
       {phase.loopVideoSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, loopVideoSrc: undefined })}>Remove loop</button>}
     </fieldset>}
+    {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Room music</legend>
+      <p className="sc-tool-copy field-hint">Music from the main display that keeps playing across scenes until a later cue changes it. Scenes without a cue leave it as it is. Group-path scenes do not change it. Admin can override it live.</p>
+      <label className="sc-tool-label">{label("Music cue", "music.action")}<select className="sc-tool-select" value={phase.music?.action ?? ""} onChange={(event) => {
+        const action = event.target.value;
+        const firstAudio = localMedia.find((file) => studioMediaKindForSource(file.src) === "audio")?.src ?? "media/new-music.mp3";
+        onChange({ ...phase, music: action === "play" ? { action: "play", src: phase.music?.action === "play" ? phase.music.src : firstAudio, loop: true }
+          : action === "volume" ? { action: "volume", volume: 0.5 }
+          : action === "stop" ? { action: "stop" }
+          : undefined });
+      }}>
+        <option value="">No change</option>
+        <option value="play">Start a track</option>
+        <option value="volume">Change volume</option>
+        <option value="stop">Stop</option>
+      </select></label>
+      {phase.music?.action === "play" && (() => { const cue = phase.music; return <>
+        {mediaPicker("Music track (MP3)", "musicSrc", cue.src, "audio")}
+        {number("Volume (%)", "music.volume", Math.round((cue.volume ?? 1) * 100), (value) => onChange({ ...phase, music: { ...cue, volume: Math.max(0, Math.min(100, value)) / 100 } }))}
+        {number("Fade in (ms)", "music.fadeMs", cue.fadeMs ?? 0, (fadeMs) => onChange({ ...phase, music: { ...cue, fadeMs: Math.min(120_000, fadeMs) } }))}
+        <label className="sc-tool-checkbox check"><input type="checkbox" checked={cue.loop ?? true} onChange={(event) => onChange({ ...phase, music: { ...cue, loop: event.target.checked } })} />{label("Loop until stopped", "music.loop")}</label>
+      </>; })()}
+      {phase.music?.action === "volume" && (() => { const cue = phase.music; return <>
+        {number("Volume (%)", "music.volume", Math.round(cue.volume * 100), (value) => onChange({ ...phase, music: { ...cue, volume: Math.max(0, Math.min(100, value)) / 100 } }))}
+        {number("Fade (ms)", "music.fadeMs", cue.fadeMs ?? 2000, (fadeMs) => onChange({ ...phase, music: { ...cue, fadeMs: Math.min(120_000, fadeMs) } }))}
+      </>; })()}
+      {phase.music?.action === "stop" && (() => { const cue = phase.music; return number("Fade out (ms)", "music.fadeMs", cue.fadeMs ?? 2000, (fadeMs) => onChange({ ...phase, music: { ...cue, fadeMs: Math.min(120_000, fadeMs) } })); })()}
+    </fieldset>}
     {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone audio</legend>
       <p className="sc-tool-copy field-hint">Each listener hears one scene track. A group track replaces the default for that group.</p>
       {mediaPicker(phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? "Synchronized phone soundtrack (MP3)" : "Default track (optional)", "phoneAudioSrc", phase.phoneAudioSrc, "audio", "No default audio")}

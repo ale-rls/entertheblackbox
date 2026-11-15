@@ -636,6 +636,58 @@ export const wallSchema = z.object({
   loop: z.boolean(),
 });
 
+/**
+ * Room music on the main display (scene music cues or the Admin override).
+ * Idempotent: the latest `seq` wins and a (re)joining display gets the current
+ * state. Position is (serverNow − startAt); loudness follows `gain`, a linear
+ * ramp from `from` to `to` over `ms` starting at `at` (see musicGainAt). After
+ * `stopAt` the track is silent and may be released.
+ */
+export const musicSchema = z.object({
+  t: z.literal("music"),
+  v,
+  seq: z.number().int().nonnegative(),
+  track: z.object({
+    /** Media library name or published release path, as referenced by the scene. */
+    src: z.string().min(1).max(500),
+    /** Same-origin URL the display can stream when the file is not in its synced media. */
+    url: z.string().startsWith("/").max(1000),
+  }).nullable(),
+  startAt: timestamp.nullable(),
+  loop: z.boolean(),
+  gain: z.object({
+    from: z.number().min(0).max(1),
+    to: z.number().min(0).max(1),
+    at: timestamp,
+    ms: z.number().int().nonnegative(),
+  }),
+  stopAt: timestamp.nullable(),
+});
+
+/** Loudness 0–1 of a music message's ramp at server time `nowMs`. */
+export function musicGainAt(gain: { from: number; to: number; at: number; ms: number }, nowMs: number): number {
+  if (gain.ms <= 0 || nowMs >= gain.at + gain.ms) return gain.to;
+  if (nowMs <= gain.at) return gain.from;
+  return gain.from + (gain.to - gain.from) * ((nowMs - gain.at) / gain.ms);
+}
+
+/**
+ * Playback position in seconds at server time `nowMs`, or null when the track
+ * should be silent (not started, stopped, or a non-looping track has ended).
+ */
+export function musicPositionAt(
+  state: { startAt: number | null; loop: boolean; stopAt: number | null },
+  nowMs: number,
+  durationSeconds: number,
+): number | null {
+  if (state.startAt === null || nowMs < state.startAt) return null;
+  if (state.stopAt !== null && nowMs >= state.stopAt) return null;
+  const elapsed = (nowMs - state.startAt) / 1000;
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return elapsed;
+  if (state.loop) return elapsed % durationSeconds;
+  return elapsed < durationSeconds ? elapsed : null;
+}
+
 /** Everything a client can receive from the server. */
 export const serverToClientSchema = z.union([
   admissionStateSchema,
@@ -660,6 +712,7 @@ export const serverToClientSchema = z.union([
   audioBridgeChangedSchema,
   surfaceSchema,
   wallSchema,
+  musicSchema,
 ]);
 
 // ------------------------------------------------------------------------- types
@@ -712,5 +765,6 @@ export type PongMessage = z.infer<typeof pongSchema>;
 export type AudioBridgeChangedMessage = z.infer<typeof audioBridgeChangedSchema>;
 export type SurfaceMessage = z.infer<typeof surfaceSchema>;
 export type WallMessage = z.infer<typeof wallSchema>;
+export type MusicMessage = z.infer<typeof musicSchema>;
 export type WallStatusMessage = z.infer<typeof wallStatusSchema>;
 export type ServerToClientMessage = z.infer<typeof serverToClientSchema>;

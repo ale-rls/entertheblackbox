@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { SurfaceController } from "../surface/surface.js";
 import type { VideoWallController, WallClip } from "../wall/wall.js";
+import type { MusicController, MusicTrackOption } from "../music/music.js";
 import { wallLayoutSchema } from "@entertheblackbox/protocol";
 import type { SurfaceEffectRunner } from "../surface/effects.js";
 import { SURFACE_EFFECT_KINDS, SURFACE_EFFECT_MAX_PERIOD_MS, SURFACE_EFFECT_MIN_PERIOD_MS } from "@entertheblackbox/shared";
@@ -49,6 +50,12 @@ const wallCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("loop"), loop: z.boolean() }),
 ]);
 
+const musicCommandSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("play"), src: z.string().min(1).max(200), volume: z.number().min(0).max(1).default(1), loop: z.boolean().default(true), fadeMs: z.number().int().min(0).max(120_000).default(0) }),
+  z.object({ action: z.literal("volume"), volume: z.number().min(0).max(1), fadeMs: z.number().int().min(0).max(120_000).default(1_000) }),
+  z.object({ action: z.literal("stop"), fadeMs: z.number().int().min(0).max(120_000).default(3_000) }),
+]);
+
 export type AdminExport = { json: unknown; csv: string; tasksCsv?: string };
 export interface AdminDataSource {
   recentErrors(): Promise<readonly unknown[]>;
@@ -81,6 +88,11 @@ export type RegisterAdminOptions = {
     controller: Pick<VideoWallController, "snapshot" | "setLayout" | "load" | "play" | "cue" | "stop" | "setLoop">;
     clips: () => Promise<WallClip[]>;
     saveLayout: (layout: z.infer<typeof wallLayoutSchema>) => Promise<z.infer<typeof wallLayoutSchema>>;
+  };
+  /** Room music on the main display (Admin → Show → Music). */
+  music?: {
+    controller: Pick<MusicController, "snapshot" | "playFromLibrary" | "setVolume" | "stop">;
+    tracks: () => Promise<MusicTrackOption[]>;
   };
   /** Programmed instrument effects (chase, breathe, waves). */
   surfaceEffects?: Pick<SurfaceEffectRunner, "start" | "stop" | "state">;
@@ -249,6 +261,32 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       }
       const delivered = command.action === "cue" ? wall.cue() : command.action === "stop" ? wall.stop() : wall.setLoop(command.loop);
       return { ok: true, delivered };
+    });
+    admin.get("/music", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.music) return reply.code(503).send({ error: "music_unavailable" });
+      const tracks = await options.music.tracks().catch(() => null);
+      return { ...options.music.controller.snapshot(), tracks, tracksError: tracks === null ? "Media library unavailable" : undefined };
+    });
+    admin.post<{ Body: unknown }>("/music", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.music) return reply.code(503).send({ error: "music_unavailable" });
+      const parsed = musicCommandSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_music_command", issues: parsed.error.issues });
+      const music = options.music.controller;
+      const command = parsed.data;
+      options.data?.audit({ action: `music-${command.action}`, at: new Date().toISOString(), detail: command });
+      if (command.action === "play") {
+        const result = await music.playFromLibrary(command.src, { volume: command.volume, loop: command.loop, fadeMs: command.fadeMs });
+        return result.ok ? { ok: true, state: music.snapshot() } : reply.code(404).send(result);
+      }
+      if (command.action === "volume") {
+        return music.setVolume(command.volume, command.fadeMs, "admin")
+          ? { ok: true, state: music.snapshot() }
+          : reply.code(409).send({ ok: false, error: "no_music_playing" });
+      }
+      music.stop(command.fadeMs, "admin");
+      return { ok: true, state: music.snapshot() };
     });
     admin.get("/surface/effect", async (_request, reply) => {
       reply.header("cache-control", "no-store");

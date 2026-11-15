@@ -141,6 +141,8 @@ export type PhaseEngineOptions = {
     begin?: (phase: Extract<Phase, { kind: "group-branch" }>, participantIds: readonly string[]) => readonly string[];
   };
   onPhase?: (phase: Phase, startedAt: number) => void;
+  /** The main display (re)connected; send it state kept outside the engine, e.g. music. */
+  onDisplayConnected?: (socket: WebSocket) => void;
   onParticipantPhase?: (participantIds: readonly string[], phase: Phase, startedAt: number) => void;
   qr?: Omit<QrGrantPushLoopOptions, "send" | "lifecycle" | "hasDisplay" | "now">;
 };
@@ -1455,6 +1457,12 @@ export class PhaseEngine {
     } else {
       this.qr?.push();
     }
+    this.options.onDisplayConnected?.(socket);
+  }
+
+  /** The main display socket, if one is connected. */
+  get mainDisplaySocket(): WebSocket | undefined {
+    return this.displaySocket;
   }
 
   /**

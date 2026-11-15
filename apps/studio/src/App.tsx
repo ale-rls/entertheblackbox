@@ -596,6 +596,12 @@ export function App() {
       closeMediaPicker();
       return;
     }
+    if (phase && phase.kind !== "idle" && phase.kind !== "group-branch" && mediaPicker.target === "musicSrc") {
+      const previous = phase.music?.action === "play" ? phase.music : undefined;
+      updatePhase({ ...phase, music: { ...previous, action: "play", src: row.src } });
+      closeMediaPicker();
+      return;
+    }
     if (phase && phase.kind !== "idle" && phase.kind !== "group-branch" && mediaPicker.target === "loopVideoSrc") {
       updatePhase({ ...phase, loopVideoSrc: row.src });
       closeMediaPicker();
@@ -983,6 +989,8 @@ export function App() {
     ? mediaPickerPhase.phoneAudioSrc ?? ""
     : mediaPicker?.target === "loopVideoSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
     ? mediaPickerPhase.loopVideoSrc ?? ""
+    : mediaPicker?.target === "musicSrc" && mediaPickerPhase && mediaPickerPhase.kind !== "idle" && mediaPickerPhase.kind !== "group-branch"
+    ? mediaPickerPhase.music?.action === "play" ? mediaPickerPhase.music.src : ""
     : mediaPickerPhase?.kind === "video" || mediaPickerPhase?.kind === "video-position-question"
     ? mediaPicker?.target === "audioSrc"
       ? mediaPickerPhase.audioSrc ?? ""

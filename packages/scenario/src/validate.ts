@@ -1,6 +1,7 @@
 import { taskAudioSources } from './tasks.js';
 import { admissionSources } from './admission.js';
 import { monitorMediaSources } from "./monitors.js";
+import { musicCueSources } from "./music.js";
 import { curtainLightIssues } from "./curtain.js";
 import { scriptParagraphs } from "./actor-script.js";
 import type { MediaManifest, Phase, Scenario } from "./schema.js";
@@ -212,6 +213,7 @@ export function validateScenario(
               ...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []),
               ...Object.values(phase.phoneAudioByGroup ?? {}),
               ...(phase.loopVideoSrc ? [phase.loopVideoSrc] : []),
+              ...musicCueSources(phase.music),
               ...(phase.kind === "position-question" || phase.kind === "narration" ? [] : [phase.src, ...(phase.audioSrc ? [phase.audioSrc] : []), ...(phase.extraAudioSrc ? [phase.extraAudioSrc] : [])]),
             ]),
       ];

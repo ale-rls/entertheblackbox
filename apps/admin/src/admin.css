@@ -279,3 +279,12 @@
 .admin-audience-table th[scope="row"] small { display: block; color: var(--sc-tool-color-text-muted); font-weight: normal; }
 .admin-audience-table tr[data-offline] { opacity: .6; }
 .admin-audience-missing { color: var(--sc-tool-color-warning); }
+
+/* Show → Music: room music override. */
+.admin-music { margin-top:1.25rem; padding-top:1rem; border-top:1px solid var(--sc-tool-color-rule); display:grid; gap:.6rem; }
+.admin-music h3, .admin-music p { margin:0; }
+.admin-music-row { display:flex; flex-wrap:wrap; gap:.5rem; align-items:end; }
+.admin-music-row .sc-tool-label { flex:1 1 14rem; }
+.admin-music-row .admin-music-loop { flex:0 0 auto; display:flex; gap:.35rem; align-items:center; }
+.admin-music input[type="range"] { width:100%; }
+.admin-music-help { opacity:.7; font-size:.85rem; }

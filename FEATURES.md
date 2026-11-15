@@ -24,6 +24,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Arena calibration: ellipse or perspective quad corners — `apps/display/src/components/QuadrantOverlay.tsx`
 - Resolution rules: fixed-next, or quadrant-plurality with tie handling / `kleroterion` tie-break
 - Video/still-image phases: video or still+MP3, extra audio layer, tail hold, subtitles, applause/boo windows, skip control, cursor visibility
+- Room music cue (`music`): any shared-timeline scene can start a media-library MP3 (volume, loop, fade-in), change its volume with a fade, or stop it with a fade-out; scenes without a cue keep the music; group-path scenes never change it; the idle scene stops it. Manifest-checked and frozen on publish like other media — `packages/scenario/src/music.ts`, `apps/server/src/publication.ts`, Studio Inspector "Room music"
 - Scene loop video (`loopVideoSrc`): a muted video the main display loops behind narration, position-question and still+MP3 scenes (e.g. an idle curtain), replacing the still. Rejected on scenes whose own `src` is a video. Published and manifest-checked like other visual media — `packages/scenario/src/schema.ts`, `apps/server/src/publication.ts`, Studio Inspector "Main display loop"
 - Synchronized native participant audio — engine in `apps/server`, native clock scheduler in `packages/expo-audio-scheduler`
 - Video-position-question hybrids (timed show/open/close/hide windows) — `apps/display/src/components/VideoQuestionOverlay.tsx`, `VoteCloseCountdown.tsx`
@@ -60,6 +61,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Fullscreen show playback (video, still+audio, subtitles) — `PhaseVideo.tsx`, `PhaseImageAudio.tsx`, `PhaseSubtitles.tsx`
 - Video handoff between phases (pre-buffered next clip) — `PhaseVideoHandoff.tsx`, `apps/server/src/engine/video.ts`
+- Room music layer: one track kept across scenes (and while the main display is black during group paths), positioned and faded on the server clock from the `music` message; published scene music plays from the synced media, Admin-picked library tracks stream from `/media/`. Needs "Enable sound" like other display audio. Main display only: no native app change — `components/MusicLayer.tsx`, `state/store.ts`, `apps/server/src/music/music.ts`, `packages/protocol` (`musicSchema`, `musicGainAt`, `musicPositionAt`)
 - Scene loop video: muted, looped on the absolute server clock so scenes in a row sharing a loop continue without a jump and every display shows the same frame; it stays up until an incoming scene video is presented. Pinned in the media store under its own owner beside the curtain-light video — `components/LoopVideo.tsx`, `App.tsx`, `media/mediaStore.ts` (`pin`). Main display only: no native app change
 - Skipped phase audio fades out over 3 s: video sound, extra audio and image+MP3 audio that is still playing when the show moves on continue from a detached copy that ramps to silence while the picture cuts as before; the outgoing Blob URL is held for the fade. Natural ends, paused and muted media are untouched — `apps/display/src/media/skipFade.ts`, `PhaseVideoHandoff.tsx`, `PhaseImageAudio.tsx`, `media/mediaStore.ts` (`holdUrl`)
 - Live cursor field (real + ghost cursors) — `cursors/CursorCanvas.tsx`, `cursorField.ts` ← **apps/realtime-ws-coolify** + server ghost pool
@@ -96,6 +98,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Audience overview on the Show tab: group head counts (online, no-group warning), App/Web totals, each device's current cue and time in cue, device audio report — `apps/admin/src/AudienceOverview.tsx`, `participantPresence` in `apps/server/src/engine/phase-engine.ts`
 - Downloadable high-resolution PNG export of the configured participant join QR code
 - Session export (JSON/CSV) — `apps/server/src/persistence/admin-data.ts`
+- Room music override (Show tab): fade out, stop, volume, play any media-library MP3 on the main display; audited — `apps/admin/src/MusicPanel.tsx`, `GET/POST /api/admin/music`, `apps/server/src/music/music.ts`
 - Participant tasks: send published templates, per-path GO gates, role assignment/withdrawal, tablet handover, task results CSV — `apps/admin/src/ParticipantTasks.tsx`, `AdmissionPrograms.tsx`, `/api/admin/tasks`, `/api/admin/handover`
 - Error log / audit log
 - Admin API rate limiting — `apps/server/src/admission/rate-limit.ts`

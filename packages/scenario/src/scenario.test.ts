@@ -128,6 +128,27 @@ describe("scenarioSchema structural rejection", () => {
     expect(parse((s) => ({ ...s, phases: s.phases.map((phase) => phase.id === "q1" ? { ...phase, loopVideoSrc: "curtain.png" } : phase) })).success).toBe(false);
   });
 
+  it("accepts music cues on scenes and validates the played track against the manifest", () => {
+    const withMusic = {
+      ...baseScenario,
+      phases: baseScenario.phases.map((phase) => phase.id === "intro"
+        ? { ...phase, music: { action: "play", src: "bed.mp3", volume: 0.6, loop: true, fadeMs: 1_500 } }
+        : phase.id === "q1" ? { ...phase, music: { action: "stop" } } : phase),
+    };
+    const parsed = scenarioSchema.safeParse(withMusic);
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    const files = baseScenario.phases.flatMap((phase) => "src" in phase && typeof phase.src === "string" ? [{ src: phase.src, bytes: 1, hash: phase.src }] : []);
+    expect(validateScenario(parsed.data, { files: [...files, { src: "bed.mp3", bytes: 1, hash: "bed" }] }).errors.filter((issue) => issue.code === "missing-media")).toEqual([]);
+    expect(validateScenario(parsed.data, { files }).errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: "missing-media", phaseId: "intro", message: expect.stringContaining("bed.mp3") }),
+    ]));
+
+    // Music must be an MP3; volume stays within 0–1.
+    expect(parse((s) => ({ ...s, phases: s.phases.map((phase) => phase.id === "q1" ? { ...phase, music: { action: "play", src: "bed.mp4" } } : phase) })).success).toBe(false);
+    expect(parse((s) => ({ ...s, phases: s.phases.map((phase) => phase.id === "q1" ? { ...phase, music: { action: "volume", volume: 1.5 } } : phase) })).success).toBe(false);
+  });
+
   it("accepts an extra MP3 alongside video and includes it in manifest validation", () => {
     const withExtraAudio = {
       ...baseScenario,

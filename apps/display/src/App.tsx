@@ -22,6 +22,7 @@ import { QrBadge } from "./components/QrBadge.js";
 import { QuadrantOverlay, questionFieldCenter } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
 import { LoopVideo } from "./components/LoopVideo.js";
+import { MusicLayer } from "./components/MusicLayer.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhaseVideoHandoff, type PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
 import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
@@ -243,8 +244,17 @@ export function App() {
   const setActiveExtraAudio = useCallback((audioElement: HTMLAudioElement | null) => {
     activeExtraAudioRef.current = audioElement;
   }, []);
+  const musicAudioRef = useRef<HTMLAudioElement | null>(null);
+  const setMusicAudio = useCallback((audioElement: HTMLAudioElement | null) => {
+    musicAudioRef.current = audioElement;
+  }, []);
   const enableSound = useCallback(() => {
     const current = stateRef.current.phase;
+    // Room music needs the same user gesture as scene audio.
+    if (musicAudioRef.current !== null) {
+      musicAudioRef.current.muted = false;
+      void musicAudioRef.current.play()?.catch(() => { /* MusicLayer retries on its own tick. */ });
+    }
     if (current?.kind === "video" && current.phoneAudioMode === "synchronized") { setSoundEnabled(true); return; }
     for (const mediaElement of [activeMediaRef.current, activeExtraAudioRef.current]) {
       if (mediaElement === null) continue;
@@ -378,6 +388,10 @@ export function App() {
   // content -- just its configured background loop and the live join QR,
   // independent of session/phase state.
   const clockOverlay = showClock && <ShowClockOverlay clock={connection.clock} phase={phase} />;
+  // Room music belongs to the main display and keeps playing while it is black during group paths.
+  const musicLayer = config.groupId === undefined && config.signageId === undefined
+    ? <MusicLayer music={state.music} clock={connection.clock} soundEnabled={soundEnabled} media={media.store} onAudioElement={setMusicAudio} />
+    : null;
   if (config.signageId !== undefined) return <main className="display-root" aria-label="Signage kiosk">
     {clockOverlay}
     <IdleAttract
@@ -393,12 +407,14 @@ export function App() {
   // Unmount show media and overlays; inactive displays may play a muted waiting loop.
   if (displayInactive) return <main className="display-root" aria-label="Display inactive" style={{ background: "#000" }}>
     {clockOverlay}
+    {musicLayer}
     {waitingVideoUrl && <IdleAttract key={waitingVideoUrl} grant={null} qrHidden clock={connection.clock} videoUrls={[waitingVideoUrl]} />}
   </main>;
 
   return (
     <main className="display-root">
       {clockOverlay}
+      {musicLayer}
       {/* Layer 1: video */}
       <section className="layer layer-video">
         <IdleAttract

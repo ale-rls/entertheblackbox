@@ -1,4 +1,5 @@
 import type {
+  MusicMessage,
   PhaseSnapshotMessage,
   QrGrantMessage,
   QuestionResolvedMessage,
@@ -34,6 +35,8 @@ export type DisplayState = {
   resolution: QuestionResolvedMessage | null;
   /** Live applause/boo tally for the current rating-enabled video phase, if any. */
   ratingStatus: RatingStatusMessage | null;
+  /** Room music; kept across phases until the server changes it. */
+  music: MusicMessage | null;
 };
 
 export const initialDisplayState: DisplayState = {
@@ -50,6 +53,7 @@ export const initialDisplayState: DisplayState = {
   liveField: null,
   resolution: null,
   ratingStatus: null,
+  music: null,
 };
 
 export type DisplayAction =
@@ -134,5 +138,8 @@ export function displayReducer(
     case "surface":
     case "wall":
       return state;
+    case "music":
+      // One socket delivers in order; seq restarts with the server, so the latest message wins.
+      return { ...state, music: m };
   }
 }

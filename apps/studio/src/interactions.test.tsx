@@ -363,6 +363,33 @@ describe("Studio feedback and keyboard entry", () => {
     expect(compiled().phases.find((p: {kind: string}) => p.kind === "narration").loopVideoSrc).toBeUndefined();
   });
 
+  it("sets a room music cue from the media library and switches it to a stop", async () => {
+    media.load.mockResolvedValue({ files: [
+      { src: "voice.mp3", bytes: 100, hash: "voice" },
+      { src: "bed.mp3", bytes: 100, hash: "bed" },
+    ] });
+    await render(<App />);
+    await act(async () => { button("New show").click(); });
+    await act(async () => { button("Add").click(); });
+    await act(async () => { button("Audio + text (narration)").click(); });
+    await act(async () => { document.querySelector<HTMLElement>('.react-flow__node[data-id^="narration-"]')!.click(); });
+    const cueSelect = Array.from(document.querySelectorAll<HTMLLabelElement>('.inspector label')).find(item => item.textContent?.startsWith("Music cue"))!.querySelector("select")!;
+    await act(async () => { cueSelect.value = "play"; cueSelect.dispatchEvent(new Event("change", { bubbles: true })); });
+    const compiled = () => JSON.parse(document.querySelector('.inspector pre')!.textContent!);
+    const narration = () => compiled().phases.find((p: {kind: string}) => p.kind === "narration");
+    expect(narration().music).toEqual({ action: "play", src: "voice.mp3", loop: true });
+    await act(async () => { document.querySelector<HTMLButtonElement>('button[aria-label^="Choose audio"][aria-label$="Current media: voice.mp3"]')!.click(); });
+    const dialog = document.querySelector('[role="dialog"]')!;
+    const row = Array.from(dialog.querySelectorAll('.media-row')).find(item => item.textContent?.includes("bed.mp3"))!;
+    await act(async () => { row.querySelector<HTMLButtonElement>('button')!.click(); });
+    await flush();
+    expect(narration().music).toEqual({ action: "play", src: "bed.mp3", loop: true });
+    await act(async () => { cueSelect.value = "stop"; cueSelect.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(narration().music).toEqual({ action: "stop" });
+    await act(async () => { cueSelect.value = ""; cueSelect.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(narration().music).toBeUndefined();
+  });
+
   it("picks group audio without changing the default or other groups, and restores fallback on removal", async () => {
     media.load.mockResolvedValue({ files: [
       { src: "default.mp3", bytes: 100, hash: "default" },

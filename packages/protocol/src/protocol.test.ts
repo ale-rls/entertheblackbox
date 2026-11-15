@@ -372,3 +372,19 @@ describe("participantClientOf", () => {
     expect(participantClientOf({})).toBe("web");
   });
 });
+
+describe("music message", () => {
+  it("parses a music state and computes ramps and positions on the server clock", async () => {
+    const { musicGainAt, musicPositionAt, serverToClientSchema } = await import("./index.js");
+    const message = { t: "music", v: 2, seq: 1, track: { src: "bed.mp3", url: "/media/bed.mp3" }, startAt: 1_000, loop: true,
+      gain: { from: 0, to: 0.8, at: 1_000, ms: 2_000 }, stopAt: null };
+    expect(serverToClientSchema.safeParse(message).success).toBe(true);
+    expect(musicGainAt(message.gain, 0)).toBe(0);
+    expect(musicGainAt(message.gain, 2_000)).toBeCloseTo(0.4);
+    expect(musicGainAt(message.gain, 9_000)).toBe(0.8);
+    expect(musicPositionAt(message, 500, 10)).toBeNull();
+    expect(musicPositionAt(message, 13_500, 10)).toBeCloseTo(2.5);
+    expect(musicPositionAt({ ...message, loop: false }, 13_500, 10)).toBeNull();
+    expect(musicPositionAt({ ...message, stopAt: 5_000 }, 6_000, 10)).toBeNull();
+  });
+});
