@@ -1,0 +1,15 @@
+{
+  "output": "IAC",
+  "channel": 1,
+  "cues": {
+    "musik-warten-start": [{ "note": 36 }],
+    "musik-puls-start": [{ "note": 37 }],
+    "musik-puls-lauter": [{ "cc": 20, "value": 110 }],
+    "musik-puls-leiser": [{ "cc": 20, "value": 60 }],
+    "musik-stopp": [{ "note": 48 }]
+  },
+  "scenes": {
+    "example-scene-id": [{ "note": 38 }]
+  },
+  "showEnd": [{ "note": 48 }]
+}

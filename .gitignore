@@ -57,3 +57,6 @@ content/media/native-shows/
 # making the files publicly downloadable, and this repo is public. Copy the
 # licensed files in locally; see fonts/README.md.
 /fonts/optik/
+
+# The show's MIDI mapping for Ableton (cue names are show content); see apps/midi-bridge/midi-mapping.example.json
+midi-mapping.json

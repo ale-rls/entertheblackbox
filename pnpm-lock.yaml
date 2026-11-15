@@ -146,6 +146,32 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)(lightningcss@1.33.0)(terser@5.51.2)
 
+  apps/midi-bridge:
+    dependencies:
+      eventsource:
+        specifier: ^5.1.1
+        version: 5.1.1
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    optionalDependencies:
+      '@julusian/midi':
+        specifier: 3.8.1
+        version: 3.8.1
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.1)(jsdom@25.0.1)(lightningcss@1.33.0)(terser@5.51.2)
+
   apps/native:
     dependencies:
       '@entertheblackbox/expo-audio-scheduler':
@@ -1737,6 +1763,10 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@julusian/midi@3.8.1':
+    resolution: {integrity: sha512-T+Ecn2pWTFu0G81PUa64Tk7yqzS6KlW61BKIaWVCBeXKXtXQ8ARgn6NcqmH6kABOM3FA8DV7XaPcw7VDBtgxKQ==}
+    engines: {node: '>=14.15'}
 
   '@mediabunny/aac-encoder@1.55.1':
     resolution: {integrity: sha512-NkLRZzfZoCmMZpMosj+O9gpl1tgHgKR85G8QrtUSUGJO1HaI/NqZznwSEdGWZKT4rSiRRaYtYXecLCAIdKWDFQ==}
@@ -4000,6 +4030,9 @@ packages:
   no-case@3.0.4:
     resolution: {integrity: sha512-fgAN3jGAh+RoxUGZHTSOLJIqUc2wmoBwGR4tbpNAKmmovFoWq0OdRkb0VkldReO2a2iBT/OEulG9XSUc10r3zg==}
 
+  node-addon-api@6.1.0:
+    resolution: {integrity: sha512-+eawOlIgy680F0kBzPUNFhMZGtJ1YmqM6l4+Crf4IkImjYrO/mqPwRMh352g23uIaQKFItcQ64I7KMaJxHgAVA==}
+
   node-forge@1.4.1:
     resolution: {integrity: sha512-w5/MfWaeMrpR/5ba6fZyAUTLSuE6aYz7H/3cYrqwZEmf5eQS3IaaLgJt4MBv7HglGFWmV22K8h4U18RJQmw/ow==}
     engines: {node: '>= 6.13.0'}
@@ -4161,6 +4194,11 @@ packages:
   pirates@4.0.7:
     resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
     engines: {node: '>= 6'}
+
+  pkg-prebuilds@1.1.0:
+    resolution: {integrity: sha512-jyai+KTQ2OwbN6iRYw88XbYOMgtpoSYJpjYebx7d9ihqz3txNi3ucsBt3va0iVWe6svSlaqpijMHFF/eJCMZzg==}
+    engines: {node: '>= 14.15.0'}
+    hasBin: true
 
   playwright-core@1.61.1:
     resolution: {integrity: sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg==}
@@ -6586,6 +6624,13 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  '@julusian/midi@3.8.1':
+    dependencies:
+      node-addon-api: 6.1.0
+      pkg-prebuilds: 1.1.0
+      tslib: 2.8.1
+    optional: true
+
   '@mediabunny/aac-encoder@1.55.1(mediabunny@1.55.1)':
     dependencies:
       mediabunny: 1.55.1
@@ -6769,13 +6814,13 @@ snapshots:
       '@remotion/timeline-utils': 4.0.516(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@rspack/core': 1.7.11
       '@rspack/plugin-react-refresh': 1.6.1(react-refresh@0.18.0)
-      css-loader: 7.1.4(@rspack/core@1.7.11)(webpack@5.105.0(lightningcss@1.33.0)(postcss@8.5.17))
+      css-loader: 7.1.4(@rspack/core@1.7.11)(webpack@5.105.0(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.17))
       esbuild: 0.28.1
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
       react-refresh: 0.18.0
       remotion: 4.0.516(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      style-loader: 4.0.0(webpack@5.105.0(lightningcss@1.33.0)(postcss@8.5.17))
+      style-loader: 4.0.0(webpack@5.105.0(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.17))
       webpack: 5.105.0(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.17)
     transitivePeerDependencies:
       - '@minify-html/node'
@@ -7975,7 +8020,7 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
-  css-loader@7.1.4(@rspack/core@1.7.11)(webpack@5.105.0(lightningcss@1.33.0)(postcss@8.5.17)):
+  css-loader@7.1.4(@rspack/core@1.7.11)(webpack@5.105.0(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.17)):
     dependencies:
       icss-utils: 5.1.0(postcss@8.5.17)
       postcss: 8.5.17
@@ -9308,6 +9353,9 @@ snapshots:
       lower-case: 2.0.2
       tslib: 2.8.1
 
+  node-addon-api@6.1.0:
+    optional: true
+
   node-forge@1.4.1: {}
 
   node-int64@0.4.0: {}
@@ -9458,6 +9506,9 @@ snapshots:
       thread-stream: 4.2.0
 
   pirates@4.0.7: {}
+
+  pkg-prebuilds@1.1.0:
+    optional: true
 
   playwright-core@1.61.1: {}
 
@@ -9902,7 +9953,7 @@ snapshots:
 
   structured-headers@0.4.1: {}
 
-  style-loader@4.0.0(webpack@5.105.0(lightningcss@1.33.0)(postcss@8.5.17)):
+  style-loader@4.0.0(webpack@5.105.0(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.17)):
     dependencies:
       webpack: 5.105.0(esbuild@0.28.1)(lightningcss@1.33.0)(postcss@8.5.17)
 
