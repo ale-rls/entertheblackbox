@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { voteCountdownSeconds } from "@entertheblackbox/scenario";
 import type {
   PhaseSnapshotMessage,
   QuestionResolvedMessage,
@@ -101,7 +102,7 @@ export function VideoQuestionOverlay({
         showCounts={false}
         highlightRegionIds={highlightRegionIds}
       />}
-      {votingOpen && <VoteCloseCountdown clock={clock} deadlineAt={closeAt} soundEnabled={soundEnabled} durationSeconds={phase.closeCountdownSeconds ?? 5} center={bare ? null : questionFieldCenter(phase.field)} />}
+      {votingOpen && <VoteCloseCountdown clock={clock} deadlineAt={closeAt} soundEnabled={soundEnabled} durationSeconds={voteCountdownSeconds(phase)} center={bare ? null : questionFieldCenter(phase.field)} />}
     </div>
   );
 }
