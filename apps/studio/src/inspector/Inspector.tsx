@@ -1,7 +1,7 @@
 import { RoleEditor } from './RoleEditor.js';
 import { AdmissionEditor } from './AdmissionEditor.js';
 import { TaskEditor } from './TaskEditor.js';
-import type { ParticipantTask } from '@entertheblackbox/scenario';
+import { MAX_VOTE_COUNTDOWN_SECONDS, MIN_VOTE_COUNTDOWN_SECONDS, voteCountdownSeconds, withVoteCountdownSeconds, type ParticipantTask } from '@entertheblackbox/scenario';
 import { MonitorEditor, type MediaTarget } from "./MonitorEditor.js";
 import { ActorScriptEditor, ScriptCueEditor, TabletScriptEditor } from "./ScriptEditor.js";
 import { useEffect, useState } from "react";
@@ -475,7 +475,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
         const closeOffset = phase.closeAtMs - timelineOriginMs;
         const hideOffset = phase.hideAtMs - timelineOriginMs;
         return <fieldset className="timeline-fields"><legend>Vote timeline <small>{phase.audioSrc === undefined ? "milliseconds from media start" : "milliseconds from MP3 end"}</small></legend>
-          <label className="sc-tool-label">{label("Close countdown", "closeCountdownSeconds")}<select className="sc-tool-select" value={phase.closeCountdownSeconds ?? 5} onChange={(event) => onChange({ ...phase, closeCountdownSeconds: Number(event.target.value) as 5 | 10 })}><option value="5">5 seconds</option><option value="10">10 seconds</option></select></label>
+          <label className="sc-tool-label">{label("Close countdown (seconds)", "voteCountdownSeconds")}<input className="sc-tool-field" type="number" min={MIN_VOTE_COUNTDOWN_SECONDS} max={MAX_VOTE_COUNTDOWN_SECONDS} step={1} value={voteCountdownSeconds(phase)} onChange={(event) => { if (event.target.value !== "") onChange(withVoteCountdownSeconds(phase, Number(event.target.value))); }} /></label>
           <TimingTimeline label="Vote" min={timelineMinMs} max={timelineMaxMs} origin={0} markers={[
             { id: "show", label: "Show question", runtime: "showAtMs", value: showOffset, min: timelineMinMs, max: openOffset, tone: "show", onChange: (value) => changeOffset("showAtMs", value) },
             { id: "open", label: "Open voting", runtime: "openAtMs", value: openOffset, min: showOffset, max: Math.max(showOffset, closeOffset - 1), tone: "open", onChange: (value) => changeOffset("openAtMs", value) },
@@ -486,7 +486,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
             const tailDurationMs = phase.tailDurationMs ?? 0;
             const openAtMs = timelineOriginMs + Math.min(15_000, Math.max(0, tailDurationMs - 2));
             const closeAtMs = Math.min(timelineOriginMs + tailDurationMs - 1, openAtMs + 5_000);
-            onChange({ ...phase, showAtMs: timelineOriginMs, openAtMs, closeAtMs, hideAtMs: Math.min(timelineOriginMs + tailDurationMs, closeAtMs + 5_000), closeCountdownSeconds: phase.closeCountdownSeconds ?? 5 });
+            onChange({ ...withVoteCountdownSeconds(phase, voteCountdownSeconds(phase)), showAtMs: timelineOriginMs, openAtMs, closeAtMs, hideAtMs: Math.min(timelineOriginMs + tailDurationMs, closeAtMs + 5_000) });
           }}>Fit vote to audio tail</button>}
           <p className="sc-tool-copy field-hint">{phase.audioSrc === undefined
             ? `Required order: show ≤ open < close ≤ hide ≤ media duration (${phase.expectedDurationMs} ms).`

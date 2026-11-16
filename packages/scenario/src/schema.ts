@@ -477,6 +477,12 @@ const videoPositionQuestionBaseSchema = z.object({
   rating: ratingConfigSchema.optional(),
   subtitles: z.array(subtitleSchema).optional(),
   closeCountdownSeconds: z.union([z.literal(5), z.literal(10)]).optional(),
+  /**
+   * Any close-countdown length in whole seconds; wins over closeCountdownSeconds. Kept separate
+   * because installed native apps reject a phase whose closeCountdownSeconds is not 5 or 10, while
+   * they strip this unknown key. Write it through withVoteCountdownSeconds.
+   */
+  voteCountdownSeconds: z.number().int().min(1).max(60).optional(),
 });
 
 const polygonZonesVideoQuestionVariantSchema = videoPositionQuestionBaseSchema

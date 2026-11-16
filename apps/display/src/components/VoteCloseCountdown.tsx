@@ -22,7 +22,7 @@ export function VoteCloseCountdown({
   clock: ServerClock;
   deadlineAt: number;
   soundEnabled: boolean;
-  durationSeconds?: 5 | 10;
+  durationSeconds?: number;
   /** Arena center (0-100 percentages) to align on instead of the screen center. */
   center?: { x: number; y: number } | null;
 }) {
