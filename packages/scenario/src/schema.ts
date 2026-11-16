@@ -2,6 +2,7 @@ import { admissionConfigSchema } from './admission.js';
 import { participantTaskSchema, participantRoleSchema } from './tasks.js';
 import { monitorCuesSchema } from "./monitors.js";
 import { actorScriptSchema, scriptCuesSchema, tabletScriptSchema } from "./actor-script.js";
+import { surfaceCuesSchema } from "./surface-cues.js";
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
 import { extraAudioCombinationError, loopVideoCombinationError, mediaCombinationError } from "./media-kind.js";
@@ -300,6 +301,8 @@ export const videoPhaseSchema = z.object({
   syncLeadMs: z.number().int().min(1000).max(30000).optional(),
   /** Positive values delay the picture relative to the phone soundtrack. */
   syncVideoOffsetMs: z.number().int().min(-2000).max(2000).optional(),
+  /** Timed Admin Instrument effects on joined tablets (start/stop), relative to scene start. */
+  surfaceCues: surfaceCuesSchema.optional(),
   /** Optional display treatment for the title. Omitted titles retain the standard top placement. */
   titleLayout: z.literal("centered-xl").optional(),
   src: z.string().min(1, "media src must be non-empty"),
@@ -347,6 +350,8 @@ export const narrationPhaseSchema = z.object({
   kind: z.literal("narration"),
   taskId: z.string().min(1).optional(),
   waitForGo: z.boolean().optional(),
+  /** Timed Admin Instrument effects on joined tablets (start/stop), relative to scene start. */
+  surfaceCues: surfaceCuesSchema.optional(),
   ...phoneAudioFields,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),

@@ -14,6 +14,7 @@ import { readDisplaySettings, readWallLayout, writeDisplaySettings, writeWallLay
 import { VideoWallController, wallClipsFromMedia } from "./wall/wall.js";
 import { SurfaceController } from "./surface/surface.js";
 import { SurfaceEffectRunner } from "./surface/effects.js";
+import { SurfaceCueScheduler, surfaceDeviceOrder } from "./surface/surface-cues.js";
 import { AudioDelivery } from "./audio/audio-delivery.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
@@ -128,6 +129,14 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   // Identify shows the tablet's label, not the participant's name.
   const surface = new SurfaceController({ recipients: () => admission.registry.values().map((participant) => ({ ...participant, name: participant.deviceLabel ?? participant.name })) });
   const surfaceEffects = new SurfaceEffectRunner(surface);
+  const surfaceCues = new SurfaceCueScheduler(surfaceEffects, () => surfaceDeviceOrder(
+    admission.registry.values().map((participant) => ({ clientId: participant.clientId, name: participant.deviceLabel ?? participant.name }))));
+  // Admin's Instrument takes over from scene cues whenever the operator starts or stops an effect.
+  const operatorSurfaceEffects = {
+    get state() { return surfaceEffects.state; },
+    start: (...args: Parameters<SurfaceEffectRunner["start"]>) => { surfaceCues.operatorOverride(); return surfaceEffects.start(...args); },
+    stop: () => { surfaceCues.operatorOverride(); return surfaceEffects.stop(); },
+  };
   const wallClips = async () => {
     if (!options.pocketbase) return [];
     await options.pocketbase.ensureAuth();
@@ -183,7 +192,10 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       participantLeaseTtlMs: admission.participantLeaseTtlMs,
       autoStartOnFirstParticipant: false,
       onParticipantPhase: (ids, phase, startedAt) => audio?.transitionParticipants(ids, phase, startedAt),
-      onPhase: (phase, startedAt) => audio?.transition(phase, (id) => groups?.groupFor(id) ?? null, startedAt),
+      onPhase: (phase, startedAt) => {
+        audio?.transition(phase, (id) => groups?.groupFor(id) ?? null, startedAt);
+        surfaceCues.enterPhase(phase, startedAt);
+      },
       onCueEvent: (event) => { cueFeed.publish(event); },
       groupSelection: {
         current: (participantId) => groups?.groupFor(participantId) ?? null,
@@ -375,7 +387,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     verifyToken: options.verifyOperatorToken ?? createOperatorTokenVerifier(config.pocketbase.url),
     engine: () => engine,
     surface,
-    surfaceEffects,
+    surfaceEffects: operatorSurfaceEffects,
     wall: {
       controller: wall,
       clips: wallClips,
@@ -567,6 +579,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     await audio?.stop();
     clearInterval(webSocketKeepAliveInterval);
     movementConsent?.stop();
+    surfaceCues.dispose();
     surfaceEffects.stop();
     tracking?.stop();
     engine?.stop();

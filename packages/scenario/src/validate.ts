@@ -27,7 +27,8 @@ export type ScenarioIssue = {
     | "unmarked-cycle"
     | "curtain-light"
     | "script-cue"
-    | "unused-rank-outcome";
+    | "unused-rank-outcome"
+    | "surface-cue";
   phaseId?: string;
   message: string;
 };
@@ -78,6 +79,14 @@ export function validateScenario(
   for (const path of scenario.admission?.paths ?? []) if (!scenario.groups?.some(g => g.id === path.groupId)) errors.push({ severity: 'error', code: 'unknown-group', message: `Admission references unknown group ${path.groupId}` });
   for (const src of admissionSources(scenario.admission)) if (mediaManifest && !mediaManifest.files.some(f => f.src === src)) errors.push({ severity: 'error', code: 'missing-media', message: `Admission audio missing from manifest: ${src}` });
   const scriptLength = scenario.actorScript ? scriptParagraphs(scenario.actorScript.text).length : 0;
+  for (const phase of scenario.phases) {
+    if (phase.kind !== "video" && phase.kind !== "narration") continue;
+    const sceneMs = phase.kind === "video" ? phase.expectedDurationMs : phase.durationMs;
+    for (const cue of phase.surfaceCues ?? []) if (cue.atMs > sceneMs) errors.push({
+      severity: "error", code: "surface-cue", phaseId: phase.id,
+      message: `Tablet light cue at ${cue.atMs} ms is after the scene ends (${sceneMs} ms)`,
+    });
+  }
   for (const phase of scenario.phases) for (const cue of phase.scriptCues ?? []) {
     if (cue.paragraph >= scriptLength) errors.push({
       severity: "error", code: "script-cue", phaseId: phase.id,
