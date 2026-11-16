@@ -85,6 +85,8 @@ export type {
 } from "./schema.js";
 
 export { validateScenario } from "./validate.js";
+export { orderedSurfaceCues, surfaceCueEffect, surfaceCueEffectSchema, surfaceCueSchema, surfaceCuesSchema } from "./surface-cues.js";
+export type { SurfaceCue, SurfaceCueEffect } from "./surface-cues.js";
 export type { ScenarioIssue, ValidationResult } from "./validate.js";
 
 export { validateMediaManifest } from "./media.js";

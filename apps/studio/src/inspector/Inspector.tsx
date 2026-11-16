@@ -1,4 +1,5 @@
 import { RoleEditor } from './RoleEditor.js';
+import { SurfaceCueEditor } from "./SurfaceCueEditor.js";
 import { AdmissionEditor } from './AdmissionEditor.js';
 import { TaskEditor } from './TaskEditor.js';
 import { MAX_VOTE_COUNTDOWN_SECONDS, MIN_VOTE_COUNTDOWN_SECONDS, voteCountdownSeconds, withVoteCountdownSeconds, type ParticipantTask } from '@entertheblackbox/scenario';
@@ -526,6 +527,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
       {mediaPicker("Loop video (optional)", "loopVideoSrc", phase.loopVideoSrc, "video", "No loop")}
       {phase.loopVideoSrc && <button type="button" className="sc-tool-button" onClick={() => onChange({ ...phase, loopVideoSrc: undefined })}>Remove loop</button>}
     </fieldset>}
+    {(phase.kind === "video" || phase.kind === "narration") && <SurfaceCueEditor cues={phase.surfaceCues} sceneMs={phase.kind === "video" ? phase.expectedDurationMs : phase.durationMs} onChange={(surfaceCues) => onChange({ ...phase, surfaceCues })} />}
     {phase.kind !== "idle" && phase.kind !== "group-branch" && <fieldset><legend>Phone audio</legend>
       <p className="sc-tool-copy field-hint">Each listener hears one scene track. A group track replaces the default for that group.</p>
       {mediaPicker(phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? "Synchronized phone soundtrack (MP3)" : "Default track (optional)", "phoneAudioSrc", phase.phoneAudioSrc, "audio", "No default audio")}
