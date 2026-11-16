@@ -31,4 +31,13 @@ describe("monitor positioning countdown", () => {
     expect(monitorCountdown(video(), 32_000)).toBeNull();
     expect(monitorCountdown(video({ showAtMs: 6_000 }), 15_000)).toBeNull();
   });
+  it("counts a video or narration scene's authored countdown", () => {
+    const scene = { kind: "video", startedAt: 10_000, countdown: { startAtMs: 5_000, endAtMs: 35_000 } } as PhaseSnapshotMessage;
+    expect(monitorCountdown(scene, 14_999)).toBeNull();
+    expect(monitorCountdown(scene, 15_000)).toBe(30);
+    expect(monitorCountdown(scene, 44_001)).toBe(1);
+    expect(monitorCountdown(scene, 45_000)).toBeNull();
+    expect(monitorCountdown({ kind: "narration", startedAt: 0, countdown: { startAtMs: 0, endAtMs: 12_000 } } as PhaseSnapshotMessage, 500)).toBe(12);
+    expect(monitorCountdown({ kind: "video", startedAt: 0 } as PhaseSnapshotMessage, 500)).toBeNull();
+  });
 });
