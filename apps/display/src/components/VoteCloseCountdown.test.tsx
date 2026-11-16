@@ -47,4 +47,17 @@ describe("VoteCloseCountdown", () => {
     expect(FakeAudio.created[0]?.currentTime).toBe(0);
     expect(FakeAudio.created[0]?.play).toHaveBeenCalledOnce();
   });
+
+  it("runs a 12 s countdown when the vote names 12 seconds", async () => {
+    vi.stubGlobal("Audio", FakeAudio);
+    const clock = { remainingUntil: () => 11_400 } as unknown as ServerClock;
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+
+    await act(async () => root?.render(<VoteCloseCountdown clock={clock} deadlineAt={20_000} soundEnabled={false} durationSeconds={12} />));
+    expect(document.querySelector(".vote-close-countdown")?.textContent).toBe("12");
+
+    await act(async () => root?.render(<VoteCloseCountdown clock={clock} deadlineAt={20_000} soundEnabled={false} durationSeconds={10} />));
+    expect(document.querySelector(".vote-close-countdown")).toBeNull();
+  });
 });
