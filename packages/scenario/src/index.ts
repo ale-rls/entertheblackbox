@@ -88,6 +88,8 @@ export { validateScenario } from "./validate.js";
 export type { ScenarioIssue, ValidationResult } from "./validate.js";
 
 export { validateMediaManifest } from "./media.js";
+export { sceneCountdownPings, sceneCountdownSchema, sceneCountdownSeconds } from "./scene-countdown.js";
+export type { SceneCountdown } from "./scene-countdown.js";
 export type { MediaIssue, StatSize } from "./media.js";
 export { extraAudioCombinationError, loopVideoCombinationError, mediaCombinationError, mediaKindForSource } from "./media-kind.js";
 export type { MediaKind } from "./media-kind.js";

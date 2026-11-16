@@ -27,6 +27,7 @@ import { PhaseVideoHandoff, type PhaseVideoCandidate } from "./components/PhaseV
 import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
 import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
+import { SceneCountdown } from "./components/SceneCountdown.js";
 import { PhaseSubtitles } from "./components/PhaseSubtitles.js";
 import { VideoTitle } from "./components/VideoTitle.js";
 import { FullscreenControl } from "./components/FullscreenControl.js";
@@ -543,6 +544,9 @@ export function App() {
           <VideoTitle title={phase.title} layout={phase.titleLayout} />
         )}
         {(phase?.kind === "video" || phase?.kind === "video-position-question") && <PhaseSubtitles phase={phase} clock={connection.clock} />}
+        {(phase?.kind === "video" || phase?.kind === "narration") && phase.countdown && (
+          <SceneCountdown key={`${phase.id}-${phase.startedAt}`} countdown={phase.countdown} startedAt={phase.startedAt} clock={connection.clock} soundEnabled={soundEnabled} belowText={phase.kind === "narration"} />
+        )}
         {phase?.kind === "video-position-question" && (
           <VideoQuestionOverlay
             phase={phase}

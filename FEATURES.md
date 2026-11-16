@@ -65,7 +65,8 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Live cursor field (real + ghost cursors) — `cursors/CursorCanvas.tsx`, `cursorField.ts` ← **apps/realtime-ws-coolify** + server ghost pool
 - Spectrum glow / cursor-density heat — `cursors/spectrumGlow.ts`
 - Curtain-light votes for curtain-light groups and for votes flagged `curtainLightVote` on any timeline (WebGL2 relit packed curtain video, answer pools from the counting geometry, instanced per-cursor lights with touch pulses, white labels with dark halos, fade into the next scene) — `curtain/*`, geometry in `packages/shared/src/curtain.ts`; see `docs/curtain-light-voting.md`
-- Quadrant/zone overlays, vote-close countdown of any length (1–60 s; `voteCountdownSeconds`, falling back to the legacy 5/10 s `closeCountdownSeconds` that installed native apps still validate) — `QuadrantOverlay.tsx`, `VoteCloseCountdown.tsx`, `VideoQuestionOverlay.tsx`, `packages/scenario/src/vote-countdown.ts`
+- Quadrant/zone overlays, vote-close countdown — `QuadrantOverlay.tsx`, `VoteCloseCountdown.tsx`, `VideoQuestionOverlay.tsx`
+- Scene countdown on video and narration scenes (`countdown`: start/end on the scene timeline, optional Ping4 in the final seconds): large centred number on the main display (beneath the text on narration scenes), same seconds on M1–M4 with a visible cue; edited in Studio → Countdown — `apps/display/src/components/SceneCountdown.tsx`, `apps/display/src/monitors/countdown.ts`, `packages/scenario/src/scene-countdown.ts`
 - Ghost cursors (replayed past-participant cursors filling a sparse room) — `apps/server/src/ghosts/ghost-cursor-player.ts`
 - Idle attract loop (`attract-*.mp4` playlist, no QR on main/group idle displays; perspective-calibrated QR marker tracking remains for signage kiosks) — `IdleAttract.tsx`, `idle/*`
 - Join QR code / corner QR for late joiners — `QrBadge.tsx`, `qr/*`, `apps/server/src/admission/qr.ts`

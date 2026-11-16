@@ -497,6 +497,29 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
       <label className="sc-tool-label">{label("Transition rule", "next.type")}<select className="sc-tool-select" value={phase.next.type} onChange={(event) => onTransitionChange(event.target.value as "fixed" | "quadrant-plurality", event.currentTarget)}><option value="fixed">Fixed target</option><option value="quadrant-plurality">Quadrant plurality</option></select></label>
       {phase.next.type === "quadrant-plurality" && <CountedStatuses phase={phase} onChange={onChange} />}
     </>}
+    {(phase.kind === "video" || phase.kind === "narration") && (() => {
+      const sceneMs = phase.kind === "video" ? phase.expectedDurationMs : phase.durationMs;
+      const countdown = phase.countdown;
+      const setCountdown = (next: { startAtMs: number; endAtMs: number; pingSeconds?: number } | undefined) => onChange({ ...phase, countdown: next });
+      const seconds = (ms: number) => Math.round(ms / 100) / 10;
+      const startS = countdown ? seconds(countdown.startAtMs) : 0;
+      const lengthS = countdown ? seconds(countdown.endAtMs - countdown.startAtMs) : 0;
+      const update = (startSeconds: number, lengthSeconds: number, pingSeconds: number) => {
+        const startAtMs = Math.max(0, Math.round(startSeconds * 1000));
+        const endAtMs = Math.max(startAtMs + 1000, startAtMs + Math.round(lengthSeconds * 1000));
+        setCountdown({ startAtMs, endAtMs, ...(pingSeconds > 0 ? { pingSeconds: Math.min(60, Math.round(pingSeconds)) } : {}) });
+      };
+      return <fieldset><legend>Countdown</legend>
+        <p className="sc-tool-copy field-hint">A large countdown on the main display (beneath the text on narration scenes) and on M1–M4 with a visible cue, e.g. time to build a still image. The final seconds can ping.</p>
+        <label className="sc-tool-checkbox check"><input type="checkbox" checked={countdown !== undefined} onChange={(event) => setCountdown(event.target.checked ? { startAtMs: 0, endAtMs: Math.min(sceneMs, 30_000) } : undefined)} />{label("Show a countdown", "countdown")}</label>
+        {countdown && <>
+          <label className="sc-tool-label">{label("Starts after (seconds)", "countdown.startAtMs")}<input className="sc-tool-field" type="number" min="0" step="0.1" value={startS} onChange={(event) => { if (event.target.value !== "") update(Number(event.target.value), lengthS, countdown.pingSeconds ?? 0); }} /></label>
+          <label className="sc-tool-label">{label("Length (seconds)", "countdown.endAtMs")}<input className="sc-tool-field" type="number" min="1" step="1" value={lengthS} onChange={(event) => { if (event.target.value !== "") update(startS, Number(event.target.value), countdown.pingSeconds ?? 0); }} /></label>
+          <label className="sc-tool-label">{label("Ping in the last (seconds, 0 = silent)", "countdown.pingSeconds")}<input className="sc-tool-field" type="number" min="0" max="60" step="1" value={countdown.pingSeconds ?? 0} onChange={(event) => { if (event.target.value !== "") update(startS, lengthS, Number(event.target.value)); }} /></label>
+          {countdown.endAtMs > sceneMs && <p className="field-error" role="alert">The countdown ends at {seconds(countdown.endAtMs)} s but the scene lasts {seconds(sceneMs)} s. Shorten it or lengthen the scene.</p>}
+        </>}
+      </fieldset>;
+    })()}
     {(phase.kind === "narration" || phase.kind === "position-question"
       || ((phase.kind === "video" || phase.kind === "video-position-question") && phase.audioSrc !== undefined)) && <fieldset><legend>Main display loop</legend>
       <p className="sc-tool-copy field-hint">A muted video that loops behind this scene, e.g. the idle curtain. It covers the still image. Scenes in a row with the same loop continue without a jump.</p>

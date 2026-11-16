@@ -1,6 +1,7 @@
 import { admissionConfigSchema } from './admission.js';
 import { participantTaskSchema, participantRoleSchema } from './tasks.js';
 import { monitorCuesSchema } from "./monitors.js";
+import { sceneCountdownSchema } from "./scene-countdown.js";
 import { actorScriptSchema, scriptCuesSchema, tabletScriptSchema } from "./actor-script.js";
 import { z } from "zod";
 import { FOUR_QUADRANTS, TWO_QUADRANTS } from "@entertheblackbox/shared";
@@ -316,7 +317,9 @@ export const videoPhaseSchema = z.object({
   showCursors: z.boolean().optional(),
   rating: ratingConfigSchema.optional(),
   subtitles: z.array(subtitleSchema).optional(),
+  countdown: sceneCountdownSchema.optional(),
 }).superRefine((phase, ctx) => {
+  if (phase.countdown && phase.countdown.endAtMs > phase.expectedDurationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "countdown must end within the scene", path: ["countdown", "endAtMs"] });
   if (phase.phoneAudioMode === "synchronized") {
     if ((phase.syncLeadMs ?? 3000) + Math.min(0, phase.syncVideoOffsetMs ?? 0) < 1000) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Preparation must leave at least one second before the adjusted picture start", path: ["syncLeadMs"] });
     if (!phase.phoneAudioSrc) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Synchronized video requires a phone soundtrack", path: ["phoneAudioSrc"] });
@@ -358,6 +361,9 @@ export const narrationPhaseSchema = z.object({
   allowSkip: z.boolean().optional(),
   /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
   showCursors: z.boolean().optional(),
+  countdown: sceneCountdownSchema.optional(),
+}).superRefine((phase, ctx) => {
+  if (phase.countdown && phase.countdown.endAtMs > phase.durationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "countdown must end within the scene", path: ["countdown", "endAtMs"] });
 });
 
 /** Rehearsal light tuning; each value overrides the shared curtain default. */
