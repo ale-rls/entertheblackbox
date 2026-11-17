@@ -221,7 +221,9 @@ Then decide what happens next, and **ask before acting**:
   `/update-show` now. Pass on the baseline from step 3 (the newest draft if it
   already holds wanted unpublished edits; otherwise the live draft; ask if
   unclear), the script revision (the
-  HTML export in the scratchpad), and ask for the media folder holding any new
+  HTML export in the scratchpad, plus the doc ID and `modifiedTime` so
+  `/update-show` can re-check the doc right before delivering), and ask for
+  the media folder holding any new
   recordings. Voice cues still missing after that are **always generated**
   with ElevenLabs and uploaded to the library and the Drive VOX folder, as
   described in `/update-show` step 3a; never make a text-only swap. Don't apply

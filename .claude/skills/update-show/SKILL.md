@@ -104,6 +104,16 @@ produced it.
 
 ## 5. Deliver
 
+**Re-check the script first, every time.** When the change comes from a Google
+Doc, call `get_file_metadata` on it again right before saving the draft,
+uploading media or writing the final backup. Compare its `modifiedTime` with
+the revision you worked from. If it changed: export the HTML again, parse it,
+diff it against the revision you used, and apply the differences (generate new
+voice cues per step 3a, then validate again) before delivering. Repeat until
+the doc is unchanged since your last fetch. Report the `modifiedTime` the
+delivered draft matches. Tested 2026-11-17: the script changed twice while the
+update was being built.
+
 **Backup file:** write `<name> <short-change-label>.studio-backup.json` next to the
 baseline. The original stays untouched.
 
@@ -128,6 +138,8 @@ Diagnostics and use **Publish** (operator sign-in; see docs/publishing.md).
 ## 6. Report
 
 - Baseline revision and where the result lives (file path and/or draft name + id).
+- The script revision the result matches (doc title + `modifiedTime` from the
+  final re-check in step 5).
 - The change list by phase ID, plus anything requested but not done.
 - Generated voice cues (file, scene, length, verification result, Drive and
   library upload), recordings still missing, text-only substitutes,
