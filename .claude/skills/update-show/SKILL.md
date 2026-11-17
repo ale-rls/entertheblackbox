@@ -29,6 +29,9 @@ editing anything:
   missing are generated, not left as gaps (step 3a); never make a silent
   text-only swap.
 - **Delivery** — a new backup file, a new Studio draft in PocketBase, or both.
+- **Lighting** — only when the script has light cues (`lightCues` in the parsed
+  script): the current `lighting.json` of the Eos bridge (on the show laptop, in
+  the repo folder), and where the new one should go.
 
 Done when the baseline is pinned to an exact revision (`draftId` + `updatedAt`, or
 file path + SHA-256) and every requested change has a source.
@@ -96,6 +99,37 @@ From Node, `PocketbaseMediaLibrary.upload()` can't measure durations (it uses a
 browser media element). Create the `media` record directly with `src`,
 `bytes`, `hash`, `durationMs` (from `ffprobe`) and `file`.
 
+## 3b. Light cues
+
+When the parsed script has `lightCues`, `lightLooks` or `lightColours` (the
+convention is in [docs/script-light-cues.md](../../../docs/script-light-cues.md)):
+
+1. **Mapping.** Write `<scratchpad>/light-mapping.json`: `scenes` maps each
+   script scene ID with a light cue to its phase ID (the same matching as for
+   text), and `winners` maps each `LICHT Gewinner` scene to `{answer ID: lamp}`.
+   Take the answer IDs from the phase's field (`q1`–`q4`, `min`/`max`, zone IDs)
+   and match each answer to the lamp of the same colour, using the phase's
+   answer colours and the script's field/colour notes. Ask if a match is not
+   clear; never guess.
+2. **Generate:**
+
+   ```bash
+   python3 -I .claude/skills/update-show/light_plan.py <parsed.json> <current lighting.json> <scratchpad>/light-mapping.json <scratchpad>/light
+   ```
+
+   It writes `lighting.json` (the venue part and hand-made looks kept, the
+   script's looks, colours, `licht-*` cues and vote results replaced),
+   `phase-cues.json` and `light-plan.md`. Exit code 1 means problems; they are
+   listed in `light-plan.md`. Fix the mapping, or report script problems
+   (unknown look, lamp or colour) instead of working around them.
+3. **Scene cues in the draft.** For each phase, set the `licht-*` entries of
+   `outgoingCues` to exactly what `phase-cues.json` lists: remove `licht-*`
+   names that are no longer there, and keep every other cue name (MIDI,
+   TouchDesigner) as it is. In Studio this is Advanced settings → External show
+   cues.
+4. **Check the light file** with the bridge itself:
+   `pnpm eos-bridge --config <scratchpad>/light/lighting.json --list`.
+
 ## 4. Validate
 
 Run every step of "Validate the saved output" in docs/updating-shows.md against the
@@ -132,6 +166,12 @@ from `apps/studio/src/media/pocketbase-media.ts` after the same confirmation.
 Generated voice cues are uploaded there and to the Drive VOX folder (step 3a).
 Studio refreshes durations from that library when the draft opens.
 
+**Light file:** the bridge reads `lighting.json` from the repo folder on the
+show laptop and reloads it on save. If you run on that laptop, show the diff
+against the current file and copy it there after the user confirms. Otherwise,
+give the user the path of the generated file. It is show content: never commit
+it.
+
 **Publishing stays with the operator:** they open the new draft in Studio, resolve
 Diagnostics and use **Publish** (operator sign-in; see docs/publishing.md).
 
@@ -144,6 +184,8 @@ Diagnostics and use **Publish** (operator sign-in; see docs/publishing.md).
 - Generated voice cues (file, scene, length, verification result, Drive and
   library upload), recordings still missing, text-only substitutes,
   disconnected scenes.
+- Light: `light-plan.md` (what fires automatically, the operator's cue list,
+  problems) and where the new `lighting.json` went.
 - Each validation step and its result, kept apart from what still needs venue
   rehearsal.
 - Operator next steps: media to upload, draft to open, publish.

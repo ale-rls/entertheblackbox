@@ -110,6 +110,12 @@ catches up. A new look interrupts a running fade from wherever the
 fade had got to. The lamps' own dim curve (`setup` above) shapes how smooth the
 steps look.
 
+## Light cues in the script
+
+Looks and cues can be written in the script and put into the show by the
+script skills, instead of editing this file by hand. How to write them and what
+the skills do: [script-light-cues.md](script-light-cues.md).
+
 ## Setting up the laptop
 
 1. **Repo and Node:** Node 22 and pnpm 9 (`corepack enable`), then
