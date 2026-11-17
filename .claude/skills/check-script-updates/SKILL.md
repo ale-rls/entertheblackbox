@@ -30,7 +30,8 @@ Read through the **claude.ai Google Drive** connector. If its tools are
 missing, ask the user to run `/mcp` and connect *claude.ai Google Drive*.
 Use only the read tools (`get_file_metadata`, `read_file_content`,
 `download_file_content`, `list_file_revisions`). Never edit, comment on,
-share, copy or trash the doc.
+share, copy or trash the doc. (Uploading generated voice cues to the VOX
+folder happens later, in `/update-show`, never to the script doc.)
 
 ## 2. Fetch and parse the script
 
@@ -221,8 +222,10 @@ Then decide what happens next, and **ask before acting**:
   already holds wanted unpublished edits; otherwise the live draft; ask if
   unclear), the script revision (the
   HTML export in the scratchpad), and ask for the media folder holding any new
-  recordings. Changed wording without its recording is a gap to report, not a
-  text-only swap. Don't apply red text.
+  recordings. Voice cues still missing after that are **always generated**
+  with ElevenLabs and uploaded to the library and the Drive VOX folder, as
+  described in `/update-show` step 3a; never make a text-only swap. Don't apply
+  red text.
 - **Missing features** → offer to file one GitHub issue per feature. Describe
   the behaviour; never paste script text. The user may still want the
   text-only scenes updated now; offer `/update-show` for those that don't depend
