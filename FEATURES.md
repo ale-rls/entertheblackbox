@@ -107,7 +107,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Participant registry, capacity limits, returning-participant lease/reconnect — `admission/registry.ts`
 - Per-path admission programs (intro + loop clocks per device), capability-gated join with compatible update notice, occupant handover with `occupantId` validation of queued commands — `admission/admission-program.ts`, `admission/controller.ts`
 - Server-arbitrated participant tasks and capacity-limited roles; restart cancels old-session tasks; late joiners in the audience join a scene task that is still open — `apps/server/src/prompts/task-engine.ts`
-- Scene exit when a group is empty (`nextIfGroupEmpty` on video/narration scenes): decided at scene end, also on GO and Skip — `apps/server/src/engine/phase-engine.ts` (`linearNext`), schema in `packages/scenario`, Studio second output + inspector in `apps/studio/src/canvas/graph.ts`, `Inspector.tsx`
+- PIN-protected staff menu on native tablets: assigns a published staff pick (role and/or group) to that tablet's occupant; PIN from env `STAFF_PIN`, per-participant lockout — `apps/server/src/prompts/staff-gate.ts`, `PhaseEngine.staffCommand`, `apps/native/src/StaffMenu.tsx`, protocol `staff_menu_request`/`staff_assign`, Studio `StaffPickEditor.tsx`
 - Per-IP join rate limiting
 - Late-join toggle, printed/hidden phone join URL
 - Cursor pipeline (batching/throttling) → **apps/realtime-ws-coolify**

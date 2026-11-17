@@ -11,6 +11,15 @@ audio and shows task prompts.
   fixed length. Assignment is `operator` or `self-select`. Each admitted device
   runs its own clock, anchored at admission. Admission audio is part of the
   immutable native release. Edit it in Studio → Show properties → Admission.
+- **Staff menu on the tablet** (`scenario.staffAssignments`). Staff hold the
+  top-right corner of a native tablet for 2.5 s and enter the venue PIN
+  (server env `STAFF_PIN`, 4–12 digits; the menu is off when it is unset).
+  The menu lists the show's picks; each gives whoever holds that tablet a
+  role, a group, or both. A role replaces any role the holder has in the
+  same exclusive set; a full role is refused. Five wrong PINs lock that
+  participant out for a minute. Edit the picks in Studio → Show properties
+  → Staff menu picks. Typical use: after an audience vote casts someone,
+  the stage manager gives them their part on their own tablet.
 - **Participant tasks** (`scenario.participantTasks`). A template has a
   question, a notification text, an audience-group filter, a response window
   and 1–12 fixed options. Each option has an optional capacity, an optional

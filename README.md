@@ -143,7 +143,7 @@ scenario is not ready, it fails closed with HTTP 503 and
 metadata (the public media manifest already lists media paths), so authors must
 not put secrets or private visitor information in either field.
 
-Development credentials in the server configuration are intentionally local-only defaults. Set installation-specific `JOIN_GRANT_SECRET`, `DISPLAY_TOKEN`, and `POCKETBASE_ADMIN_PASSWORD` values before venue operation. `JOIN_GRANT_SECRET` continues to sign returning-participant leases; public first-time joins are protected by admission capacity and per-IP rate limits rather than URL secrets.
+Development credentials in the server configuration are intentionally local-only defaults. Set installation-specific `JOIN_GRANT_SECRET`, `DISPLAY_TOKEN`, and `POCKETBASE_ADMIN_PASSWORD` values before venue operation. `JOIN_GRANT_SECRET` continues to sign returning-participant leases; public first-time joins are protected by admission capacity and per-IP rate limits rather than URL secrets. Set `STAFF_PIN` (4–12 digits) to enable the staff menu on native tablets; it is unset (menu off) by default and never part of the published show.
 
 The admin dashboard (`/admin/`) authenticates operators against PocketBase's `operators` collection instead of a shared static token — see [PocketBase setup](#pocketbase) below for provisioning an operator account.
 

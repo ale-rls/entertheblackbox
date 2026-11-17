@@ -189,6 +189,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       roomId: config.roomId,
       showId: readiness.showId,
       displayToken: config.displayToken,
+      staffPin: config.staffPin,
       participantLeaseTtlMs: admission.participantLeaseTtlMs,
       autoStartOnFirstParticipant: false,
       onParticipantPhase: (ids, phase, startedAt) => audio?.transitionParticipants(ids, phase, startedAt),

@@ -1,5 +1,6 @@
 import { AdmissionPrograms } from '../admission/admission-program.js';
 import { TaskEngine } from '../prompts/task-engine.js';
+import { StaffGate, staffGateMessage } from '../prompts/staff-gate.js';
 import {
   DISPLAY_REPLACED_CLOSE_CODE,
   encodeMessage,
@@ -112,6 +113,8 @@ export type PhaseEngineOptions = {
   roomId: string;
   showId: string;
   displayToken: string;
+  /** Venue staff PIN for the tablet staff menu; unset disables it. */
+  staffPin?: string | undefined;
   participantLeaseTtlMs?: number;
   policy?: Partial<PhaseEnginePolicy>;
   now?: () => number;
@@ -404,6 +407,7 @@ export class PhaseEngine {
   }
 
   private tasks = new TaskEngine();
+  private staffGate: StaffGate | undefined;
   private taskError: string | null = null;
   private taskVoteWinners = new Map<string, string | null>();
   private lastTaskState = '';
@@ -455,6 +459,36 @@ export class PhaseEngine {
     }
     if (added) this.pushTasks(true);
   }
+  /** Staff menu on a tablet: assigns a published staff pick to whoever holds that tablet. */
+  private staffCommand(participantId: string, message: Extract<ClientToServerMessage, { t: 'staff_menu_request' | 'staff_assign' }>, socket: WebSocket): void {
+    this.staffGate ??= new StaffGate(this.options.staffPin);
+    const verdict = this.staffGate.check(participantId, message.pin, this.now());
+    const picks = this.scenario.staffAssignments ?? [];
+    if (message.t === 'staff_menu_request') {
+      const ok = verdict === 'ok' && picks.length > 0;
+      this.send(socket, { t: 'staff_menu', v: PROTOCOL_VERSION, ok,
+        message: verdict !== 'ok' ? staffGateMessage(verdict) : picks.length ? '' : 'This show has no staff picks.',
+        picks: ok ? picks.map(({ id, label }) => ({ id, label })) : [] });
+      return;
+    }
+    const result = (ok: boolean, text: string) => this.send(socket, { t: 'staff_assign_result', v: PROTOCOL_VERSION, ok, message: text });
+    if (verdict !== 'ok') return result(false, staffGateMessage(verdict));
+    const pick = picks.find(p => p.id === message.pickId);
+    if (!pick) return result(false, 'This pick no longer exists. Reopen the staff menu.');
+    if (pick.roleId) {
+      const roles = this.scenario.participantRoles ?? [];
+      const role = roles.find(r => r.id === pick.roleId);
+      if (role?.exclusiveSet) for (const held of this.tasks.roleAssignments()) {
+        if (held.participantId === participantId && held.roleId !== role.id && roles.find(r => r.id === held.roleId)?.exclusiveSet === role.exclusiveSet) this.tasks.withdraw(participantId, held.roleId);
+      }
+      try { this.tasks.assignRole(participantId, pick.roleId, 'staff', this.now()); }
+      catch (error) { this.pushTasks(true); return result(false, error instanceof Error ? error.message : 'Role unavailable'); }
+    }
+    if (pick.groupId && !this.adminAssignGroup(participantId, pick.groupId).ok) { this.pushTasks(true); return result(false, 'Could not move this tablet into that group.'); }
+    this.pushTasks(true);
+    result(true, `Assigned: ${pick.label}`);
+  }
+
   private sendTask(socket: WebSocket): void {
     if (!this.scenario.participantTasks?.length) return;
     const id = this.participantIds.get(socket);
@@ -1087,6 +1121,12 @@ export class PhaseEngine {
     if (message.t === 'admission_choice') {
       const id = this.participantIds.get(socket);
       if (id && this.scenario.admission?.assignment === 'self-select') { try { this.admissionCommand(id, message.generation, message.groupId); } catch { this.sendAdmission(socket); } }
+      return;
+    }
+
+    if (message.t === 'staff_menu_request' || message.t === 'staff_assign') {
+      const id = this.participantIds.get(socket);
+      if (id) this.staffCommand(id, message, socket);
       return;
     }
 

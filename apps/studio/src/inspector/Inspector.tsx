@@ -1,4 +1,5 @@
 import { RoleEditor } from './RoleEditor.js';
+import { StaffPickEditor } from './StaffPickEditor.js';
 import { SurfaceCueEditor } from "./SurfaceCueEditor.js";
 import { AdmissionEditor } from './AdmissionEditor.js';
 import { TaskEditor } from './TaskEditor.js';
@@ -21,6 +22,7 @@ import { curtainStagePhaseIds, isCurtainLightVote, type CurtainLightConfig } fro
 type Props = {
   onHandoverTaskChange?: (id: string) => void;
   onRolesChange?: (roles: NonNullable<StudioProject['scenario']['participantRoles']>) => void;
+  onStaffPicksChange?: (picks: NonNullable<StudioProject['scenario']['staffAssignments']>) => void;
   onAdmissionChange?: (value: StudioProject['scenario']['admission']) => void;
   onTasksChange?: (tasks: ParticipantTask[]) => void;
   project: StudioProject;
@@ -44,7 +46,7 @@ const numberValue = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChange, onTasksChange, project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onGroupByClientChange, onCurtainLightChange, onActorScriptChange }: Props) {
+export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksChange, onAdmissionChange, onTasksChange, project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onGroupByClientChange, onCurtainLightChange, onActorScriptChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   const [copiedArena, setCopiedArena] = useState<Arena | null>(null);
@@ -73,6 +75,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
     {onHandoverTaskChange && <label>Task for a replacement occupant<select value={project.scenario.handoverTaskId ?? ''} onChange={e => onHandoverTaskChange(e.target.value)}><option value="">No automatic task</option>{(project.scenario.participantTasks ?? []).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}</select><small>Admin handover preserves device setup and audience, creates a new participant identity, retires old roles and reopens this task.</small></label>}
     {onActorScriptChange && <ActorScriptEditor script={project.scenario.actorScript} groups={project.scenario.groups ?? []} onChange={onActorScriptChange} />}
     {onRolesChange && <RoleEditor roles={project.scenario.participantRoles ?? []} onChange={onRolesChange} />}
+    {onStaffPicksChange && <StaffPickEditor picks={project.scenario.staffAssignments ?? []} roles={project.scenario.participantRoles ?? []} groups={project.scenario.groups ?? []} onChange={onStaffPicksChange} />}
     {onTasksChange && <TaskEditor roles={project.scenario.participantRoles ?? []} tasks={project.scenario.participantTasks ?? []} groups={project.scenario.groups ?? []} onChange={onTasksChange} />}
     <fieldset><legend>Audience groups <small>groups</small></legend>
       {(project.scenario.groups ?? []).map((group, index) => <div key={group.id}>

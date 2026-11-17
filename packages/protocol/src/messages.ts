@@ -248,7 +248,17 @@ export const participantTaskStateSchema = z.object({
     status: z.enum(['open', 'closed', 'cancelled']), recipient: taskRecipientSchema }).nullable(),
 });
 
+/** Staff menu on a native tablet: unlock with the venue PIN, then assign a pick to this tablet's occupant. */
+const staffPin = z.string().min(1).max(32);
+export const staffMenuRequestSchema = z.object({ t: z.literal('staff_menu_request'), occupantId: z.string().optional(), v, pin: staffPin });
+export const staffAssignSchema = z.object({ t: z.literal('staff_assign'), occupantId: z.string().optional(), v, pin: staffPin, pickId: z.string().min(1).max(100) });
+export const staffMenuSchema = z.object({ t: z.literal('staff_menu'), v, ok: z.boolean(), message: z.string().max(300),
+  picks: z.array(z.object({ id: z.string(), label: z.string() })).max(30) });
+export const staffAssignResultSchema = z.object({ t: z.literal('staff_assign_result'), v, ok: z.boolean(), message: z.string().max(300) });
+
 export const phoneToServerSchema = z.discriminatedUnion("t", [
+  staffMenuRequestSchema,
+  staffAssignSchema,
   admissionChoiceSchema,
   participantTaskResponseSchema,
   wallStatusSchema,
@@ -329,6 +339,8 @@ export const displayToServerSchema = z.discriminatedUnion("t", [
 export const clientToServerSchema = z.discriminatedUnion("t", [
   admissionChoiceSchema,
   participantTaskResponseSchema,
+  staffMenuRequestSchema,
+  staffAssignSchema,
   wallStatusSchema,
   joinSchema,
   inputSchema,
@@ -638,6 +650,8 @@ export const wallSchema = z.object({
 
 /** Everything a client can receive from the server. */
 export const serverToClientSchema = z.union([
+  staffMenuSchema,
+  staffAssignResultSchema,
   admissionStateSchema,
   participantTaskStateSchema,
   snapshotSchema,
@@ -684,6 +698,8 @@ export type ReactionMessage = z.infer<typeof reactionSchema>;
 export type GroupSelectionMessage = z.infer<typeof groupSelectionSchema>;
 export type ButtonVoteMessage = z.infer<typeof buttonVoteSchema>;
 export type PhoneToServerMessage = z.infer<typeof phoneToServerSchema>;
+export type StaffMenuMessage = z.infer<typeof staffMenuSchema>;
+export type StaffAssignResultMessage = z.infer<typeof staffAssignResultSchema>;
 
 export type DisplayJoinMessage = z.infer<typeof displayJoinSchema>;
 export type VideoEndedMessage = z.infer<typeof videoEndedSchema>;
