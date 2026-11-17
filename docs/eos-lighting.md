@@ -26,7 +26,7 @@ folder. It is git-ignored, because the looks and cue names are show content.
 {
   "eos": { "host": "169.254.126.220" },
   "fixtures": {
-    "feld-rot": { "channel": 10, "setup": { "intensity mspeed": -3 } }
+    "l1": { "channel": 11, "setup": { "intensity mspeed": -3 } }
   },
   "palette": {
     "rot":  { "red": 100 },
@@ -35,11 +35,11 @@ folder. It is git-ignored, because the looks and cue names are show content.
   },
   "looks": {
     "aus":     { "fade": 3,   "fixtures": { "*": { "level": 0 } } },
-    "nur-rot": { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "feld-rot": { "level": 100 } } }
+    "nur-l1":  { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "l1": { "level": 100 } } }
   },
   "cues":    { "licht-aus": "aus" },
   "scenes":  { "T1-titel": "aus" },
-  "results": { "T1-wahl": { "q1": "nur-rot", "none": "aus" } },
+  "results": { "T1-wahl": { "q1": "nur-l1", "none": "aus" } },
   "showEnd": "aus"
 }
 ```
@@ -47,7 +47,7 @@ folder. It is git-ignored, because the looks and cue names are show content.
 | Section | What it is |
 | :- | :- |
 | `eos` | The desk's IP address. `port` (3037) and `user` (0) rarely change. |
-| `fixtures` | A name for each lamp and its **Eos channel number**. `setup` is sent on every connect, and again when a save changes it; `"intensity mspeed": -3` is the Theatre dim curve, `-7` is Standard. Intensity and the colour emitters belong to the looks and are refused in `setup`. |
+| `fixtures` | A name for each lamp and its **Eos channel number**. The script calls the field lamps L1–L4 (the lamp of monitor field M1–M4), so they are named `l1`–`l4` here. `setup` is sent on every connect, and again when a save changes it; `"intensity mspeed": -3` is the Theatre dim curve, `-7` is Standard. Intensity and the colour emitters belong to the looks and are refused in `setup`. |
 | `palette` | Named colours. Either `"#rrggbb"`, or the lamp's emitters directly: `red`, `green`, `blue`, `amber`, `mint`, each 0–100 (missing ones are 0). Use the emitter form for yellows, oranges and warm tones: hex can only use red, green and blue. |
 | `looks` | What each lamp does: `color` (a palette name or `#rrggbb`) and/or `level` (0–100). `"*"` applies to every lamp first; named lamps then override it. Anything left out stays as it is, so a highlight look can change levels and keep the colours. `fade` is in seconds. |
 | `cues` | A named cue from Studio → look. |
@@ -135,7 +135,7 @@ the skills do: [script-light-cues.md](script-light-cues.md).
 ```bash
 pnpm eos-bridge --list                                  # fixtures, palette, looks, triggers
 pnpm eos-bridge --test vier-felder                      # play one look
-pnpm eos-bridge --test vier-felder --test nur-gelb      # the second one fades from the first
+pnpm eos-bridge --test vier-felder --test nur-l4        # the second one fades from the first
 pnpm eos-bridge --test licht-vier-felder                # a cue or scene name plays its look
 pnpm eos-bridge --dry-run --test aus                    # print instead of sending
 ```

@@ -3,15 +3,16 @@
 
 Run: python3 -I .claude/skills/update-show/test_light_plan.py   (from the repo root)
 
-Uses a synthetic export in the Google Docs HTML shape (generic text, no show content), runs
-parse_script.py and light_plan.py on it, and checks the result with the bridge's own validation
-(`pnpm eos-bridge --list`).
+Uses synthetic exports in the Google Docs HTML shape and a synthetic .docx (generic text, no show
+content), runs parse_script.py and light_plan.py on them, and checks the result with the bridge's
+own validation (`pnpm eos-bridge --list`).
 """
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -27,174 +28,210 @@ def cell(*paras):
     return "<td>" + "".join(f"<p>{p}</p>" for p in paras) + "</td>"
 
 
+def y(text):
+    return f"<span {Y}>{text}</span>"
+
+
 EXPORT = f"""<html><body>
 <p><span>Legende</span></p>
 <table>
-<tr>{cell('Lichtstimmung')}{cell('Lampen')}{cell('Fade')}</tr>
-<tr>{cell('vier felder')}{cell('Feld rot: rot 100 · Feld blau: blau 100 · Feld grün: grün 100')}{cell('2 s')}</tr>
-<tr>{cell('Aus')}{cell('alle: aus')}{cell('3')}</tr>
-<tr>{cell('dämmer')}{cell('alle: abend 20')}{cell('')}</tr>
+<tr>{cell('Name used in script')}{cell('Red')}{cell('Amber')}{cell('Mint')}{cell('Green')}{cell('Blue')}{cell('Monitor color (M1-4)')}</tr>
+<tr>{cell('Kalt')}{cell('0')}{cell('63')}{cell('100')}{cell('13')}{cell('100')}{cell('#faf3dd')}</tr>
+<tr>{cell('Glut ')}{cell('100')}{cell('100')}{cell('72')}{cell('0')}{cell('')}{cell('#ffa69e')}</tr>
 </table>
 <table>
-<tr>{cell('Lichtfarbe')}{cell('Mischung')}</tr>
-<tr>{cell('Abend')}{cell('rot 100 · grün 30 · amber 80')}</tr>
-</table>
-<table>
-<tr>{cell('T1.1.v1 Eins', 'Text eins.', f'<span {Y}>[LICHT: vier-felder]</span>')}{cell('')}</tr>
-<tr>{cell('T1.2.v1 Zwei', f'<span {M}>[Code] Abstimmung.</span>', f'<span {Y}>LICHT Gewinner</span>')}{cell('')}</tr>
-<tr>{cell('T1.3.v2 Drei', f'<span {Y}>[LICHT: Zuschauerraum hell; Bühne dunkel.]</span>', f'<span {Y}>LICHT Pult: kurzer Blitz auf die Bühne</span>', f'<span {Y}>Licht hebt die Gruppe hervor.</span>')}{cell('')}</tr>
-<tr>{cell('T1.4.v1 Vier', f'<span {Y}>LICHT: aus</span>', f'<span {Y}>LICHT: gibts-nicht</span>')}{cell('')}</tr>
+<tr>{cell('T1.1.v1 Eins', 'Text eins.', y('Licht: L1+L3: Kalt L2+L4: off'))}{cell('')}</tr>
+<tr>{cell('T1.2.v1 Zwei', f'<span {M}>[Code] Abstimmung.</span>', y('Die gewählte Gruppe wird durch Licht hervorgehoben. (andere drei Farben auf 30% Helligkeit)'))}{cell('')}</tr>
+<tr>{cell('T1.3.v2 Drei', y('[LICHT: Saal hell; Bühne dunkel.]'), 'Licht hebt die Gruppe hervor.', y('Das ist Pflicht, ganz schlicht.'))}{cell('')}</tr>
+<tr>{cell('T1.4.v1 Vier', y('Licht: 50% Glut auf L1-L4'))}{cell('')}</tr>
+<tr>{cell('T1.5.v1 Fünf', y('Licht: L1: Gibtsnicht'))}{cell('')}</tr>
+<tr>{cell('T1.6.v1 Sechs', y('Licht: L5: Kalt'))}{cell('')}</tr>
+<tr>{cell('T1.7.v1 Sieben', y('Glut on lights 1-4'))}{cell('')}</tr>
+<tr>{cell('T1.8.v1 Acht', y('Licht: alle: aus 3s'))}{cell('')}</tr>
 </table>
 </body></html>"""
 
 VENUE = {
     "eos": {"host": "10.0.0.1"},
-    "fixtures": {"feld-rot": {"channel": 12}, "feld-blau": {"channel": 13}, "feld-gruen": {"channel": 10}, "feld-gelb": {"channel": 11}},
-    "palette": {"rot": {"red": 100}, "blau": {"blue": 100}, "gruen": {"green": 100}, "gelb": {"red": 100, "green": 55, "amber": 100}},
-    "looks": {"aus": {"fade": 3, "fixtures": {"*": {"level": 0}}}, "eigen": {"fixtures": {"*": {"level": 50}}}},
-    "cues": {"licht-alt": "aus", "musik-start": "aus"},
+    "fixtures": {"l1": {"channel": 11}, "l2": {"channel": 13}, "l3": {"channel": 12}, "l4": {"channel": 10}},
+    "palette": {"rot": {"red": 100}},
+    "looks": {"aus": {"fade": 3, "fixtures": {"*": {"level": 0}}}, "eigen": {"fixtures": {"*": {"level": 50}}},
+              "licht-alt": {"fixtures": {"*": {"level": 20}}}, "gewinner-l1-10": {"fixtures": {"l1": {"level": 100}}}},
+    "cues": {"licht-alt": "licht-alt", "musik-start": "aus"},
+    "results": {"T0-alt": {"q1": "gewinner-l1-10"}},
     "showEnd": "aus",
 }
-MAPPING = {
-    "scenes": {"T1.1": "T1-1-eins", "T1.2": "T1-2-zwei", "T1.3": "T1-3-drei", "T1.4": "T1-4-vier"},
-    "winners": {"T1.2": {"q1": "feld-rot", "q2": "feld-blau", "q3": "Feld grün", "q4": "feld-gelb"}},
-}
+SCENES = {f"T1.{n}": f"T1-{n}" for n in range(1, 9)}
+MAPPING = {"scenes": SCENES, "winners": {"T1.2": {"q1": "L1", "q2": "L2", "q3": "l3", "q4": "L4"}}}
 
 
-class LightPlan(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.dir = Path(tempfile.mkdtemp())
-        (cls.dir / "export.html").write_text(EXPORT, encoding="utf-8")
-        (cls.dir / "venue.json").write_text(json.dumps(VENUE), encoding="utf-8")
-        (cls.dir / "mapping.json").write_text(json.dumps(MAPPING), encoding="utf-8")
-        subprocess.run([sys.executable, "-I", str(PARSER), str(cls.dir / "export.html"), str(cls.dir / "parsed.json")], check=True, capture_output=True)
-        cls.parsed = json.loads((cls.dir / "parsed.json").read_text(encoding="utf-8"))
-        cls.plan_run = subprocess.run([sys.executable, "-I", str(PLAN), str(cls.dir / "parsed.json"), str(cls.dir / "venue.json"),
-                                  str(cls.dir / "mapping.json"), str(cls.dir / "out")], capture_output=True, text=True)
-        cls.lighting = json.loads((cls.dir / "out/lighting.json").read_text(encoding="utf-8"))
-        cls.phase_cues = json.loads((cls.dir / "out/phase-cues.json").read_text(encoding="utf-8"))
-        cls.report = (cls.dir / "out/light-plan.md").read_text(encoding="utf-8")
-
-    def test_parser_finds_cues_by_kind(self):
-        kinds = [(c["scene"], c["kind"]) for c in self.parsed["lightCues"]]
-        self.assertEqual(kinds, [("T1.1", "look"), ("T1.2", "winner"), ("T1.3", "prose"), ("T1.3", "operator"), ("T1.4", "look"), ("T1.4", "look")])
-        self.assertEqual(self.parsed["lightCues"][0]["look"], "vier-felder")
-
-    def test_stage_directions_are_not_cues(self):
-        texts = [c["text"] for c in self.parsed["lightCues"]]
-        self.assertFalse(any("hebt" in text for text in texts))
-
-    def test_parser_reads_the_tables(self):
-        self.assertEqual([row[0] for row in self.parsed["lightLooks"]], ["vier felder", "Aus", "dämmer"])
-        self.assertEqual(self.parsed["lightColours"], [["Abend", "rot 100 · grün 30 · amber 80"]])
-
-    def test_looks_colours_and_cues(self):
-        looks = self.lighting["looks"]
-        self.assertEqual(looks["vier-felder"], {"fixtures": {"feld-rot": {"color": "rot", "level": 100}, "feld-blau": {"color": "blau", "level": 100},
-                                                             "feld-gruen": {"color": "gruen", "level": 100}}, "fade": 2.0})
-        self.assertEqual(looks["aus"], {"fade": 3.0, "fixtures": {"*": {"level": 0}}})  # the script's version wins
-        self.assertEqual(looks["daemmer"], {"fixtures": {"*": {"color": "abend", "level": 20.0}}})
-        self.assertEqual(looks["eigen"], VENUE["looks"]["eigen"])  # hand-made looks stay
-        self.assertEqual(self.lighting["palette"]["abend"], {"red": 100.0, "green": 30.0, "amber": 80.0})
-        self.assertEqual(self.lighting["cues"], {"musik-start": "aus", "licht-vier-felder": "vier-felder", "licht-aus": "aus"})
-        self.assertEqual(self.phase_cues, {"T1-1-eins": ["licht-vier-felder"], "T1-4-vier": ["licht-aus"]})
-
-    def test_vote_winner_lights_its_field(self):
-        self.assertEqual(self.lighting["results"]["T1-2-zwei"], {"q1": "gewinner-feld-rot", "q2": "gewinner-feld-blau", "q3": "gewinner-feld-gruen", "q4": "gewinner-feld-gelb"})
-        self.assertEqual(self.lighting["looks"]["gewinner-feld-blau"], {"fade": 1.5, "fixtures": {"*": {"level": 10}, "feld-blau": {"level": 100}}})
-
-    def test_venue_part_is_kept(self):
-        for key in ("eos", "fixtures", "showEnd"):
-            self.assertEqual(self.lighting[key], VENUE[key])
-
-    def test_report_lists_operator_cues_and_problems(self):
-        self.assertEqual(self.plan_run.returncode, 1)
-        self.assertIn("kurzer Blitz auf die Bühne", self.report)
-        self.assertIn("written as prose", self.report)
-        self.assertIn("gibts-nicht — no Lichtstimmung", self.report)
-
-    def test_the_bridge_accepts_the_file(self):
-        result = subprocess.run(["pnpm", "--silent", "eos-bridge", "--config", str(self.dir / "out/lighting.json"), "--list"],
-                                cwd=REPO, capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
-        self.assertIn("vote T1-2-zwei → q1 → gewinner-feld-rot", result.stdout)
-
+def run_parser(source: Path):
+    out = source.with_suffix(".json")
+    subprocess.run([sys.executable, "-I", str(PARSER), str(source), str(out)], check=True, capture_output=True)
+    return json.loads(out.read_text(encoding="utf-8"))
 
 
 def parse(export):
     folder = Path(tempfile.mkdtemp())
     (folder / "export.html").write_text(export, encoding="utf-8")
-    subprocess.run([sys.executable, "-I", str(PARSER), str(folder / "export.html"), str(folder / "parsed.json")], check=True, capture_output=True)
-    return json.loads((folder / "parsed.json").read_text(encoding="utf-8"))
+    return run_parser(folder / "export.html")
 
 
 def plan(parsed, venue, mapping):
     folder = Path(tempfile.mkdtemp())
     for name, data in (("parsed.json", parsed), ("venue.json", venue), ("mapping.json", mapping)):
         (folder / name).write_text(json.dumps(data), encoding="utf-8")
-    subprocess.run([sys.executable, "-I", str(PLAN), *(str(folder / n) for n in ("parsed.json", "venue.json", "mapping.json")), str(folder / "out")], capture_output=True)
-    return json.loads((folder / "out/lighting.json").read_text(encoding="utf-8"))
+    run = subprocess.run([sys.executable, "-I", str(PLAN), *(str(folder / n) for n in ("parsed.json", "venue.json", "mapping.json")),
+                          str(folder / "out")], capture_output=True, text=True)
+    return json.loads((folder / "out/lighting.json").read_text(encoding="utf-8")), run, folder / "out"
+
+
+class LightPlan(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.parsed = parse(EXPORT)
+        cls.lighting, cls.plan_run, out = plan(cls.parsed, VENUE, MAPPING)
+        cls.phase_cues = json.loads((out / "phase-cues.json").read_text(encoding="utf-8"))
+        cls.report = (out / "light-plan.md").read_text(encoding="utf-8")
+        cls.out = out
+
+    def test_parser_finds_cues_by_kind(self):
+        kinds = [(c["scene"], c["kind"]) for c in self.parsed["lightCues"]]
+        self.assertEqual(kinds, [("T1.1", "set"), ("T1.2", "winner"), ("T1.3", "prose"), ("T1.4", "set"),
+                                 ("T1.5", "set"), ("T1.6", "set"), ("T1.7", "set"), ("T1.8", "set")])
+        self.assertEqual(self.parsed["lightCues"][0]["parts"], [{"lamps": [1, 3], "settings": "Kalt"}, {"lamps": [2, 4], "settings": "off"}])
+        self.assertEqual(self.parsed["lightCues"][1]["others"], 30)
+        self.assertEqual(self.parsed["lightCues"][3]["parts"], [{"lamps": [1, 2, 3, 4], "settings": "50% Glut"}])
+        self.assertEqual(self.parsed["lightCues"][6]["parts"], [{"lamps": [1, 2, 3, 4], "settings": "Glut"}])
+        self.assertEqual(self.parsed["lightCues"][7]["parts"], [{"lamps": ["*"], "settings": "aus 3s"}])
+
+    def test_stage_directions_are_not_cues(self):
+        texts = [c["text"] for c in self.parsed["lightCues"]]
+        self.assertFalse(any("hebt" in text or "Pflicht" in text for text in texts))
+
+    def test_parser_reads_the_colour_table(self):
+        self.assertEqual([row["name"] for row in self.parsed["lightColours"]], ["Kalt", "Glut"])
+
+    def test_colours(self):
+        palette = self.lighting["palette"]
+        self.assertEqual(palette["kalt"], {"red": 0.0, "green": 13.0, "blue": 100.0, "amber": 63.0, "mint": 100.0})
+        self.assertEqual(palette["glut"], {"red": 100.0, "amber": 100.0, "mint": 72.0, "green": 0.0, "blue": 0.0})  # empty cell = 0
+        self.assertEqual(palette["rot"], {"red": 100})  # the venue's colours stay
+
+    def test_each_cue_becomes_a_look_and_a_cue_name(self):
+        looks = self.lighting["looks"]
+        self.assertEqual(looks["licht-l1-l3-kalt-l2-l4-off"], {"fixtures": {"l1": {"color": "kalt", "level": 100}, "l3": {"color": "kalt", "level": 100},
+                                                                            "l2": {"level": 0}, "l4": {"level": 0}}, "fade": 1.0})
+        self.assertEqual(looks["licht-l1-l2-l3-l4-50-glut"]["fixtures"]["l2"], {"level": 50.0, "color": "glut"})
+        self.assertEqual(looks["licht-alle-aus-3s"], {"fixtures": {"*": {"level": 0}}, "fade": 3.0})
+        self.assertEqual(self.lighting["cues"]["licht-l1-l3-kalt-l2-l4-off"], "licht-l1-l3-kalt-l2-l4-off")
+        self.assertEqual(self.phase_cues, {"T1-1": ["licht-l1-l3-kalt-l2-l4-off"], "T1-4": ["licht-l1-l2-l3-l4-50-glut"],
+                                           "T1-7": ["licht-l1-l2-l3-l4-glut"], "T1-8": ["licht-alle-aus-3s"]})
+
+    def test_vote_winner_lights_its_field(self):
+        self.assertEqual(self.lighting["results"]["T1-2"], {"q1": "gewinner-l1-30", "q2": "gewinner-l2-30", "q3": "gewinner-l3-30", "q4": "gewinner-l4-30"})
+        self.assertEqual(self.lighting["looks"]["gewinner-l2-30"], {"fade": 1.5, "fixtures": {"*": {"level": 30}, "l2": {"level": 100}}})
+
+    def test_earlier_generated_entries_are_rebuilt_and_the_rest_kept(self):
+        for key in ("eos", "fixtures", "showEnd"):
+            self.assertEqual(self.lighting[key], VENUE[key])
+        self.assertEqual(self.lighting["looks"]["eigen"], VENUE["looks"]["eigen"])
+        self.assertNotIn("licht-alt", self.lighting["looks"])
+        self.assertNotIn("licht-alt", self.lighting["cues"])
+        self.assertNotIn("gewinner-l1-10", self.lighting["looks"])
+        self.assertNotIn("T0-alt", self.lighting["results"])
+        self.assertEqual(self.lighting["cues"]["musik-start"], "aus")
+
+    def test_report_lists_operator_notes_and_problems(self):
+        self.assertEqual(self.plan_run.returncode, 1)
+        self.assertIn("Saal hell", self.report)
+        self.assertIn("\"Gibtsnicht\" is neither a colour", self.report)
+        self.assertIn("no lamp L5 (lamps: L1, L2, L3, L4, alle)", self.report)
+
+    def test_the_bridge_accepts_the_file(self):
+        result = subprocess.run(["pnpm", "--silent", "eos-bridge", "--config", str(self.out / "lighting.json"), "--list"],
+                                cwd=REPO, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn("vote T1-2 → q1 → gewinner-l1-30", result.stdout)
+        self.assertIn('cue "licht-l1-l3-kalt-l2-l4-off" → licht-l1-l3-kalt-l2-l4-off', result.stdout)
 
 
 class ScriptLayout(unittest.TestCase):
-    """Where cues sit in the real script's two-column table (Astra review)."""
+    """Where cues sit in the real script's two-column table."""
 
     def cues(self, rows):
         parsed = parse("<html><body><p>Legende</p><table>" + "".join(rows) + "</table></body></html>")
-        return [(c["scene"], c["kind"], c.get("look")) for c in parsed["lightCues"]]
+        return [(c["scene"], c["kind"]) for c in parsed["lightCues"]]
 
     def test_two_cues_split_by_a_line_break(self):
-        rows = [f"<tr>{cell('T1.1.v1 Eins', f'<span {Y}>LICHT: aus<br>LICHT Gewinner</span>')}{cell('')}</tr>"]
-        self.assertEqual(self.cues(rows), [("T1.1", "look", "aus"), ("T1.1", "winner", None)])
-
-    def test_cue_next_to_other_text(self):
-        rows = [f"<tr>{cell('T1.1.v1 Eins', f'<span {Y}>LICHT: aus</span><span>Text</span><span {Y}>LICHT: an</span>')}{cell('')}</tr>"]
-        self.assertEqual(self.cues(rows), [("T1.1", "look", "aus"), ("T1.1", "look", "an")])
+        rows = [f"<tr>{cell('T1.1.v1 Eins', y('Licht: L1: an<br>Licht: L2: off'))}{cell('')}</tr>"]
+        self.assertEqual(self.cues(rows), [("T1.1", "set"), ("T1.1", "set")])
 
     def test_cue_in_the_other_column_of_the_scene_row(self):
-        rows = [f"<tr>{cell('T1.1.v1 Eins')}{cell('')}</tr>",
-                f"<tr>{cell(f'<span {Y}>LICHT: aus</span>')}{cell('T1.2.v1 Zwei')}</tr>"]
-        self.assertEqual(self.cues(rows), [("T1.2", "look", "aus")])
+        rows = [f"<tr>{cell('T1.1.v1 Eins')}{cell('')}</tr>", f"<tr>{cell(y('Licht: L1: an'))}{cell('T1.2.v1 Zwei')}</tr>"]
+        self.assertEqual(self.cues(rows), [("T1.2", "set")])
 
     def test_cue_in_a_cell_without_heading_belongs_to_the_last_scene(self):
-        rows = [f"<tr>{cell('T1.1.v1 Eins')}{cell('')}</tr>", f"<tr>{cell(f'<span {Y}>LICHT: aus</span>')}{cell('')}</tr>"]
-        self.assertEqual(self.cues(rows), [("T1.1", "look", "aus")])
+        rows = [f"<tr>{cell('T1.1.v1 Eins')}{cell('')}</tr>", f"<tr>{cell(y('Licht: L1: an'))}{cell('')}</tr>"]
+        self.assertEqual(self.cues(rows), [("T1.1", "set")])
 
     def test_cue_without_heading_prefers_its_own_column(self):
         rows = [f"<tr>{cell('K1.1.v1 Links')}{cell('')}</tr>", f"<tr>{cell('')}{cell('T1.1.v1 Rechts')}</tr>",
-                f"<tr>{cell(f'<span {Y}>LICHT: aus</span>')}{cell('')}</tr>"]
-        self.assertEqual(self.cues(rows), [("K1.1", "look", "aus")])
+                f"<tr>{cell(y('Licht: L1: an'))}{cell('')}</tr>"]
+        self.assertEqual(self.cues(rows), [("K1.1", "set")])
 
     def test_heading_after_a_line_break(self):
-        rows = [f"<tr>{cell('T1.1.v1 Eins', 'Ende der Szene.<br>T1.2.v3 Zwei<br>' + f'<span {Y}>LICHT: aus</span>')}{cell('')}</tr>"]
-        self.assertEqual(self.cues(rows), [("T1.2", "look", "aus")])
+        rows = [f"<tr>{cell('T1.1.v1 Eins', 'Ende der Szene.<br>T1.2.v3 Zwei<br>' + y('Licht: L1: an'))}{cell('')}</tr>"]
+        self.assertEqual(self.cues(rows), [("T1.2", "set")])
+
+    def test_long_heading_that_holds_the_first_sentence(self):
+        long = "K1.7.v4 (war K1.6.v3) Kopfhörer: " + "Ein langer erster Satz der Szene. " * 6
+        rows = [f"<tr>{cell('K1.6.v4 Sechs', long, y('Licht: L1: an'))}{cell('')}</tr>"]
+        self.assertEqual(self.cues(rows), [("K1.7", "set")])
+
+    def test_prose_shows_the_whole_line(self):
+        parsed = parse(f"<html><body><p>L</p><table><tr>{cell('T1.1.v1 Eins', '[Code/Video/' + y('Licht:') + ' Person markieren.]')}</tr></table></body></html>")
+        self.assertEqual(parsed["lightCues"][0]["text"], "[Code/Video/Licht: Person markieren.]")
 
 
-class ColourNames(unittest.TestCase):
-    def test_a_colour_name_with_a_space(self):
-        parsed = {"lightColours": [["warm weiß", "rot 100 · grün 80 · amber 60"]],
-                  "lightLooks": [["sanft", "alle: warm weiß 80", "4"]], "lightCues": []}
-        lighting = plan(parsed, VENUE, MAPPING)
-        self.assertEqual(lighting["looks"]["sanft"], {"fade": 4.0, "fixtures": {"*": {"color": "warm-weiss", "level": 80.0}}})
+class Docx(unittest.TestCase):
+    """A .docx is read directly: Word highlights become the same colours as in the HTML export."""
+
+    def test_highlighted_cue_in_a_table(self):
+        w = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+
+        def para(text, highlight=None):
+            rpr = f'<w:rPr><w:highlight w:val="{highlight}"/></w:rPr>' if highlight else ""
+            return f'<w:p><w:r>{rpr}<w:t xml:space="preserve">{text}</w:t></w:r></w:p>'
+
+        body = (para("Legende") + "<w:tbl><w:tr><w:tc>" + para("T1.1.v1 Eins") + para("Licht: L1+L2: an", "yellow")
+                + para("Licht: L3: off") + "</w:tc></w:tr></w:tbl>")
+        folder = Path(tempfile.mkdtemp())
+        with zipfile.ZipFile(folder / "script.docx", "w") as z:
+            z.writestr("word/document.xml", f'<?xml version="1.0"?><w:document {w}><w:body>{body}</w:body></w:document>')
+        parsed = run_parser(folder / "script.docx")
+        self.assertEqual([(c["scene"], c["kind"], c.get("parts")) for c in parsed["lightCues"]],
+                         [("T1.1", "set", [{"lamps": [1, 2], "settings": "an"}])])  # the un-highlighted line is not a cue
 
 
 class Reruns(unittest.TestCase):
-    def test_a_winner_cue_removed_from_the_script_is_gone_after_the_next_run(self):
-        first = plan({"lightCues": [{"scene": "T1.2", "kind": "winner", "text": "LICHT Gewinner"}]}, VENUE, MAPPING)
-        self.assertIn("T1-2-zwei", first["results"])
+    def test_a_winner_removed_from_the_script_is_gone_after_the_next_run(self):
+        first, _, _ = plan({"lightCues": [{"scene": "T1.2", "kind": "winner", "text": "…", "others": None}]}, VENUE, MAPPING)
+        self.assertEqual(first["results"]["T1-2"]["q1"], "gewinner-l1-25")  # 25 % when the script gives no level
         hand_made = {**first, "results": {**first["results"], "andere-wahl": {"q1": "eigen"}}}
-        second = plan({"lightCues": []}, hand_made, MAPPING)
-        self.assertNotIn("T1-2-zwei", second["results"])
+        second, _, _ = plan({"lightCues": []}, hand_made, MAPPING)
         self.assertFalse(any(name.startswith("gewinner-") for name in second["looks"]))
         self.assertEqual(second["results"], {"andere-wahl": {"q1": "eigen"}})  # hand-made vote entries stay
 
-    def test_a_look_cue_removed_from_the_script_is_gone_after_the_next_run(self):
-        first = plan({"lightCues": [{"scene": "T1.1", "kind": "look", "look": "aus", "text": "aus"}]}, VENUE, MAPPING)
-        self.assertIn("licht-aus", first["cues"])
-        second = plan({"lightCues": []}, first, MAPPING)
-        self.assertNotIn("licht-aus", second["cues"])
+    def test_a_cue_removed_from_the_script_is_gone_after_the_next_run(self):
+        cue = {"scene": "T1.1", "kind": "set", "text": "Licht: L1: an", "parts": [{"lamps": [1], "settings": "an"}]}
+        first, _, _ = plan({"lightCues": [cue]}, VENUE, MAPPING)
+        self.assertIn("licht-l1-an", first["cues"])
+        second, _, _ = plan({"lightCues": []}, first, MAPPING)
+        self.assertNotIn("licht-l1-an", second["cues"])
+        self.assertNotIn("licht-l1-an", second["looks"])
         self.assertIn("musik-start", second["cues"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

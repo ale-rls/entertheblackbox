@@ -43,18 +43,20 @@ folder happens later, in `/update-show`, never to the script doc.)
 3. `read_file_content` with `includeComments: true` for the open comment
    threads (questions and to-dos from the team). Large docs are saved to a
    file; read them with `jq`.
-4. Parse the HTML export with the helper next to this file:
+4. Parse the HTML export with the helper next to this file. It also reads a
+   `.docx` of the script directly (when the user hands over a Word file
+   instead of the doc); highlights come out as the same colours.
 
    ```bash
-   python3 -I .claude/skills/check-script-updates/parse_script.py <export.html> <scratchpad>/parsed.json
+   python3 -I .claude/skills/check-script-updates/parse_script.py <export.html | script.docx> <scratchpad>/parsed.json
    ```
 
    It outputs the legend paragraphs, every paragraph with colour-tagged runs
    and table row/column, and paragraphs grouped into scenes (`id`, `version`,
    `statuses`, `cues`). `versionedIds` lists every `ID.vN` heading,
    including the ones that share a paragraph with the previous scene. Use it for
-   the recording check. `lightCues`, `lightLooks` and `lightColours` hold the
-   light cues written in the script's light convention (step 4).
+   the recording check. `lightCues` and `lightColours` hold the light
+   cues and the colour table written in the script's light notation (step 4).
 
 **Check the legend first.** The legend is at the top of the doc, before the first
 table. If it no longer matches the mapping in `parse_script.py`, or
@@ -165,25 +167,23 @@ notes, open comments). For each, decide which of these it is, with evidence:
 
 **Light cues.** The Eos bridge plays light looks on the venue desk from scene
 starts, scene cue names and vote results (docs/eos-lighting.md). The script
-writes them in a fixed form, listed in `lightCues`
+writes them in the yellow highlight, listed in `lightCues`
 ([docs/script-light-cues.md](../../../docs/script-light-cues.md)):
 
-- kind `look` (`LICHT: <look>`): **Exists, needs setting up** if the look is
-  in the `Lichtstimmung` table (or already in `lighting.json`); otherwise report
-  the missing look. **Already set up** if the scene's phase already has the
-  `licht-<look>` cue and `lighting.json` has the look.
-- kind `winner` (`LICHT Gewinner`): needs a vote in that scene; note which
-  answer lights which field (from the draft's answer colours and field), since
-  `/update-show` needs it. Ask if it is unclear.
-- kind `operator` (`LICHT Pult: …`): outside the software, for the operator's
-  cue list.
-- kind `prose`: a light direction not written in the convention. List it for
-  the operator and say it could be automated if rewritten as `LICHT: <look>`
-  (only for the four field lamps the bridge drives; house light, follow spots and
+- kind `set` (`Licht: L1+L3: Warm L2+L4: off`, `Licht: 50% Warm auf L1-L4`):
+  lamps L1–L4 (the lamps of monitor fields M1–M4) with a colour from the
+  colour table, a level or `off`. **Exists, needs setting up** if every colour
+  is in the colour table (`lightColours`) or `lighting.json` and every lamp is
+  L1–L4; otherwise report the unknown colour or lamp. **Already set up** if
+  the scene's phase already has the matching `licht-…` cue.
+- kind `winner` ("Die gewählte Gruppe wird durch Licht hervorgehoben (andere …
+  auf 25% …)"): needs a vote in that scene; note which answer is on which
+  monitor field (Mn is lit by Ln), since `/update-show` needs it. Ask if it is
+  unclear.
+- kind `prose`: any other yellow line about light. It goes on the operator's
+  list. Say it could be automated if rewritten as a `Licht: L…: …` cue (only
+  for the four field lamps the bridge drives; house light, follow spots and
   other lamps not patched in `lighting.json` stay with the operator).
-
-Yellow light/stage directions without `LICHT` are stage notes; list the ones
-that clearly ask for a light change as operator cues.
 
 Where to check, in order: [FEATURES.md](../../../FEATURES.md); the
 "Authoring a show" gotchas in [CLAUDE.md](../../../CLAUDE.md) (late joiners,

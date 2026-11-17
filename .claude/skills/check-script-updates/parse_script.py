@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Turn a Google Docs HTML export of the show script into colour-tagged JSON.
+"""Turn the show script (Google Docs HTML export or .docx) into colour-tagged JSON.
 
-Usage: python3 -I parse_script.py <export.html> <out.json>
+Usage: python3 -I parse_script.py <export.html | script.docx> <out.json>
 
 Output: {"legend": [...], "paragraphs": [...], "scenes": [...]}
 
@@ -14,16 +14,21 @@ Output: {"legend": [...], "paragraphs": [...], "scenes": [...]}
 - scenes: paragraphs grouped under scene headings such as "K0.1.v2 ..." or
   "T1.2 — ...", with the heading's version number and the set of statuses and
   cues found inside.
-- lightCues: light cues written in the convention (docs/script-light-cues.md): `LICHT: <look>`, `LICHT Gewinner`, `LICHT Pult: <text>`
-  in the yellow highlight. Other text after `LICHT:` is kind "prose". Each cue
-  belongs to the scene heading above it in the same table cell, else to a
-  heading in the same table row (the other column), else to the last heading
-  in the same column (the K and T sides run in separate columns), else to the
-  last heading before it.
-- lightLooks / lightColours: rows of the tables headed "Lichtstimmung" and
-  "Lichtfarbe", as raw cell text.
+- lightCues: light written in the yellow highlight (docs/script-light-cues.md), one per line:
+  - kind "set": `Licht: L1+L3: Warm L2+L4: off`, `Licht: 50% Warm auf L1-L4`,
+    `Warm on lights 1-4`. `parts` lists the lamps (numbers, or "*" for alle) and the settings
+    text for each group; light_plan.py checks the settings.
+  - kind "winner": "Die gewählte Gruppe wird durch Licht hervorgehoben (andere … auf 25% …)",
+    with `others`, the level of the fields that did not win (null when not written).
+  - kind "prose": any other yellow line that mentions light: a note for the operator.
+  Each cue belongs to the scene heading above it in the same table cell, else to a heading in
+  the same table row (the other column), else to the last heading in the same column (the K and
+  T sides run in separate columns), else to the last heading before it.
+- lightColours: rows of the colour table (a table whose header row names the emitters Red,
+  Green, Blue, Amber, Mint): {"name": first cell, "values": {header: cell text}}.
 
-The mapping below reflects the legend as of 2026-11. If the legend in the
+A .docx is read directly (Word highlight and shading become the same hex colours as in the
+HTML export). The mapping below reflects the legend as of 2026-11. If the legend in the
 script changes, the skill tells the agent to trust the script over this table.
 Only the standard library is used; the input is untrusted, nothing is executed.
 """
@@ -48,10 +53,22 @@ HIGHLIGHT_CUE = {
     "#ff00ff": "code",
     "#d9ead3": "vox-ready",   # light-green heading: section can be recorded
 }
-# Light cues in the yellow highlight. Upper-case LICHT plus a colon or a keyword, so stage
-# directions such as "Licht hebt ..." or "[BÜHNE / LICHT / TON: ...]" are not taken for cues.
-LIGHT_CUE_RE = re.compile(r"\bLICHT(?:\s+(GEWINNER|Gewinner|PULT|Pult)\b)?\s*(?::\s*([^\]\n]*))?")
-LOOK_NAME_RE = re.compile(r"^[A-Za-z0-9ÄÖÜäöüß_-]+$")
+# Light in the yellow highlight. A lamp group is L1, L1+L3, L1-L4, "L1, L2" or "alle".
+LAMPS = r"(?:L\s*\d+(?:\s*(?:\+|,|&|-|–|bis|und)\s*L?\s*\d+)*|alle(?:\s+(?:4|vier))?)"
+LIGHT_PREFIX_RE = re.compile(r"^\W*licht\s*:\s*(.*?)[\s\].;]*$", re.I)
+ASSIGN_RE = re.compile(rf"({LAMPS})\s*:", re.I)
+# "50% Warm auf L1-L4", "Warm on lights 1-4"
+ON_LAMPS_RE = re.compile(rf"^(.+?)\s+(?:auf|on|für)\s+(?:(?:die\s+)?(?:lights?|lampen?)\s+(L?\s*\d+(?:\s*(?:\+|,|&|-|–|bis|und)\s*L?\s*\d+)*)|({LAMPS}))$", re.I)
+WINNER_RE = re.compile(r"gew[äa]hlte\s+(?:Gruppe|Feld)\b[^.]*\blicht\b[^.]*\b(?:hervorgehoben|markiert)", re.I)
+WINNER_LEVEL_RE = re.compile(r"(\d+(?:[.,]\d+)?)\s*%")
+MENTIONS_LIGHT_RE = re.compile(r"(?<!pf)(?<!sch)licht", re.I)  # Bühnenlicht, Orientierungslicht; not Pflicht, schlicht
+EMITTER_HEADERS = {"red", "rot", "green", "grün", "gruen", "blue", "blau", "amber", "mint"}
+HIGHLIGHT_HEX = {  # Word highlight names, as Google Docs writes them into a .docx
+    "yellow": "#ffff00", "green": "#00ff00", "cyan": "#00ffff", "magenta": "#ff00ff", "blue": "#0000ff",
+    "red": "#ff0000", "darkBlue": "#000080", "darkCyan": "#008080", "darkGreen": "#008000",
+    "darkMagenta": "#800080", "darkRed": "#800000", "darkYellow": "#808000", "darkGray": "#808080",
+    "lightGray": "#c0c0c0", "black": "#000000", "white": "#ffffff",
+}
 # "K0 — ...", "K0.1.v2 ...", "T1.0.1.v2", "KI_NTROv3 — ...": ID plus optional version.
 SCENE_RE = re.compile(r"^\s*(KI_NTRO|[KT]\d+(?:\.\d+)*)(?:\.?v(\d+))?(?=[\s—–:-]|$)")
 
@@ -161,15 +178,50 @@ def lines_of(para):
     return lines
 
 
+def lamp_numbers(text):
+    """"L1+L3" -> [1, 3], "L1-L4" -> [1, 2, 3, 4], "alle" -> ["*"]."""
+    if text.strip().lower().startswith("alle"):
+        return ["*"]
+    numbers = []
+    for part in re.split(r"\s*(?:\+|,|&|und)\s*", text, flags=re.I):
+        bounds = [int(n) for n in re.findall(r"\d+", part)]
+        if len(bounds) == 2 and re.search(r"-|–|bis", part):
+            numbers += range(min(bounds), max(bounds) + 1)
+        else:
+            numbers += bounds
+    return sorted(set(numbers))
+
+
+def light_cue(text):
+    """One yellow line -> a cue: lamps with settings, a vote winner, or prose."""
+    body = LIGHT_PREFIX_RE.match(text)
+    body = body.group(1).strip() if body else text.strip().strip("[]").strip()
+    groups = list(ASSIGN_RE.finditer(body))
+    if groups and not body[:groups[0].start()].strip():
+        parts = [{"lamps": lamp_numbers(g.group(1)),
+                  "settings": body[g.end():groups[n + 1].start() if n + 1 < len(groups) else len(body)].strip(" ,;·")}
+                 for n, g in enumerate(groups)]
+        return {"kind": "set", "text": text, "parts": parts}
+    on = ON_LAMPS_RE.match(body)
+    if on:
+        return {"kind": "set", "text": text, "parts": [{"lamps": lamp_numbers(on.group(2) or on.group(3)), "settings": on.group(1).strip()}]}
+    if WINNER_RE.search(text):
+        level = WINNER_LEVEL_RE.search(text)
+        return {"kind": "winner", "text": text, "others": float(level.group(1).replace(",", ".")) if level else None}
+    return {"kind": "prose", "text": text}
+
+
 def light_cues(paragraphs):
-    """`LICHT ...` cues in yellow text, in reading order, with the scene each belongs to."""
+    """Light cues in yellow text, in reading order, with the scene each belongs to."""
+    # Any line that starts with a scene ID is a heading here, also long ones such as
+    # "K1.1.7.v4 (war K1.1.6.v3) Kopfhörer: ..." that hold the scene's first sentence.
     row_scene = {}
     for para in paragraphs:
         if para.get("table") is None:
             continue
         for full, _ in lines_of(para):
             m = LINE_SCENE_RE.match(full)
-            if m and len(full) < 160:
+            if m:
                 row_scene.setdefault((para["table"], para["row"]), m.group(1))
     cues, last_scene, cell, cell_scene, last_in_column = [], None, None, None, {}
     for i, para in enumerate(paragraphs):
@@ -178,28 +230,22 @@ def light_cues(paragraphs):
             cell, cell_scene = here, None
         for full, yellow in lines_of(para):
             m = LINE_SCENE_RE.match(full)
-            if m and len(full) < 160:
+            if m:
                 cell_scene = last_scene = last_in_column[para.get("col")] = m.group(1)
             scene = (cell_scene or row_scene.get((para.get("table"), para.get("row")))
                      or last_in_column.get(para.get("col")) or last_scene)
-            for c in LIGHT_CUE_RE.finditer(yellow):
-                keyword, rest = (c.group(1) or "").lower(), (c.group(2) or "").strip().rstrip(".;,]").strip()
-                if keyword == "gewinner":
-                    cue = {"kind": "winner", "text": c.group(0).strip()}
-                elif keyword == "pult":
-                    cue = {"kind": "operator", "text": rest}
-                elif c.group(2) is None:
-                    continue  # "LICHT" alone, e.g. in a heading: not a cue
-                elif LOOK_NAME_RE.match(rest):
-                    cue = {"kind": "look", "look": rest, "text": rest}
-                else:
-                    cue = {"kind": "prose", "text": rest}
-                cues.append({"scene": scene, "paragraph": i, **cue})
+            found = [light_cue(piece.strip()) for piece in yellow.split("\n")
+                     if piece.strip() and (MENTIONS_LIGHT_RE.search(piece) or ON_LAMPS_RE.match(piece.strip()))]
+            exact = [cue for cue in found if cue["kind"] != "prose"]
+            if exact:
+                cues += [{"scene": scene, "paragraph": i, **cue} for cue in exact]
+            elif found:  # a note for the operator: the whole line, not only its yellow part
+                cues.append({"scene": scene, "paragraph": i, "kind": "prose", "text": full.strip()})
     return cues
 
 
-def table_rows(paragraphs, header):
-    """Rows (list of cell texts) of every table whose first cell reads `header`, header row excluded."""
+def colour_table(paragraphs):
+    """Rows of every table whose header row names at least three emitters (Red, Green, Blue, ...)."""
     cells = {}
     for para in paragraphs:
         if para.get("table") is None:
@@ -208,20 +254,93 @@ def table_rows(paragraphs, header):
         cells[key] = (cells[key] + "\n" + para["text"]) if key in cells else para["text"]
     rows = []
     for table in sorted({t for t, _, _ in cells}):
-        keys = sorted(k for k in cells if k[0] == table)
-        first_row = keys[0][1]
-        if cells.get((table, first_row, 0), "").strip().lower() != header:
+        keys = [k for k in cells if k[0] == table]
+        first_row = min(r for _, r, _ in keys)
+        header = {c: cells[(table, first_row, c)].strip() for _, r, c in keys if r == first_row}
+        if sum(1 for h in header.values() if h.lower() in EMITTER_HEADERS) < 3:
             continue
         for row in sorted({r for _, r, _ in keys if r != first_row}):
-            cols = sorted(c for t, r, c in keys if r == row)
-            rows.append([cells[(table, row, c)].strip() for c in range(max(cols) + 1) if (table, row, c) in cells] if cols else [])
-    return [row for row in rows if row and row[0]]
+            name = cells.get((table, row, 0), "").strip()
+            if name:
+                rows.append({"name": name, "values": {header[c]: cells[(table, row, c)].strip()
+                                                      for _, r, c in keys if r == row and c in header and c != 0}})
+    return rows
+
+
+def docx_html(path):
+    """A .docx as the HTML shape of a Google Docs export: tables, paragraphs, coloured spans."""
+    import zipfile
+    from xml.etree import ElementTree
+    w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    with zipfile.ZipFile(path) as z:
+        root = ElementTree.fromstring(z.read("word/document.xml"))
+    out = []
+
+    def runs(node):
+        for child in node:
+            if child.tag == w + "r":
+                yield child
+            elif child.tag not in (w + "del", w + "moveFrom", w + "pPr", w + "rPr"):
+                yield from runs(child)
+
+    def paragraph(p):
+        style = p.find(f"{w}pPr/{w}pStyle")
+        level = re.match(r"Heading([1-4])$", style.get(w + "val", "")) if style is not None else None
+        tag = f"h{level.group(1)}" if level else "p"
+        out.append(f"<{tag}>")
+        for r in runs(p):
+            css = []
+            color = r.find(f"{w}rPr/{w}color")
+            if color is not None and re.fullmatch(r"[0-9A-Fa-f]{6}", color.get(w + "val", "")):
+                css.append(f"color:#{color.get(w + 'val').lower()}")
+            highlight, shade = r.find(f"{w}rPr/{w}highlight"), r.find(f"{w}rPr/{w}shd")
+            bg = HIGHLIGHT_HEX.get(highlight.get(w + "val", "")) if highlight is not None else None
+            if bg is None and shade is not None and re.fullmatch(r"[0-9A-Fa-f]{6}", shade.get(w + "fill", "")):
+                bg = "#" + shade.get(w + "fill").lower()
+            if bg:
+                css.append(f"background-color:{bg}")
+            text = []
+            for child in r:
+                if child.tag == w + "t":
+                    text.append(html.escape(child.text or ""))
+                elif child.tag == w + "tab":
+                    text.append("\t")
+                elif child.tag in (w + "br", w + "cr"):
+                    text.append("<br>")
+                elif child.tag == w + "noBreakHyphen":
+                    text.append("-")
+            if text:
+                out.append(f'<span style="{";".join(css)}">{"".join(text)}</span>')
+        out.append(f"</{tag}>")
+
+    def block(node):
+        for child in node:
+            if child.tag == w + "p":
+                paragraph(child)
+            elif child.tag == w + "tbl":
+                out.append("<table>")
+                for tr in child.iter(w + "tr"):
+                    if tr.find(f"..") is not None:
+                        pass
+                for tr in child.findall(w + "tr"):
+                    out.append("<tr>")
+                    for tc in tr.findall(w + "tc"):
+                        out.append("<td>")
+                        block(tc)
+                        out.append("</td>")
+                    out.append("</tr>")
+                out.append("</table>")
+            elif child.tag in (w + "sdt", w + "sdtContent", w + "body"):
+                block(child)
+
+    block(root.find(w + "body"))
+    return "<html><body>" + "".join(out) + "</body></html>"
 
 
 def main():
     src, dst = sys.argv[1], sys.argv[2]
     p = Parser()
-    p.feed(open(src, encoding="utf-8").read())
+    p.feed(docx_html(src) if src.lower().endswith(".docx") else open(src, encoding="utf-8").read())
     for para in p.legend + p.paragraphs:
         para["runs"] = merge_runs(para["runs"])
 
@@ -264,15 +383,14 @@ def main():
     cues = light_cues(p.paragraphs)
     for para in p.legend + p.paragraphs:
         para.pop("_segments", None)
-    looks = table_rows(p.legend + p.paragraphs, "lichtstimmung")
-    colours = table_rows(p.legend + p.paragraphs, "lichtfarbe")
+    colours = colour_table(p.legend + p.paragraphs)
     json.dump({"legend": p.legend, "paragraphs": p.paragraphs, "scenes": scenes,
                "versionedIds": list(versioned.values()),
-               "lightCues": cues, "lightLooks": looks, "lightColours": colours,
+               "lightCues": cues, "lightColours": colours,
                "unmappedColours": [list(u) for u in unknown]},
               open(dst, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"{len(p.paragraphs)} paragraphs, {len(scenes)} scenes, "
-          f"{len(cues)} light cues, {len(looks)} light looks, "
+          f"{len(cues)} light cues, {len(colours)} light colours, "
           f"{len(unknown)} unmapped colour pairs -> {dst}")
 
 
