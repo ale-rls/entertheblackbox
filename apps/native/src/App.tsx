@@ -21,6 +21,7 @@ import { createForegroundAttention } from './foreground-attention';
 import { applySurface, expireSurface, initialSurface, surfaceDelay, visibleSurface } from './surface';
 import { acceptWall, wallStatus, type WallPlayback, type WallSliceState } from './wall';
 import { WallVideo } from './WallVideo';
+import { StaffMenu } from './StaffMenu';
 
 /** Resend a playing tablet's drift this often, so Admin sees it live. */
 const WALL_DRIFT_REPORT_MS = 2_000;
@@ -47,6 +48,7 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [voting, setVoting] = useState<Voting | null>(null);
   const [admission, setAdmission] = useState<Extract<ServerToClientMessage, { t: 'admission_state' }> | null>(null);
+  const [staffReply, setStaffReply] = useState<Extract<ServerToClientMessage, { t: 'staff_menu' | 'staff_assign_result' }> | null>(null);
   const [task, setTaskState] = useState<ParticipantTaskState | null>(null);
   const taskRef = useRef<ParticipantTaskState | null>(null);
   function setTask(value: ParticipantTaskState | null) { taskRef.current = value; setTaskState(value); }
@@ -207,6 +209,7 @@ export default function App() {
         if (message.t === 'surface') scheduleSurface(message, c);
         if (message.t === 'wall') setWall(current => acceptWall(current, message));
         if (message.t === 'admission_state') { setAdmission(message); player.current?.setAdmission(message); }
+        if (message.t === 'staff_menu' || message.t === 'staff_assign_result') setStaffReply(message);
         if (message.t === 'participant_task' && message.sessionId === latest.current?.sessionId) { setTask(message); player.current?.setCue(cueForPlayback(latest.current, message, c.clock.now())); }
         if (message.t === 'reload') setError(`Server requests compatible app content (${message.minVersion}). Leave before checking app updates.`);
         if (message.t === 'join_rejected') { player.current?.setEnabled(false); player.current?.setCue(null); setError(message.reason === 'update_required' ? 'Install the current native app build to join this show.' : `Join rejected: ${message.reason}`); }
@@ -268,7 +271,7 @@ export default function App() {
       serverNow={() => connection.current?.clock.now() ?? Date.now()} onPlayback={setWallPlayback} />
     : null;
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
-  return <StageCompanion actionPrompt={activePrompt} admission={admission} onAdmissionGroup={groupId => { if (admission && authorized.current) connection.current?.send({ t: 'admission_choice', v: PROTOCOL_VERSION, generation: admission.generation, groupId }); }} participantTask={<ParticipantTaskCard state={task} now={serverNow} enabled={connected && status === 'Connected'} respond={optionId => { if (task?.task && authorized.current) connection.current?.send({ t: 'participant_task_response', v: PROTOCOL_VERSION, sessionId: task.sessionId, instanceId: task.task.id, optionId }); }} />} taskVisible={!!task?.task && task.task.status !== 'cancelled'} answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
+  return <><StageCompanion actionPrompt={activePrompt} admission={admission} onAdmissionGroup={groupId => { if (admission && authorized.current) connection.current?.send({ t: 'admission_choice', v: PROTOCOL_VERSION, generation: admission.generation, groupId }); }} participantTask={<ParticipantTaskCard state={task} now={serverNow} enabled={connected && status === 'Connected'} respond={optionId => { if (task?.task && authorized.current) connection.current?.send({ t: 'participant_task_response', v: PROTOCOL_VERSION, sessionId: task.sessionId, instanceId: task.task.id, optionId }); }} />} taskVisible={!!task?.task && task.task.status !== 'cancelled'} answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
     paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
     surface={visibleSurface(surface)} wall={wallLayer} wallVisible={!!wallLayer && wall?.startAt != null} onShowMode={setShowMode} origin={origin} name={name} deviceLabel={deviceLabel} onDeviceLabel={saveDeviceLabel} musicVolume={musicVolume} onMusicVolume={saveMusicVolume} manifest={manifest} identity={identity} clockText={clockText}
     notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}
@@ -292,5 +295,6 @@ export default function App() {
         acknowledgeAction('rating');
         connection.current?.send({ t: 'reaction', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, kind });
       }
-    }} />;
+    }} />
+    <StaffMenu connected={connected && status === 'Connected'} reply={staffReply} send={message => { if (authorized.current) connection.current?.send(message); }} /></>;
 }

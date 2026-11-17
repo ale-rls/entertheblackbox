@@ -201,7 +201,7 @@ export class AdmissionController {
     }
     const commandState = this.socketStates.get(socket);
     const command = parsed.message;
-    if (command.t === 'input' || command.t === 'reaction' || command.t === 'group_selection' || command.t === 'button_vote' || command.t === 'participant_task_response' || command.t === 'admission_choice') {
+    if (command.t === 'input' || command.t === 'reaction' || command.t === 'group_selection' || command.t === 'button_vote' || command.t === 'participant_task_response' || command.t === 'admission_choice' || command.t === 'staff_menu_request' || command.t === 'staff_assign') {
       if ((commandState?.requireOccupantId || command.occupantId !== undefined) && command.occupantId !== commandState?.occupantId) return;
     }
     const clientMessageResult = this.options.onClientMessage?.(parsed.message, socket, request) as unknown;

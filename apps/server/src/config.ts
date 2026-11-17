@@ -18,6 +18,8 @@ const envSchema = z.object({
   ROOM_ID: z.string().min(1).default("main"),
   SHOW_ID: z.string().min(1).default("local-dev"),
   DISPLAY_TOKEN: z.string().min(1).default(DEVELOPMENT_DISPLAY_TOKEN),
+  /** Unlocks the staff menu on native tablets. Unset disables the menu. */
+  STAFF_PIN: z.string().regex(/^[0-9]{4,12}$/, "STAFF_PIN must be 4-12 digits").optional(),
   ADMIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(600),
   ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES: z.coerce.number().int().positive().default(30),
   ADMIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
@@ -55,6 +57,7 @@ export type ServerConfig = {
   roomId: string;
   showId: string;
   displayToken: string;
+  staffPin?: string | undefined;
   adminRateLimit: {
     maxAuthenticatedRequests: number;
     maxAuthenticationFailures: number;
@@ -137,6 +140,7 @@ export function loadConfig(
     roomId: value.ROOM_ID,
     showId: value.SHOW_ID,
     displayToken: value.DISPLAY_TOKEN,
+    staffPin: value.STAFF_PIN,
     adminRateLimit: {
       maxAuthenticatedRequests: value.ADMIN_RATE_LIMIT_MAX_REQUESTS,
       maxAuthenticationFailures: value.ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES,

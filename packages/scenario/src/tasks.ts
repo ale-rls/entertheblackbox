@@ -58,6 +58,13 @@ export type TaskInstance = z.infer<typeof taskInstanceSchema>;
 
 export const participantRoleSchema = z.object({ id, label: z.string().trim().min(1).max(200), capacity: z.number().int().positive().max(10000).optional(), exclusiveSet: z.string().max(100).optional() });
 export type ParticipantRole = z.infer<typeof participantRoleSchema>;
+/**
+ * A pick in the staff menu on the tablet (unlocked with the venue's staff PIN).
+ * It assigns a role, a group, or both to whoever is holding that tablet.
+ */
+export const staffAssignmentSchema = z.object({ id, label: z.string().trim().min(1).max(200), roleId: id.optional(), groupId: id.optional() })
+  .refine(p => p.roleId !== undefined || p.groupId !== undefined, 'A staff pick needs a role or a group');
+export type StaffAssignment = z.infer<typeof staffAssignmentSchema>;
 export type RoleAssignment = { participantId: string; roleId: string; source: string; assignedAt: number };
 
 /** Every task recording must be bundled, including alternatives selected by vote history. */

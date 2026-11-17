@@ -1,5 +1,5 @@
 import { admissionConfigSchema } from './admission.js';
-import { participantTaskSchema, participantRoleSchema } from './tasks.js';
+import { participantTaskSchema, participantRoleSchema, staffAssignmentSchema } from './tasks.js';
 import { monitorCuesSchema } from "./monitors.js";
 import { sceneCountdownSchema } from "./scene-countdown.js";
 import { actorScriptSchema, scriptCuesSchema, tabletScriptSchema } from "./actor-script.js";
@@ -641,6 +641,8 @@ const canonicalScenarioSchema = z.object({
   handoverTaskId: z.string().min(1).optional(),
   participantRoles: z.array(participantRoleSchema).max(100).refine(a => new Set(a.map(r => r.id)).size === a.length, "Role IDs must be unique").optional(),
   participantTasks: z.array(participantTaskSchema).max(100).refine(a => new Set(a.map(t => t.id)).size === a.length, "Task IDs must be unique").optional(),
+  /** Picks offered by the PIN-protected staff menu on native tablets. */
+  staffAssignments: z.array(staffAssignmentSchema).max(30).refine(a => new Set(a.map(p => p.id)).size === a.length, "Staff pick IDs must be unique").optional(),
   /** Immutable native assets belonging to this published scenario. */
   nativeReleaseId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   backgroundMusic: z.object({ src: z.string().min(1), volume: z.number().positive().max(1) }).optional(),

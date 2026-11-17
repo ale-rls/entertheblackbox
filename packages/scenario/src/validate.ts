@@ -335,6 +335,10 @@ export function validateScenario(
     for (const option of task.options) if (option.roleId && !scenario.participantRoles?.some(r => r.id === option.roleId)) errors.push({ severity: 'error', code: 'broken-target', message: `Task ${task.id} references unknown role ${option.roleId}` });
     for (const id of task.groupIds) if (!scenario.groups?.some(g => g.id === id)) errors.push({ severity: 'error', code: 'unknown-group', message: `Task ${task.id} targets unknown group ${id}` });
   }
+  for (const pick of scenario.staffAssignments ?? []) {
+    if (pick.roleId && !scenario.participantRoles?.some(r => r.id === pick.roleId)) errors.push({ severity: 'error', code: 'broken-target', message: `Staff pick ${pick.id} references unknown role ${pick.roleId}` });
+    if (pick.groupId && !scenario.groups?.some(g => g.id === pick.groupId)) errors.push({ severity: 'error', code: 'unknown-group', message: `Staff pick ${pick.id} references unknown group ${pick.groupId}` });
+  }
   for (const phase of scenario.phases) if ((phase.kind === 'narration' || phase.kind === 'video') && phase.taskId && !scenario.participantTasks?.some(t => t.id === phase.taskId)) errors.push({ severity: 'error', code: 'broken-target', phaseId: phase.id, message: `Unknown task ${phase.taskId}` });
   for (const src of taskAudioSources(scenario.participantTasks)) if (mediaManifest && !mediaManifest.files.some(f => f.src === src)) errors.push({ severity: 'error', code: 'missing-media', message: `Task audio missing from manifest: ${src}` });
   return { ok: errors.length === 0, errors, warnings };

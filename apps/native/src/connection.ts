@@ -32,7 +32,7 @@ export class NativeConnection {
     this.connect();
   }
   send(message: PhoneToServerMessage) {
-    if (this.socket?.readyState === 1) this.socket.send(encodeMessage(message.t === 'input' || message.t === 'reaction' || message.t === 'group_selection' || message.t === 'button_vote' || message.t === 'participant_task_response' || message.t === 'admission_choice' ? { ...message, ...(this.occupantId ? { occupantId: this.occupantId } : {}) } : message));
+    if (this.socket?.readyState === 1) this.socket.send(encodeMessage(message.t === 'input' || message.t === 'reaction' || message.t === 'group_selection' || message.t === 'button_vote' || message.t === 'participant_task_response' || message.t === 'admission_choice' || message.t === 'staff_menu_request' || message.t === 'staff_assign' ? { ...message, ...(this.occupantId ? { occupantId: this.occupantId } : {}) } : message));
   }
   private connect() {
     if (this.stopped) return;
