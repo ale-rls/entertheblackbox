@@ -1,27 +1,28 @@
 #!/usr/bin/env python3
-"""Turn the light cues and looks written in the script into the show's light plan.
+"""Turn the light written in the script into the show's light plan.
 
 Usage:
   python3 -I light_plan.py <parsed.json> <venue lighting.json> <mapping.json> <out-dir>
 
-- parsed.json: output of check-script-updates/parse_script.py (lightCues, lightLooks, lightColours).
-- venue lighting.json: the Eos bridge's current file. Its desk address (eos), lamps (fixtures),
-  colours (palette) and anything not written in the script are kept.
+- parsed.json: output of check-script-updates/parse_script.py (lightCues, lightColours).
+- venue lighting.json: the Eos bridge's current file. Its desk address (eos), lamps (fixtures
+  `l1`-`l4`, the lamps L1-L4 of the script), colours (palette) and anything not generated from
+  the script are kept.
 - mapping.json: what only the show draft knows:
     {"scenes":  {"T2.2": "T2-2-regie", ...},              script scene ID -> phase ID
-     "winners": {"T2.5": {"q1": "feld-rot", ...}}}         per vote scene: answer ID -> lamp it lights
+     "winners": {"T2.5": {"q1": "L1", ...}}}              per vote scene: answer ID -> lamp of its field
 
 Writes to <out-dir>:
-- lighting.json: the venue file plus the script's colours and looks, a `licht-<look>` cue per look
-  used at a scene start, and the vote results for `LICHT Gewinner` scenes. What earlier runs
-  generated (`licht-*` cues, `gewinner-*` looks and the vote results pointing at them) is rebuilt,
-  so a cue removed from the script disappears from the file too. A look the script defines replaces
-  a hand-made look of the same name.
+- lighting.json: the venue file plus the script's colours, one look and `licht-...` cue per
+  distinct `Licht:` cue (named after what it does, e.g. `licht-l1-l3-warm-l2-l4-off`), and the
+  vote results for "gewählte Gruppe ... hervorgehoben" scenes. What earlier runs generated
+  (`licht-*` looks and cues, `gewinner-*` looks and the vote results pointing at them) is rebuilt,
+  so a cue removed from the script disappears from the file too.
 - phase-cues.json: phase ID -> the `licht-*` cue names its External show cues must contain.
 - light-plan.md: what fires automatically, what the operator does on the desk, and every problem.
 
-The convention is documented in docs/script-light-cues.md. Standard
-library only; the input is untrusted and nothing is executed. Exit code 1 if there are problems.
+The convention is documented in docs/script-light-cues.md. Standard library only; the input is
+untrusted and nothing is executed. Exit code 1 if there are problems.
 """
 import json
 import re
@@ -30,15 +31,18 @@ from pathlib import Path
 
 CUE_PREFIX = "licht-"
 WINNER_PREFIX = "gewinner-"
-WINNER_OTHERS_LEVEL = 10
+WINNER_OTHERS_LEVEL = 25    # when the script does not say
 WINNER_FADE = 1.5
+DEFAULT_FADE = 1.0          # seconds, when a cue does not say ("0s" snaps)
+MAX_CUE_LENGTH = 120        # Studio's limit for an external show cue name
 EMITTERS = {"rot": "red", "red": "red", "gruen": "green", "green": "green", "blau": "blue", "blue": "blue",
             "amber": "amber", "mint": "mint"}
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+FADE_RE = re.compile(r"^(\d+(?:[.,]\d+)?)\s*(?:s|sek|sec)$", re.I)
 
 
 def slug(text: str) -> str:
-    """Script spelling -> file name: "Feld grün" -> "feld-gruen"."""
+    """Script spelling -> file name: "Warm Weiß" -> "warm-weiss"."""
     text = text.strip().lower()
     for a, b in (("ä", "ae"), ("ö", "oe"), ("ü", "ue"), ("ß", "ss")):
         text = text.replace(a, b)
@@ -47,124 +51,113 @@ def slug(text: str) -> str:
     return re.sub(r"-+", "-", text).strip("-")
 
 
-def entries(cell: str):
-    """`a: x · b: y; c: z` (or one per line) -> ["a: x", "b: y", "c: z"]."""
-    return [part.strip() for part in re.split(r"[·;\n]", cell) if part.strip()]
-
-
 def parse_number(token: str):
-    token = token.rstrip("%").replace(",", ".")
+    token = token.strip().rstrip("%").replace(",", ".")
     try:
         return float(token)
     except ValueError:
         return None
 
 
-def parse_colour(cell: str, problems, where):
-    """`#rrggbb`, or emitters: `rot 100 · grün 55 · amber 100`."""
-    cell = cell.strip()
-    if HEX_RE.match(cell):
-        return cell.lower()
-    colour = {}
-    for part in entries(cell):
-        words = part.replace(":", " ").split()
-        if len(words) != 2 or slug(words[0]) not in EMITTERS or parse_number(words[1]) is None:
-            problems.append(f"{where}: cannot read \"{part}\" (write e.g. \"rot 100\" or #rrggbb)")
-            continue
-        value = parse_number(words[1])
-        if not 0 <= value <= 100:
-            problems.append(f"{where}: {words[0]} {words[1]} is outside 0–100")
-            continue
-        colour[EMITTERS[slug(words[0])]] = value
-    return colour or None
+def lamp_name(number):
+    return "*" if number == "*" else f"l{number}"
 
 
-def parse_look(row, fixtures, palette, problems):
-    """A row of the "Lichtstimmung" table -> (name, look) in the bridge's format."""
-    name = slug(row[0])
-    where = f"Lichtstimmung \"{row[0]}\""
-    if len(row) < 2:
-        problems.append(f"{where}: no lamps given")
-        return name, None
-    look = {"fixtures": {}}
-    if len(row) > 2 and row[2].strip():
-        fade = parse_number(row[2].strip().rstrip("s").strip())
-        if fade is None or not 0 <= fade <= 600:
-            problems.append(f"{where}: fade \"{row[2]}\" is not a number of seconds")
+def colours_from_table(rows, problems):
+    """Rows of the colour table -> palette entries: {"cool": {"red": 0, "amber": 63, ...}}."""
+    palette = {}
+    for row in rows:
+        where = f"colour \"{row['name']}\""
+        colour, found = {"red": 0.0, "green": 0.0, "blue": 0.0, "amber": 0.0, "mint": 0.0}, False  # an empty cell is 0
+        for header, cell in row.get("values", {}).items():
+            emitter = EMITTERS.get(slug(header))
+            if emitter is None:
+                continue  # e.g. the monitor colour
+            value = parse_number(cell) if cell.strip() else 0.0
+            if value is None or not 0 <= value <= 100:
+                problems.append(f"{where}: {header} \"{cell}\" is not a number 0–100")
+                continue
+            colour[emitter], found = value, True
+        if found:
+            palette[slug(row["name"])] = colour
         else:
-            look["fade"] = fade
-    for part in entries(row[1]):
-        if ":" not in part:
-            problems.append(f"{where}: \"{part}\" needs \"lamp: setting\", e.g. \"Feld rot: rot 100\" or \"alle: 0\"")
-            continue
-        lamp_text, settings = part.split(":", 1)
-        lamp = "*" if slug(lamp_text) == "alle" else slug(lamp_text)
-        if lamp != "*" and lamp not in fixtures:
-            problems.append(f"{where}: no lamp \"{lamp_text.strip()}\" (lamps: alle, {', '.join(sorted(fixtures))})")
-            continue
-        state = {}
-        words = settings.split()
-        # Colour names may have spaces ("warm weiß" is the palette's "warm-weiss"): join them first.
-        joined, i = [], 0
-        while i < len(words):
-            for length in (3, 2):
-                if i + length <= len(words) and slug(" ".join(words[i:i + length])) in palette:
-                    joined.append(" ".join(words[i:i + length]))
-                    i += length
-                    break
+            problems.append(f"{where}: no emitter values")
+    return palette
+
+
+def settings_of(text, palette, where, problems):
+    """`Warm`, `off`, `50% Warm`, `an`, `2s` -> ({"color": ..., "level": ...}, fade or None)."""
+    words = text.split()
+    joined, i = [], 0  # colour names may have spaces ("Warm Weiß" is the palette's "warm-weiss")
+    while i < len(words):
+        for length in (3, 2):
+            if i + length <= len(words) and slug(" ".join(words[i:i + length])) in palette:
+                joined.append(" ".join(words[i:i + length]))
+                i += length
+                break
+        else:
+            joined.append(words[i])
+            i += 1
+    state, fade = {}, None
+    for word in joined:
+        key, number = slug(word), parse_number(word)
+        if key in ("aus", "off"):
+            state["level"] = 0
+        elif key in ("an", "on", "voll", "full"):
+            state["level"] = 100
+        elif FADE_RE.match(word):
+            fade = parse_number(FADE_RE.match(word).group(1))
+        elif number is not None:
+            if 0 <= number <= 100:
+                state["level"] = number
             else:
-                joined.append(words[i])
-                i += 1
-        for word in joined:
-            key = slug(word)
-            number = parse_number(word)
-            if key == "aus":
-                state["level"] = 0
-            elif key in ("an", "voll"):
-                state["level"] = 100
-            elif number is not None:
-                if not 0 <= number <= 100:
-                    problems.append(f"{where}: level {word} is outside 0–100")
-                else:
-                    state["level"] = number
-            elif HEX_RE.match(word):
-                state["color"] = word.lower()
-            elif key in palette:
-                state["color"] = key
-            else:
-                problems.append(f"{where}: \"{word}\" is neither a colour ({', '.join(sorted(palette))}, #rrggbb) nor a level")
-        if state:
+                problems.append(f"{where}: level {word} is outside 0–100")
+        elif HEX_RE.match(word):
+            state["color"] = word.lower()
+        elif key in palette:
+            state["color"] = key
+        else:
+            problems.append(f"{where}: \"{word}\" is neither a colour ({', '.join(sorted(palette))}, #rrggbb), "
+                            "a level (50%, an, off) nor a fade (2s)")
+    if "color" in state and "level" not in state:
+        state["level"] = 100  # "L1: Warm" switches the lamp on in that colour
+    return state, fade
+
+
+def look_of(cue, fixtures, palette, problems):
+    """A `set` cue -> (name, look). The name says what it does, so the same cue gives the same name."""
+    where = f"{cue['scene']}: \"{cue['text']}\""
+    look, fade, name_parts = {"fixtures": {}}, None, []
+    for part in cue["parts"]:
+        lamps = [lamp_name(n) for n in part["lamps"]]
+        unknown = [l for l in lamps if l != "*" and l not in fixtures]
+        if unknown or not lamps:
+            problems.append(f"{where}: no lamp {', '.join(u.upper() for u in unknown) or '?'} "
+                            f"(lamps: {', '.join(sorted(l.upper() for l in fixtures))}, alle)")
+            return None, None
+        state, part_fade = settings_of(part["settings"], palette, where, problems)
+        if not state:
+            problems.append(f"{where}: nothing to set for {'+'.join(l.upper() for l in lamps)}")
+            return None, None
+        fade = part_fade if part_fade is not None else fade
+        for lamp in lamps:
             look["fixtures"][lamp] = {**look["fixtures"].get(lamp, {}), **state}
-    if not look["fixtures"]:
-        problems.append(f"{where}: no usable lamp settings")
-        return name, None
+        name_parts += ["alle" if lamps == ["*"] else "-".join(lamps), slug(part["settings"])]
+    look["fade"] = DEFAULT_FADE if fade is None else fade
+    name = CUE_PREFIX + slug("-".join(name_parts))
+    if len(name) > MAX_CUE_LENGTH:
+        problems.append(f"{where}: the cue name would be longer than {MAX_CUE_LENGTH} characters; split the cue")
+        return None, None
     return name, look
 
 
 def build(parsed, venue, mapping):
-    problems, notes = [], []
+    problems = []
     fixtures = venue.get("fixtures", {})
-    palette = dict(venue.get("palette", {}))
-
-    for row in parsed.get("lightColours", []):
-        if len(row) < 2:
-            problems.append(f"Lichtfarbe \"{row[0]}\": no mix given")
-            continue
-        colour = parse_colour(row[1], problems, f"Lichtfarbe \"{row[0]}\"")
-        if colour is not None:
-            palette[slug(row[0])] = colour
-
-    script_looks = {}
-    for row in parsed.get("lightLooks", []):
-        name, look = parse_look(row, fixtures, palette, problems)
-        if look is not None:
-            if name in script_looks:
-                problems.append(f"Lichtstimmung \"{row[0]}\" is defined twice")
-            script_looks[name] = look
+    palette = {**venue.get("palette", {}), **colours_from_table(parsed.get("lightColours", []), problems)}
 
     # Drop what earlier runs generated, so cues removed from the script do not linger.
-    kept_looks = {k: v for k, v in venue.get("looks", {}).items() if not k.startswith(WINNER_PREFIX)}
-    looks = {**kept_looks, **script_looks}
+    looks = {k: v for k, v in venue.get("looks", {}).items() if not k.startswith((CUE_PREFIX, WINNER_PREFIX))}
     cues = {k: v for k, v in venue.get("cues", {}).items() if not k.startswith(CUE_PREFIX)}
     results = {phase: winners for phase, winners in venue.get("results", {}).items()
                if not winners or not all(look.startswith(WINNER_PREFIX) for look in winners.values())}
@@ -174,42 +167,43 @@ def build(parsed, venue, mapping):
     for cue in parsed.get("lightCues", []):
         scene = cue["scene"]
         phase = scenes.get(scene)
-        if cue["kind"] in ("operator", "prose"):
-            operator.append((scene, phase, cue["text"], cue["kind"]))
+        if cue["kind"] == "prose":
+            operator.append((scene, phase, cue["text"]))
             continue
         if phase is None:
             problems.append(f"{scene}: light cue but no phase for this scene in mapping.json")
             continue
-        if cue["kind"] == "look":
-            look = slug(cue["look"])
-            if look not in looks:
-                problems.append(f"{scene}: LICHT: {cue['look']} — no Lichtstimmung of that name")
+        if cue["kind"] == "set":
+            name, look = look_of(cue, fixtures, palette, problems)
+            if look is None:
                 continue
-            name = CUE_PREFIX + look
-            cues[name] = look
+            looks[name] = look
+            cues[name] = name
             listed = phase_cues.setdefault(phase, [])
             if name not in listed:
                 listed.append(name)
             if len(listed) > 1:
-                problems.append(f"{scene}: several light looks at the same scene start ({', '.join(listed)}); the last one wins")
-            automatic.append((scene, phase, f"scene start → {look}"))
+                problems.append(f"{scene}: several light cues at the same scene start ({', '.join(listed)}); the last one wins")
+            automatic.append((scene, phase, f"scene start → {cue['text']}"))
         elif cue["kind"] == "winner":
             fields = mapping.get("winners", {}).get(scene)
             if not fields:
-                problems.append(f"{scene}: LICHT Gewinner but no answer → lamp list for this scene in mapping.json")
+                problems.append(f"{scene}: vote winner light but no answer → lamp list for this scene in mapping.json")
                 continue
+            others = cue.get("others")
+            others = WINNER_OTHERS_LEVEL if others is None else others
             per_answer = {}
             for answer, lamp in fields.items():
                 lamp = slug(lamp)
                 if lamp not in fixtures:
                     problems.append(f"{scene}: answer {answer} → unknown lamp \"{lamp}\"")
                     continue
-                look_name = WINNER_PREFIX + lamp
-                looks[look_name] = {"fade": WINNER_FADE, "fixtures": {"*": {"level": WINNER_OTHERS_LEVEL}, lamp: {"level": 100}}}
+                look_name = f"{WINNER_PREFIX}{lamp}-{others:g}"
+                looks[look_name] = {"fade": WINNER_FADE, "fixtures": {"*": {"level": others}, lamp: {"level": 100}}}
                 per_answer[answer] = look_name
             if per_answer:
                 results[phase] = per_answer
-                automatic.append((scene, phase, "vote decided → winning field full, others " f"{WINNER_OTHERS_LEVEL}%"))
+                automatic.append((scene, phase, f"vote decided → winning field full, others {others:g}%"))
 
     lighting = {**venue, "palette": palette, "looks": looks, "cues": cues, "results": results}
     return lighting, phase_cues, automatic, operator, problems
@@ -220,9 +214,8 @@ def report(automatic, operator, problems, phase_cues):
     lines += ["## Fires automatically", ""] + ([f"- {s} ({p}): {what}" for s, p, what in automatic] or ["- (none)"])
     lines += ["", "## Scene cue names for the draft (External show cues)", ""]
     lines += [f"- {phase}: {', '.join(names)}" for phase, names in phase_cues.items()] or ["- (none)"]
-    lines += ["", "## Operator on the desk", ""]
-    lines += [f"- {s}{f' ({p})' if p else ''}: {text}{' — written as prose, not in the convention' if kind == 'prose' else ''}"
-              for s, p, text, kind in operator] or ["- (none)"]
+    lines += ["", "## Operator on the desk (written as text, not as a cue)", ""]
+    lines += [f"- {s}{f' ({p})' if p else ''}: {text}" for s, p, text in operator] or ["- (none)"]
     lines += ["", "## Problems", ""] + ([f"- {line}" for line in problems] or ["- (none)"])
     return "\n".join(lines) + "\n"
 

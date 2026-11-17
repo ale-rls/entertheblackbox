@@ -2,10 +2,10 @@
   "eos": { "host": "169.254.126.220", "port": 3037, "user": 0 },
 
   "fixtures": {
-    "feld-rot":   { "channel": 10, "setup": { "intensity mspeed": -3 } },
-    "feld-blau":  { "channel": 11, "setup": { "intensity mspeed": -3 } },
-    "feld-gruen": { "channel": 12, "setup": { "intensity mspeed": -3 } },
-    "feld-gelb":  { "channel": 13, "setup": { "intensity mspeed": -3 } }
+    "l1": { "channel": 11, "setup": { "intensity mspeed": -3 } },
+    "l2": { "channel": 13, "setup": { "intensity mspeed": -3 } },
+    "l3": { "channel": 12, "setup": { "intensity mspeed": -3 } },
+    "l4": { "channel": 10, "setup": { "intensity mspeed": -3 } }
   },
 
   "palette": {
@@ -24,16 +24,16 @@
     "vier-felder": {
       "fade": 2,
       "fixtures": {
-        "feld-rot":   { "color": "rot",   "level": 100 },
-        "feld-blau":  { "color": "blau",  "level": 100 },
-        "feld-gruen": { "color": "gruen", "level": 100 },
-        "feld-gelb":  { "color": "gelb",  "level": 100 }
+        "l1": { "color": "rot",   "level": 100 },
+        "l2": { "color": "blau",  "level": 100 },
+        "l3": { "color": "gruen", "level": 100 },
+        "l4": { "color": "gelb",  "level": 100 }
       }
     },
-    "nur-rot":   { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "feld-rot":   { "level": 100 } } },
-    "nur-blau":  { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "feld-blau":  { "level": 100 } } },
-    "nur-gruen": { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "feld-gruen": { "level": 100 } } },
-    "nur-gelb":  { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "feld-gelb":  { "level": 100 } } }
+    "nur-l1": { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "l1": { "level": 100 } } },
+    "nur-l2": { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "l2": { "level": 100 } } },
+    "nur-l3": { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "l3": { "level": 100 } } },
+    "nur-l4": { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "l4": { "level": 100 } } }
   },
 
   "cues": {
@@ -47,7 +47,7 @@
   },
 
   "results": {
-    "example-vote-scene-id": { "q1": "nur-rot", "q2": "nur-blau", "q3": "nur-gruen", "q4": "nur-gelb", "none": "vier-felder" }
+    "example-vote-scene-id": { "q1": "nur-l1", "q2": "nur-l2", "q3": "nur-l3", "q4": "nur-l4", "none": "vier-felder" }
   },
 
   "showEnd": "aus"

@@ -101,27 +101,26 @@ browser media element). Create the `media` record directly with `src`,
 
 ## 3b. Light cues
 
-When the parsed script has `lightCues`, `lightLooks` or `lightColours` (the
-convention is in [docs/script-light-cues.md](../../../docs/script-light-cues.md)):
+When the parsed script has `lightCues` or `lightColours` (the notation is in
+[docs/script-light-cues.md](../../../docs/script-light-cues.md)):
 
 1. **Mapping.** Write `<scratchpad>/light-mapping.json`: `scenes` maps each
    script scene ID with a light cue to its phase ID (the same matching as for
-   text), and `winners` maps each `LICHT Gewinner` scene to `{answer ID: lamp}`.
+   text), and `winners` maps each vote-winner scene to `{answer ID: lamp}`.
    Take the answer IDs from the phase's field (`q1`–`q4`, `min`/`max`, zone IDs)
-   and match each answer to the lamp of the same colour, using the phase's
-   answer colours and the script's field/colour notes. Ask if a match is not
-   clear; never guess.
+   and find the monitor field (M1–M4) each answer is shown on; field Mn is lit
+   by lamp `Ln`. Ask if a match is not clear; never guess.
 2. **Generate:**
 
    ```bash
    python3 -I .claude/skills/update-show/light_plan.py <parsed.json> <current lighting.json> <scratchpad>/light-mapping.json <scratchpad>/light
    ```
 
-   It writes `lighting.json` (the venue part and hand-made looks kept, the
-   script's looks, colours, `licht-*` cues and vote results replaced),
-   `phase-cues.json` and `light-plan.md`. Exit code 1 means problems; they are
-   listed in `light-plan.md`. Fix the mapping, or report script problems
-   (unknown look, lamp or colour) instead of working around them.
+   It writes `lighting.json` (the venue part and hand-made looks kept; the
+   script's colours, one `licht-…` look and cue per distinct cue, and the vote
+   results rebuilt), `phase-cues.json` and `light-plan.md`. Exit code 1 means
+   problems; they are listed in `light-plan.md`. Fix the mapping, or report
+   script problems (unknown lamp or colour) instead of working around them.
 3. **Scene cues in the draft.** For each phase, set the `licht-*` entries of
    `outgoingCues` to exactly what `phase-cues.json` lists: remove `licht-*`
    names that are no longer there, and keep every other cue name (MIDI,
