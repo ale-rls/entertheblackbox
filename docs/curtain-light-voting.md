@@ -46,7 +46,8 @@ leave an unlit gap between them.
 | Three candidates / custom zones | Light shaped to each zone with soft edges; space between zones is neutral |
 
 Fields are lit in one neutral, slightly warm white (`CURTAIN_NEUTRAL_POOL_COLOR`)
-and separated by thin soft white outlines along each counting area's edge. The
+and divided by a thin, soft white cross through the middle of the neutral gap
+(one line for a left/right or top/bottom vote; custom zones get outlines instead). The
 answer colours are not used on the curtain; they still tint M1–M4 and the
 phones. Pools keep a base glow and brighten with their share of the
 authoritative live counts, smoothed and capped. Areas never move or grow with

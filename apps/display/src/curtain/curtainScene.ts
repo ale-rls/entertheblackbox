@@ -7,7 +7,7 @@ import {
   hexToLinear,
   poolIntensities,
   quadrantOfField,
-  poolOutlines,
+  curtainDivisionLines,
   type CurtainLabel,
   type PoolOutlineSegment,
   type PoolMasks,
@@ -33,8 +33,8 @@ export class CurtainScene {
   readonly pools: PoolMasks;
   readonly labels: CurtainLabel[];
   readonly colorsLinear: Array<[number, number, number]>;
-  /** Field divisions drawn over the neutral fabric, one segment list per answer. */
-  readonly outlines: PoolOutlineSegment[][];
+  /** Field divisions drawn over the neutral fabric: a cross (or one line) through the field. */
+  readonly divisions: PoolOutlineSegment[];
   private readonly intensities: number[];
   private readonly light: ReturnType<typeof composeLightMap>;
   private closedAt: number | null = null;
@@ -43,7 +43,7 @@ export class CurtainScene {
     this.pools = buildPoolMasks(field);
     this.labels = curtainLabels(field, this.pools);
     this.colorsLinear = this.pools.outcomes.map(() => hexToLinear(CURTAIN_NEUTRAL_POOL_COLOR));
-    this.outlines = poolOutlines(this.pools);
+    this.divisions = curtainDivisionLines(field, this.pools);
     this.intensities = this.pools.outcomes.map(() => treatment.curtain.poolBase);
     this.light = new Float32Array(this.pools.columns * this.pools.rows * 3);
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CurtainTreatment } from "@entertheblackbox/protocol";
-import { curtainVoteField, resolveCurtainSettings, type TwoQuadrantField } from "@entertheblackbox/shared";
+import { curtainVoteField, resolveCurtainSettings, type FourQuadrantField, type TwoQuadrantField } from "@entertheblackbox/shared";
 import { CurtainScene } from "./curtainScene.js";
 import { coverCrop, encodeLightMap, FABRIC_FS } from "./curtainRenderer.js";
 
@@ -47,19 +47,27 @@ describe("CurtainScene", () => {
     expect(plain!.rgb).toEqual([1, 1, 1]);
   });
 
-  it("lights every field in the same neutral colour and outlines each field", () => {
+  it("lights every field in the same neutral colour and divides them with a line", () => {
     const scene = new CurtainScene(field, treatment);
     expect(scene.colorsLinear[0]).toEqual(scene.colorsLinear[1]);
     const [r, g, b] = scene.colorsLinear[0]!;
     expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(0.15);
-    expect(scene.outlines).toHaveLength(2);
-    for (const segments of scene.outlines) {
-      expect(segments.length).toBeGreaterThan(10);
-      for (const [x1, y1, x2, y2] of segments) for (const v of [x1, y1, x2, y2]) expect(v).toBeGreaterThanOrEqual(0), expect(v).toBeLessThanOrEqual(1);
-    }
-    // "No" sits left, "Yes" right: their outlines stay on their own side.
-    const meanX = (segments: readonly (readonly number[])[]) => segments.reduce((sum, seg) => sum + seg[0]!, 0) / segments.length;
-    expect(meanX(scene.outlines[0]!)).toBeLessThan(meanX(scene.outlines[1]!));
+    // Left/right vote: one vertical line through the middle of the neutral gap.
+    expect(scene.divisions).toHaveLength(1);
+    const [x1, y1, x2, y2] = scene.divisions[0]!;
+    expect(x1).toBeCloseTo(0.5);
+    expect(x2).toBeCloseTo(0.5);
+    expect(y1).toBeLessThan(0.1);
+    expect(y2).toBeGreaterThan(0.9);
+  });
+
+  it("divides a four-way vote with a cross", () => {
+    const four = curtainVoteField<FourQuadrantField>({ type: "four-quadrant", xAxis: { minLabel: "L", maxLabel: "R" }, yAxis: { minLabel: "T", maxLabel: "B" } });
+    const scene = new CurtainScene(four, { ...treatment, answerColors: {} });
+    expect(scene.divisions).toHaveLength(2);
+    const [vertical, horizontal] = scene.divisions;
+    expect(vertical![0]).toBeCloseTo(vertical![2]);
+    expect(horizontal![1]).toBeCloseTo(horizontal![3]);
   });
 
   it("keeps labels for both pools", () => {

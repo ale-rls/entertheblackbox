@@ -420,6 +420,30 @@ export function poolOutlines(pools: PoolMasks): PoolOutlineSegment[][] {
   });
 }
 
+/**
+ * The curtain's field divisions: a cross through the field's centre along
+ * its split lines (one line for a two-way vote), ending where the field
+ * ends. Custom zones have no natural cross, so they use their outlines.
+ */
+export function curtainDivisionLines(field: PositionField, pools: PoolMasks): PoolOutlineSegment[] {
+  if (field.type === "polygon-zones") return poolOutlines(pools).flat();
+  const vertical = field.type === "four-quadrant" || field.axis === "x";
+  const horizontal = field.type === "four-quadrant" || field.axis === "y";
+  const lines: PoolOutlineSegment[] = [];
+  const arena = field.arena;
+  if (arena !== undefined && arena.type !== "ellipse") {
+    const { topMid, bottomMid, leftMid, rightMid } = arenaQuadLandmarks(arena.corners);
+    if (vertical) lines.push([topMid.x, topMid.y, bottomMid.x, bottomMid.y]);
+    if (horizontal) lines.push([leftMid.x, leftMid.y, rightMid.x, rightMid.y]);
+    return lines;
+  }
+  const center = curtainFieldCenter(field);
+  const { left, right, top, bottom } = pools.extent;
+  if (vertical) lines.push([center.x, Math.max(0, center.y - top), center.x, Math.min(1, center.y + bottom)]);
+  if (horizontal) lines.push([Math.max(0, center.x - left), center.y, Math.min(1, center.x + right), center.y]);
+  return lines;
+}
+
 /** Summed soft pool coverage at a position (0 in neutral space, about 1 inside a pool). */
 export function poolCoverageAt(pools: PoolMasks, x: number, y: number): number {
   const column = Math.min(pools.columns - 1, Math.max(0, Math.floor(x * pools.columns)));
