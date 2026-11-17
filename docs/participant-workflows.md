@@ -19,6 +19,13 @@ audio and shows task prompts.
   "full" message. Operators send tasks from Admin → Participant tasks.
   A phase can open a task (`taskId`) and hold until the operator presses GO
   (`waitForGo`).
+  A video or narration scene can also skip ahead when nobody took a route:
+  with `nextIfGroupEmpty: { groupId, target }` it continues at `target`
+  instead of `next` if, when the scene ends (media end, deadline, GO or
+  Skip), nobody on its timeline is in that group. Typical use: a task
+  option assigns a group, and the scenes that handle those people are
+  skipped when nobody chose it. Studio shows this as a second output,
+  "if … is empty", set under "Exit when a group is empty".
   A scene's task stays open until its response window ends, even when
   everyone has answered. Anyone who joins, or is moved into its audience
   group, during that window becomes a recipient and gets the prompt.

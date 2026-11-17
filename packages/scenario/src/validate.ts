@@ -46,7 +46,8 @@ export function targetsOf(phase: Phase): Array<{ label: string; target: string }
       return [];
     case "video":
     case "narration":
-      return [{ label: "next", target: phase.next }];
+      return [{ label: "next", target: phase.next }, ...(phase.nextIfGroupEmpty
+        ? [{ label: "nextIfGroupEmpty.target", target: phase.nextIfGroupEmpty.target }] : [])];
     case "group-branch":
       return [{ label: "next", target: phase.next }, ...phase.branches.flatMap((branch) =>
         branch.next === undefined ? [] : [{ label: `branches.${branch.groupId}.next`, target: branch.next }])];
@@ -187,6 +188,10 @@ export function validateScenario(
           });
       }
     } else if (phase.kind !== "idle") {
+      if ((phase.kind === "video" || phase.kind === "narration") && phase.nextIfGroupEmpty && !groupIds.has(phase.nextIfGroupEmpty.groupId)) errors.push({
+        severity: "error", code: "unknown-group", phaseId: phase.id,
+        message: `phase "${phase.id}" branches on unknown group "${phase.nextIfGroupEmpty.groupId}"`,
+      });
       for (const groupId of Object.keys(phase.phoneAudioByGroup ?? {})) if (!groupIds.has(groupId)) errors.push({
         severity: "error", code: "unknown-group", phaseId: phase.id,
         message: `phase "${phase.id}" targets unknown group "${groupId}"`,

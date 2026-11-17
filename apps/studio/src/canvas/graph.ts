@@ -4,6 +4,8 @@ import type { Connection, Edge } from "@xyflow/react";
 export const ENTRY_NODE_ID = "__studio_entry__";
 export const END_NODE_ID = "__studio_end__";
 export const FIXED_HANDLE = "next";
+/** Second exit of a video/narration scene with `nextIfGroupEmpty`. */
+export const GROUP_EMPTY_HANDLE = "group-empty";
 export const FOUR_OUTCOME_HANDLES = ["q1", "q2", "q3", "q4", "tie", "empty"] as const;
 export const TWO_OUTCOME_HANDLES = ["min", "max", "tie", "empty"] as const;
 type Phase = StudioProject["scenario"]["phases"][number];
@@ -25,6 +27,7 @@ export function withoutOutputEdge(edges: Edge[], source: string | null, sourceHa
 export function phaseOutputHandles(phase: Phase | undefined): readonly string[] {
   if (!phase || phase.kind === "idle") return [];
   if (phase.kind === "group-branch") return [...phase.branches.map((branch) => `group:${branch.groupId}`), FIXED_HANDLE];
+  if (phase.kind === "video" || phase.kind === "narration") return phase.nextIfGroupEmpty ? [FIXED_HANDLE, GROUP_EMPTY_HANDLE] : [FIXED_HANDLE];
   return (phase.kind === "position-question" || phase.kind === "video-position-question") && phase.next.type === "quadrant-plurality"
     ? phase.field.type === "two-quadrant"
       ? TWO_OUTCOME_HANDLES
@@ -78,7 +81,7 @@ export function reconcilePhaseOutputEdges(edges: Edge[], phase: Phase): Edge[] {
       if (existing) return { ...existing, id: `${phase.id}:${handle}`, sourceHandle: handle };
       let runtime = "idle";
       if (phase.kind === "group-branch") runtime = phase.branches.find((branch) => `group:${branch.groupId}` === handle)?.next ?? phase.next;
-      else if (phase.kind === "video" || phase.kind === "narration") runtime = phase.next;
+      else if (phase.kind === "video" || phase.kind === "narration") runtime = handle === GROUP_EMPTY_HANDLE ? phase.nextIfGroupEmpty?.target ?? "idle" : phase.next;
       else if (phase.next.type === "fixed") runtime = phase.next.target;
       else if (handle === "tie" || handle === "empty") runtime = phase.next[handle];
       else runtime = (phase.next.map as Record<string, string>)[handle] ?? "idle";
@@ -97,6 +100,7 @@ export function graphEdges(project: StudioProject): Edge[] {
     }
     if (phase.kind === "video" || phase.kind === "narration") {
       edges.push({ id: `${phase.id}:next`, source: phase.id, sourceHandle: FIXED_HANDLE, target: edgeTarget(phase.next) });
+      if (phase.nextIfGroupEmpty) edges.push({ id: `${phase.id}:${GROUP_EMPTY_HANDLE}`, source: phase.id, sourceHandle: GROUP_EMPTY_HANDLE, target: edgeTarget(phase.nextIfGroupEmpty.target) });
       continue;
     }
     if (phase.next.type === "fixed") {
@@ -144,6 +148,11 @@ export function applyEdges(project: StudioProject, edges: Edge[]): StudioProject
         if (!branchEdge) throw new Error(`Phase “${phase.id}” has a dangling ${branch.groupId} output.`);
         return { ...branch, next: runtimeTarget(branchEdge.target) };
       }) };
+      if (phase.nextIfGroupEmpty) {
+        const emptyEdge = edgeFor(phase.id, GROUP_EMPTY_HANDLE);
+        if (!emptyEdge) throw new Error(`Phase “${phase.id}” has a dangling group-empty output.`);
+        return { ...phase, next: target, nextIfGroupEmpty: { ...phase.nextIfGroupEmpty, target: runtimeTarget(emptyEdge.target) } };
+      }
       return { ...phase, next: target };
     }
     if (phase.next.type === "fixed") {
