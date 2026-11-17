@@ -60,3 +60,5 @@ content/media/native-shows/
 
 # The show's MIDI mapping for Ableton (cue names are show content); see apps/midi-bridge/midi-mapping.example.json
 midi-mapping.json
+# The show's lighting file for the Eos desk (looks and cue names are show content); see apps/eos-bridge/lighting.example.json
+lighting.json
