@@ -234,6 +234,13 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
       {phase.kind === 'narration' && <p>GO is in Admin → Tasks. Responses close at the task deadline; a held scene continues only when the operator confirms readiness.</p>}
       <TaskFlow taskId={phase.taskId} tasks={project.scenario.participantTasks ?? []} />
     </fieldset>}
+    {(phase.kind === 'narration' || phase.kind === 'video') && <fieldset><legend>Exit when a group is empty</legend>
+      <label>Group<select value={phase.nextIfGroupEmpty?.groupId ?? ''} onChange={e => {
+        const { nextIfGroupEmpty, ...rest } = phase;
+        onChange(e.target.value ? { ...rest, nextIfGroupEmpty: { groupId: e.target.value, target: nextIfGroupEmpty?.target ?? phase.next } } : rest);
+      }}><option value="">Always use next</option>{(project.scenario.groups ?? []).map(g => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
+      <p>When this scene ends and nobody on its timeline is in the chosen group, the show continues at the node's “is empty” output instead of “next”. Decided at the end of the scene, including on GO and Skip.</p>
+    </fieldset>}
     {phase.kind === "narration" && <fieldset><legend>Audio + text</legend>
       <p className="sc-tool-copy field-hint">Introduce the next question with phone audio and monitor text. Connect this scene to a Position question; set its duration to cover the introduction.</p>
       {text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}

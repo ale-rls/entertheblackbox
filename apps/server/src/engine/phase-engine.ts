@@ -211,7 +211,8 @@ export type AdminGroupPathStatus = {
 
 function adminRoutesForPhase(phase: Exclude<Phase, { kind: "idle" }>): AdminFlowRoute[] {
   if (phase.kind === "group-branch") return [...phase.branches.map((branch) => ({ outcome: branch.groupId, target: branch.next ?? phase.next })), { outcome: "rejoin", target: phase.next }];
-  if (phase.kind === "video" || phase.kind === "narration") return [{ outcome: "next", target: phase.next }];
+  if (phase.kind === "video" || phase.kind === "narration") return [{ outcome: "next", target: phase.next },
+    ...(phase.nextIfGroupEmpty ? [{ outcome: `empty:${phase.nextIfGroupEmpty.groupId}`, target: phase.nextIfGroupEmpty.target }] : [])];
   if (phase.next.type === "fixed") return [{ outcome: "next", target: phase.next.target }];
   return [
     ...Object.entries(phase.next.map).map(([outcome, target]) => ({ outcome, target })),
@@ -433,7 +434,7 @@ export class PhaseEngine {
     } else if (command.action === 'go') {
       const phase = this.currentPhase();
       if (phase.kind !== 'narration' || !phase.waitForGo) throw new Error('Scene is not waiting for GO');
-      this.advanceTo(phase.next, this.now(), 'operator-go');
+      this.advanceTo(this.linearNext(phase), this.now(), 'operator-go');
     } else if (command.action === 'open') this.openTask(command.templateId ?? '', command.participantIds);
     else if (!this.tasks.close(command.instanceId ?? '', command.action === 'cancel')) throw new Error('Unknown task');
     this.pushTasks(true);
@@ -643,6 +644,14 @@ export class PhaseEngine {
     return { ok: true };
   }
 
+  /** A linear scene's exit: its `nextIfGroupEmpty` target when nobody on this timeline is in that group. */
+  private linearNext(phase: Extract<Phase, { kind: "video" | "narration" }>): string {
+    const rule = phase.nextIfGroupEmpty;
+    if (!rule) return phase.next;
+    const occupied = this.registry.values().some((participant) => this.groupSelection?.current(participant.clientId) === rule.groupId);
+    return occupied ? phase.next : rule.target;
+  }
+
   adminSkip(now = this.now(), expectedPhaseId?: string): TransitionResult {
     if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
     if (expectedPhaseId !== undefined && expectedPhaseId !== this.phaseId) return { ok: false, reason: "stale" };
@@ -652,7 +661,7 @@ export class PhaseEngine {
     // must either skip one group's own scene (adminSkipGroup) or explicitly
     // force everyone to the reunion point (adminForceReunion).
     if (phase.kind === "group-branch") return { ok: false, reason: "wrong-phase" };
-    if (phase.kind === "video" || phase.kind === "narration") return this.advanceTo(phase.next, now, "admin-skip");
+    if (phase.kind === "video" || phase.kind === "narration") return this.advanceTo(this.linearNext(phase), now, "admin-skip");
     if (phase.kind === "video-position-question") {
       if (this.questionResolutionTarget !== null) {
         return this.advanceTo(this.questionResolutionTarget, now, "admin-skip");
@@ -977,7 +986,7 @@ export class PhaseEngine {
     }
 
     if (phase.kind === "narration") {
-      if (this.deadlineAt !== null && now >= this.deadlineAt) this.advanceTo(phase.next, now, "narration-complete");
+      if (this.deadlineAt !== null && now >= this.deadlineAt) this.advanceTo(this.linearNext(phase), now, "narration-complete");
       return;
     }
 
@@ -992,7 +1001,7 @@ export class PhaseEngine {
           phase,
           deadlineAt: this.deadlineAt!,
         });
-        this.advanceTo(phase.next, now, "video-complete");
+        this.advanceTo(this.linearNext(phase), now, "video-complete");
       }
       return;
     }

@@ -5,7 +5,7 @@ import type { StudioProject } from "@entertheblackbox/studio-adapter";
 type NodeData = {
   label: string;
   kind: string;
-  outcomes?: Array<{ id: string; label: string; tone: "quad" | "special" }>;
+  outcomes?: Array<{ id: string; label: string; tone?: "quad" | "special" }>;
   groupOutputs?: string[];
   /** Media sources this phase references that are not in the media library. */
   missingMedia?: string[];
@@ -17,7 +17,7 @@ const KIND_TITLE: Record<string, string> = { idle: "Idle", video: "Media", narra
 const InPort = () => (
   <div className="port port-in"><Handle aria-label="Input" className="sc-tool-graph-port" id="input" type="target" position={Position.Left} /><span className="port-name">in</span></div>
 );
-const OutPort = ({ id, label, tone }: { id: string; label: string; tone?: "quad" | "special" }) => (
+const OutPort = ({ id, label, tone }: { id: string; label: string; tone?: "quad" | "special" | undefined }) => (
   <div className={`port port-out ${tone ?? ""}`} data-port-tone={tone ?? "default"}><span className="port-name">{label}</span><Handle aria-label={`${label} output`} className="sc-tool-graph-port" id={id} type="source" position={Position.Right} /></div>
 );
 
@@ -32,6 +32,14 @@ export function nodeDataForPhase(phase: Phase, groups: StudioProject["scenario"]
     data.outcomes = [
       ...phase.branches.map((branch) => ({ id: `group:${branch.groupId}`, label: groups?.find((group) => group.id === branch.groupId)?.label ?? branch.groupId, tone: "quad" as const })),
       { id: "next", label: "Rejoin (all groups)", tone: "special" },
+    ];
+    return data;
+  }
+  if ((phase.kind === "video" || phase.kind === "narration") && phase.nextIfGroupEmpty) {
+    const groupId = phase.nextIfGroupEmpty.groupId;
+    data.outcomes = [
+      { id: "next", label: "next" },
+      { id: "group-empty", label: `if ${groups?.find((group) => group.id === groupId)?.label ?? groupId} is empty`, tone: "special" },
     ];
     return data;
   }
