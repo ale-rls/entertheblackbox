@@ -234,6 +234,8 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onAdmissionChan
     {phase.kind === "narration" && <fieldset><legend>Audio + text</legend>
       <p className="sc-tool-copy field-hint">Introduce the next question with phone audio and monitor text. Connect this scene to a Position question; set its duration to cover the introduction.</p>
       {text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
+      <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.titleLayout === "top"} onChange={(event) => onChange({ ...phase, titleLayout: event.target.checked ? "top" : undefined })} />{label("Title at top (curtain open)", "titleLayout")}</label>
+      <p className="sc-tool-copy field-hint">Sets the title and text at the top of the main display so the stage and audience stay visible.</p>
       <label className="sc-tool-label">{label("Display text", "text")}<textarea className="sc-tool-field" rows={4} value={phase.text} onChange={(event) => onChange({ ...phase, text: event.target.value })} /></label>
       {number("Duration (ms)", "durationMs", phase.durationMs, (durationMs) => onChange({ ...phase, durationMs: Math.max(1, durationMs) }))}
       <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.allowSkip ?? false} onChange={(event) => onChange({ ...phase, allowSkip: event.target.checked || undefined })} />{label("Operator can skip early", "allowSkip")}</label>

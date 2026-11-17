@@ -34,10 +34,10 @@ export type CurtainStageProps = {
 /** Fit text into maxWidth by shrinking, never by wrapping. */
 function fitFont(ctx: CanvasRenderingContext2D, text: string, size: number, maxWidth: number): number {
   let current = size;
-  ctx.font = `500 ${current}px ${FONT}`;
+  ctx.font = `700 ${current}px ${FONT}`;
   while (current > 8 && ctx.measureText(text).width > maxWidth) {
     current *= 0.92;
-    ctx.font = `500 ${current}px ${FONT}`;
+    ctx.font = `700 ${current}px ${FONT}`;
   }
   return current;
 }

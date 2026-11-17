@@ -326,6 +326,26 @@ describe("App media-readiness gate", () => {
     expect(title?.classList.contains("video-title-centered-xl")).toBe(true);
   });
 
+  it("sets a narration title at the top only when the scene asks for it", async () => {
+    harness.mediaStatus = { state: "ready" };
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<App />));
+    const send = async (phaseEpoch: number, phase: Record<string, unknown>) => act(async () => {
+      harness.connectionOptions?.onMessage({
+        t: "snapshot", v: PROTOCOL_VERSION, sessionId: "session-1", phaseEpoch, serverTime: 0,
+        phase: { scenarioVersion: "show-1", startedAt: 0, deadlineAt: null, durationMs: 10_000, next: "idle", ...phase },
+      } as ServerToClientMessage);
+    });
+
+    await send(1, { kind: "narration", id: "closed", title: "2. Trainingsepoche", text: "REGIE" });
+    expect(document.querySelector(".narration")?.classList.contains("narration-top")).toBe(false);
+
+    await send(2, { kind: "narration", id: "open", title: "2. Trainingsepoche", text: "REGIE", titleLayout: "top" });
+    expect(document.querySelector(".narration")?.classList.contains("narration-top")).toBe(true);
+    expect(document.querySelector(".narration-text")?.textContent).toBe("REGIE");
+  });
+
   it("loops a scene's background video and keeps it until the next scene's video is presented", async () => {
     harness.mediaStatus = { state: "ready" };
     document.body.innerHTML = '<div id="root"></div>';
