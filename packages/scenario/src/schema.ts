@@ -358,6 +358,8 @@ export const narrationPhaseSchema = z.object({
   ...phoneAudioFields,
   id: phaseIdSchema,
   title: z.string().min(1, "title must be non-empty").optional(),
+  /** "top": main display sets title and text in a band at the top (e.g. curtain open, audience visible). Default: centred. */
+  titleLayout: z.literal("top").optional(),
   text: z.string().min(1, "narration text must be non-empty"),
   /** Per-group text overrides, keyed by stable authored group id. */
   textByGroup: z.record(groupIdSchema, z.string().min(1)).optional(),

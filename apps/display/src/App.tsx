@@ -533,7 +533,7 @@ export function App() {
           </div>
         )}
         {phase?.kind === "narration" && (
-          <div className="narration">
+          <div className={`narration${phase.titleLayout === "top" ? " narration-top" : ""}`}>
             <div className="narration-copy">
               {phase.title && <p className="narration-title">{phase.title}</p>}
               <p className="narration-text">{(config.groupId !== undefined ? phase.textByGroup?.[config.groupId] : undefined) ?? phase.text}</p>
