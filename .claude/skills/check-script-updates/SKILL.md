@@ -175,7 +175,10 @@ writes them in the yellow highlight, listed in `lightCues`
   colour table, a level or `off`. **Exists, needs setting up** if every colour
   is in the colour table (`lightColours`) or `lighting.json` and every lamp is
   L1–L4; otherwise report the unknown colour or lamp. **Already set up** if
-  the scene's phase already has the matching `licht-…` cue.
+  `lighting.json` already plays the matching `licht-…` look for that scene
+  (`scenes`, at its start or at the time its question appears on the
+  monitors). A script scene with no phase of its own (a question inside a
+  longer scene) is fine: `/update-show` times it to its monitor cue.
 - kind `winner` ("Die gewählte Gruppe wird durch Licht hervorgehoben (andere …
   auf 25% …)"): needs a vote in that scene; note which answer is on which
   monitor field (Mn is lit by Ln), since `/update-show` needs it. Ask if it is

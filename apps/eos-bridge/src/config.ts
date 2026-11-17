@@ -46,6 +46,9 @@ const lookSchema = z.object({
   fixtures: z.record(name, fixtureStateSchema),
 }).strict();
 
+/** A look at a time within a scene: `at` is seconds from the scene's start (as monitor cues are). */
+const sceneStepSchema = z.object({ at: z.number().min(0).max(24 * 3600), look: name }).strict();
+
 export const bridgeConfigSchema = z.object({
   eos: z.object({
     host: z.string().min(1),
@@ -63,14 +66,26 @@ export const bridgeConfigSchema = z.object({
   looks: z.record(name, lookSchema).default({}),
   /** Outgoing cue name (Studio → scene → External show cues) → look. */
   cues: z.record(name, name).default({}),
-  /** Scene ID → look, when that scene starts. */
-  scenes: z.record(name, name).default({}),
+  /**
+   * Scene ID → look, when that scene starts; or → timed steps, each a look at a time within the scene
+   * (e.g. a question round in one scene whose monitors change at set times).
+   */
+  scenes: z.record(name, z.union([name, z.array(sceneStepSchema).min(1).max(500)])).default({}),
   /** Scene ID → vote winner ("q1"–"q4", "min"/"max" or a zone ID) → look, when that scene's vote resolves. */
   results: z.record(name, z.record(name, name)).default({}),
   /** Look when the show ends or is restarted (returns to idle). */
   showEnd: name.optional(),
 }).strict();
 export type BridgeConfig = z.infer<typeof bridgeConfigSchema>;
+export type SceneStep = { atMs: number; look: string };
+
+/** A scene's looks in time order: one look at its start, or its timed steps. Empty if the scene has none. */
+export function sceneSteps(config: BridgeConfig, scene: string): SceneStep[] {
+  const trigger = own(config.scenes, scene);
+  if (trigger === undefined) return [];
+  if (typeof trigger === "string") return [{ atMs: 0, look: trigger }];
+  return trigger.map((step) => ({ atMs: Math.round(step.at * 1000), look: step.look })).sort((a, b) => a.atMs - b.atMs);
+}
 export type Look = z.infer<typeof lookSchema>;
 
 /** Every look name a trigger points at must exist; every colour and fixture a look uses must too. */
@@ -78,7 +93,10 @@ function crossCheck(config: BridgeConfig): string[] {
   const problems: string[] = [];
   const lookExists = (look: string, where: string) => { if (!own(config.looks, look)) problems.push(`${where}: no look named "${look}"`); };
   for (const [cue, look] of Object.entries(config.cues)) lookExists(look, `cues.${cue}`);
-  for (const [scene, look] of Object.entries(config.scenes)) lookExists(look, `scenes.${scene}`);
+  for (const [scene, trigger] of Object.entries(config.scenes)) {
+    if (typeof trigger === "string") lookExists(trigger, `scenes.${scene}`);
+    else trigger.forEach((step, index) => lookExists(step.look, `scenes.${scene}[${index}]`));
+  }
   for (const [scene, winners] of Object.entries(config.results)) {
     for (const [winner, look] of Object.entries(winners)) lookExists(look, `results.${scene}.${winner}`);
   }

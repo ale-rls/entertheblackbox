@@ -1,4 +1,4 @@
-import { lookTargets, own, type BridgeConfig } from "./config.js";
+import { lookTargets, own, sceneSteps, type BridgeConfig } from "./config.js";
 import type { Log } from "./eos.js";
 import type { LookPlayer } from "./player.js";
 
@@ -34,6 +34,11 @@ export type Now = () => number;
  * the server's clock (`startedAt` − the event's `timestamp`), so the laptop's
  * clock does not matter. An event that arrives later than events usually do
  * waits that much less. A newer scene on the same timeline cancels them.
+ *
+ * A scene can also hold timed steps (looks at set times within it, as monitor
+ * cues are). They count from the scene's start on the server's clock. On a
+ * reconnect the steps still ahead of the current scene are scheduled again;
+ * the ones already past are not replayed.
  */
 export class LightingBridge {
   private bootId: string | null = null;
@@ -95,6 +100,15 @@ export class LightingBridge {
           if (typeof entry.timelineId !== "string" || typeof entry.phaseEpoch !== "number") continue;
           this.sceneEpochs.set(entry.timelineId, entry.phaseEpoch);
           if ((entry.payload as { result?: unknown } | undefined)?.result !== undefined) this.resultEpochs.set(entry.timelineId, entry.phaseEpoch);
+          // Timed steps still ahead in a scene that is running: lost with the connection unless scheduled again.
+          const startedAt = entry.payload?.phase?.startedAt;
+          if (this.pending.has(entry.timelineId) || typeof entry.phaseId !== "string" || typeof startedAt !== "number"
+            || typeof event.timestamp !== "number") continue;
+          this.sceneStarts.set(entry.timelineId, { epoch: entry.phaseEpoch, startedAt });
+          const into = event.timestamp - startedAt + late;
+          for (const step of sceneSteps(this.config, entry.phaseId)) {
+            if (step.atMs > into) this.at(entry.timelineId, entry, step.atMs - into, this.prepare(step.look, `scene ${entry.phaseId} at ${step.atMs / 1000} s`));
+          }
         }
         return;
       }
@@ -113,9 +127,16 @@ export class LightingBridge {
         if (typeof event.phaseEpoch === "number" && typeof startedAt === "number") this.sceneStarts.set(timeline, { epoch: event.phaseEpoch, startedAt });
         else this.sceneStarts.delete(timeline);
         const lead = this.leadMs(timeline, event, late);
-        const look = own(this.config.scenes, event.phaseId);
-        this.log(`scene ${event.phaseId}${timeline === "main" ? "" : ` (${timeline})`}${lead ? ` · starts in ${(lead / 1000).toFixed(1)} s` : ""}${look ? "" : " · no look"}`);
-        if (look) this.at(timeline, event, lead, this.prepare(look, `scene ${event.phaseId}`));
+        const steps = sceneSteps(this.config, event.phaseId);
+        this.log(`scene ${event.phaseId}${timeline === "main" ? "" : ` (${timeline})`}${lead ? ` · starts in ${(lead / 1000).toFixed(1)} s` : ""}${steps.length ? (steps.length > 1 ? ` · ${steps.length} light steps` : "") : " · no look"}`);
+        // How far into the scene it already is when the event is handled (0 while it is still to start).
+        const into = lead > 0 ? 0 : this.intoSceneMs(timeline, event) + late;
+        const due = steps.filter((step) => lead + step.atMs - into <= 0);
+        const latestDue = due[due.length - 1];
+        if (latestDue) this.play(latestDue.look, `scene ${event.phaseId}${latestDue.atMs ? ` at ${latestDue.atMs / 1000} s` : ""}`);
+        for (const step of steps.slice(due.length)) {
+          this.at(timeline, event, lead + step.atMs - into, this.prepare(step.look, `scene ${event.phaseId}${step.atMs ? ` at ${step.atMs / 1000} s` : ""}`));
+        }
         return;
       }
       case "cue": {
@@ -161,7 +182,7 @@ export class LightingBridge {
   /** Play a look by name, or the look a cue or scene points at (for testing in the room). */
   test(name: string): boolean {
     const look = own(this.config.looks, name) ? name
-      : own(this.config.cues, name) ?? own(this.config.scenes, name) ?? (name === "showEnd" ? this.config.showEnd : undefined);
+      : own(this.config.cues, name) ?? sceneSteps(this.config, name)[0]?.look ?? (name === "showEnd" ? this.config.showEnd : undefined);
     if (!look) return false;
     this.play(look, `test "${name}"`);
     return true;
@@ -191,6 +212,13 @@ export class LightingBridge {
     const announced = start.startedAt - event.timestamp;
     if (!(announced > 0 && announced <= MAX_LEAD_MS)) return 0;
     return Math.max(0, announced - late);
+  }
+
+  /** How long the current scene of `timeline` had been running when the server sent `event` (0 if unknown). */
+  private intoSceneMs(timeline: string, event: Envelope): number {
+    const start = this.sceneStarts.get(timeline);
+    if (!start || start.epoch !== event.phaseEpoch || typeof event.timestamp !== "number") return 0;
+    return Math.max(0, event.timestamp - start.startedAt);
   }
 
   /** Run `fn` now, or after `delayMs` if its scene is still the current one on `timeline` by then. */

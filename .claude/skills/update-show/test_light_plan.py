@@ -91,7 +91,6 @@ class LightPlan(unittest.TestCase):
     def setUpClass(cls):
         cls.parsed = parse(EXPORT)
         cls.lighting, cls.plan_run, out = plan(cls.parsed, VENUE, MAPPING)
-        cls.phase_cues = json.loads((out / "phase-cues.json").read_text(encoding="utf-8"))
         cls.report = (out / "light-plan.md").read_text(encoding="utf-8")
         cls.out = out
 
@@ -118,15 +117,15 @@ class LightPlan(unittest.TestCase):
         self.assertEqual(palette["glut"], {"red": 100.0, "amber": 100.0, "mint": 72.0, "green": 0.0, "blue": 0.0})  # empty cell = 0
         self.assertEqual(palette["rot"], {"red": 100})  # the venue's colours stay
 
-    def test_each_cue_becomes_a_look_and_a_cue_name(self):
+    def test_each_cue_becomes_a_look_and_a_scene_trigger(self):
         looks = self.lighting["looks"]
         self.assertEqual(looks["licht-l1-l3-kalt-l2-l4-off"], {"fixtures": {"l1": {"color": "kalt", "level": 100}, "l3": {"color": "kalt", "level": 100},
                                                                             "l2": {"level": 0}, "l4": {"level": 0}}, "fade": 1.0})
         self.assertEqual(looks["licht-l1-l2-l3-l4-50-glut"]["fixtures"]["l2"], {"level": 50.0, "color": "glut"})
         self.assertEqual(looks["licht-alle-aus-3s"], {"fixtures": {"*": {"level": 0}}, "fade": 3.0})
-        self.assertEqual(self.lighting["cues"]["licht-l1-l3-kalt-l2-l4-off"], "licht-l1-l3-kalt-l2-l4-off")
-        self.assertEqual(self.phase_cues, {"T1-1": ["licht-l1-l3-kalt-l2-l4-off"], "T1-4": ["licht-l1-l2-l3-l4-50-glut"],
-                                           "T1-7": ["licht-l1-l2-l3-l4-glut"], "T1-8": ["licht-alle-aus-3s"]})
+        self.assertEqual(self.lighting["scenes"], {"T1-1": "licht-l1-l3-kalt-l2-l4-off", "T1-4": "licht-l1-l2-l3-l4-50-glut",
+                                                   "T1-7": "licht-l1-l2-l3-l4-glut", "T1-8": "licht-alle-aus-3s"})
+        self.assertEqual(self.lighting["cues"], {"musik-start": "aus"})  # no cue names needed in the draft
 
     def test_vote_winner_lights_its_field(self):
         self.assertEqual(self.lighting["results"]["T1-2"], {"q1": "gewinner-l1-30", "q2": "gewinner-l2-30", "q3": "gewinner-l3-30", "q4": "gewinner-l4-30"})
@@ -153,7 +152,7 @@ class LightPlan(unittest.TestCase):
                                 cwd=REPO, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
         self.assertIn("vote T1-2 → q1 → gewinner-l1-30", result.stdout)
-        self.assertIn('cue "licht-l1-l3-kalt-l2-l4-off" → licht-l1-l3-kalt-l2-l4-off', result.stdout)
+        self.assertIn("scene T1-1 → licht-l1-l3-kalt-l2-l4-off", result.stdout)
 
 
 class ScriptLayout(unittest.TestCase):
@@ -225,12 +224,45 @@ class Reruns(unittest.TestCase):
 
     def test_a_cue_removed_from_the_script_is_gone_after_the_next_run(self):
         cue = {"scene": "T1.1", "kind": "set", "text": "Licht: L1: an", "parts": [{"lamps": [1], "settings": "an"}]}
-        first, _, _ = plan({"lightCues": [cue]}, VENUE, MAPPING)
-        self.assertIn("licht-l1-an", first["cues"])
+        venue = {**VENUE, "scenes": {"eigene-szene": "eigen"}}
+        first, _, _ = plan({"lightCues": [cue]}, venue, MAPPING)
+        self.assertEqual(first["scenes"]["T1-1"], "licht-l1-an")
         second, _, _ = plan({"lightCues": []}, first, MAPPING)
-        self.assertNotIn("licht-l1-an", second["cues"])
+        self.assertEqual(second["scenes"], {"eigene-szene": "eigen"})  # hand-made scene triggers stay
         self.assertNotIn("licht-l1-an", second["looks"])
         self.assertIn("musik-start", second["cues"])
+
+
+def set_cue(scene, text, lamps, settings):
+    return {"scene": scene, "kind": "set", "text": text, "parts": [{"lamps": lamps, "settings": settings}]}
+
+
+class TimedSteps(unittest.TestCase):
+    """Script scenes inside one longer show scene: light at the time each one's monitor cue starts."""
+
+    def setUp(self):
+        self.cues = [set_cue("K1.1", "Licht: L1-L4: an", [1, 2, 3, 4], "an"),
+                     set_cue("K1.2", "Licht: L1: off", [1], "off"),
+                     set_cue("K1.3", "Licht: L1-L4: an", [1, 2, 3, 4], "an")]
+        self.mapping = {"scenes": {"K1.1": "runde", "K1.2": {"phase": "runde", "at": 125.4}, "K1.3": {"phase": "runde", "at": 140}}}
+
+    def test_steps_in_time_order(self):
+        lighting, run, out = plan({"lightCues": list(reversed(self.cues))}, VENUE, self.mapping)
+        self.assertEqual(run.returncode, 0, run.stdout)
+        self.assertEqual(lighting["scenes"]["runde"], [{"at": 0.0, "look": "licht-l1-l2-l3-l4-an"},
+                                                       {"at": 125.4, "look": "licht-l1-off"},
+                                                       {"at": 140.0, "look": "licht-l1-l2-l3-l4-an"}])
+        self.assertIn("125.4 s into the scene", (out / "light-plan.md").read_text(encoding="utf-8"))
+        result = subprocess.run(["pnpm", "--silent", "eos-bridge", "--config", str(out / "lighting.json"), "--list"],
+                                cwd=REPO, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr or result.stdout)
+        self.assertIn("scene runde at 125.4 s → licht-l1-off", result.stdout)
+
+    def test_two_cues_at_the_same_moment_are_a_problem(self):
+        mapping = {"scenes": {"K1.1": "runde", "K1.2": "runde", "K1.3": {"phase": "runde", "at": 140}}}
+        _, run, out = plan({"lightCues": self.cues}, VENUE, mapping)
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("two light cues at the same moment of runde", (out / "light-plan.md").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -106,7 +106,12 @@ When the parsed script has `lightCues` or `lightColours` (the notation is in
 
 1. **Mapping.** Write `<scratchpad>/light-mapping.json`: `scenes` maps each
    script scene ID with a light cue to its phase ID (the same matching as for
-   text), and `winners` maps each vote-winner scene to `{answer ID: lamp}`.
+   text). A script scene with no phase of its own runs inside a longer one
+   (e.g. a question round in one video scene): map it to
+   `{"phase": <phase ID>, "at": <seconds>}`, the start time of the monitor cue
+   where its question appears (`monitorCues`, `startMs` / 1000; check the
+   monitor images or texts against the script's `[Monitore …]` line, in
+   order). `winners` maps each vote-winner scene to `{answer ID: lamp}`.
    Take the answer IDs from the phase's field (`q1`–`q4`, `min`/`max`, zone IDs)
    and find the monitor field (M1–M4) each answer is shown on; field Mn is lit
    by lamp `Ln`. Ask if a match is not clear; never guess.
@@ -116,16 +121,15 @@ When the parsed script has `lightCues` or `lightColours` (the notation is in
    python3 -I .claude/skills/update-show/light_plan.py <parsed.json> <current lighting.json> <scratchpad>/light-mapping.json <scratchpad>/light
    ```
 
-   It writes `lighting.json` (the venue part and hand-made looks kept; the
-   script's colours, one `licht-…` look and cue per distinct cue, and the vote
-   results rebuilt), `phase-cues.json` and `light-plan.md`. Exit code 1 means
+   It writes `lighting.json` (the venue part and hand-made entries kept; the
+   script's colours, one `licht-…` look per distinct cue, a scene trigger per
+   phase with its look or timed steps, and the vote results rebuilt) and
+   `light-plan.md`. Exit code 1 means
    problems; they are listed in `light-plan.md`. Fix the mapping, or report
    script problems (unknown lamp or colour) instead of working around them.
-3. **Scene cues in the draft.** For each phase, set the `licht-*` entries of
-   `outgoingCues` to exactly what `phase-cues.json` lists: remove `licht-*`
-   names that are no longer there, and keep every other cue name (MIDI,
-   TouchDesigner) as it is. In Studio this is Advanced settings → External show
-   cues.
+3. **Nothing in the draft.** The bridge reacts to scene IDs, so the draft
+   needs no light cue names. If a phase still has `licht-…` entries in
+   `outgoingCues` from an earlier run, remove them (keep every other cue name).
 4. **Check the light file** with the bridge itself:
    `pnpm eos-bridge --config <scratchpad>/light/lighting.json --list`.
 
