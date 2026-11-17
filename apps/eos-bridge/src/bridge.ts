@@ -1,6 +1,7 @@
 import { lookTargets, own, sceneSteps, type BridgeConfig } from "./config.js";
 import type { Log } from "./eos.js";
 import type { LookPlayer } from "./player.js";
+import { swatches } from "./swatch.js";
 
 type Envelope = {
   type?: unknown; bootId?: unknown; sequence?: unknown; timelineId?: unknown; phaseId?: unknown; phaseEpoch?: unknown;
@@ -61,6 +62,8 @@ export class LightingBridge {
     private readonly log: Log,
     private readonly schedule: Schedule = realSchedule,
     private readonly now: Now = () => performance.now(),
+    /** Add a colour swatch per lamp to each look's log line (for a terminal that shows colour). */
+    private readonly showSwatches = false,
   ) {}
 
   /** Swap in an edited lighting file without reconnecting. */
@@ -269,7 +272,8 @@ export class LightingBridge {
     const targets = lookTargets(this.config, look);
     return () => {
       this.player.play(targets, look.fade);
-      this.log(`${label} → look "${lookName}"${look.fade ? ` (${look.fade} s fade)` : ""}`);
+      const line = `${label} → look "${lookName}"${look.fade ? ` (${look.fade} s fade)` : ""}`;
+      this.log(this.showSwatches ? `${line}  ${swatches(this.config, (channel) => this.player.state(channel))}` : line);
     };
   }
 }

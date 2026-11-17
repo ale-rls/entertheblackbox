@@ -94,7 +94,9 @@ async function main(): Promise<void> {
     output = eos;
   }
   player = new LookPlayer(output);
-  const bridge = new LightingBridge(config, player, log);
+  // Colour swatches per lamp on each look's log line, only where a terminal shows them (not in a log file).
+  const showSwatches = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
+  const bridge = new LightingBridge(config, player, log, undefined, undefined, showSwatches);
   log(`lights: ${output.name} · lighting file: ${configPath} (${Object.keys(config.fixtures).length} fixtures, ${Object.keys(config.palette).length} colours, ${Object.keys(config.looks).length} looks)`);
 
   if (values.ping || values.test !== undefined) {
