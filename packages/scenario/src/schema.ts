@@ -291,6 +291,15 @@ export const subtitleSchema = z.object({
   path: ["startAtMs"],
 });
 
+/**
+ * Optional second exit for linear scenes: when the scene ends and nobody on
+ * this timeline is in `groupId`, continue at `target` instead of `next`.
+ */
+export const nextIfGroupEmptySchema = z.object({
+  groupId: groupIdSchema,
+  target: phaseIdSchema,
+});
+
 export const videoPhaseSchema = z.object({
   kind: z.literal("video"),
   taskId: z.string().min(1).optional(),
@@ -315,6 +324,7 @@ export const videoPhaseSchema = z.object({
   tailDurationMs: z.number().int().nonnegative().optional(),
   expectedDurationMs: z.number().int().positive(),
   next: phaseIdSchema,
+  nextIfGroupEmpty: nextIfGroupEmptySchema.optional(),
   allowSkip: z.boolean().optional(),
   /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
   showCursors: z.boolean().optional(),
@@ -365,6 +375,7 @@ export const narrationPhaseSchema = z.object({
   textByGroup: z.record(groupIdSchema, z.string().min(1)).optional(),
   durationMs: z.number().int().positive(),
   next: phaseIdSchema,
+  nextIfGroupEmpty: nextIfGroupEmptySchema.optional(),
   allowSkip: z.boolean().optional(),
   /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
   showCursors: z.boolean().optional(),

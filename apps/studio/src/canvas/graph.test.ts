@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseRuntimeScenario } from "@entertheblackbox/studio-adapter";
 import scenario from "../../../../content/scenarios/dev.json";
 import manifest from "../../../../content/media-manifest.json";
-import { acceptsInput, applyEdges, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, outputHandles, phaseOutputHandles, pruneEdges, reconcilePhaseOutputEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./graph.js";
+import { acceptsInput, applyEdges, GROUP_EMPTY_HANDLE, END_NODE_ID, ENTRY_NODE_ID, graphEdges, graphPhases, outputHandles, phaseOutputHandles, pruneEdges, reconcilePhaseOutputEdges, replacePluralityLayoutEdges, validateConnection, withoutOutputEdge } from "./graph.js";
 
 const project = () => parseRuntimeScenario(structuredClone(scenario), manifest);
 
@@ -25,6 +25,22 @@ describe("Studio canvas graph", () => {
     expect(edges.find((edge) => edge.source === ENTRY_NODE_ID)).toBeTruthy();
     expect(edges.some((edge) => edge.target === END_NODE_ID)).toBe(true);
     expect(applyEdges(value, edges).scenario).toEqual(value.scenario);
+  });
+
+  it("gives a scene with nextIfGroupEmpty a second output that round-trips", () => {
+    const value = project();
+    const groups = [{ id: "stage", label: "Stage" }, { id: "swap", label: "Swap" }];
+    const phases = value.scenario.phases.map((phase) => phase.id === "intro-video" && phase.kind === "video"
+      ? { ...phase, nextIfGroupEmpty: { groupId: "swap", target: "idle" } } : phase);
+    const withRule = { ...value, scenario: { ...value.scenario, groups, phases } } as typeof value;
+    const intro = withRule.scenario.phases.find((phase) => phase.id === "intro-video");
+    expect(phaseOutputHandles(intro)).toEqual(["next", GROUP_EMPTY_HANDLE]);
+    const edges = graphEdges(withRule);
+    expect(edges.find((edge) => edge.source === "intro-video" && edge.sourceHandle === GROUP_EMPTY_HANDLE)?.target).toBe(END_NODE_ID);
+    expect(applyEdges(withRule, edges).scenario).toEqual(withRule.scenario);
+    const rewired = edges.map((edge) => edge.source === "intro-video" && edge.sourceHandle === GROUP_EMPTY_HANDLE ? { ...edge, target: "question-fixed" } : edge);
+    expect(applyEdges(withRule, rewired).scenario.phases.find((phase) => phase.id === "intro-video")).toMatchObject({ nextIfGroupEmpty: { groupId: "swap", target: "question-fixed" } });
+    expect(reconcilePhaseOutputEdges(edges, { ...intro!, nextIfGroupEmpty: undefined } as never).some((edge) => edge.sourceHandle === GROUP_EMPTY_HANDLE)).toBe(false);
   });
 
   it("keeps two-quadrant handles correlated with their min/max runtime map", () => {
