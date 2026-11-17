@@ -56,6 +56,20 @@ function drawText(canvas: HTMLCanvasElement, question: string, scene: CurtainSce
   if (!ctx) return;
   const { width, height } = canvas;
   ctx.clearRect(0, 0, width, height);
+  // Field divisions: a thin, soft white cross so the neutral fields read as separate areas.
+  ctx.save();
+  ctx.strokeStyle = "rgb(255 255 255 / 55%)";
+  ctx.lineWidth = Math.max(1.5, width * 0.0016);
+  ctx.lineCap = "round";
+  ctx.shadowColor = "rgb(0 0 0 / 60%)";
+  ctx.shadowBlur = width * 0.004;
+  ctx.beginPath();
+  for (const [x1, y1, x2, y2] of scene.divisions) {
+    ctx.moveTo(x1 * width, y1 * height);
+    ctx.lineTo(x2 * width, y2 * height);
+  }
+  ctx.stroke();
+  ctx.restore();
   ctx.textAlign = "center";
   // Title: centre top, 4.2% of width, top edge at 5% of height, at most 88% wide.
   ctx.textBaseline = "top";

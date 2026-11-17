@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CurtainTreatment } from "@entertheblackbox/protocol";
-import { curtainVoteField, resolveCurtainSettings, type TwoQuadrantField } from "@entertheblackbox/shared";
+import { curtainVoteField, resolveCurtainSettings, type FourQuadrantField, type TwoQuadrantField } from "@entertheblackbox/shared";
 import { CurtainScene } from "./curtainScene.js";
 import { coverCrop, encodeLightMap, FABRIC_FS } from "./curtainRenderer.js";
 
@@ -33,7 +33,41 @@ describe("CurtainScene", () => {
     expect(counted!.flood).toBeGreaterThan(neutral!.flood);
     expect(neutral!.pulse).toBe(1);
     expect(counted!.pulse).toBe(0);
-    expect(counted!.rgb[2]).toBeGreaterThan(counted!.rgb[0]);
+  });
+
+  it("lights each cursor in its participant's own colour, wherever it stands", () => {
+    const scene = new CurtainScene(field, treatment);
+    // #ff0000 is the "min" answer's colour; this cursor stands in the "max" field.
+    const [light, plain] = scene.cursorLights([
+      { x: 0.9, y: 0.5, ghost: false, color: "#00f5d4" },
+      { x: 0.1, y: 0.5, ghost: false },
+    ], 0);
+    expect(light!.rgb[0]).toBe(0);
+    expect(light!.rgb[1]).toBeGreaterThan(0.8);
+    expect(plain!.rgb).toEqual([1, 1, 1]);
+  });
+
+  it("lights every field in the same neutral colour and divides them with a line", () => {
+    const scene = new CurtainScene(field, treatment);
+    expect(scene.colorsLinear[0]).toEqual(scene.colorsLinear[1]);
+    const [r, g, b] = scene.colorsLinear[0]!;
+    expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(0.15);
+    // Left/right vote: one vertical line through the middle of the neutral gap.
+    expect(scene.divisions).toHaveLength(1);
+    const [x1, y1, x2, y2] = scene.divisions[0]!;
+    expect(x1).toBeCloseTo(0.5);
+    expect(x2).toBeCloseTo(0.5);
+    expect(y1).toBeLessThan(0.1);
+    expect(y2).toBeGreaterThan(0.9);
+  });
+
+  it("divides a four-way vote with a cross", () => {
+    const four = curtainVoteField<FourQuadrantField>({ type: "four-quadrant", xAxis: { minLabel: "L", maxLabel: "R" }, yAxis: { minLabel: "T", maxLabel: "B" } });
+    const scene = new CurtainScene(four, { ...treatment, answerColors: {} });
+    expect(scene.divisions).toHaveLength(2);
+    const [vertical, horizontal] = scene.divisions;
+    expect(vertical![0]).toBeCloseTo(vertical![2]);
+    expect(horizontal![1]).toBeCloseTo(horizontal![3]);
   });
 
   it("keeps labels for both pools", () => {

@@ -2,12 +2,14 @@ import type { CurtainTreatment } from "@entertheblackbox/protocol";
 import {
   buildPoolMasks,
   composeLightMap,
+  CURTAIN_NEUTRAL_POOL_COLOR,
   curtainLabels,
-  cursorTint,
   hexToLinear,
   poolIntensities,
   quadrantOfField,
+  curtainDivisionLines,
   type CurtainLabel,
+  type PoolOutlineSegment,
   type PoolMasks,
   type PositionField,
 } from "@entertheblackbox/shared";
@@ -20,7 +22,7 @@ export const PULSE_DECAY_MS = 380;
 /** Cursor lights fade out over this long once the vote closes. */
 export const CLOSE_FADE_MS = 900;
 
-export type SceneCursor = { x: number; y: number; ghost: boolean; pulseAt?: number | undefined };
+export type SceneCursor = { x: number; y: number; ghost: boolean; color?: string | undefined; pulseAt?: number | undefined };
 
 /**
  * Display-side state of one curtain-light vote, independent of WebGL: the
@@ -31,6 +33,8 @@ export class CurtainScene {
   readonly pools: PoolMasks;
   readonly labels: CurtainLabel[];
   readonly colorsLinear: Array<[number, number, number]>;
+  /** Field divisions drawn over the neutral fabric: a cross (or one line) through the field. */
+  readonly divisions: PoolOutlineSegment[];
   private readonly intensities: number[];
   private readonly light: ReturnType<typeof composeLightMap>;
   private closedAt: number | null = null;
@@ -38,7 +42,8 @@ export class CurtainScene {
   constructor(readonly field: PositionField, readonly treatment: CurtainTreatment) {
     this.pools = buildPoolMasks(field);
     this.labels = curtainLabels(field, this.pools);
-    this.colorsLinear = this.pools.outcomes.map((id) => hexToLinear(treatment.answerColors[id] ?? "#ffffff"));
+    this.colorsLinear = this.pools.outcomes.map(() => hexToLinear(CURTAIN_NEUTRAL_POOL_COLOR));
+    this.divisions = curtainDivisionLines(field, this.pools);
     this.intensities = this.pools.outcomes.map(() => treatment.curtain.poolBase);
     this.light = new Float32Array(this.pools.columns * this.pools.rows * 3);
   }
@@ -72,20 +77,19 @@ export class CurtainScene {
   }
 
   /**
-   * One light per cursor: tinted toward the nearby answer colours, a
-   * stronger flood once it stands in a counting area, and a brief pulse
-   * when its participant touches their phone.
+   * One light per cursor in its participant's own colour (the colour their
+   * phone shows), a stronger flood once it stands in a counting area, and a
+   * brief pulse when its participant touches their phone.
    */
   cursorLights(cursors: readonly SceneCursor[], now: number): CursorLight[] {
     const { cursorFlood, cursorFloodCounted } = this.treatment.curtain;
     return cursors.filter((cursor) => !cursor.ghost).map((cursor) => {
-      const tint = cursorTint(this.pools, this.colorsLinear, cursor.x, cursor.y);
       const counted = quadrantOfField(this.field, cursor.x, cursor.y) !== null;
       const pulse = cursor.pulseAt === undefined ? 0 : Math.exp(-Math.max(0, now - cursor.pulseAt) / PULSE_DECAY_MS);
       return {
         x: cursor.x,
         y: cursor.y,
-        rgb: tint.rgb,
+        rgb: hexToLinear(cursor.color ?? "#ffffff"),
         flood: counted ? cursorFloodCounted : cursorFlood,
         core: counted ? 1.1 : 0.8,
         pulse,

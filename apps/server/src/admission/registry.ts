@@ -1,12 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { ParticipantClient } from "@entertheblackbox/protocol";
 import type { WebSocket } from "ws";
+import { PARTICIPANT_COLORS } from "@entertheblackbox/shared";
 
-export const IDENTITY_COLORS = [
-  "#ff595e", "#ffca3a", "#8ac926", "#1982c4", "#6a4c93",
-  "#f15bb5", "#00bbf9", "#00f5d4", "#fb8500", "#8338ec",
-  "#3a86ff", "#06d6a0",
-] as const;
+/** Each participant's own colour: phone background, cursor dot and curtain light. */
+export const IDENTITY_COLORS = PARTICIPANT_COLORS;
 
 export type ParticipantRecord = {
   clientId: string;
