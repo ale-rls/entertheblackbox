@@ -41,16 +41,21 @@ leave an unlit gap between them.
 | Layout | Treatment |
 |---|---|
 | Left/right, top/bottom vote | Two pools separated by unlit space |
-| Horizontal / vertical spectrum | Opposing coloured washes, continuous colour transition, unlit centre band; light grows toward the ends |
+| Horizontal / vertical spectrum | Two neutral washes either side of an unlit centre band; light grows toward the ends |
 | Four quadrants | Four pools with an unlit cross; axis-end labels |
 | Three candidates / custom zones | Light shaped to each zone with soft edges; space between zones is neutral |
 
-There are no borders, grid lines or dividing strokes. Pools keep a base glow
-and brighten with their share of the authoritative live counts, smoothed and
-capped. Areas never move or grow with popularity.
+Fields are lit in one neutral, slightly warm white (`CURTAIN_NEUTRAL_POOL_COLOR`)
+and separated by thin soft white outlines along each counting area's edge. The
+answer colours are not used on the curtain; they still tint M1–M4 and the
+phones. Pools keep a base glow and brighten with their share of the
+authoritative live counts, smoothed and capped. Areas never move or grow with
+popularity.
 
-Each cursor is a bright centre with a soft flood, tinted toward nearby answer
-colours. Its flood strengthens once it stands in a counting area. The title
+Each cursor is a bright centre with a soft flood in its participant's own
+colour: the identity colour the server assigns on join and the phone shows as
+its background (`PARTICIPANT_COLORS`). The coloured floods are what colour the
+neutral fabric. A flood strengthens once it stands in a counting area. The title
 and labels stay visible throughout in white, with a soft dark halo for contrast
 over both lit pools and unlit fabric.
 

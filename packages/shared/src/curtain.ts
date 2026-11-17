@@ -355,6 +355,71 @@ export function buildPoolMasks(field: PositionField, columns = POOL_GRID_COLUMNS
   return { columns, rows, outcomes, masks, counted, centers, extent };
 }
 
+/**
+ * Participant identity colours, assigned by the server on join. A phone shows
+ * its colour as its background; the display draws that cursor (and its curtain
+ * light) in the same colour.
+ */
+export const PARTICIPANT_COLORS = [
+  "#ff595e", "#ffca3a", "#8ac926", "#1982c4", "#6a4c93",
+  "#f15bb5", "#00bbf9", "#00f5d4", "#fb8500", "#8338ec",
+  "#3a86ff", "#06d6a0",
+] as const;
+
+/**
+ * Curtain-light answer fields are lit in one neutral, slightly warm white:
+ * the curtain's colour comes from the audience's own lights, not from
+ * colour-coded fields. (Answer colours still drive M1–M4 and the phones.)
+ */
+export const CURTAIN_NEUTRAL_POOL_COLOR = "#f4eee6";
+
+/** One outline segment in viewport units (0..1, y down). */
+export type PoolOutlineSegment = readonly [x1: number, y1: number, x2: number, y2: number];
+
+/**
+ * Smooth outline of every answer's counting area: marching squares at the
+ * half-way level of a lightly blurred one-hot of `counted`. Used to draw the
+ * field divisions on a neutral curtain instead of filling fields with colour.
+ */
+export function poolOutlines(pools: PoolMasks): PoolOutlineSegment[][] {
+  const { columns, rows, counted } = pools;
+  const radius = Math.max(1, Math.round(columns / 192));
+  return pools.outcomes.map((_, i) => {
+    const raw = new Float32Array(columns * rows);
+    for (let cell = 0; cell < counted.length; cell += 1) if (counted[cell] === i) raw[cell] = 1;
+    const v = blur(raw, columns, rows, radius);
+    const at = (column: number, row: number) => v[row * columns + column]!;
+    const px = (column: number) => (column + 0.5) / columns;
+    const py = (row: number) => (row + 0.5) / rows;
+    const segments: PoolOutlineSegment[] = [];
+    for (let row = 0; row < rows - 1; row += 1) {
+      for (let column = 0; column < columns - 1; column += 1) {
+        const a = at(column, row); const b = at(column + 1, row);
+        const c = at(column + 1, row + 1); const d = at(column, row + 1);
+        const code = (a >= 0.5 ? 8 : 0) | (b >= 0.5 ? 4 : 0) | (c >= 0.5 ? 2 : 0) | (d >= 0.5 ? 1 : 0);
+        if (code === 0 || code === 15) continue;
+        const t = (p: number, q: number) => (p === q ? 0.5 : (0.5 - p) / (q - p));
+        const top = [px(column) + t(a, b) / columns, py(row)] as const;
+        const right = [px(column + 1), py(row) + t(b, c) / rows] as const;
+        const bottom = [px(column) + t(d, c) / columns, py(row + 1)] as const;
+        const left = [px(column), py(row) + t(a, d) / rows] as const;
+        const add = (p: readonly [number, number], q: readonly [number, number]) => segments.push([p[0], p[1], q[0], q[1]]);
+        switch (code) {
+          case 1: case 14: add(left, bottom); break;
+          case 2: case 13: add(bottom, right); break;
+          case 3: case 12: add(left, right); break;
+          case 4: case 11: add(top, right); break;
+          case 6: case 9: add(top, bottom); break;
+          case 7: case 8: add(left, top); break;
+          case 5: add(left, top); add(bottom, right); break;
+          case 10: add(top, right); add(left, bottom); break;
+        }
+      }
+    }
+    return segments;
+  });
+}
+
 /** Summed soft pool coverage at a position (0 in neutral space, about 1 inside a pool). */
 export function poolCoverageAt(pools: PoolMasks, x: number, y: number): number {
   const column = Math.min(pools.columns - 1, Math.max(0, Math.floor(x * pools.columns)));

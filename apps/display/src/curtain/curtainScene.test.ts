@@ -33,7 +33,33 @@ describe("CurtainScene", () => {
     expect(counted!.flood).toBeGreaterThan(neutral!.flood);
     expect(neutral!.pulse).toBe(1);
     expect(counted!.pulse).toBe(0);
-    expect(counted!.rgb[2]).toBeGreaterThan(counted!.rgb[0]);
+  });
+
+  it("lights each cursor in its participant's own colour, wherever it stands", () => {
+    const scene = new CurtainScene(field, treatment);
+    // #ff0000 is the "min" answer's colour; this cursor stands in the "max" field.
+    const [light, plain] = scene.cursorLights([
+      { x: 0.9, y: 0.5, ghost: false, color: "#00f5d4" },
+      { x: 0.1, y: 0.5, ghost: false },
+    ], 0);
+    expect(light!.rgb[0]).toBe(0);
+    expect(light!.rgb[1]).toBeGreaterThan(0.8);
+    expect(plain!.rgb).toEqual([1, 1, 1]);
+  });
+
+  it("lights every field in the same neutral colour and outlines each field", () => {
+    const scene = new CurtainScene(field, treatment);
+    expect(scene.colorsLinear[0]).toEqual(scene.colorsLinear[1]);
+    const [r, g, b] = scene.colorsLinear[0]!;
+    expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(0.15);
+    expect(scene.outlines).toHaveLength(2);
+    for (const segments of scene.outlines) {
+      expect(segments.length).toBeGreaterThan(10);
+      for (const [x1, y1, x2, y2] of segments) for (const v of [x1, y1, x2, y2]) expect(v).toBeGreaterThanOrEqual(0), expect(v).toBeLessThanOrEqual(1);
+    }
+    // "No" sits left, "Yes" right: their outlines stay on their own side.
+    const meanX = (segments: readonly (readonly number[])[]) => segments.reduce((sum, seg) => sum + seg[0]!, 0) / segments.length;
+    expect(meanX(scene.outlines[0]!)).toBeLessThan(meanX(scene.outlines[1]!));
   });
 
   it("keeps labels for both pools", () => {

@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   buildPoolMasks,
   composeLightMap,
+  CURTAIN_NEUTRAL_POOL_COLOR,
   CURTAIN_DEFAULTS,
   CURTAIN_DEFAULT_NEUTRAL_GAP,
   curtainLabels,
   curtainVoteField,
-  cursorTint,
   hexToLinear,
   neutralEntryPoint,
+  PARTICIPANT_COLORS,
+  poolOutlines,
   poolIntensities,
   quadrantOfField,
   resolveAnswerColors,
@@ -104,7 +106,7 @@ export function CurtainStageEditor({ phase, scenario, onChange }: {
   };
   const gapField = phase.field.type === "polygon-zones" ? null : phase.field;
   return <fieldset className="curtain-stage"><legend>Curtain light</legend>
-    <CurtainPreview field={field} colors={colors} settings={settings} question={phase.text} />
+    <CurtainPreview field={field} settings={settings} question={phase.text} />
     <div className="curtain-colors">
       {Object.entries(colors).map(([id, color]) => <label key={id} className="sc-tool-label curtain-color">
         <input type="color" value={color} aria-label={`Colour for ${labels[id] ?? id}`} onChange={(event) => setColor(id, event.target.value)} />
@@ -112,6 +114,7 @@ export function CurtainStageEditor({ phase, scenario, onChange }: {
       </label>)}
     </div>
     <button className="sc-tool-button" type="button" disabled={phase.answerColors === undefined} onClick={() => onChange({ ...phase, answerColors: undefined } as Phase)}>Reset colours to system defaults</button>
+    <p className="sc-tool-copy field-hint">Answer colours tint M1–M4 and the phones. On the curtain, fields are neutral and outlined; each participant's light shines in their own phone colour.</p>
     <details><summary>Rehearsal tuning</summary>
       {gapField && <Slider label="Neutral gap" hint="field.neutralGap" value={gapField.neutralGap ?? settings.neutralGap} min={0} max={0.4} step={0.005}
         onChange={(neutralGap) => onChange({ ...phase, field: { ...gapField, neutralGap } } as Phase)} />}
@@ -129,12 +132,13 @@ type SampleCursor = { x: number; y: number; vx: number; vy: number; target: { x:
 /**
  * A light-only preview: pools from the same counting geometry the server
  * uses, sample cursor lights, and a simulated distribution that drives pool
- * brightness the way live counts do. The fabric itself is only drawn on the
- * display, so this shows layout, colour and balance rather than final looks.
+ * brightness the way live counts do. Fields are neutral and outlined; each
+ * sample cursor lights in a participant colour, as on the display. The fabric
+ * itself is only drawn on the display, so this shows layout and balance
+ * rather than final looks.
  */
-export function CurtainPreview({ field, colors, settings, question }: {
+export function CurtainPreview({ field, settings, question }: {
   field: PositionField;
-  colors: Record<string, string>;
   settings: ReturnType<typeof resolveCurtainSettings>;
   question: string;
 }) {
@@ -145,7 +149,8 @@ export function CurtainPreview({ field, colors, settings, question }: {
   const pools = useMemo(() => buildPoolMasks(field, 96, 54), [field]);
   const labels = useMemo(() => curtainLabels(field, pools), [field, pools]);
   const entry = useMemo(() => neutralEntryPoint(field), [field]);
-  const colorsLinear = useMemo(() => pools.outcomes.map((id) => hexToLinear(colors[id] ?? "#ffffff")), [pools, colors]);
+  const colorsLinear = useMemo(() => pools.outcomes.map(() => hexToLinear(CURTAIN_NEUTRAL_POOL_COLOR)), [pools]);
+  const outlines = useMemo(() => poolOutlines(pools), [pools]);
   const live = useRef({ settings, lean, running, count });
   live.current = { settings, lean, running, count };
 
@@ -208,12 +213,16 @@ export function CurtainPreview({ field, colors, settings, question }: {
       ctx.fillRect(0, 0, width, height);
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(map, 0, 0, width, height);
+      ctx.strokeStyle = "rgb(255 255 255 / 55%)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const segments of outlines) for (const [x1, y1, x2, y2] of segments) { ctx.moveTo(x1 * width, y1 * height); ctx.lineTo(x2 * width, y2 * height); }
+      ctx.stroke();
       ctx.globalCompositeOperation = "lighter";
       cursors.forEach((cursor, index) => {
-        const tint = cursorTint(pools, colorsLinear, cursor.x, cursor.y);
         const counted = quadrantOfField(field, cursor.x, cursor.y) !== null;
         const pulse = pulseAt.has(index) ? Math.exp(-(time - pulseAt.get(index)!) / 380) : 0;
-        const rgb = tint.rgb.map((v) => Math.round(255 * v ** (1 / 2.2))).join(" ");
+        const rgb = hexToLinear(PARTICIPANT_COLORS[index % PARTICIPANT_COLORS.length]!).map((v) => Math.round(255 * v ** (1 / 2.2))).join(" ");
         const x = cursor.x * width;
         const y = cursor.y * height;
         const flood = (counted ? s.cursorFloodCounted : s.cursorFlood) * (1 + 0.6 * pulse);
@@ -245,7 +254,7 @@ export function CurtainPreview({ field, colors, settings, question }: {
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [field, pools, labels, entry, colorsLinear, question]);
+  }, [field, pools, labels, entry, colorsLinear, outlines, question]);
 
   return <div className="curtain-preview">
     <canvas ref={canvasRef} width={384} height={216} aria-label="Curtain light preview" />
