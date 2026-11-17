@@ -37,6 +37,12 @@ export class LookPlayer {
 
   constructor(private readonly output: LightOutput, private readonly clock: Clock = realClock) {}
 
+  /** What the looks want this channel to end at (a copy), or undefined if no look has set it yet. */
+  state(channel: number): ChannelValues | undefined {
+    const values = this.wanted.get(channel);
+    return values && { ...values };
+  }
+
   play(targets: Map<number, ChannelValues>, fadeSeconds: number): void {
     this.stop();
     for (const [channel, values] of targets) this.wanted.set(channel, { ...this.wanted.get(channel), ...values });

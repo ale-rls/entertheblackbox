@@ -155,6 +155,12 @@ keeps retrying both: a dropped desk every 2 s, and the server even after an
 error response such as a 502 while it restarts (1 s, 2 s, 4 s … up to every
 30 s, back to 1 s once it is reachable again).
 
+Each look's line ends with a small colour swatch per lamp, as the lamps should
+look once the fade is done (`l1 ▇ l2 ▇ l3 -- l4 ··`: `--` is off, `··` not set
+yet). It is a monitoring aid: amber and mint have no exact screen colour. The
+swatches appear in a Terminal window only, not when the output goes to a file
+(or with `NO_COLOR=1`).
+
 The display token is a secret: don't put it in the lighting file or in git.
 
 ## Troubleshooting
