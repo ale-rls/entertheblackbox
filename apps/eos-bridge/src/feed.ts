@@ -9,6 +9,22 @@ export type FeedSource = {
   close(): void;
 };
 
+/**
+ * The fetch the feed's EventSource uses: adds the display token and asks for an
+ * uncompressed stream. Node's fetch offers br and zstd by default, and a proxy
+ * that compresses with those holds the event stream back to fill its buffer:
+ * not even the headers arrive, so the feed never opens. A live stream of small
+ * events gains nothing from compression.
+ */
+export function feedFetch(token: string, fetchImpl: typeof fetch = fetch): typeof fetch {
+  return (input, init) => {
+    const headers = new Headers(init?.headers);
+    headers.set("Authorization", `Bearer ${token}`);
+    headers.set("Accept-Encoding", "identity");
+    return fetchImpl(input, { ...init, headers });
+  };
+}
+
 const CLOSED = 2;
 export const FEED_RETRY_MIN_MS = 1_000;
 export const FEED_RETRY_MAX_MS = 30_000;
