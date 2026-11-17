@@ -5,7 +5,7 @@ import { EventSource } from "eventsource";
 import { LightingBridge } from "./bridge.js";
 import { parseBridgeConfig, type BridgeConfig } from "./config.js";
 import { dryRunOutput, EosConnection, type LightOutput } from "./eos.js";
-import { CueFeed, type FeedSource } from "./feed.js";
+import { CueFeed, feedFetch, type FeedSource } from "./feed.js";
 import { LookPlayer } from "./player.js";
 import { watchFile } from "./watch.js";
 
@@ -138,9 +138,7 @@ async function main(): Promise<void> {
 
   const feed = new CueFeed(
     new URL("/api/cues", server),
-    (url) => new EventSource(url, {
-      fetch: (input, init) => fetch(input, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${token}` } }),
-    }) as unknown as FeedSource,
+    (url) => new EventSource(url, { fetch: feedFetch(token) }) as unknown as FeedSource,
     (data) => {
       try { bridge.handle(JSON.parse(data) as Parameters<LightingBridge["handle"]>[0]); }
       catch (error) { log(`ignored a malformed event: ${error instanceof Error ? error.message : String(error)}`); }

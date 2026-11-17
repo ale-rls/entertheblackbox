@@ -7,7 +7,7 @@ import { EventSource } from "eventsource";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ChannelValues } from "./config.js";
 import { EosConnection, type LightOutput } from "./eos.js";
-import { CueFeed, FEED_RETRY_MAX_MS, FEED_RETRY_MIN_MS, type FeedSource } from "./feed.js";
+import { CueFeed, FEED_RETRY_MAX_MS, FEED_RETRY_MIN_MS, feedFetch, type FeedSource } from "./feed.js";
 import { SlipDecoder, oscAddress } from "./osc.js";
 import { FRAME_MS, LookPlayer, type Clock } from "./player.js";
 import { watchFile } from "./watch.js";
@@ -76,6 +76,33 @@ describe("cue feed after an HTTP error (review finding 1)", () => {
     sources.at(-1)!.onerror?.({ code: 401 });
     expect(unauthorized).toBe(true);
     expect(pending).toHaveLength(0);
+  });
+});
+
+describe("cue feed behind a proxy that compresses with br/zstd (#368)", () => {
+  it("asks for an uncompressed stream with the token, so the feed opens", async () => {
+    const seen: Array<{ authorization?: string | undefined; encoding?: string | undefined }> = [];
+    const server: HttpServer = createHttpServer((request, response) => {
+      seen.push({ authorization: request.headers.authorization, encoding: request.headers["accept-encoding"] });
+      // Like the production proxy: when the client accepts br or zstd, nothing comes back at all.
+      if (/\b(br|zstd)\b/.test(request.headers["accept-encoding"] ?? "")) return;
+      response.writeHead(200, { "Content-Type": "text/event-stream" });
+      response.write(`data: ${JSON.stringify({ type: "snapshot" })}\n\n`);
+    });
+    await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+    cleanups.push(() => new Promise<void>((done) => { server.closeAllConnections(); server.close(() => done()); }));
+    const port = (server.address() as { port: number }).port;
+
+    const events: string[] = [];
+    const feed = new CueFeed(
+      new URL(`http://127.0.0.1:${port}/api/cues`),
+      (url) => new EventSource(url, { fetch: feedFetch("secret") }) as unknown as FeedSource,
+      (data) => events.push(data), () => {}, () => {},
+    );
+    cleanups.push(() => feed.stop());
+    feed.start();
+    await until(() => events.length > 0);
+    expect(seen[0]).toEqual({ authorization: "Bearer secret", encoding: "identity" });
   });
 });
 
