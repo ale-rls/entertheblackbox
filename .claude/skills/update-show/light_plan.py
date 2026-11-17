@@ -103,7 +103,19 @@ def parse_look(row, fixtures, palette, problems):
             problems.append(f"{where}: no lamp \"{lamp_text.strip()}\" (lamps: alle, {', '.join(sorted(fixtures))})")
             continue
         state = {}
-        for word in settings.split():
+        words = settings.split()
+        # Colour names may have spaces ("warm weiß" is the palette's "warm-weiss"): join them first.
+        joined, i = [], 0
+        while i < len(words):
+            for length in (3, 2):
+                if i + length <= len(words) and slug(" ".join(words[i:i + length])) in palette:
+                    joined.append(" ".join(words[i:i + length]))
+                    i += length
+                    break
+            else:
+                joined.append(words[i])
+                i += 1
+        for word in joined:
             key = slug(word)
             number = parse_number(word)
             if key == "aus":

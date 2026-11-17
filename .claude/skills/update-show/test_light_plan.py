@@ -171,6 +171,14 @@ class ScriptLayout(unittest.TestCase):
         self.assertEqual(self.cues(rows), [("T1.2", "look", "aus")])
 
 
+class ColourNames(unittest.TestCase):
+    def test_a_colour_name_with_a_space(self):
+        parsed = {"lightColours": [["warm weiß", "rot 100 · grün 80 · amber 60"]],
+                  "lightLooks": [["sanft", "alle: warm weiß 80", "4"]], "lightCues": []}
+        lighting = plan(parsed, VENUE, MAPPING)
+        self.assertEqual(lighting["looks"]["sanft"], {"fade": 4.0, "fixtures": {"*": {"color": "warm-weiss", "level": 80.0}}})
+
+
 class Reruns(unittest.TestCase):
     def test_a_winner_cue_removed_from_the_script_is_gone_after_the_next_run(self):
         first = plan({"lightCues": [{"scene": "T1.2", "kind": "winner", "text": "LICHT Gewinner"}]}, VENUE, MAPPING)

@@ -32,7 +32,7 @@ work). Its first cell reads `Lichtstimmung`; the header row is not read.
 | aus | alle: aus | 3 |
 | abend | alle: abend 20 | 6 |
 
-- **Lichtstimmung:** the look's name. Spaces and umlauts are fine: in cues,
+- **Lichtstimmung:** the look's name. Spaces and umlauts are fine (also in colour names): in cues,
   `vier felder` is written `vier-felder`.
 - **Lampen:** `lamp: setting`, separated by `·`, `;` or new lines.
   - `alle` is every lamp. It is applied first; lamps named after it override it.
