@@ -19,7 +19,8 @@
     "publish-scenario": "tsx scripts/publish-scenario-to-pocketbase.ts",
     "import-show-yaml": "tsx scripts/import-show-yaml.ts",
     "publish-native-show": "tsx packages/show-content/src/publish.ts",
-    "midi-bridge": "pnpm --silent --filter @entertheblackbox/midi-bridge start"
+    "midi-bridge": "pnpm --silent --filter @entertheblackbox/midi-bridge start",
+    "eos-bridge": "pnpm --silent --filter @entertheblackbox/eos-bridge start"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",

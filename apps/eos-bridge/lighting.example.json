@@ -1,0 +1,54 @@
+{
+  "eos": { "host": "169.254.126.220", "port": 3037, "user": 0 },
+
+  "fixtures": {
+    "feld-rot":   { "channel": 10, "setup": { "intensity mspeed": -3 } },
+    "feld-blau":  { "channel": 11, "setup": { "intensity mspeed": -3 } },
+    "feld-gruen": { "channel": 12, "setup": { "intensity mspeed": -3 } },
+    "feld-gelb":  { "channel": 13, "setup": { "intensity mspeed": -3 } }
+  },
+
+  "palette": {
+    "rot":    { "red": 100 },
+    "blau":   { "blue": 100 },
+    "gruen":  { "green": 100 },
+    "gelb":   { "red": 100, "green": 55, "amber": 100 },
+    "orange": { "red": 100, "green": 15, "amber": 100 },
+    "warm":   { "red": 100, "green": 35, "amber": 90, "mint": 10 },
+    "weiss":  "#ffffff"
+  },
+
+  "looks": {
+    "aus":        { "fade": 3, "fixtures": { "*": { "level": 0 } } },
+    "warme-welle": { "fade": 6, "fixtures": { "*": { "color": "warm", "level": 100 } } },
+    "vier-felder": {
+      "fade": 2,
+      "fixtures": {
+        "feld-rot":   { "color": "rot",   "level": 100 },
+        "feld-blau":  { "color": "blau",  "level": 100 },
+        "feld-gruen": { "color": "gruen", "level": 100 },
+        "feld-gelb":  { "color": "gelb",  "level": 100 }
+      }
+    },
+    "nur-rot":   { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "feld-rot":   { "level": 100 } } },
+    "nur-blau":  { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "feld-blau":  { "level": 100 } } },
+    "nur-gruen": { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "feld-gruen": { "level": 100 } } },
+    "nur-gelb":  { "fade": 1.5, "fixtures": { "*": { "level": 10 }, "feld-gelb":  { "level": 100 } } }
+  },
+
+  "cues": {
+    "licht-aus": "aus",
+    "licht-warme-welle": "warme-welle",
+    "licht-vier-felder": "vier-felder"
+  },
+
+  "scenes": {
+    "example-scene-id": "vier-felder"
+  },
+
+  "results": {
+    "example-vote-scene-id": { "q1": "nur-rot", "q2": "nur-blau", "q3": "nur-gruen", "q4": "nur-gelb", "none": "vier-felder" }
+  },
+
+  "showEnd": "aus"
+}
