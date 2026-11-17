@@ -7,9 +7,9 @@ it into the show: no code, and no hand-editing of the lighting file.
 ```
 script (yellow "Licht:" cues + colour table)
   → /check-script-updates   checks every light cue against the show
-  → /update-show            scene cue names into the Studio draft, looks into lighting.json
-  → operator publishes the draft in Studio
-  → show: scene starts → server sends the cue → Eos bridge plays the look on the desk
+  → /update-show            looks and scene triggers (with times) into lighting.json
+  → lighting.json on the show laptop (the Studio draft needs nothing for the light)
+  → show: scene starts → the bridge plays its look, or its steps at set times, on the desk
 ```
 
 The Eos bridge and `lighting.json` are described in [eos-lighting.md](eos-lighting.md).
@@ -89,14 +89,18 @@ lands in the wrong scene, put it directly under the heading.
 ### When it fires
 
 At the **start** of the scene, or for the vote winner, when the vote is
-decided. The script is already split into short scenes ("Freeze" is a scene of
-its own), so a cue at the start of a scene is usually the right moment.
-Scenes with synchronized phone audio start a few seconds after they are
-announced; the light waits for the real start.
+decided. Scenes with synchronized phone audio start a few seconds after they
+are announced; the light waits for the real start.
 
-A change in the **middle** of a scene ("after 10 s", "on the third flash")
-cannot be automated yet: leave it as a note for the operator, or split the
-scene.
+Some script scenes run **inside** a longer show scene: a question round where
+the show plays one long scene and the monitors switch to each question at a
+set time. A cue in such a script scene fires at the moment its question
+appears on the monitors. `/update-show` takes that time from the monitor cue
+in the draft. If the monitor times change in Studio, run `/update-show` again
+so the light follows.
+
+A change at a moment the show doesn't mark ("after 10 s", "on the third
+flash") cannot be automated yet: leave it as a note for the operator.
 
 ## 3. What the skills do
 
@@ -114,24 +118,23 @@ exist.
    automatically, the operator's cue list, and every problem. Each cue becomes
    a look named after what it does, e.g. `licht-l1-l3-warm-l2-l4-off`; the
    same cue in several scenes is one look.
-4. Adds that cue name to each scene in the new Studio draft (Advanced settings
-   → External show cues). Other cue names there (MIDI, TouchDesigner) are left
-   alone.
+4. Puts a scene trigger for each show scene into the lighting file: the look
+   at its start, or timed steps for a scene that holds several script scenes.
+   The Studio draft needs nothing for the light.
 5. Checks the lighting file with the bridge itself and puts it on the show
    laptop after you confirm.
 
-The operator then publishes the draft in Studio as usual. The bridge on the
-laptop picks up the new lighting file by itself.
-
-Because the names come from the cues, building `lighting.json` from the same
-script on another machine gives the same names: the draft and the file match.
+The bridge on the laptop picks up the new lighting file by itself. Because the
+file only needs the script and the published show, it can be built on the show
+laptop itself.
 
 ## What the script controls, and what it doesn't
 
 The skill rebuilds from the script, on every update:
 
 - the colours in the colour table,
-- the `licht-…` looks and scene cues, and the `gewinner-…` looks for votes.
+- the `licht-…` looks and the scene triggers that use them, and the
+  `gewinner-…` looks for votes.
 
 A cue removed from the script is gone after the next update.
 
@@ -150,7 +153,9 @@ with the same name.
   lamp's setup in `lighting.json`.
 - A lamp lights a field, not a person: "mark the chosen person with light" is
   an operator cue.
-- Cues fire at scene start or at a vote result, not in the middle of a scene.
+- Cues fire at a scene's start, at the time its question appears on the
+  monitors, or at a vote result. If the operator skips ahead inside a scene,
+  the light keeps to the scene's clock, as the monitors do.
 - Stage 1: the looks live in `lighting.json` on the show laptop, not in the
   published show. Moving the light plan into Studio, published with the show
   and sharing its colours with the projection and monitors, is a later step.
@@ -162,8 +167,8 @@ with the same name.
 - *"…" is neither a colour, a level nor a fade*: a word in the cue is not in
   the colour table, a level such as `50%`, `on`/`off`, or a fade such as `2s`.
 - *no lamp L5*: only L1–L4 (and `alle`) exist.
-- *several light cues at the same scene start*: two `Licht:` cues in one
-  scene. Only the last one would show; keep one.
+- *two light cues at the same moment*: two `Licht:` cues land on the same
+  time of one show scene. Only the last one would show; keep one.
 - *light cue but no phase for this scene*: the scene isn't matched to a scene
   in the show yet (the skill's mapping step).
 - Operator notes: yellow light text that isn't a `Licht:` cue. It stays on

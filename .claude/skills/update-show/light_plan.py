@@ -9,16 +9,19 @@ Usage:
   `l1`-`l4`, the lamps L1-L4 of the script), colours (palette) and anything not generated from
   the script are kept.
 - mapping.json: what only the show draft knows:
-    {"scenes":  {"T2.2": "T2-2-regie", ...},              script scene ID -> phase ID
+    {"scenes":  {"T2.2": "T2-2-regie",                     script scene ID -> phase ID (light at its start)
+                 "K1.1.3": {"phase": "TEIL_1", "at": 125.4}},  or a phase and the seconds into it
      "winners": {"T2.5": {"q1": "L1", ...}}}              per vote scene: answer ID -> lamp of its field
+  A script scene that runs inside a longer show scene (a question round whose monitors change at set
+  times) gets the time its monitor cue starts at.
 
 Writes to <out-dir>:
-- lighting.json: the venue file plus the script's colours, one look and `licht-...` cue per
-  distinct `Licht:` cue (named after what it does, e.g. `licht-l1-l3-warm-l2-l4-off`), and the
-  vote results for "gewählte Gruppe ... hervorgehoben" scenes. What earlier runs generated
-  (`licht-*` looks and cues, `gewinner-*` looks and the vote results pointing at them) is rebuilt,
-  so a cue removed from the script disappears from the file too.
-- phase-cues.json: phase ID -> the `licht-*` cue names its External show cues must contain.
+- lighting.json: the venue file plus the script's colours, one `licht-...` look per distinct
+  `Licht:` cue (named after what it does, e.g. `licht-l1-l3-warm-l2-l4-off`), a scene trigger per
+  show scene (its look, or its timed steps), and the vote results for "gewählte Gruppe ...
+  hervorgehoben" scenes. The Studio draft needs no light cue names. What earlier runs generated
+  (`licht-*` looks, cues and the scene triggers using them, `gewinner-*` looks and the vote results
+  pointing at them) is rebuilt, so a cue removed from the script disappears from the file too.
 - light-plan.md: what fires automatically, what the operator does on the desk, and every problem.
 
 The convention is documented in docs/script-light-cues.md. Standard library only; the input is
@@ -34,7 +37,7 @@ WINNER_PREFIX = "gewinner-"
 WINNER_OTHERS_LEVEL = 25    # when the script does not say
 WINNER_FADE = 1.5
 DEFAULT_FADE = 1.0          # seconds, when a cue does not say ("0s" snaps)
-MAX_CUE_LENGTH = 120        # Studio's limit for an external show cue name
+MAX_CUE_LENGTH = 120        # keeps look names readable in the bridge's log
 EMITTERS = {"rot": "red", "red": "red", "gruen": "green", "green": "green", "blau": "blue", "blue": "blue",
             "amber": "amber", "mint": "mint"}
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -159,14 +162,20 @@ def build(parsed, venue, mapping):
     # Drop what earlier runs generated, so cues removed from the script do not linger.
     looks = {k: v for k, v in venue.get("looks", {}).items() if not k.startswith((CUE_PREFIX, WINNER_PREFIX))}
     cues = {k: v for k, v in venue.get("cues", {}).items() if not k.startswith(CUE_PREFIX)}
+
+    def generated(trigger):
+        steps = [trigger] if isinstance(trigger, str) else [step.get("look", "") for step in trigger]
+        return all(look.startswith(CUE_PREFIX) for look in steps)
+    scene_triggers = {k: v for k, v in venue.get("scenes", {}).items() if not generated(v)}
     results = {phase: winners for phase, winners in venue.get("results", {}).items()
                if not winners or not all(look.startswith(WINNER_PREFIX) for look in winners.values())}
-    phase_cues, automatic, operator = {}, [], []
+    steps, automatic, operator = {}, [], []  # steps: phase -> {seconds into it: look}
     scenes = mapping.get("scenes", {})
 
     for cue in parsed.get("lightCues", []):
         scene = cue["scene"]
-        phase = scenes.get(scene)
+        target = scenes.get(scene)
+        phase, at = (target.get("phase"), float(target.get("at", 0))) if isinstance(target, dict) else (target, 0.0)
         if cue["kind"] == "prose":
             operator.append((scene, phase, cue["text"]))
             continue
@@ -178,13 +187,11 @@ def build(parsed, venue, mapping):
             if look is None:
                 continue
             looks[name] = look
-            cues[name] = name
-            listed = phase_cues.setdefault(phase, [])
-            if name not in listed:
-                listed.append(name)
-            if len(listed) > 1:
-                problems.append(f"{scene}: several light cues at the same scene start ({', '.join(listed)}); the last one wins")
-            automatic.append((scene, phase, f"scene start → {cue['text']}"))
+            timed = steps.setdefault(phase, {})
+            if at in timed and timed[at] != name:
+                problems.append(f"{scene}: two light cues at the same moment of {phase} ({at:g} s: {timed[at]}, {name}); the last one wins")
+            timed[at] = name
+            automatic.append((scene, phase, f"{'scene start' if at == 0 else f'{at:g} s into the scene'} → {cue['text']}"))
         elif cue["kind"] == "winner":
             fields = mapping.get("winners", {}).get(scene)
             if not fields:
@@ -205,15 +212,19 @@ def build(parsed, venue, mapping):
                 results[phase] = per_answer
                 automatic.append((scene, phase, f"vote decided → winning field full, others {others:g}%"))
 
-    lighting = {**venue, "palette": palette, "looks": looks, "cues": cues, "results": results}
-    return lighting, phase_cues, automatic, operator, problems
+    for phase, timed in steps.items():
+        if phase in scene_triggers:
+            problems.append(f"{phase}: replaces the hand-made scene trigger {json.dumps(scene_triggers[phase], ensure_ascii=False)}")
+        ordered = sorted(timed.items())
+        scene_triggers[phase] = ordered[0][1] if len(ordered) == 1 and ordered[0][0] == 0 else \
+            [{"at": at, "look": look} for at, look in ordered]
+    lighting = {**venue, "palette": palette, "looks": looks, "cues": cues, "scenes": scene_triggers, "results": results}
+    return lighting, automatic, operator, problems
 
 
-def report(automatic, operator, problems, phase_cues):
+def report(automatic, operator, problems):
     lines = ["# Light plan from the script", ""]
     lines += ["## Fires automatically", ""] + ([f"- {s} ({p}): {what}" for s, p, what in automatic] or ["- (none)"])
-    lines += ["", "## Scene cue names for the draft (External show cues)", ""]
-    lines += [f"- {phase}: {', '.join(names)}" for phase, names in phase_cues.items()] or ["- (none)"]
     lines += ["", "## Operator on the desk (written as text, not as a cue)", ""]
     lines += [f"- {s}{f' ({p})' if p else ''}: {text}" for s, p, text in operator] or ["- (none)"]
     lines += ["", "## Problems", ""] + ([f"- {line}" for line in problems] or ["- (none)"])
@@ -225,12 +236,11 @@ def main():
     parsed = json.loads(Path(parsed_path).read_text(encoding="utf-8"))
     venue = json.loads(Path(venue_path).read_text(encoding="utf-8"))
     mapping = json.loads(Path(mapping_path).read_text(encoding="utf-8"))
-    lighting, phase_cues, automatic, operator, problems = build(parsed, venue, mapping)
+    lighting, automatic, operator, problems = build(parsed, venue, mapping)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     (out / "lighting.json").write_text(json.dumps(lighting, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (out / "phase-cues.json").write_text(json.dumps(phase_cues, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (out / "light-plan.md").write_text(report(automatic, operator, problems, phase_cues), encoding="utf-8")
+    (out / "light-plan.md").write_text(report(automatic, operator, problems), encoding="utf-8")
     print(f"{len(automatic)} automatic, {len(operator)} for the operator, {len(problems)} problems -> {out}")
     sys.exit(1 if problems else 0)
 

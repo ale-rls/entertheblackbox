@@ -51,7 +51,7 @@ folder. It is git-ignored, because the looks and cue names are show content.
 | `palette` | Named colours. Either `"#rrggbb"`, or the lamp's emitters directly: `red`, `green`, `blue`, `amber`, `mint`, each 0–100 (missing ones are 0). Use the emitter form for yellows, oranges and warm tones: hex can only use red, green and blue. |
 | `looks` | What each lamp does: `color` (a palette name or `#rrggbb`) and/or `level` (0–100). `"*"` applies to every lamp first; named lamps then override it. Anything left out stays as it is, so a highlight look can change levels and keep the colours. `fade` is in seconds. |
 | `cues` | A named cue from Studio → look. |
-| `scenes` | A scene ID → look, when that scene starts. |
+| `scenes` | A scene ID → look, when that scene starts. Or → timed steps, `[{ "at": 0, "look": "a" }, { "at": 125.4, "look": "b" }]`: each look at that many seconds into the scene, counted from its real start on the server's clock, as monitor cues are. A new scene drops the steps still to come; a bridge (re)started mid-scene runs the ones still ahead and replays none. |
 | `results` | A scene ID → vote winner → look, when that scene's vote resolves. Winners are `q1`–`q4` for four fields, `min`/`max` for two, or a zone ID for curtain-light zones. When no field won, the server reports `tie`, `empty` (nobody voted) or `fixed` (a question with a fixed next scene): give any of them its own look, or use `none` for all three. A field without its own entry keeps the current light. |
 | `showEnd` | A look for when the show ends or is restarted. |
 
@@ -66,7 +66,7 @@ using a colour that is not in the palette, is refused with the exact place.
 | Trigger | Set up in | Lighting file key |
 | :- | :- | :- |
 | A named cue when a scene starts | Studio → scene → Advanced settings → **External show cues** (e.g. `licht-vier-felder`) | `cues` |
-| A scene starting, by scene ID | nothing in Studio | `scenes` |
+| A scene starting, by scene ID, or set times within it | nothing in Studio | `scenes` |
 | A vote resolving, by scene ID and winner | nothing in Studio | `results` |
 | The show ending or restarting | nothing in Studio | `showEnd` |
 

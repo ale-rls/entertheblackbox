@@ -48,7 +48,8 @@ function list(config: BridgeConfig): void {
   section("Looks", Object.entries(config.looks).map(([name, look]) => `${name}${look.fade ? ` (${look.fade} s)` : ""}: ${Object.entries(look.fixtures).map(([fixture, state]) => `${fixture} ${[state.color, state.level !== undefined ? `${state.level}%` : undefined].filter(Boolean).join(" ")}`).join(" · ")}`));
   section("Triggers", [
     ...Object.entries(config.cues).map(([cue, look]) => `cue "${cue}" → ${look}`),
-    ...Object.entries(config.scenes).map(([scene, look]) => `scene ${scene} → ${look}`),
+    ...Object.entries(config.scenes).flatMap(([scene, trigger]) => typeof trigger === "string" ? [`scene ${scene} → ${trigger}`]
+      : trigger.map((step) => `scene ${scene} at ${step.at} s → ${step.look}`)),
     ...Object.entries(config.results).flatMap(([scene, winners]) => Object.entries(winners).map(([winner, look]) => `vote ${scene} → ${winner} → ${look}`)),
     ...(config.showEnd ? [`show end → ${config.showEnd}`] : []),
   ]);
