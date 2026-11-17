@@ -53,7 +53,8 @@ folder happens later, in `/update-show`, never to the script doc.)
    and table row/column, and paragraphs grouped into scenes (`id`, `version`,
    `statuses`, `cues`). `versionedIds` lists every `ID.vN` heading,
    including the ones that share a paragraph with the previous scene. Use it for
-   the recording check.
+   the recording check. `lightCues`, `lightLooks` and `lightColours` hold the
+   light cues written in the script's light convention (step 4).
 
 **Check the legend first.** The legend is at the top of the doc, before the first
 table. If it no longer matches the mapping in `parse_script.py`, or
@@ -159,8 +160,30 @@ notes, open comments). For each, decide which of these it is, with evidence:
 - **Missing**: needs code. Say which app/package it touches (see the
   dependency map in FEATURES.md) and whether the native app would need an EAS
   Update or a new build.
-- **Outside the software**: lighting desk, sound desk, staff, props. Note it,
-  but don't propose code.
+- **Outside the software**: sound desk, staff, props, and light the Eos bridge
+  can't do (see below). Note it, but don't propose code.
+
+**Light cues.** The Eos bridge plays light looks on the venue desk from scene
+starts, scene cue names and vote results (docs/eos-lighting.md). The script
+writes them in a fixed form, listed in `lightCues`
+([docs/script-light-cues.md](../../../docs/script-light-cues.md)):
+
+- kind `look` (`LICHT: <look>`): **Exists, needs setting up** if the look is
+  in the `Lichtstimmung` table (or already in `lighting.json`); otherwise report
+  the missing look. **Already set up** if the scene's phase already has the
+  `licht-<look>` cue and `lighting.json` has the look.
+- kind `winner` (`LICHT Gewinner`): needs a vote in that scene; note which
+  answer lights which field (from the draft's answer colours and field), since
+  `/update-show` needs it. Ask if it is unclear.
+- kind `operator` (`LICHT Pult: …`): outside the software, for the operator's
+  cue list.
+- kind `prose`: a light direction not written in the convention. List it for
+  the operator and say it could be automated if rewritten as `LICHT: <look>`
+  (only for the four field lamps the bridge drives; house light, follow spots and
+  other lamps not patched in `lighting.json` stay with the operator).
+
+Yellow light/stage directions without `LICHT` are stage notes; list the ones
+that clearly ask for a light change as operator cues.
 
 Where to check, in order: [FEATURES.md](../../../FEATURES.md); the
 "Authoring a show" gotchas in [CLAUDE.md](../../../CLAUDE.md) (late joiners,
@@ -217,6 +240,8 @@ the user its absolute path. In chat, give a short summary:
 
 Then decide what happens next, and **ask before acting**:
 
+- **Light cues** that need setting up → part of the `/update-show` run (its
+  step 3b). Pass on the parsed JSON and which answer lights which field.
 - **Only text/content changes, no missing features** → offer to run
   `/update-show` now. Pass on the baseline from step 3 (the newest draft if it
   already holds wanted unpublished edits; otherwise the live draft; ask if
