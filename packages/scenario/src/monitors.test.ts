@@ -34,3 +34,10 @@ describe("monitor cue contracts", () => {
     expect(validateScenario(scenario, { files: [] }).errors).toEqual(expect.arrayContaining([expect.objectContaining({ code: "missing-media", phaseId: "idle" })]));
   });
 });
+
+
+it("round-trips named vote-result cues without adding media dependencies", () => {
+  const cues = monitorCuesSchema.parse({ M1: [{ kind: "vote-result", votePhaseId: "topic", fallbackText: "No topic" }] });
+  expect(cues.M1?.[0]).toMatchObject({ kind: "vote-result", votePhaseId: "topic", fallbackText: "No topic" });
+  expect(monitorMediaSources(cues)).toEqual([]);
+});
