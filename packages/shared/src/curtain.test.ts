@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPoolMasks,
   composeLightMap,
+  curtainDivisionLines,
   curtainLabels,
   curtainVoteField,
   cursorTint,
@@ -156,5 +157,20 @@ describe("pool masks", () => {
     const tint = cursorTint(pools, colors, 0.9, 0.5);
     expect(tint.rgb[2]).toBeGreaterThan(tint.rgb[0]);
     expect(cursorTint(pools, colors, 0.5, 0.5).weight).toBeLessThan(0.5);
+  });
+});
+
+describe("curtainDivisionLines", () => {
+  it("divides a left/right split vote with one vertical line", () => {
+    const [line, ...rest] = curtainDivisionLines(leftRight, buildPoolMasks(leftRight, 96, 54));
+    expect(rest).toHaveLength(0);
+    expect(line![0]).toBeCloseTo(line![2]!);
+  });
+  it("draws a horizontal spectrum as one horizontal scale line", () => {
+    const scale: TwoQuadrantField = { ...leftRight, variant: "spectrum" };
+    const [line, ...rest] = curtainDivisionLines(scale, buildPoolMasks(scale, 96, 54));
+    expect(rest).toHaveLength(0);
+    expect(line![1]).toBeCloseTo(line![3]!);
+    expect(line![2]! - line![0]!).toBeGreaterThan(0.3);
   });
 });

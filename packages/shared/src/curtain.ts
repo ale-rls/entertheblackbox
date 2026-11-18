@@ -427,8 +427,11 @@ export function poolOutlines(pools: PoolMasks): PoolOutlineSegment[][] {
  */
 export function curtainDivisionLines(field: PositionField, pools: PoolMasks): PoolOutlineSegment[] {
   if (field.type === "polygon-zones") return poolOutlines(pools).flat();
-  const vertical = field.type === "four-quadrant" || field.axis === "x";
-  const horizontal = field.type === "four-quadrant" || field.axis === "y";
+  // A split vote is divided across its axis; a spectrum is drawn as the axis itself,
+  // a line the cursors position along (as QuadrantOverlay does off the curtain).
+  const spectrum = field.type === "two-quadrant" && field.variant !== "split";
+  const vertical = field.type === "four-quadrant" || (spectrum ? field.axis === "y" : field.axis === "x");
+  const horizontal = field.type === "four-quadrant" || (spectrum ? field.axis === "x" : field.axis === "y");
   const lines: PoolOutlineSegment[] = [];
   const arena = field.arena;
   if (arena !== undefined && arena.type !== "ellipse") {
