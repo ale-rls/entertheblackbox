@@ -57,6 +57,9 @@ folder happens later, in `/update-show`, never to the script doc.)
    including the ones that share a paragraph with the previous scene. Use it for
    the recording check. `lightCues` and `lightColours` hold the light
    cues and the colour table written in the script's light notation (step 4).
+   `fieldGrids` holds every 2×2 field grid: per field M1–M4 its monitor text,
+   lamp and colour (step 4, monitors). `problems` lists grid labels that
+   contradict the legend and colours not in the colour table: report them.
 
 **Check the legend first.** The legend is at the top of the doc, before the first
 table. If it no longer matches the mapping in `parse_script.py`, or
@@ -179,14 +182,26 @@ writes them in the yellow highlight, listed in `lightCues`
   (`scenes`, at its start or at the time its question appears on the
   monitors). A script scene with no phase of its own (a question inside a
   longer scene) is fine: `/update-show` times it to its monitor cue.
+  A field grid with its own colours is a `set` cue too (`source: "grid"`).
 - kind `winner` ("Die gewählte Gruppe wird durch Licht hervorgehoben (andere …
   auf 25% …)"): needs a vote in that scene; note which answer is on which
-  monitor field (Mn is lit by Ln), since `/update-show` needs it. Ask if it is
-  unclear.
+  monitor field (Mn is lit by Ln), since `/update-show` needs it. Monitor N
+  shows the vote's Nth answer in outcome order (zone order), so answer N is
+  lit by lamp N; check it against the grid's texts (`fieldGrids`) and the
+  zone labels. Ask if they disagree.
 - kind `prose`: any other yellow line about light. It goes on the operator's
   list. Say it could be automated if rewritten as a `Licht: L…: …` cue (only
   for the four field lamps the bridge drives; house light, follow spots and
   other lamps not patched in `lighting.json` stay with the operator).
+
+**Monitors (field grids).** For each grid in `fieldGrids`, find the phase
+of its scene and compare: each field's `text` with that monitor's text cue in
+`monitorCues` (images: open them and read the text), and each field's colour
+with the phase's `answerColors` for the answer shown on that monitor (the
+colour table's "Monitor color" column). A grid with `colours: "carried"` keeps
+the colours of the grid at `coloursFrom`. Report text or colour that differs
+as **Exists, needs setting up**. Grids inside a longer scene (a question
+round) are the monitor cues that `/update-show` times the light to.
 
 Where to check, in order: [FEATURES.md](../../../FEATURES.md); the
 "Authoring a show" gotchas in [CLAUDE.md](../../../CLAUDE.md) (late joiners,
