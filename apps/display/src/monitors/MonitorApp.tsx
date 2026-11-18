@@ -9,7 +9,7 @@ import { useMedia } from "../media/useMedia.js";
 import { FullscreenControl } from "../components/FullscreenControl.js";
 import { performReload } from "../lib/kiosk.js";
 import { monitorVideoTime } from "./playback.js";
-import { monitorCountdown } from "./countdown.js";
+import { monitorCountdown, monitorCueCountdown } from "./countdown.js";
 import { monitorAnswerColor } from "./answerColor.js";
 import "./monitors.css";
 
@@ -50,8 +50,11 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   const url = media.visualSrc === src ? media.videoUrl : null;
   const ready = media.status.state === "ready";
   const key = `${state.sessionId}:${state.phaseEpoch}:${cue?.startMs}`;
-  const countdown = connection.clock.ready && cue && cue.kind !== "blank" && state.resolution === null
-    ? monitorCountdown(phase, now) : null;
+  const countdown = ready && connection.clock.ready && cue && cue.kind !== "blank"
+    ? cue.countdownSeconds !== undefined
+      ? monitorCueCountdown(phase?.monitorCues?.[monitorId] ?? [], now - (phase?.startedAt ?? 0))
+      : state.resolution === null ? monitorCountdown(phase, now) : null
+    : null;
   const answerColor = monitorAnswerColor(phase, monitorId);
   const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
   return <main className="monitor-root" aria-label={`Monitor ${monitorId}`} style={accent}>
@@ -59,7 +62,7 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
     {cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
     {ready && cue?.kind === "image" && url && <figure className="monitor-image"><img src={url} alt={cue.text ?? ""} style={{ objectFit: cue.fit }} onError={() => setError("Image could not be decoded")} />{cue.text && <figcaption>{cue.text}</figcaption>}</figure>}
     {ready && cue?.kind === "video" && url && phase && <MonitorVideo key={key} src={url} startedAt={phase.startedAt + cue.startMs} loop={cue.loop} fit={cue.fit} clock={connection.clock} onError={setError} />}
-    {countdown !== null && <div className="monitor-countdown" aria-label="Seconds left to position">{countdown}</div>}
+    {countdown !== null && <div className="monitor-countdown" aria-label="Seconds remaining">{countdown}</div>}
     {(!ready || setup || state.connection !== "open" || error || state.notice) && <aside className="monitor-status" role="status">
       <strong>{monitorId}</strong> · {state.connection} · {media.status.state}{ready ? " — media verified" : " — preparing media"}
       <p>Server clock: {connection.clock.ready ? "synchronized" : "synchronizing"} · scene media: {sources.length} files</p>

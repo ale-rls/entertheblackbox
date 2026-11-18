@@ -13,7 +13,7 @@ export function MonitorEditor({ phase, onChange, onChooseMedia }: {
   const check = monitorCuesSchema.safeParse(phase.monitorCues ?? {});
   return <fieldset><legend>Stage monitors</legend>
     <p className="sc-tool-copy">Text, images or muted video on M1–M4.</p>
-    <details><summary>Cue timing help</summary><p className="sc-tool-copy">Times are milliseconds from scene start. Each cue replaces the previous one. Leave duration empty to hold until the next cue or scene. Screens without cues stay black. Monitors follow the main timeline, including during group paths.</p></details>
+    <details><summary>Cue timing help</summary><p className="sc-tool-copy">Times are milliseconds from scene start. Each cue replaces the previous one. Leave duration empty to hold until the next cue or scene. The optional final countdown ends at the next cue or duration, whichever comes first; a cue with neither has no deadline. Screens without cues stay black. Monitors follow the main timeline, including during group paths.</p></details>
     {!check.success && <p className="field-error" role="alert">{check.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ")}</p>}
     {MONITOR_IDS.map((id) => {
       const cues = phase.monitorCues?.[id] ?? [];
@@ -22,13 +22,14 @@ export function MonitorEditor({ phase, onChange, onChooseMedia }: {
         {cues.map((cue, index) => <fieldset key={index}><legend>{id} cue {index + 1}</legend>
           <label className="sc-tool-label">Content<select className="sc-tool-select" value={cue.kind} onChange={(event) => {
             const kind = event.target.value as MonitorCue["kind"];
-            const timing = { startMs: cue.startMs, ...(cue.durationMs === undefined ? {} : { durationMs: cue.durationMs }) };
+            const timing = { startMs: cue.startMs, countdownSeconds: cue.countdownSeconds, ...(cue.durationMs === undefined ? {} : { durationMs: cue.durationMs }) };
             update(index, kind === "video" ? { kind, src: "choose-video.mp4", loop: false, fit: "contain", ...timing }
               : kind === "image" ? { kind, src: "choose-image.png", fit: "contain", ...timing }
               : kind === "blank" ? { kind, ...timing } : { kind, text: "text" in cue ? cue.text ?? "" : "Content to come", ...timing });
           }}>{["placeholder", "text", "image", "video", "blank"].map((kind) => <option key={kind}>{kind}</option>)}</select></label>
           <label className="sc-tool-label">Start (ms)<input className="sc-tool-field" type="number" min="0" step="1" value={cue.startMs} onChange={(event) => update(index, { ...cue, startMs: Math.max(0, Math.floor(Number(event.target.value) || 0)) })} /></label>
           <label className="sc-tool-label">Duration (ms, empty = hold)<input className="sc-tool-field" type="number" min="1" step="1" value={cue.durationMs ?? ""} onChange={(event) => update(index, { ...cue, durationMs: event.target.value === "" ? undefined : Math.max(1, Math.floor(Number(event.target.value) || 1)) })} /></label>
+          {cue.kind !== "blank" && <label className="sc-tool-label">Final countdown (seconds, empty = scene/vote)<input className="sc-tool-field" type="number" min="1" step="1" placeholder="5" value={cue.countdownSeconds ?? ""} onChange={(event) => update(index, { ...cue, countdownSeconds: event.target.value === "" ? undefined : Math.max(1, Math.floor(Number(event.target.value) || 1)) })} /></label>}
           {(cue.kind === "text" || cue.kind === "placeholder" || cue.kind === "image") && <label className="sc-tool-label">{cue.kind === "image" ? "Caption (optional)" : "Text"}<textarea className="sc-tool-field" value={cue.text ?? ""} onChange={(event) => update(index, { ...cue, text: event.target.value })} /></label>}
           {(cue.kind === "video" || cue.kind === "image") && <>
             <button className="sc-tool-button" type="button" onClick={(event) => onChooseMedia(phase.id, { monitorId: id, cueIndex: index }, cue.kind, event.currentTarget)}>Browse {cue.kind} library… {cue.src}</button>
