@@ -213,6 +213,7 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 
 - Four independent authenticated `/display/?monitor=M1` … `M4` pages; replacement affects only that monitor, never the main projection — `apps/server/src/engine/phase-engine.ts`, `apps/display/src/monitors/MonitorApp.tsx`.
 - Per-phase video, image/caption, text, placeholder and blank sequences with offsets, optional durations, fit and looping; missing screens and gaps are black — `packages/scenario/src/monitors.ts`.
+- Optional per-cue final countdown (for example 5 seconds), ending at its duration or next cue and taking precedence over scene/vote countdowns, including after a vote resolves; authored in Studio.
 - Automatic server-clock countdown on visible nonblank monitor cues during open positioning votes (plain or video-timed); hidden for resolved, closed or untimed votes — `apps/display/src/monitors/countdown.ts`.
 - Answer colour coding and Optik: monitor N draws text and captions in the phase's Nth answer colour (outcome order, authored `answerColors` or the resolved curtain colours; answers repeat when there are fewer than four, so two-answer questions colour M1/M3 and M2/M4); phases without colours stay white — `apps/display/src/monitors/answerColor.ts`.
 - Studio inspector controls, shared media-library selection and usage tracking, schema/export validation and display-preview links — `apps/studio/src/inspector/MonitorEditor.tsx`.

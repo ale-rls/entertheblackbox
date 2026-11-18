@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PhaseSnapshotMessage } from "@entertheblackbox/protocol";
-import { monitorCountdown } from "./countdown.js";
+import { monitorCountdown, monitorCueCountdown } from "./countdown.js";
 
 const position = (extra: object = {}) => ({
   kind: "position-question", startedAt: 10_000, deadlineAt: 30_000, ...extra,
@@ -39,5 +39,26 @@ describe("monitor positioning countdown", () => {
     expect(monitorCountdown(scene, 45_000)).toBeNull();
     expect(monitorCountdown({ kind: "narration", startedAt: 0, countdown: { startAtMs: 0, endAtMs: 12_000 } } as PhaseSnapshotMessage, 500)).toBe(12);
     expect(monitorCountdown({ kind: "video", startedAt: 0 } as PhaseSnapshotMessage, 500)).toBeNull();
+  });
+});
+
+
+describe("monitor cue countdown", () => {
+  const question = { kind: "text" as const, text: "KI?", startMs: 2000, countdownSeconds: 5 };
+  const next = { kind: "blank" as const, startMs: 12000 };
+  it("counts only the final five seconds, including on late join", () => {
+    expect(monitorCueCountdown([question, next], 6999)).toBeNull();
+    expect(monitorCueCountdown([question, next], 7000)).toBe(5);
+    expect(monitorCueCountdown([question, next], 11001)).toBe(1);
+    expect(monitorCueCountdown([question, next], 12000)).toBeNull();
+  });
+  it("uses the earlier of duration and replacement and keeps gaps black", () => {
+    expect(monitorCueCountdown([{ ...question, durationMs: 6000 }, next], 7000)).toBe(1);
+    expect(monitorCueCountdown([{ ...question, durationMs: 6000 }, next], 8000)).toBeNull();
+    expect(monitorCueCountdown([{ ...question, durationMs: 20000 }, next], 11000)).toBe(1);
+  });
+  it("has no deadline for indefinite holds or before the cue starts", () => {
+    expect(monitorCueCountdown([question], 10000)).toBeNull();
+    expect(monitorCueCountdown([question, next], 1000)).toBeNull();
   });
 });
