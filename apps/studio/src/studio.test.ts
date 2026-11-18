@@ -143,6 +143,59 @@ describe("Studio shell", () => {
     vi.useRealTimers();
   });
 
+  it("preserves pending edits when another draft is opened during the debounce window", async () => {
+    vi.useFakeTimers();
+    try {
+      const db = new MemoryDb();
+      const autosave = new Autosave(db, 20);
+      const first = importRuntime(scenario, manifest, "First");
+      const second = importRuntime(scenario, manifest, "Second");
+      autosave.schedule(first);
+      autosave.schedule(second);
+      autosave.schedule({ ...first, name: "First edited" });
+      await vi.advanceTimersByTimeAsync(20);
+
+      expect(await db.list()).toEqual([
+        expect.objectContaining({ id: first.id, name: "First edited" }),
+        expect.objectContaining({ id: second.id, name: "Second" }),
+      ]);
+      expect(await db.revisions(first.id)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("waits for an in-flight save before writing newer edits", async () => {
+    vi.useFakeTimers();
+    try {
+      const db = new MemoryDb();
+      const autosave = new Autosave(db, 20);
+      const draft = importRuntime(scenario, manifest, "Original");
+      const put = db.put.bind(db);
+      let finishFirst!: () => void;
+      const firstWrite = new Promise<void>((resolve) => { finishFirst = resolve; });
+      const writes = vi.spyOn(db, "put").mockImplementationOnce(async (value) => {
+        await firstWrite;
+        await put(value);
+      });
+      const changed = vi.fn();
+
+      autosave.schedule(draft, changed);
+      await vi.advanceTimersByTimeAsync(20);
+      autosave.schedule({ ...draft, name: "Updated" }, changed);
+      await vi.advanceTimersByTimeAsync(20);
+      expect(writes).toHaveBeenCalledTimes(1);
+      expect(autosave.status).toBe("saving");
+
+      finishFirst();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await db.list()).toEqual([expect.objectContaining({ name: "Updated" })]);
+      expect(changed.mock.calls).toEqual([["saving"], ["saving"], ["saved"]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("recovers the newest structurally good revision after a corrupt latest draft", async () => {
     const db = new MemoryDb();
     const project = parseRuntimeScenario(scenario, manifest);

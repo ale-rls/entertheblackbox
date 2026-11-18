@@ -10,21 +10,29 @@ export interface DraftDatabase {
 
 export class Autosave {
   status: SaveStatus = "saved";
-  private timer?: ReturnType<typeof setTimeout>;
+  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private writes = Promise.resolve();
+  private latestSchedule = 0;
+
   constructor(private db: DraftDatabase, private delayMs = 500) {}
+
   schedule(draft: Draft, changed?: (status: SaveStatus) => void) {
-    clearTimeout(this.timer);
+    clearTimeout(this.timers.get(draft.id));
+    const schedule = ++this.latestSchedule;
     this.status = "saving";
+    this.timers.set(draft.id, setTimeout(() => {
+      this.timers.delete(draft.id);
+      // PocketBase uses the same request key for draft lookups, even across draft IDs.
+      const write = this.writes.then(() => this.db.put(draft));
+      this.writes = write.catch(() => {});
+      const finish = (status: SaveStatus) => {
+        if (schedule !== this.latestSchedule) return;
+        this.status = status;
+        changed?.(status);
+      };
+      void write.then(() => finish("saved"), () => finish("error"));
+    }, this.delayMs));
     changed?.(this.status);
-    this.timer = setTimeout(async () => {
-      try {
-        await this.db.put(draft);
-        this.status = "saved";
-      } catch {
-        this.status = "error";
-      }
-      changed?.(this.status);
-    }, this.delayMs);
   }
 }
 
