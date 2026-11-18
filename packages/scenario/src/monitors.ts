@@ -6,6 +6,8 @@ const timing = {
   startMs: z.number().int().nonnegative().default(0),
   /** Omit to hold until the next cue or phase. Gaps render black. */
   durationMs: z.number().int().positive().optional(),
+  /** Show only the final seconds of this cue; overrides the scene/vote countdown. */
+  countdownSeconds: z.number().int().positive().optional(),
 };
 const text = z.string().max(4000);
 const source = z.string().min(1).refine((value) => !value.startsWith("/") && !value.includes("..") && !/[?#:\\]/.test(value), "Use a relative media manifest path");
