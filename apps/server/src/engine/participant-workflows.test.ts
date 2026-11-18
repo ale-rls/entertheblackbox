@@ -36,6 +36,37 @@ describe('connected participant workflows',()=>{
   h.respond(late,task.id);expect(h.engine.taskStatus.assignments).toMatchObject([{participantId:'late',roleId:'helper'}]);
   h.tick(2000);const tooLate=h.phone('too-late');expect(lastTask(tooLate)).toBeNull();
  });
+ it('opens a scene task for an empty audience and keeps its original deadline for the first eligible arrival', () => {
+  const h = setup();
+  const outside = h.phone('outside', 'audience');
+  h.engine.adminStart();
+
+  const task = h.engine.taskStatus.instances[0]!;
+  expect(h.engine.taskStatus.error).toBeNull();
+  expect(task).toMatchObject({ status: 'open', recipients: [], deadlineAt: 1100 });
+  const lastTask = (socket: Socket) => socket.sent.filter(m => m.t === 'participant_task').at(-1).task;
+  expect(lastTask(outside)).toBeNull();
+  h.tick(1099);
+  const first = h.phone('first');
+  expect(lastTask(first)).toMatchObject({ id: task.id, deadlineAt: task.deadlineAt, recipient: { participantId: 'first', status: 'pending' } });
+  h.respond(first, task.id);
+  expect(lastTask(first).recipient.status).toBe('accepted');
+
+  h.tick(1100);
+  expect(h.engine.taskStatus.instances[0]?.status).toBe('closed');
+  expect(lastTask(h.phone('too-late'))).toBeNull();
+ });
+
+ it('rejects a manually opened task with no eligible recipients', () => {
+  const h = setup();
+  h.phone('outside', 'audience');
+  h.engine.adminStart();
+  expect(() => h.engine.taskCommand({
+    action: 'open', templateId: 'volunteer', sessionId: h.engine.currentSessionId, phaseId: 'task', phaseEpoch: h.engine.currentPhaseEpoch,
+  })).toThrow('No eligible participants');
+  expect(h.engine.taskStatus.instances).toHaveLength(1);
+ });
+
  it('stops admission before active phase frames and never starts admission for active late arrivals',()=>{
   const h=setup();const p=h.phone('a');expect(p.sent.find(m=>m.t==='admission_state').active).toBe(true);
   h.engine.adminStart();const stop=p.sent.findIndex(m=>m.t==='admission_state'&&!m.active);const start=p.sent.findIndex(m=>m.t==='phase'&&m.phase.kind==='narration');expect(stop).toBeLessThan(start);
