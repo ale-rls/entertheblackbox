@@ -193,6 +193,106 @@ class ScriptLayout(unittest.TestCase):
         self.assertEqual(parsed["lightCues"][0]["text"], "[Code/Video/Licht: Person markieren.]")
 
 
+def grid(*cells):
+    """A 2×2 table inside a script cell: cells in reading order (top left, top right, bottom left, bottom right)."""
+    a, b, c, d = cells
+    return f"<table><tr>{cell(a)}{cell(b)}</tr><tr>{cell(c)}{cell(d)}</tr></table>"
+
+
+GRID_EXPORT = f"""<html><body>
+<p><span>Legende</span></p>
+<table>
+<tr>{cell('Name used in script')}{cell('Red')}{cell('Amber')}{cell('Mint')}{cell('Green')}{cell('Blue')}</tr>
+<tr>{cell('Kalt')}{cell('0')}{cell('63')}{cell('100')}{cell('13')}{cell('100')}</tr>
+<tr>{cell('Glut')}{cell('100')}{cell('100')}{cell('72')}{cell('0')}{cell('')}</tr>
+</table>
+<p>Lampen wie Monitore:</p>
+<table><tr>{cell(y('M3/L3'))}{cell(y('M2/L2'))}</tr><tr>{cell(y('M4/L4'))}{cell(y('M1/L1'))}</tr></table>
+<table>
+<tr><td><p>K1.1.v1 Links</p>{grid('12', '13', '10', '11')}<p>K1.2.v1 Links zwei</p>{grid('M3: Nie', 'M2: Frage?', 'M4: Frage?', 'M1: Immer')}<p>{y('Licht: L1+L3 Glut, L2+L4 off')}</p></td>
+<td><p>T1.1.v1 Rechts</p></td></tr>
+<tr><td><p>K2.1.v1 Links</p></td>
+<td><p>T2.1.v1 Wahl</p><p>Auf Monitoren</p>{grid('M3: Eins ' + y('(Glut)'), 'M2: Zwei ' + y('(Kalt)'), 'M4: Drei ' + y('(Kalt)'), 'M1: Vier ' + y('(Glut)'))}
+<p>T2.2.v1 Weiter</p>{grid('M3 Ja', 'M2 Ja', 'M4 Nein', 'M1 Nein')}
+<p>{y('Die gewählte Gruppe wird durch Licht hervorgehoben.')}</p>
+<p>T2.3.v1 Arbeit</p>{grid('M3/L3 Kalt: Chor', 'M2/L2 Glut: Bühne', 'M2: Haupt', 'M1/L1 Kalt: Pause')}
+<p>{y('L1-4 Glut 100%')}</p><p>{y('Nach 10 Sekunden Flackern auf L1-L4')}</p><p>{y('[LICHT: L1+L2 markieren die vordere Zone; L3+L4 die hintere.]')}</p></td></tr>
+</table>
+</body></html>"""
+
+
+class FieldGrids(unittest.TestCase):
+    """The script's 2×2 field grids: monitor text and colour per field (Mn is lit by Ln)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.parsed = parse(GRID_EXPORT)
+        cls.grids = cls.parsed["fieldGrids"]
+
+    def test_layout_comes_from_the_legend_grid(self):
+        self.assertEqual(self.parsed["fieldLayout"], [["M3", "M2"], ["M4", "M1"]])
+
+    def test_a_grid_of_numbers_is_an_instruction(self):
+        self.assertEqual(self.parsed["instructionGrids"], [{"scene": "K1.1", "paragraph": 1 + self.first_script_paragraph(),
+                                                            "cells": {"M3": "12", "M2": "13", "M4": "10", "M1": "11"}}])
+
+    def first_script_paragraph(self):
+        return next(p["index"] for p in self.parsed["paragraphs"] if p["text"].startswith("K1.1.v1"))
+
+    def test_monitor_text_per_field_without_labels(self):
+        self.assertEqual([(g["scene"], {f: v["text"] for f, v in g["fields"].items()}) for g in self.grids[:3]], [
+            ("K1.2", {"M1": "Immer", "M2": "Frage?", "M3": "Nie", "M4": "Frage?"}),
+            ("T2.1", {"M1": "Vier", "M2": "Zwei", "M3": "Eins", "M4": "Drei"}),
+            ("T2.2", {"M1": "Nein", "M2": "Ja", "M3": "Ja", "M4": "Nein"})])
+
+    def test_colours_and_lamps(self):
+        regie = self.grids[1]
+        self.assertEqual(regie["colours"], "own")
+        self.assertEqual({f: (v["lamp"], v["colour"]) for f, v in regie["fields"].items()},
+                         {"M1": ("L1", "Glut"), "M2": ("L2", "Kalt"), "M3": ("L3", "Glut"), "M4": ("L4", "Kalt")})
+
+    def test_a_grid_without_colours_keeps_the_last_ones(self):
+        weiter = self.grids[2]
+        self.assertEqual((weiter["colours"], weiter["coloursFrom"]), ("carried", self.grids[1]["paragraph"]))
+        self.assertEqual(weiter["fields"]["M3"]["colour"], "Glut")
+        self.assertIsNone(self.grids[0]["fields"]["M1"]["colour"])  # before any coloured grid
+
+    def test_colour_in_the_label_and_a_label_in_the_wrong_place(self):
+        arbeit = self.grids[3]
+        self.assertEqual(arbeit["fields"]["M3"], {"lamp": "L3", "text": "Chor", "colour": "Kalt"})
+        self.assertIn("labelled M2, but the legend puts M4 in this position", " ".join(self.parsed["problems"]))
+        self.assertIn("gives no colour for M4", " ".join(self.parsed["problems"]))
+
+    def test_a_coloured_grid_is_a_light_cue_and_tells_the_winner_its_colours(self):
+        cues = [(c["scene"], c["kind"], c.get("parts")) for c in self.parsed["lightCues"] if c.get("source") == "grid"]
+        self.assertEqual(cues[0], ("T2.1", "set", [{"lamps": [1], "settings": "Glut"}, {"lamps": [2], "settings": "Kalt"},
+                                                   {"lamps": [3], "settings": "Glut"}, {"lamps": [4], "settings": "Kalt"}]))
+        winner = next(c for c in self.parsed["lightCues"] if c["kind"] == "winner")
+        self.assertEqual((winner["scene"], winner["fieldColours"]), ("T2.2", {"L1": "Glut", "L2": "Kalt", "L3": "Glut", "L4": "Kalt"}))
+
+    def test_a_grid_does_not_move_the_script_column(self):
+        cue = next(c for c in self.parsed["lightCues"] if c["text"].startswith("Licht: L1+L3"))
+        self.assertEqual(cue["scene"], "K1.2")  # the left column, below two grids
+        para = self.parsed["paragraphs"][cue["paragraph"]]
+        self.assertEqual((para["row"], para["col"]), (0, 0))
+
+    def test_cue_wording_without_colon_or_without_licht(self):
+        by_text = {c["text"]: c for c in self.parsed["lightCues"]}
+        self.assertEqual(by_text["Licht: L1+L3 Glut, L2+L4 off"]["parts"], [{"lamps": [1, 3], "settings": "Glut"}, {"lamps": [2, 4], "settings": "off"}])
+        self.assertEqual(by_text["L1-4 Glut 100%"]["parts"], [{"lamps": [1, 2, 3, 4], "settings": "Glut 100%"}])
+        self.assertEqual(by_text["Nach 10 Sekunden Flackern auf L1-L4"]["kind"], "prose")  # never dropped
+        self.assertEqual(by_text["[LICHT: L1+L2 markieren die vordere Zone; L3+L4 die hintere.]"]["kind"], "prose")
+
+    def test_text_after_a_comma_without_lamps_is_for_the_operator(self):
+        parsed = parse(f"<html><body><p>L</p><table><tr>{cell('T1.1.v1 Eins', y('Licht: L1-4 off, Saal hell'))}</tr></table></body></html>")
+        self.assertEqual([(c["kind"], c["text"]) for c in parsed["lightCues"]],
+                         [("set", "Licht: L1-4 off, Saal hell"), ("prose", "Saal hell")])
+
+    def test_heading_with_a_trailing_dot(self):
+        parsed = parse(f"<html><body><p>L</p><table><tr>{cell('T1.1.1. Frage', y('Licht: L1: an'))}</tr></table></body></html>")
+        self.assertEqual(parsed["lightCues"][0]["scene"], "T1.1.1")
+
+
 class Docx(unittest.TestCase):
     """A .docx is read directly: Word highlights become the same colours as in the HTML export."""
 

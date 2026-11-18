@@ -54,6 +54,8 @@ Square brackets around it are fine.
 | `Licht: L1+L3: Warm L2+L4: off` | L1 and L3 go to Warm at full, L2 and L4 go out. |
 | `Licht: L1-L4: Kalt` | All four go to Kalt at full. |
 | `Licht: 50% Warm auf L1-L4` | All four go to Warm at 50 %. |
+| `Licht: L4+L1 Warm, L2+L3 off` | Same as with colons: groups can be separated by commas. |
+| `L1-L4 Warm 100%` | A yellow line that starts with lamps needs no `Licht:`. |
 | `Warm on lights 1-4` | Same as `Licht: L1-L4: Warm`. |
 | `Licht: alle: off 3s` | All lamps fade out over 3 seconds. |
 
@@ -74,9 +76,40 @@ When the vote is decided, the winning field's lamp goes to full and the others
 to the level written there (25 % if none is given). A tie or an empty vote
 changes nothing.
 
-**Anything else** in yellow that mentions light ("[LICHT: Saal hell]", "Licht
-wieder auf alle", "Bühnenlicht auf die Mitte") is a note for the operator. It goes on their cue list; nothing is automated. To automate
-it, rewrite it as a `Licht:` cue, e.g. `Licht: L1-L4: an`.
+**Anything else** in yellow that mentions light, a lamp or a colour from the
+table ("[LICHT: Saal hell]", "Licht wieder auf alle", "Flackern auf
+L1-L4") is a note for the operator. It goes on their cue list; nothing is
+automated, and nothing is dropped. To automate it, rewrite it as a `Licht:`
+cue, e.g. `Licht: L1-L4: an`. Text after a comma that names no lamp
+(`Licht: L1-4 off, Saal hell`) goes to the operator too, while the lamp
+part is automated. A lamp line whose settings are a sentence ("L1+L2
+markieren die vordere Zone") is a description, not a cue.
+
+### Field grids: the four fields as a table
+
+The script draws the four stage fields as a 2×2 table. The legend's grid says
+where each field is:
+
+| | |
+| :- | :- |
+| M3/L3 | M2/L2 |
+| M4/L4 | M1/L1 |
+
+A grid in a scene uses the same positions. Each cell is that field's
+**monitor text**, optionally with its **colour**: in yellow (`M3: Antwort eins
+(Warm)`) or in the label (`M3/L3 Warm: Antwort eins`). The labels `M3:`, `M3 `
+or `M3/L3 …:` are optional, since the position decides the field; a label that
+contradicts its position is reported.
+
+- A grid **with colours** sets each field's lamp to its colour when the scene
+  starts, and gives the monitors their answer colour (the colour table's
+  monitor column).
+- A grid **without colours** keeps the colours of the grid before it: the
+  light doesn't change, and the monitors keep those colours.
+- A grid of **numbers only** (such as the lamps' desk channels) is an
+  instruction, not a cue.
+- For a **vote winner** in a later scene, the field grid tells which answer
+  is on which field, and so which lamp lights it.
 
 ### Which scene a cue belongs to
 
@@ -107,7 +140,8 @@ flash") cannot be automated yet: leave it as a note for the operator.
 **`/check-script-updates`** lists every light cue with its scene and says, for
 each one, whether it is already in the show, needs setting up, or is for the
 operator. It reports colours that aren't in the table and lamps that don't
-exist.
+exist. It compares each field grid with the show's monitor texts and answer
+colours for that scene.
 
 **`/update-show`** (step 3b):
 

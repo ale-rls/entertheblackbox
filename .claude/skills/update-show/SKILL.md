@@ -114,7 +114,12 @@ When the parsed script has `lightCues` or `lightColours` (the notation is in
    order). `winners` maps each vote-winner scene to `{answer ID: lamp}`.
    Take the answer IDs from the phase's field (`q1`–`q4`, `min`/`max`, zone IDs)
    and find the monitor field (M1–M4) each answer is shown on; field Mn is lit
-   by lamp `Ln`. Ask if a match is not clear; never guess.
+   by lamp `Ln`. Monitor N shows the Nth answer in outcome order (zone order);
+   confirm with the script's field grid (`fieldGrids`: the texts per field)
+   and the zone labels. Ask if a match is not clear; never guess.
+   Two `set` cues in one script scene (one at its start, one at its end)
+   land on the same moment: give the later one its own key in a run copy of
+   `parsed.json` and map it to the next phase or a time, and say so.
 2. **Generate:**
 
    ```bash
