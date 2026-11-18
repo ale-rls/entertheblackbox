@@ -477,16 +477,16 @@ export class PhaseEngine {
     if (verdict !== 'ok') return result(false, staffGateMessage(verdict));
     const pick = picks.find(p => p.id === message.pickId);
     if (!pick) return result(false, 'This pick no longer exists. Reopen the staff menu.');
+    let assignRole: (() => void) | undefined;
     if (pick.roleId) {
-      const roles = this.scenario.participantRoles ?? [];
-      const role = roles.find(r => r.id === pick.roleId);
-      if (role?.exclusiveSet) for (const held of this.tasks.roleAssignments()) {
-        if (held.participantId === participantId && held.roleId !== role.id && roles.find(r => r.id === held.roleId)?.exclusiveSet === role.exclusiveSet) this.tasks.withdraw(participantId, held.roleId);
-      }
-      try { this.tasks.assignRole(participantId, pick.roleId, 'staff', this.now()); }
-      catch (error) { this.pushTasks(true); return result(false, error instanceof Error ? error.message : 'Role unavailable'); }
+      try { assignRole = this.tasks.prepareRoleAssignment(participantId, pick.roleId, 'staff', this.now(), true); }
+      catch (error) { return result(false, error instanceof Error ? error.message : 'Role unavailable'); }
     }
-    if (pick.groupId && !this.adminAssignGroup(participantId, pick.groupId).ok) { this.pushTasks(true); return result(false, 'Could not move this tablet into that group.'); }
+    if (pick.groupId) {
+      if (!this.assignParticipantGroup(participantId, pick.groupId, undefined, false, assignRole).ok) return result(false, 'Could not move this tablet into that group.');
+    } else {
+      assignRole?.();
+    }
     this.pushTasks(true);
     result(true, `Assigned: ${pick.label}`);
   }
@@ -746,7 +746,7 @@ export class PhaseEngine {
     return this.assignParticipantGroup(participantId, groupId, expectedEpoch);
   }
 
-  private assignParticipantGroup(participantId: string, groupId: string, expectedEpoch?: number, parentOnly = false): TransitionResult {
+  private assignParticipantGroup(participantId: string, groupId: string, expectedEpoch?: number, parentOnly = false, onValidated?: () => void): TransitionResult {
     if (expectedEpoch !== undefined && expectedEpoch !== this.phaseEpoch) return { ok: false, reason: "stale" };
     const participant = this.registry.values().find((row) => row.clientId === participantId);
     if (!participant || !this.groupSelection || !this.scenario.groups?.some((group) => group.id === groupId)) return { ok: false, reason: "invalid-target" };
@@ -762,8 +762,10 @@ export class PhaseEngine {
     if (selection) {
       // Move to the parent selection first when admitting someone from another path.
       if (selection !== this && !selection.registry.values().some((p) => p.clientId === participantId)) {
-        const moved = this.assignParticipantGroup(participantId, selection.path!.timelineId, expectedEpoch, true);
+        const moved = this.assignParticipantGroup(participantId, selection.path!.timelineId, expectedEpoch, true, onValidated);
         if (!moved.ok) return moved;
+      } else {
+        onValidated?.();
       }
       selection.selectionCohort.add(participantId);
       if (this.groupSelection.current(participantId) === groupId) return { ok: true };
@@ -782,6 +784,7 @@ export class PhaseEngine {
     // Containers with running subgroups have no single playback clock to join.
     if (this.pathsStarted && (!destination || destination.engine.pathsStarted)) return { ok: false, reason: "invalid-target" };
     const sourceChain = this.pathChainForParticipant(participantId);
+    onValidated?.();
     if (destination && sourceChain.at(-1) === destination) return { ok: true };
     this.groupSelection.select(participantId, groupId);
     if (!destination) {
