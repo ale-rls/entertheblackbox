@@ -80,6 +80,9 @@ export const phaseSnapshotSchema = z.intersection(
     startedAt: timestamp,
     deadlineAt: timestamp.nullable(),
     voteTreatment: curtainTreatmentSchema.optional(),
+    /** Resolved vote labels retained for later monitor cues and reconnects. */
+    monitorVoteResults: z.record(z.string(), z.object({ label: z.string().nullable(), color: z.string().optional() })).optional(),
+    lastMonitorVotePhaseId: nonEmpty.optional(),
   }),
 );
 

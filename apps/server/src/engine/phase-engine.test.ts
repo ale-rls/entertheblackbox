@@ -1660,3 +1660,36 @@ describe("native clients do not supply phone cursors", () => {
     expect(snapshot?.votes.map(v => v.participantId)).toEqual(["web"]);
   });
 });
+
+
+describe("retained monitor vote results", () => {
+  it.each(["winner", "tie", "empty"])("retains %s across scenes and reconnects, and resets on restart", (mode) => {
+    let now = 1000;
+    const authored = scenarioSchema.parse({ ...scenario, phases: [
+      ...scenario.phases.map(phase => phase.id === "question" ? { ...phase, answerColors: { q4: "#e5484d" }, next: { type: "fixed", target: "after" } } : phase),
+      { kind: "narration", id: "after", text: "Result", durationMs: 10000, next: "idle", monitorCues: { M1: [{ kind: "vote-result", fallbackText: "Tie or empty" }] } },
+    ] });
+    const { engine, registry } = setup({ now: () => now, testScenario: authored });
+    engine.startRehearsalAt("question", now);
+    if (mode !== "empty") {
+      for (let i = 0; i < (mode === "tie" ? 2 : 1); i++) {
+        const phone = new MockSocket();
+        addParticipant(registry, phone as unknown as WebSocket, now, `p${i}`);
+        engine.participantJoined(phone as unknown as WebSocket, registry.get(`lease-p${i}`));
+        engine.handleClientMessage({ t: "input", v: 2, sessionId: "session-1", phaseEpoch: engine.currentPhaseEpoch, seq: 1, x: i ? 0.1 : 0.9, y: i ? 0.1 : 0.9 }, phone as unknown as WebSocket);
+      }
+    }
+    now = 1200; engine.tick(now);
+    now = 1220; engine.tick(now);
+    expect(engine.currentPhaseId).toBe("after");
+    const expected = mode === "winner" ? { label: "right / down", color: "#e5484d" } : { label: null };
+    expect(engine.getSnapshot().monitorVoteResults?.question).toEqual(expected);
+    expect(engine.getSnapshot().lastMonitorVotePhaseId).toBe("question");
+    const display = new MockSocket();
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(display.sent.find(message => message.t === "snapshot")?.phase.monitorVoteResults.question).toEqual(expected);
+    engine.adminRestart(now);
+    expect(engine.getSnapshot().monitorVoteResults).toEqual({});
+    expect(engine.getSnapshot().lastMonitorVotePhaseId).toBeUndefined();
+  });
+});

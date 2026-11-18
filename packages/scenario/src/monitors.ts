@@ -14,6 +14,7 @@ export const monitorCueSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("blank"), ...timing }),
   z.object({ kind: z.literal("placeholder"), text, ...timing }),
   z.object({ kind: z.literal("text"), text, ...timing }),
+  z.object({ kind: z.literal("vote-result"), votePhaseId: z.string().min(1).optional(), fallbackText: text.default(""), ...timing }),
   z.object({ kind: z.literal("image"), src: source.refine((value) => /\.(png|jpe?g|webp)$/i.test(value), "Choose a PNG, JPEG or WebP image"), text: text.optional(), fit, ...timing }),
   z.object({ kind: z.literal("video"), src: source.refine((value) => /\.(mp4|webm)$/i.test(value), "Choose an MP4 or WebM video"), loop: z.boolean().default(false), fit, ...timing }),
 ]);

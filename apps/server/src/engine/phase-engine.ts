@@ -409,6 +409,8 @@ export class PhaseEngine {
   private tasks = new TaskEngine();
   private staffGate: StaffGate | undefined;
   private taskError: string | null = null;
+  private monitorVoteResults: NonNullable<PhaseSnapshotMessage["monitorVoteResults"]> = {};
+  private lastMonitorVotePhaseId: string | undefined;
   private taskVoteWinners = new Map<string, string | null>();
   private lastTaskState = '';
   get taskStatus() {
@@ -623,6 +625,8 @@ export class PhaseEngine {
     this.routingEpochs.clear();
     this.tasks.cancelAll();
     this.taskVoteWinners.clear();
+    this.monitorVoteResults = {};
+    this.lastMonitorVotePhaseId = undefined;
     this.tasks.clearRoles();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
@@ -893,6 +897,8 @@ export class PhaseEngine {
     this.routingEpochs.clear();
     this.tasks.cancelAll();
     this.taskVoteWinners.clear();
+    this.monitorVoteResults = {};
+    this.lastMonitorVotePhaseId = undefined;
     this.tasks.clearRoles();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
@@ -913,6 +919,8 @@ export class PhaseEngine {
     const { scriptCues: _scriptCues, ...publicPhase } = phase;
     return {
       ...publicPhase,
+      monitorVoteResults: { ...this.monitorVoteResults },
+      lastMonitorVotePhaseId: this.lastMonitorVotePhaseId,
       // The display lights exactly the field the server counts (same field type, gap applied).
       ...(curtain === null ? {} : { field: curtain.field as never, voteTreatment: curtain.treatment }),
       scenarioVersion: this.scenario.version,
@@ -1557,6 +1565,8 @@ export class PhaseEngine {
     this.routingEpochs.clear();
     this.tasks.cancelAll();
     this.taskVoteWinners.clear();
+    this.monitorVoteResults = {};
+    this.lastMonitorVotePhaseId = undefined;
     this.tasks.clearRoles();
     this.sessionId = this.sessionIdFactory();
     this.sessionStartedAt = now;
@@ -1912,6 +1922,13 @@ export class PhaseEngine {
     const maxCount = Math.max(0, ...counts.map(([, count]) => count));
     const leaders = counts.filter(([, count]) => count === maxCount);
     this.taskVoteWinners.set(phase.id, maxCount > 0 && leaders.length === 1 ? leaders[0]![0] : null);
+    // Routing may say "fixed" or break ties randomly. Monitor text describes
+    // the audience's unique plurality; ties and empty votes use the cue fallback.
+    const winner = maxCount > 0 && leaders.length === 1 ? leaders[0]![0] : null;
+    const answer = votingOptions(phase).find((option) => option.id === winner);
+    const color = answer?.color ?? (winner ? this.curtainFor(phase)?.treatment.answerColors[winner] : undefined);
+    this.monitorVoteResults[phase.id] = { label: answer?.label ?? null, ...(color ? { color } : {}) };
+    this.lastMonitorVotePhaseId = phase.id;
     for (const socket of this.participantSockets) this.sendVotingOptions(socket);
     this.options.onCueEvent?.({
       type: "result",

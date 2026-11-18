@@ -11,6 +11,7 @@ import { performReload } from "../lib/kiosk.js";
 import { monitorVideoTime } from "./playback.js";
 import { monitorCountdown } from "./countdown.js";
 import { monitorAnswerColor } from "./answerColor.js";
+import { monitorVoteResult } from "./voteResult.js";
 import "./monitors.css";
 
 declare const __BUILD_VERSION__: string | undefined;
@@ -50,9 +51,11 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   const key = `${state.sessionId}:${state.phaseEpoch}:${cue?.startMs}`;
   const countdown = ready && connection.clock.ready && cue && cue.kind !== "blank" && state.resolution === null
     ? monitorCountdown(phase, now) : null;
-  const answerColor = monitorAnswerColor(phase, monitorId);
+  const voteResult = cue?.kind === "vote-result" ? monitorVoteResult(cue, phase) : null;
+  const answerColor = voteResult ? voteResult.color : monitorAnswerColor(phase, monitorId);
   const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
   return <main className="monitor-root" aria-label={`Monitor ${monitorId}`} style={accent}>
+    {voteResult && <div className="monitor-text">{voteResult.text}</div>}
     {ready && cue?.kind === "text" && <div className="monitor-text">{cue.text}</div>}
     {ready && cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
     {ready && cue?.kind === "image" && url && <figure className="monitor-image"><img src={url} alt={cue.text ?? ""} style={{ objectFit: cue.fit }} onError={() => setError("Image could not be decoded")} />{cue.text && <figcaption>{cue.text}</figcaption>}</figure>}
