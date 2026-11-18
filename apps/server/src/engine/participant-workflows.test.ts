@@ -29,25 +29,6 @@ function setup(config=scenario){let now=100;let seq=0;const registry=new Partici
  return {engine,phone,replace,tick:(value:number)=>{now=value;engine.tick(now);},respond:(socket:Socket,id:string,option='yes',sessionId=engine.currentSessionId)=>engine.handleClientMessage({t:'participant_task_response',v:2,sessionId,instanceId:id,optionId:option},socket as unknown as WebSocket)};
 }
 describe('connected participant workflows',()=>{
- it('targets the authored audience, holds for GO after responses expire, and rejects stale commands',()=>{
-  const h=setup();const a=h.phone('a','ki','native');const b=h.phone('b','ki','native');const outside=h.phone('outside','audience');h.engine.adminStart();
-  const task=h.engine.taskStatus.instances[0]!;expect(task.recipients.map(r=>r.participantId)).toEqual(['a','b']);
-  expect(outside.sent.filter(m=>m.t==='participant_task').at(-1).task).toBeNull();h.respond(b,task.id);h.respond(a,task.id);
-  expect(h.engine.taskStatus.assignments).toMatchObject([{participantId:'b',roleId:'helper'}]);
-  expect(h.engine.taskStatus.instances[0]!.recipients.find(r=>r.participantId==='a')?.status).toBe('full');
-  h.tick(2000);expect(h.engine.currentPhaseId).toBe('task');
-  expect(()=>h.engine.taskCommand({action:'go',sessionId:'stale',phaseId:'task',phaseEpoch:h.engine.currentPhaseEpoch})).toThrow('Stale');
-  h.engine.taskCommand({action:'go',sessionId:h.engine.currentSessionId,phaseId:'task',phaseEpoch:h.engine.currentPhaseEpoch});expect(h.engine.currentPhaseId).toBe('next');
- });
- it('gives a still-open scene task to late joiners and newly grouped participants in its audience',()=>{
-  const h=setup();const a=h.phone('a');h.engine.adminStart();const task=h.engine.taskStatus.instances[0]!;h.respond(a,task.id,'no');
-  const lastTask=(socket:Socket)=>socket.sent.filter(m=>m.t==='participant_task').at(-1).task;
-  const late=h.phone('late');expect(lastTask(late)).toMatchObject({id:task.id,recipient:{participantId:'late',status:'pending'}});
-  const outside=h.phone('outside','audience');expect(lastTask(outside)).toBeNull();
-  expect(h.engine.adminAssignGroup('outside','ki').ok).toBe(true);expect(lastTask(outside)).toMatchObject({id:task.id});
-  h.respond(late,task.id);expect(h.engine.taskStatus.assignments).toMatchObject([{participantId:'late',roleId:'helper'}]);
-  h.tick(2000);const tooLate=h.phone('too-late');expect(lastTask(tooLate)).toBeNull();
- });
  it.each([
   { handoverGroup: 'ki', expected: 'handover' },
   { handoverGroup: 'audience', expected: 'volunteer' },
@@ -74,6 +55,25 @@ describe('connected participant workflows',()=>{
   const scene = h.engine.taskStatus.instances.find(task => task.template.id === 'volunteer')!;
   expect(scene.recipients).toContainEqual(expect.objectContaining({ participantId: 'former', status: 'cancelled' }));
   expect(scene.recipients.some(recipient => recipient.participantId === 'replacement')).toBe(expected === 'volunteer');
+ });
+ it('targets the authored audience, holds for GO after responses expire, and rejects stale commands',()=>{
+  const h=setup();const a=h.phone('a','ki','native');const b=h.phone('b','ki','native');const outside=h.phone('outside','audience');h.engine.adminStart();
+  const task=h.engine.taskStatus.instances[0]!;expect(task.recipients.map(r=>r.participantId)).toEqual(['a','b']);
+  expect(outside.sent.filter(m=>m.t==='participant_task').at(-1).task).toBeNull();h.respond(b,task.id);h.respond(a,task.id);
+  expect(h.engine.taskStatus.assignments).toMatchObject([{participantId:'b',roleId:'helper'}]);
+  expect(h.engine.taskStatus.instances[0]!.recipients.find(r=>r.participantId==='a')?.status).toBe('full');
+  h.tick(2000);expect(h.engine.currentPhaseId).toBe('task');
+  expect(()=>h.engine.taskCommand({action:'go',sessionId:'stale',phaseId:'task',phaseEpoch:h.engine.currentPhaseEpoch})).toThrow('Stale');
+  h.engine.taskCommand({action:'go',sessionId:h.engine.currentSessionId,phaseId:'task',phaseEpoch:h.engine.currentPhaseEpoch});expect(h.engine.currentPhaseId).toBe('next');
+ });
+ it('gives a still-open scene task to late joiners and newly grouped participants in its audience',()=>{
+  const h=setup();const a=h.phone('a');h.engine.adminStart();const task=h.engine.taskStatus.instances[0]!;h.respond(a,task.id,'no');
+  const lastTask=(socket:Socket)=>socket.sent.filter(m=>m.t==='participant_task').at(-1).task;
+  const late=h.phone('late');expect(lastTask(late)).toMatchObject({id:task.id,recipient:{participantId:'late',status:'pending'}});
+  const outside=h.phone('outside','audience');expect(lastTask(outside)).toBeNull();
+  expect(h.engine.adminAssignGroup('outside','ki').ok).toBe(true);expect(lastTask(outside)).toMatchObject({id:task.id});
+  h.respond(late,task.id);expect(h.engine.taskStatus.assignments).toMatchObject([{participantId:'late',roleId:'helper'}]);
+  h.tick(2000);const tooLate=h.phone('too-late');expect(lastTask(tooLate)).toBeNull();
  });
  it('stops admission before active phase frames and never starts admission for active late arrivals',()=>{
   const h=setup();const p=h.phone('a');expect(p.sent.find(m=>m.t==='admission_state').active).toBe(true);
