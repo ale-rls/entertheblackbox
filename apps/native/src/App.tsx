@@ -19,7 +19,7 @@ import { actionPrompt } from './action-prompt';
 import { createActionAlerts, enableActionNotifications } from './notifications';
 import { createForegroundAttention } from './foreground-attention';
 import { applySurface, expireSurface, initialSurface, surfaceDelay, visibleSurface } from './surface';
-import { acceptWall, wallStatus, type WallPlayback, type WallSliceState } from './wall';
+import { wallStatus, type WallPlayback, type WallSliceState } from './wall';
 import { WallVideo } from './WallVideo';
 import { StaffMenu } from './StaffMenu';
 
@@ -207,7 +207,7 @@ export default function App() {
           occupantId.current = message.clientId;
           resetSurface(); setIdentity({ name: joinName, color: message.color }); player.current?.startMusic(); }
         if (message.t === 'surface') scheduleSurface(message, c);
-        if (message.t === 'wall') setWall(current => acceptWall(current, message));
+        if (message.t === 'wall') setWall(message);
         if (message.t === 'admission_state') { setAdmission(message); player.current?.setAdmission(message); }
         if (message.t === 'staff_menu' || message.t === 'staff_assign_result') setStaffReply(message);
         if (message.t === 'participant_task' && message.sessionId === latest.current?.sessionId) { setTask(message); player.current?.setCue(cueForPlayback(latest.current, message, c.clock.now())); }

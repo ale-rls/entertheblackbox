@@ -23,6 +23,23 @@ describe('native connection lifecycle', () => {
     sockets[0]!.receive({ t: 'pong', v: 2, echoClientTime: 1, serverTime: 2 });
     expect(message).not.toHaveBeenCalled();
   });
+  it('accepts a restarted server’s wall welcome and drops older frames on the same socket', () => {
+    vi.useFakeTimers();
+    const { sockets, message } = fixture();
+    const welcome = { t: 'wall', v: 2, seq: 0, clip: null, startAt: null, loop: true };
+    const playing = { ...welcome, seq: 9, startAt: 100,
+      clip: { id: 'intro', slot: 'A1', url: '/media/intro.mp4', bytes: 10, sha256: 'a'.repeat(64) } };
+    sockets[0]!.receive(playing);
+    sockets[0]!.onclose?.({ code: 1006 });
+    vi.advanceTimersByTime(1000);
+    sockets[1]!.onopen?.();
+    sockets[1]!.receive(welcome);
+    sockets[0]!.receive(playing);
+    const loaded = { ...playing, seq: 2, startAt: null };
+    sockets[1]!.receive(loaded);
+    sockets[1]!.receive({ ...welcome, seq: 1 });
+    expect(message.mock.calls).toEqual([[playing], [welcome], [loaded]]);
+  });
   it('reconnects after loss but never after explicit stop', () => {
     vi.useFakeTimers(); const { c, sockets } = fixture();
     sockets[0]!.onclose?.({ code: 1006 }); vi.advanceTimersByTime(1000);
