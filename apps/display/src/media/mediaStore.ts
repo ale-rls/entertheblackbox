@@ -13,6 +13,15 @@ import type { MediaManifest } from "@entertheblackbox/scenario";
  * All browser APIs are injectable so the logic is unit-testable.
  */
 
+/** Restrict a monitor sync without silently accepting missing manifest entries. */
+export function selectMedia(manifest: MediaManifest, sources: readonly string[]): MediaManifest {
+  const wanted = new Set(sources);
+  for (const src of wanted) {
+    if (!manifest.files.some((file) => file.src === src)) throw new Error(`Missing monitor media: ${src}`);
+  }
+  return { ...manifest, files: manifest.files.filter((file) => wanted.has(file.src)) };
+}
+
 export type MediaSyncStatus =
   | { state: "idle" }
   | { state: "checking"; total: number }

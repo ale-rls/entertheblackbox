@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MediaManifest } from "@entertheblackbox/scenario";
-import { MediaStore, type MediaSyncStatus } from "./mediaStore.js";
+import { MediaStore, selectMedia, type MediaSyncStatus } from "./mediaStore.js";
 
 /** Minimal in-memory CacheStorage double. */
 function fakeCaches() {
@@ -361,5 +361,20 @@ describe("chunked large-file downloads", () => {
     await expect(store.sync(bigManifest)).resolves.toBe(true);
     expect(statuses.some((s) => s.state === "retrying")).toBe(true);
     expect(statuses.at(-1)).toEqual({ state: "ready" });
+  });
+});
+
+
+describe("monitor media selection", () => {
+  it("downloads only requested files, leaving unrelated large videos untouched", async () => {
+    const { caches } = fakeCaches();
+    const fetchFn = vi.fn(fakeFetch());
+    await makeStore({ caches, fetchFn }).sync(selectMedia(manifest, ["a.mp4", "a.mp4"]));
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(fetchFn.mock.calls[0]?.[0]).toBe("/media/a.mp4");
+  });
+  it("needs no files for text/blank scenes and rejects missing sources", () => {
+    expect(selectMedia(manifest, []).files).toEqual([]);
+    expect(() => selectMedia(manifest, ["missing.png"])).toThrow("Missing monitor media");
   });
 });

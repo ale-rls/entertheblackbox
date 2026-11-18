@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
-import { activeMonitorCue, type MonitorId } from "@entertheblackbox/scenario";
+import { activeMonitorCue, monitorMediaSources, type MonitorId } from "@entertheblackbox/scenario";
 import { rehearsalId, runtimeWebSocket } from "@entertheblackbox/protocol";
 import type { ServerClock } from "@entertheblackbox/shared";
 import { DisplayConnection } from "../lib/connection.js";
@@ -28,10 +28,12 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
     onMessage: (message) => dispatch({ type: "server-message", message }),
     onStatusChange: (status) => dispatch({ type: "connection-status", status }),
   }), [monitorId]);
-  // All declared media is hash/size verified before the screen reports ready.
+  // Only this monitor’s current scene media is downloaded and verified.
   // A changed scenario revision revalidates the manifest and clears old URLs.
   const mediaRevision = rehearsalId() ? state.sessionId ?? "" : state.phase?.scenarioVersion ?? "";
-  const media = useMedia(undefined, mediaRevision);
+  const sources = monitorMediaSources({ [monitorId]: state.phase?.monitorCues?.[monitorId] ?? [] });
+  const sourceKey = JSON.stringify([...sources].sort());
+  const media = useMedia(undefined, mediaRevision, { cacheName: `monitor-media-${monitorId}`, sources });
   useEffect(() => {
     connection.start();
     const timer = setInterval(() => setNow(connection.clock.now()), 33);
@@ -44,7 +46,7 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   useEffect(() => {
     setError("");
     void media.showMedia(src).catch((cause) => setError(String(cause)));
-  }, [src, state.sessionId, state.phaseEpoch, mediaRevision]);
+  }, [src, state.sessionId, state.phaseEpoch, mediaRevision, sourceKey]);
   const url = media.visualSrc === src ? media.videoUrl : null;
   const ready = media.status.state === "ready";
   const key = `${state.sessionId}:${state.phaseEpoch}:${cue?.startMs}`;
@@ -56,13 +58,14 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   const answerColor = monitorAnswerColor(phase, monitorId);
   const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
   return <main className="monitor-root" aria-label={`Monitor ${monitorId}`} style={accent}>
-    {ready && cue?.kind === "text" && <div className="monitor-text">{cue.text}</div>}
-    {ready && cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
+    {cue?.kind === "text" && <div className="monitor-text">{cue.text}</div>}
+    {cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
     {ready && cue?.kind === "image" && url && <figure className="monitor-image"><img src={url} alt={cue.text ?? ""} style={{ objectFit: cue.fit }} onError={() => setError("Image could not be decoded")} />{cue.text && <figcaption>{cue.text}</figcaption>}</figure>}
     {ready && cue?.kind === "video" && url && phase && <MonitorVideo key={key} src={url} startedAt={phase.startedAt + cue.startMs} loop={cue.loop} fit={cue.fit} clock={connection.clock} onError={setError} />}
     {countdown !== null && <div className="monitor-countdown" aria-label="Seconds remaining">{countdown}</div>}
     {(!ready || setup || state.connection !== "open" || error || state.notice) && <aside className="monitor-status" role="status">
       <strong>{monitorId}</strong> · {state.connection} · {media.status.state}{ready ? " — media verified" : " — preparing media"}
+      <p>Server clock: {connection.clock.ready ? "synchronized" : "synchronizing"} · scene media: {sources.length} files</p>
       {media.status.state === "downloading" && <p>{media.status.done}/{media.status.total}: {media.status.current}</p>}
       {media.status.state === "retrying" && <p>{media.status.lastError} — retrying</p>}
       {phase && <p>{phase.id} · {Math.max(0, Math.floor((now - phase.startedAt) / 1000))}s</p>}
