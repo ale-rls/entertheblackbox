@@ -40,7 +40,7 @@ export class TaskEngine {
   all(): TaskInstance[] { return structuredClone(this.instances); }
   open(template: ParticipantTask, sessionId: string, ids: string[], now: number, phase: { id: string; epoch: number } | null = null): TaskInstance {
     this.tick(now);
-    if (!ids.length) throw new Error('No eligible participants');
+    if (!ids.length && phase === null) throw new Error('No eligible participants');
     if (this.instances.some(t => t.sessionId === sessionId && t.status === 'open' && t.recipients.some(r => ids.includes(r.participantId) && (r.status === 'pending' || r.status === 'full')))) throw new Error('Recipients already have an open task. Close or cancel it first.');
     const task: TaskInstance = { id: randomUUID(), sessionId, template: structuredClone(template),
       phaseId: phase?.id ?? null, phaseEpoch: phase?.epoch ?? null, createdAt: now, deadlineAt: now + template.durationMs, status: 'open',
