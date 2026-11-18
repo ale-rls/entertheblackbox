@@ -100,7 +100,7 @@ async function main(): Promise<void> {
   log(`lights: ${output.name} · lighting file: ${configPath} (${Object.keys(config.fixtures).length} fixtures, ${Object.keys(config.palette).length} colours, ${Object.keys(config.looks).length} looks)`);
 
   if (values.ping || values.test !== undefined) {
-    if (eos && !(await waitFor(() => eos!.isConnected, 5_000))) throw new Error(`Cannot reach the desk at ${target.host}:${target.port}. Is the laptop cabled to it and is Nomad running?`);
+    if (eos && !(await waitFor(() => eos!.isConnected, 5_000))) throw new Error(`Cannot reach the desk at ${target.host}:${target.port}. Is Nomad running, and is the address (eos.host, --host or EOS_HOST) right?`);
     if (values.ping) {
       const ok = eos ? await eos.ping() : true;
       log(ok ? "desk answered" : "connected, but the desk did not answer the ping");
