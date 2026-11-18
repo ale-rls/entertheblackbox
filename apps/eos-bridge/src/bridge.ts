@@ -4,13 +4,18 @@ import type { LookPlayer } from "./player.js";
 import { swatches } from "./swatch.js";
 
 type Envelope = {
-  type?: unknown; bootId?: unknown; sequence?: unknown; timelineId?: unknown; phaseId?: unknown; phaseEpoch?: unknown;
+  type?: unknown; bootId?: unknown; sequence?: unknown; timelineId?: unknown; timelineKey?: unknown; phaseId?: unknown; phaseEpoch?: unknown;
   timestamp?: unknown;
   payload?: { cue?: unknown; winner?: unknown; phase?: { startedAt?: unknown } | undefined } | undefined;
   timelines?: unknown;
   /** The feed sends more (version, sessionId …); the bridge ignores it. */
   [key: string]: unknown;
 };
+
+function timelineKey(event: Envelope): string {
+  if (typeof event.timelineKey === "string") return event.timelineKey;
+  return typeof event.timelineId === "string" ? event.timelineId : "main";
+}
 
 /** Vote outcomes where no field won. They use the scene's `none` look unless it names them itself. */
 const NO_FIELD_WINNER = new Set(["tie", "empty", "fixed"]);
@@ -78,21 +83,21 @@ export class LightingBridge {
       this.bootId = event.bootId;
       this.lastSequence = Math.max(event.type === "snapshot" ? -1 : this.lastSequence, event.sequence);
     }
-    const timeline = typeof event.timelineId === "string" ? event.timelineId : "main";
+    const timeline = timelineKey(event);
     const late = this.lateness(event);
     switch (event.type) {
       case "snapshot": {
         const timelines = Array.isArray(event.timelines) ? event.timelines as Envelope[] : [];
-        const scenes = timelines.map((entry) => `${String(entry.timelineId)}: ${String(entry.phaseId)}`);
+        const scenes = timelines.map((entry) => `${timelineKey(entry)}: ${String(entry.phaseId)}`);
         this.log(`connected · ${scenes.length ? `current scene ${scenes.join(", ")}` : "no show running"} · nothing replayed`);
         // Events may have been missed while disconnected: a look still waiting for its scene's start only
         // survives if that scene is still the current one on its timeline.
-        // The feed keeps a group's last scene after a forced reunion (no reset is sent). Epochs come from one
-        // counter, so a group scene older than main's current scene belongs to a branch that is over.
-        const mainEpoch = timelines.find((entry) => entry.timelineId === "main")?.phaseEpoch;
+        // Older servers could retain group scenes after a forced reunion. A scene older
+        // than the shared timeline belongs to a branch that has already ended.
+        const mainEpoch = timelines.find((entry) => timelineKey(entry) === "main")?.phaseEpoch;
         const live = timelines.filter((entry) => typeof entry.timelineId === "string" && typeof entry.phaseEpoch === "number"
-          && (entry.timelineId === "main" || typeof mainEpoch !== "number" || (entry.phaseEpoch as number) > mainEpoch));
-        const current = new Map(live.map((entry) => [entry.timelineId as string, entry.phaseEpoch]));
+          && (timelineKey(entry) === "main" || typeof mainEpoch !== "number" || (entry.phaseEpoch as number) > mainEpoch));
+        const current = new Map(live.map((entry) => [timelineKey(entry), entry.phaseEpoch]));
         for (const [waiting, { epoch }] of [...this.pending]) {
           if (epoch === undefined || current.get(waiting) !== epoch) this.cancel(waiting);
         }
@@ -101,16 +106,17 @@ export class LightingBridge {
         }
         for (const entry of live) {
           if (typeof entry.timelineId !== "string" || typeof entry.phaseEpoch !== "number") continue;
-          this.sceneEpochs.set(entry.timelineId, entry.phaseEpoch);
-          if ((entry.payload as { result?: unknown } | undefined)?.result !== undefined) this.resultEpochs.set(entry.timelineId, entry.phaseEpoch);
+          const key = timelineKey(entry);
+          this.sceneEpochs.set(key, entry.phaseEpoch);
+          if ((entry.payload as { result?: unknown } | undefined)?.result !== undefined) this.resultEpochs.set(key, entry.phaseEpoch);
           // Timed steps still ahead in a scene that is running: lost with the connection unless scheduled again.
           const startedAt = entry.payload?.phase?.startedAt;
-          if (this.pending.has(entry.timelineId) || typeof entry.phaseId !== "string" || typeof startedAt !== "number"
+          if (this.pending.has(key) || typeof entry.phaseId !== "string" || typeof startedAt !== "number"
             || typeof event.timestamp !== "number") continue;
-          this.sceneStarts.set(entry.timelineId, { epoch: entry.phaseEpoch, startedAt });
+          this.sceneStarts.set(key, { epoch: entry.phaseEpoch, startedAt });
           const into = event.timestamp - startedAt + late;
           for (const step of sceneSteps(this.config, entry.phaseId)) {
-            if (step.atMs > into) this.at(entry.timelineId, entry, step.atMs - into, this.prepare(step.look, `scene ${entry.phaseId} at ${step.atMs / 1000} s`));
+            if (step.atMs > into) this.at(key, entry, step.atMs - into, this.prepare(step.look, `scene ${entry.phaseId} at ${step.atMs / 1000} s`));
           }
         }
         return;
@@ -124,7 +130,7 @@ export class LightingBridge {
         // A new scene on this timeline replaces anything still waiting for the previous one's start.
         this.cancel(timeline);
         // Group timelines only exist inside a group-branch scene on main, so a new main scene ends them all.
-        // A forced reunion sends no reset (only groups finishing on their own do), so this is the only sign.
+        // Older servers may send only this phase on a forced reunion.
         if (timeline === "main") this.endGroupTimelines();
         const startedAt = event.payload?.phase?.startedAt;
         if (typeof event.phaseEpoch === "number" && typeof startedAt === "number") this.sceneStarts.set(timeline, { epoch: event.phaseEpoch, startedAt });
@@ -166,12 +172,19 @@ export class LightingBridge {
         if (look) this.play(look, `vote ${event.phaseId} → ${winner ?? "none"}`);
         return;
       }
+      case "retire": {
+        if (typeof event.phaseEpoch !== "number" || this.sceneEpochs.get(timeline) !== event.phaseEpoch) return;
+        this.cancel(timeline);
+        this.sceneEpochs.delete(timeline);
+        this.sceneStarts.delete(timeline);
+        this.resultEpochs.delete(timeline);
+        return;
+      }
       case "reset": {
-        // Every reset ends every timeline: the return to idle, and a group-branch reunion (sent on "main",
-        // named after the reunion scene), including one the operator forces while a path is pre-rolling.
-        // Nothing still waiting for a scene's start may fire after it.
         this.cancelAll();
+        this.sceneEpochs.clear();
         this.sceneStarts.clear();
+        this.resultEpochs.clear();
         if (event.phaseId !== "idle") return;
         this.log("show ended");
         if (this.config.showEnd) this.play(this.config.showEnd, "show end");

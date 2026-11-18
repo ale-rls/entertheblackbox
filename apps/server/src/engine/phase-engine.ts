@@ -97,8 +97,9 @@ export type PhaseDeadlineEvent = {
 };
 
 export type ShowCueEvent = {
-  type: "phase" | "cue" | "result" | "reset";
+  type: "phase" | "cue" | "result" | "retire" | "reset";
   timelineId: string;
+  timelineKey?: string;
   sessionId: string;
   phaseId: string;
   phaseEpoch: number;
@@ -271,6 +272,8 @@ export class PhaseEngine {
   private phaseId = "idle";
   private sessionId = "idle";
   private phaseEpoch = 0;
+  // Closing group selection advances the routing epoch without emitting a cue phase.
+  private cuePhaseEpoch: number | null = null;
   private phaseStartedAt: number;
   private deadlineAt: number | null = null;
   private sessionStartedAt: number | null = null;
@@ -292,7 +295,7 @@ export class PhaseEngine {
   private readonly onLobbyScheduleChanged: ((startTimes: readonly number[]) => void) | undefined;
   private readonly groupSelection: PhaseEngineOptions["groupSelection"];
 
-  constructor(options: PhaseEngineOptions, private readonly path?: { tasks: TaskEngine; timelineId: string; stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; routingEpochFor: (id: string) => number; assignParticipant: (id: string, groupId: string) => TransitionResult; onPhase: (phase: Phase, startedAt: number) => void; displayForGroup: (groupId: string) => WebSocket | undefined }) {
+  constructor(options: PhaseEngineOptions, private readonly path?: { tasks: TaskEngine; timelineId: string; cueTimelineKey: string; stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; routingEpochFor: (id: string) => number; assignParticipant: (id: string, groupId: string) => TransitionResult; onPhase: (phase: Phase, startedAt: number) => void; displayForGroup: (groupId: string) => WebSocket | undefined }) {
     this.options = options;
     this.scenario = options.scenario;
     this.actorScriptParagraphs = options.scenario.actorScript ? scriptParagraphs(options.scenario.actorScript.text) : [];
@@ -954,6 +957,7 @@ export class PhaseEngine {
 
   stop(): void {
     this.clearPaths();
+    this.retirePathCue();
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.cursors.stop();
@@ -1596,6 +1600,7 @@ export class PhaseEngine {
     if (target === "idle" && !this.path) { this.tasks.cancelAll(); this.tasks.clearRoles(); }
     this.clearPaths();
     if (this.path && (target === this.path.stopAt || target === "idle")) {
+      this.retirePathCue();
       this.pathDone = true;
       this.phaseId = this.path.waitingPhase.id;
       this.phaseEpoch = this.nextEpoch();
@@ -1605,7 +1610,6 @@ export class PhaseEngine {
       this.ratings.clear();
       this.video.cancel();
       this.path.onPhase({ kind: "idle", id: "idle" }, now);
-      this.emitOutgoingPhase("path-waiting");
       this.broadcast({ ...this.getSnapshotMessage(now), t: "phase" });
       return;
     }
@@ -1701,7 +1705,7 @@ export class PhaseEngine {
   private transition(reason: string, sessionEnded?: { reason: string; sessionId: string; endedAt: number }): void {
     this.emitCheckpoint("transition", reason);
     const phase = this.currentPhase();
-    if (reason === "group-branch-complete" || phase.kind === "idle") {
+    if (!this.path && (reason === "group-branch-complete" || reason === "admin-force-reunion" || phase.kind === "idle")) {
       this.options.onCueEvent?.({
         type: "reset",
         timelineId: "main",
@@ -1741,16 +1745,38 @@ export class PhaseEngine {
   private emitOutgoingPhase(reason: string): void {
     const phase = this.currentPhase();
     const base = {
-      timelineId: this.path?.timelineId ?? "main",
+      ...this.cueTimeline(),
       sessionId: this.sessionId,
       phaseId: phase.id,
       phaseEpoch: this.phaseEpoch,
       timestamp: this.now(),
     };
+    this.cuePhaseEpoch = this.phaseEpoch;
     this.options.onCueEvent?.({ type: "phase", ...base, payload: { reason, phase: this.getSnapshot() } });
     for (const cue of phase.kind === "idle" ? [] : phase.outgoingCues ?? []) {
       this.options.onCueEvent?.({ type: "cue", ...base, payload: { cue } });
     }
+  }
+
+  private cueTimeline(): Pick<ShowCueEvent, "timelineId" | "timelineKey"> {
+    if (!this.path) return { timelineId: "main" };
+    const { timelineId, cueTimelineKey } = this.path;
+    return cueTimelineKey === timelineId ? { timelineId } : { timelineId, timelineKey: cueTimelineKey };
+  }
+
+  private retirePathCue(): void {
+    if (!this.path || this.cuePhaseEpoch === null) return;
+    const phaseEpoch = this.cuePhaseEpoch;
+    this.cuePhaseEpoch = null;
+    this.options.onCueEvent?.({
+      type: "retire",
+      ...this.cueTimeline(),
+      sessionId: this.sessionId,
+      phaseId: this.phaseId,
+      phaseEpoch,
+      timestamp: this.now(),
+      payload: {},
+    });
   }
 
   private emitCheckpoint(kind: "transition" | "recovery", reason: string): void {
@@ -1935,7 +1961,7 @@ export class PhaseEngine {
     for (const socket of this.participantSockets) this.sendVotingOptions(socket);
     this.options.onCueEvent?.({
       type: "result",
-      timelineId: this.path?.timelineId ?? "main",
+      ...this.cueTimeline(),
       sessionId: this.sessionId,
       phaseId: phase.id,
       phaseEpoch: this.phaseEpoch,
@@ -2107,6 +2133,10 @@ export class PhaseEngine {
         this.selectionCohort.has(participant.clientId) && this.groupSelection?.current(participant.clientId) === branch.groupId
       ).map((participant) => participant.clientId));
 
+      // Catalogue IDs can recur in nested branches. Keep routing IDs intact
+      // while giving cue receivers a separate key for each concurrent path.
+      const cueTimelineKey = this.path ? `${this.path.cueTimelineKey}/${branch.groupId}`
+        : branch.groupId === "main" ? "/main" : branch.groupId;
       const child = new PhaseEngine({
         scenario: this.scenario, registry: this.registry.scoped(members),
         installationId: this.installationId, roomId: this.roomId, showId: this.showId,
@@ -2119,7 +2149,7 @@ export class PhaseEngine {
         ...(this.options.onCueEvent === undefined ? {} : { onCueEvent: this.options.onCueEvent }),
         ...(this.options.onParticipantPhase === undefined ? {} : { onParticipantPhase: this.options.onParticipantPhase }),
       }, {
-        tasks: this.tasks, timelineId: branch.groupId, stopAt: phase.next, waitingPhase: phase, nextEpoch: () => this.nextEpoch(),
+        tasks: this.tasks, timelineId: branch.groupId, cueTimelineKey, stopAt: phase.next, waitingPhase: phase, nextEpoch: () => this.nextEpoch(),
         routingEpochFor: (id) => this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0,
         assignParticipant: (id, groupId) => this.path?.assignParticipant(id, groupId) ?? this.adminAssignGroup(id, groupId),
         onPhase: (localPhase, startedAt) => this.options.onParticipantPhase?.([...members], localPhase, startedAt),
