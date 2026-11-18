@@ -155,7 +155,9 @@ On the PC, unzip it (e.g. to the Desktop), then:
 1. Start Nomad, then double-click **Ping desk.cmd**: it should say *desk answered*.
 2. Double-click **Start Eos bridge.cmd**. The first time it opens `settings.cmd`
    in Notepad: fill in `SHOW_SERVER` and `DISPLAY_TOKEN`, save, start again.
-   `settings.cmd` stays on that PC; it holds the token.
+   `settings.cmd` stays on that PC; it holds the token. Paste each value
+   inside the quotes (`set "DISPLAY_TOKEN=…"`): that keeps special characters
+   such as `&`, `)` or `^` intact. Only `%` must be written twice (`%%`).
 3. Leave the window open during the show; closing it stops the bridge.
 
 **Test look.cmd** asks for a look, cue or scene and plays it; **List looks.cmd**

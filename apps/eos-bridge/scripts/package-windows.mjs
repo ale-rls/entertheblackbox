@@ -81,29 +81,32 @@ const cmd = (name, lines) => writeFileSync(join(outDir, name), `${lines.join("\r
 const prelude = [
   "@echo off",
   'cd /d "%~dp0"',
-  "chcp 65001 >nul",
   "if not exist settings.cmd copy settings.example.cmd settings.cmd >nul",
   "if not exist lighting.json copy lighting.example.json lighting.json >nul",
   "set EOS_HOST=",
+  "set DISPLAY_TOKEN=",
+  "set SHOW_SERVER=",
   "call settings.cmd",
-  'set HOST_ARG=',
-  'if not "%EOS_HOST%"=="" set HOST_ARG=--host %EOS_HOST%',
+  "set HOST_ARG=",
+  'if defined EOS_HOST set "HOST_ARG=--host %EOS_HOST%"',
 ];
 const run = "node\\node.exe eos-bridge.mjs --config lighting.json %HOST_ARG%";
 
 cmd("settings.example.cmd", [
   "@rem Settings for the Eos bridge on this PC. This file (settings.cmd) holds a secret: keep it on this PC, never in git or chat.",
-  "@rem The show server's address:",
-  "set SHOW_SERVER=https://",
+  "@rem Paste each value between the = and the closing quote. Keep the quotes exactly as they are.",
+  "@rem The show server's address, e.g. https://show.example.com",
+  'set "SHOW_SERVER=https://"',
   "@rem The display token (the same secret the main display uses):",
-  "set DISPLAY_TOKEN=",
-  "@rem The desk. 127.0.0.1 is Eos/Nomad on this same PC; it overrides eos.host in lighting.json. Leave empty to use lighting.json.",
-  "set EOS_HOST=127.0.0.1",
+  'set "DISPLAY_TOKEN="',
+  "@rem The desk. 127.0.0.1 is Eos/Nomad on this same PC; it overrides eos.host in lighting.json. Empty uses lighting.json.",
+  'set "EOS_HOST=127.0.0.1"',
 ]);
 cmd("Start Eos bridge.cmd", [
   ...prelude,
   "title Eos bridge",
-  'if "%DISPLAY_TOKEN%"=="" (',
+  "echo Starting the Eos bridge ...",
+  "if not defined DISPLAY_TOKEN (",
   "  echo Fill in the show server and display token in settings.cmd, save it, and start again.",
   "  start notepad settings.cmd",
   "  pause",
@@ -122,7 +125,7 @@ cmd("Test look.cmd", [
   ":again",
   "set NAME=",
   'set /p NAME=Look, cue or scene to play (empty to quit): ',
-  'if "%NAME%"=="" exit /b 0',
+  "if not defined NAME exit /b 0",
   `${run} --test "%NAME%"`,
   "goto again",
 ]);

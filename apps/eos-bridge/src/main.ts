@@ -120,7 +120,8 @@ async function main(): Promise<void> {
   }
 
   const server = values.server ?? process.env.SHOW_SERVER;
-  const token = values.token ?? process.env.DISPLAY_TOKEN;
+  // Tolerate the usual paste mistakes in a settings file: surrounding spaces or quotes are never part of a token.
+  const token = (values.token ?? process.env.DISPLAY_TOKEN)?.trim().replace(/^"(.*)"$/, "$1").trim() || undefined;
   if (!server || !token) throw new Error(`Missing --server/SHOW_SERVER or --token/DISPLAY_TOKEN.\n\n${usage}`);
 
   const stopWatching = watchFile(configPath, () => {
