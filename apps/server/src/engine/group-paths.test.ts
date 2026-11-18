@@ -766,6 +766,110 @@ it("lets Admin recover a nested selection blocked by a disconnected phone and st
 
 
 describe("group-following stage monitors", () => {
+  const joinMonitor = (h: ReturnType<typeof setup>) => {
+    const screen = new Socket();
+    h.send(screen, { t: "display_join", v: 2, clientVersion: "test",
+      installationId: "inst", roomId: "room", displayToken: "secret", monitorId: "M1" });
+    return screen;
+  };
+  const cast = (h: ReturnType<typeof setup>, phone: Socket, x: number, seq = 1) => {
+    h.send(phone, { t: "input", v: 2, seq, sessionId: "visit", phaseEpoch: phone.snapshot.phaseEpoch, x, y: 0.4 });
+  };
+
+  it.each(["natural", "forced"] as const)("keeps the followed vote through a %s reunion", (reunion) => {
+    const vote = scenario.phases.find(phase => phase.kind === "position-question")!;
+    const value = scenarioSchema.parse({
+      ...scenario,
+      monitorGroupId: "a",
+      entryPhaseId: "opening",
+      phases: [
+        ...scenario.phases.map(phase => {
+          if (phase.id === "together") return { ...phase, next: "closing",
+            monitorCues: { M1: [{ kind: "vote-result", votePhaseId: "vote", startMs: 0, fallbackText: "No answer" }] } };
+          if (phase.kind === "group-branch") return { ...phase,
+            branches: phase.branches.map(branch => branch.groupId === "b" ? { ...branch, next: "sibling" } : branch) };
+          if (phase.id === "vote") return { ...phase, answerColors: { max: "#ff3300" } };
+          return phase;
+        }),
+        { ...vote, id: "opening", next: { type: "fixed", target: "split" } },
+        { ...vote, id: "sibling", durationMs: 200, next: { type: "fixed", target: "film" } },
+        { ...vote, id: "closing", next: { type: "fixed", target: "final" } },
+        { kind: "video", id: "final", src: "film.mp4", expectedDurationMs: 1_000, next: "idle" },
+      ],
+    });
+    expect(validateScenario(value).ok).toBe(true);
+    const h = setup(value);
+    const a = h.phone("one"), b = h.phone("two");
+    const screen = joinMonitor(h);
+    h.engine.adminStart();
+    cast(h, a, 0.1);
+    h.tick(100);
+    h.choose(a, "a"); h.choose(b, "b");
+    h.tick(200);
+    expect(screen.snapshot.phase).toMatchObject({
+      id: "vote", monitorVoteResults: { opening: { label: "No" } }, lastMonitorVotePhaseId: "opening",
+    });
+    cast(h, a, 0.9, 2);
+    cast(h, b, 0.1);
+    h.tick(300);
+    h.tick(400);
+    if (reunion === "forced") expect(h.engine.adminForceReunion()).toEqual({ ok: true });
+    else h.tick(1400);
+    const expected = { opening: { label: "No" }, vote: { label: "Yes", color: "#ff3300" } };
+    expect(screen.snapshot.phase.id).toBe("together");
+    expect(screen.snapshot.phase.monitorVoteResults).toEqual(expected);
+    expect(screen.snapshot.phase.lastMonitorVotePhaseId).toBe("vote");
+    expect(joinMonitor(h).snapshot.phase.monitorVoteResults).toEqual(expected);
+
+    const togetherAt = reunion === "forced" ? 400 : 1400;
+    h.tick(togetherAt + 1000);
+    cast(h, a, 0.9, 3);
+    h.tick(togetherAt + 1100);
+    expect(h.engine.getSnapshot().lastMonitorVotePhaseId).toBe("closing");
+    expect(h.engine.getSnapshot().monitorVoteResults).toEqual({ ...expected, closing: { label: "Yes" } });
+    h.tick(togetherAt + 2100);
+    expect(h.engine.getSnapshot()).toMatchObject({ id: "idle", monitorVoteResults: {} });
+    expect(h.engine.getSnapshot().lastMonitorVotePhaseId).toBeUndefined();
+    h.engine.stop();
+  });
+
+  it("carries a nested followed vote to the outer reunion after its path is cleared", () => {
+    const vote = scenario.phases.find(phase => phase.kind === "position-question")!;
+    const value = scenarioSchema.parse({
+      ...scenario,
+      monitorGroupId: "c",
+      phases: [
+        ...scenario.phases.map(phase => phase.kind === "group-branch" ? { ...phase,
+          branches: phase.branches.map(branch => branch.groupId === "a" ? { ...branch, next: "roles" } : branch) } : phase),
+        { kind: "group-branch", id: "roles", title: "Choose a trade", sourceGroupIds: ["a"], durationMs: 100,
+          assignment: { type: "self-select" }, branches: [{ groupId: "a" }, { groupId: "c", next: "nested-vote" }], next: "parent-vote" },
+        { ...vote, id: "nested-vote", next: { type: "fixed", target: "parent-vote" } },
+        { ...vote, id: "parent-vote" },
+      ],
+    });
+    const h = setup(value);
+    const a = h.phone("one"), b = h.phone("two");
+    const screen = joinMonitor(h);
+    h.engine.adminStart();
+    h.choose(a, "a"); h.choose(b, "b");
+    h.tick(100);
+    h.choose(a, "c");
+    h.tick(200);
+    expect(screen.snapshot.phase.id).toBe("nested-vote");
+    cast(h, a, 0.9);
+    h.tick(300);
+    expect(h.engine.currentPhaseId).toBe("split");
+    expect(a.snapshot.phase.id).toBe("parent-vote");
+    cast(h, a, 0.1, 2);
+    h.tick(400);
+    expect(h.cues.find(cue => cue.type === "result" && cue.phaseId === "parent-vote")?.payload.quadrantCounts).toEqual({ min: 1, max: 0 });
+    h.tick(1100);
+    expect(screen.snapshot.phase.id).toBe("together");
+    expect(screen.snapshot.phase.monitorVoteResults).toEqual({ "nested-vote": { label: "Yes" } });
+    expect(screen.snapshot.phase.lastMonitorVotePhaseId).toBe("nested-vote");
+    h.engine.stop();
+  });
+
   it("follows the chosen group, restores its clock on reconnect, clears while waiting and rejoins", () => {
     const value = scenarioSchema.parse({ ...scenario, monitorGroupId: "a", phases: scenario.phases.map(p => p.id === "vote"
       ? { ...p, monitorCues: { M1: [{ kind: "text", text: "Choose now", startMs: 0 }] } } : p) });
