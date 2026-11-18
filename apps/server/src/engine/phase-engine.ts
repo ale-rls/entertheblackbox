@@ -318,7 +318,6 @@ export class PhaseEngine {
       this.tasks.configureRoles(this.scenario.participantRoles ?? []);
       this.tasks.configureWorkflow(this.scenario.participantTasks ?? [], {
         assignGroup: (id, group) => this.adminAssignGroup(id, group).ok,
-        winner: question => this.taskVoteWinners.get(question) ?? null,
       });
     }
     this.onCheckpoint = options.onCheckpoint;
@@ -417,7 +416,6 @@ export class PhaseEngine {
   private monitorVoteResults: NonNullable<PhaseSnapshotMessage["monitorVoteResults"]> = {};
   private lastMonitorVotePhaseId: string | undefined;
   private lastRecordedMonitorVoteEpoch: number | undefined;
-  private taskVoteWinners = new Map<string, string | null>();
   private lastTaskState = '';
   get taskStatus() {
     const phase = this.currentPhase();
@@ -630,7 +628,7 @@ export class PhaseEngine {
     this.lifecycle = "active";
     this.routingEpochs.clear();
     this.tasks.cancelAll();
-    this.taskVoteWinners.clear();
+    this.tasks.clearVoteWinners();
     this.monitorVoteResults = {};
     this.lastMonitorVotePhaseId = undefined;
     this.tasks.clearRoles();
@@ -902,7 +900,7 @@ export class PhaseEngine {
     this.movement.finalizeSession(now);
     this.routingEpochs.clear();
     this.tasks.cancelAll();
-    this.taskVoteWinners.clear();
+    this.tasks.clearVoteWinners();
     this.monitorVoteResults = {};
     this.lastMonitorVotePhaseId = undefined;
     this.tasks.clearRoles();
@@ -1570,7 +1568,7 @@ export class PhaseEngine {
     this.lifecycle = "active";
     this.routingEpochs.clear();
     this.tasks.cancelAll();
-    this.taskVoteWinners.clear();
+    this.tasks.clearVoteWinners();
     this.monitorVoteResults = {};
     this.lastMonitorVotePhaseId = undefined;
     this.tasks.clearRoles();
@@ -1951,10 +1949,11 @@ export class PhaseEngine {
     const counts = Object.entries(resolution.quadrantCounts);
     const maxCount = Math.max(0, ...counts.map(([, count]) => count));
     const leaders = counts.filter(([, count]) => count === maxCount);
-    this.taskVoteWinners.set(phase.id, maxCount > 0 && leaders.length === 1 ? leaders[0]![0] : null);
     // Routing may say "fixed" or break ties randomly. Monitor text describes
     // the audience's unique plurality; ties and empty votes use the cue fallback.
     const winner = maxCount > 0 && leaders.length === 1 ? leaders[0]![0] : null;
+    this.tasks.recordVoteWinner(phase.id, resolution.snapshot.phaseEpoch, winner,
+      this.path ? this.registry.values().map(participant => participant.clientId) : undefined);
     const answer = votingOptions(phase).find((option) => option.id === winner);
     const color = answer?.color ?? (winner ? this.curtainFor(phase)?.treatment.answerColors[winner] : undefined);
     // Reconnecting displays can replay a resolved composite question.

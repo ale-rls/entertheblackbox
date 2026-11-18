@@ -39,6 +39,10 @@ audio and shows task prompts.
   everyone has answered. Anyone who joins, or is moved into its audience
   group, during that window becomes a recipient and gets the prompt.
   Operator-sent tasks still close once every recipient has answered.
+  A vote-based recording uses the question result for the audience assigned
+  when the vote resolved. After a reunion, each audience retains its own
+  group result. A shared vote applies to everyone, and ties or missing results
+  use the authored fallback recording.
 - **Outcomes by order and when full.** An option can give the Nth accepted
   response its own outcome (`rankOutcomes`: role, group, recording, message,
   follow-up task; empty fields fall back to the option's own). An option with

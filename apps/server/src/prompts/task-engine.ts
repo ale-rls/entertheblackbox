@@ -6,9 +6,33 @@ export class TaskEngine {
   private sequence = 0;
   private templates: ParticipantTask[] = [];
   private followups: Array<{ sourceId: string; participantId: string; templateId: string; at: number }> = [];
-  private workflow: { assignGroup: (id: string, group: string) => boolean; winner: (question: string) => string | null } | undefined;
+  private workflow: { assignGroup: (id: string, group: string) => boolean } | undefined;
+  private voteWinners = new Map<string, { shared: string | null; participants: Map<string, string | null> }>();
+  private recordedVoteEpochs = new Set<number>();
   configureWorkflow(templates: ParticipantTask[], workflow: NonNullable<TaskEngine['workflow']>): void {
     this.templates = templates; this.workflow = workflow;
+  }
+  clearVoteWinners(): void {
+    this.voteWinners.clear();
+    this.recordedVoteEpochs.clear();
+  }
+  recordVoteWinner(questionId: string, phaseEpoch: number, winner: string | null, participantIds?: readonly string[]): void {
+    // Display reconnections can replay composite results after the roster changes.
+    if (this.recordedVoteEpochs.has(phaseEpoch)) return;
+    this.recordedVoteEpochs.add(phaseEpoch);
+    if (participantIds === undefined) {
+      this.voteWinners.set(questionId, { shared: winner, participants: new Map() });
+      return;
+    }
+    // Keep the group's result through reunion for the entire roster, including abstentions.
+    const vote = this.voteWinners.get(questionId) ?? { shared: null, participants: new Map() };
+    for (const participantId of participantIds) vote.participants.set(participantId, winner);
+    this.voteWinners.set(questionId, vote);
+  }
+  private voteWinner(questionId: string, participantId: string): string | null {
+    const vote = this.voteWinners.get(questionId);
+    if (vote?.participants.has(participantId)) return vote.participants.get(participantId) ?? null;
+    return vote?.shared ?? null;
   }
   private audio(template: ParticipantTask, now: number) {
     return template.audio ? { ...template.audio, startedAt: now + 400 } : undefined;
@@ -64,7 +88,7 @@ export class TaskEngine {
     if (!task || !r || !option || task.status !== 'open' || this.current(participantId, sessionId)?.task.id !== task.id) return false;
     if (r.status === 'accepted' || r.status === 'answered') return r.optionId === optionId;
     if (r.status !== 'pending' && r.status !== 'full') return false;
-    const winner = option.audioByVote ? this.workflow?.winner(option.audioByVote.questionId) : null;
+    const winner = option.audioByVote ? this.voteWinner(option.audioByVote.questionId, participantId) : null;
     const own: TaskOutcome = { roleId: option.roleId, groupId: option.groupId, nextTaskId: option.nextTaskId, message: option.message,
       audio: option.audioByVote ? (winner ? option.audioByVote.clips[winner] : undefined) ?? option.audioByVote.fallback : option.audio };
     // Rank and capacity count only responses that took a place, not overflow arrivals.

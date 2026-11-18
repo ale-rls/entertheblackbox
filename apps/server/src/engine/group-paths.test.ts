@@ -548,6 +548,51 @@ describe("independent group paths", () => {
     expect(h.engine.adminSkipGroup("a", undefined, "wrong-id")).toEqual({ ok: false, reason: "stale" });
     h.engine.stop();
   });
+
+  it("uses each audience's vote result for task audio after the paths reunite", () => {
+    const h = setup(scenarioSchema.parse({
+      ...scenario,
+      participantTasks: [{ id: "recap", title: "Recap", question: "Ready?", notificationBody: "Please answer",
+        durationMs: 1000, options: [{ id: "yes", label: "Yes", audioByVote: { questionId: "vote",
+          clips: { min: { src: "min.mp3", durationMs: 1000 }, max: { src: "max.mp3", durationMs: 1000 } },
+          fallback: { src: "fallback.mp3", durationMs: 1000 },
+        } }] }],
+      phases: scenario.phases.map(phase => {
+        if (phase.kind === "group-branch") return { ...phase, branches: phase.branches.map(branch =>
+          branch.groupId === "b" ? { ...branch, next: "vote" } : branch) };
+        if (phase.id === "together") return { kind: "narration", id: "together", text: "Recap", durationMs: 1000, taskId: "recap", next: "idle" };
+        return phase;
+      }),
+    }));
+    const a = h.phone("one");
+    const b = h.phone("two");
+    const c = h.phone("three");
+    h.engine.adminStart();
+    h.choose(a, "a"); h.choose(b, "b"); h.choose(c, "c");
+    h.tick(100);
+    h.send(a, { t: "input", v: 2, sessionId: "visit", phaseEpoch: a.snapshot.phaseEpoch, seq: 1, x: 0.2, y: 0.5 });
+    h.send(b, { t: "input", v: 2, sessionId: "visit", phaseEpoch: b.snapshot.phaseEpoch, seq: 1, x: 0.8, y: 0.5 });
+    h.tick(200);
+    h.tick(1_100);
+    expect(h.engine.currentPhaseId).toBe("together");
+
+    const recordings = () => {
+      const task = h.engine.taskStatus.instances[0]!;
+      for (const phone of [a, b, c]) {
+        h.send(phone, { t: "participant_task_response", v: 2, sessionId: "visit", instanceId: task.id, optionId: "yes" });
+      }
+      return h.engine.taskStatus.instances[0]?.recipients.map(recipient => recipient.audio?.src);
+    };
+    expect(recordings()).toEqual(["min.mp3", "max.mp3", "fallback.mp3"]);
+
+    expect(h.engine.startRehearsalAt("together")).toEqual({ ok: true });
+    expect(recordings()).toEqual(["fallback.mp3", "fallback.mp3", "fallback.mp3"]);
+
+    expect(h.engine.startRehearsalAt("vote")).toEqual({ ok: true });
+    h.send(a, { t: "input", v: 2, sessionId: "visit", phaseEpoch: a.snapshot.phaseEpoch, seq: 1, x: 0.2, y: 0.5 });
+    h.tick(1_200);
+    expect(recordings()).toEqual(["min.mp3", "min.mp3", "min.mp3"]);
+  });
 });
 
 it("sends each phone its own selected group and audio state, including waiting and reconnect", () => {
