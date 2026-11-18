@@ -23,7 +23,7 @@ function engine(groupFails: string[] = []) {
   const groups = new Map<string, string>();
   const e = new TaskEngine();
   e.configureRoles(['vector', 'patch', 'oracle'].map(id => ({ id, label: id, capacity: 1 })));
-  e.configureWorkflow([casting], { assignGroup: (id, group) => { if (groupFails.includes(group)) return false; groups.set(id, group); return true; }, winner: () => null });
+  e.configureWorkflow([casting], { assignGroup: (id, group) => { if (groupFails.includes(group)) return false; groups.set(id, group); return true; } });
   return { e, groups };
 }
 const recipient = (e: TaskEngine, id: string) => e.current(id, 's')!.recipient;

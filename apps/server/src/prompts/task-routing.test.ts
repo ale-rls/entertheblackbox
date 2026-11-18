@@ -9,7 +9,7 @@ function setup() {
  const replacement = task('new-work', [{id:'stage',label:'Stage',roleId:'stage',groupId:'stage',audio}]);
  const e = new TaskEngine(); const groups = new Map<string,string>();
  e.configureRoles([{id:'stage',label:'Stage',capacity:1}]);
- e.configureWorkflow([first,handover,replacement], {assignGroup:(id,g)=>{groups.set(id,g);return true;},winner:()=>null});
+ e.configureWorkflow([first,handover,replacement], {assignGroup:(id,g)=>{groups.set(id,g);return true;}});
  return {e,first,handover,replacement,groups};
 }
 describe('automatic task routing', () => {
@@ -31,7 +31,12 @@ describe('automatic task routing', () => {
  });
  it('selects recorded instruction from the saved vote and uses the declared fallback for a tie', () => {
   const {e}=setup();const variant=task('chor',[{id:'yes',label:'Yes',audioByVote:{questionId:'rule',clips:{blue:{src:'blue.mp3',durationMs:2000}},fallback:audio}}]);
-  e.configureWorkflow([variant],{assignGroup:()=>true,winner:()=> 'blue'});const t=e.open(variant,'s',['a'],0);e.respond(t.id,'s','a','yes',10);expect(e.current('a','s')!.recipient.audio!.src).toBe('blue.mp3');
-  e.configureWorkflow([variant],{assignGroup:()=>true,winner:()=>null});const t2=e.open(variant,'s',['b'],0);e.respond(t2.id,'s','b','yes',10);expect(e.current('b','s')!.recipient.audio!.src).toBe('choice.mp3');
+  e.recordVoteWinner('rule',1,'blue',['a']);
+  e.recordVoteWinner('rule',1,'blue',['a','late']); // Replaying a group result must not widen its original audience.
+  const t=e.open(variant,'s',['a','late'],0);
+  e.respond(t.id,'s','a','yes',10);expect(e.current('a','s')!.recipient.audio!.src).toBe('blue.mp3');
+  e.respond(t.id,'s','late','yes',10);expect(e.current('late','s')!.recipient.audio!.src).toBe('choice.mp3');
+  e.recordVoteWinner('rule',2,null,['a']);
+  const t2=e.open(variant,'s',['a'],20);e.respond(t2.id,'s','a','yes',30);expect(e.current('a','s')!.recipient.audio!.src).toBe('choice.mp3');
  });
 });
