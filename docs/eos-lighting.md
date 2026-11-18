@@ -2,7 +2,8 @@
 
 The stage lamps hang off the venue's ETC Eos desk (Nomad on a Windows PC). The
 show server tells the desk what to do through the **Eos bridge**
-(`apps/eos-bridge`): a small program on the laptop cabled to the desk. It
+(`apps/eos-bridge`): a small program on the Nomad PC itself (see
+[Running on the Nomad PC](#running-on-the-nomad-pc)) or on a laptop cabled to it. It
 listens to the server's cue feed (`GET /api/cues`) and plays **looks** on the
 desk over OSC.
 
@@ -116,7 +117,7 @@ Looks and cues can be written in the script and put into the show by the
 script skills, instead of editing this file by hand. How to write them and what
 the skills do: [script-light-cues.md](script-light-cues.md).
 
-## Setting up the laptop
+## Setting up a laptop instead
 
 1. **Repo and Node:** Node 22 and pnpm 9 (`corepack enable`), then
    `pnpm install` in this repo. Run every command below from the repo folder.
@@ -129,6 +130,47 @@ the skills do: [script-light-cues.md](script-light-cues.md).
    `pnpm eos-bridge --ping`. For shows, give both machines fixed addresses.
 4. **Nothing to set on the desk.** Eos's built-in OSC over TCP (port 3037) is
    used; the OSC settings in Setup and the Windows firewall stay as they are.
+
+## Running on the Nomad PC
+
+The bridge can run on the Windows PC that runs Eos/Nomad, with nothing
+installed there: no Node, no pnpm, no repo, no admin rights. That saves the
+laptop and the cable, and the desk is always at `127.0.0.1`.
+
+On a machine with the repo (Mac or Windows), build the portable folder:
+
+```bash
+pnpm eos-bridge:windows                              # includes ./lighting.json if there is one
+pnpm eos-bridge:windows --lighting path/to/lighting.json
+```
+
+It writes `dist/eos-bridge-windows/` and `dist/eos-bridge-windows.zip`: the
+official Node.js for Windows (`node\node.exe`, downloaded from nodejs.org and
+checked against a pinned SHA-256), the bridge bundled into one file
+(`eos-bridge.mjs`) and double-click launchers. The zip contains no secrets;
+it may contain the show's `lighting.json`, so don't share it publicly.
+
+On the PC, unzip it (e.g. to the Desktop), then:
+
+1. Start Nomad, then double-click **Ping desk.cmd**: it should say *desk answered*.
+2. Double-click **Start Eos bridge.cmd**. The first time it opens `settings.cmd`
+   in Notepad: fill in `SHOW_SERVER` and `DISPLAY_TOKEN`, save, start again.
+   `settings.cmd` stays on that PC; it holds the token.
+3. Leave the window open during the show; closing it stops the bridge.
+
+**Test look.cmd** asks for a look, cue or scene and plays it; **List looks.cmd**
+prints the lighting file. Edit `lighting.json` in that folder with Notepad;
+the running bridge reloads it as on the laptop.
+
+`settings.cmd` sets `EOS_HOST=127.0.0.1`, which wins over `eos.host` in the
+lighting file, so the same `lighting.json` works on the laptop and the PC. If
+the ping fails on `127.0.0.1` while Nomad is running, put the PC's own network
+address there instead.
+
+To update, build again and copy the new files over the old folder, keeping
+`settings.cmd` (and `lighting.json` if it was edited on the PC). Windows may
+show a SmartScreen or firewall prompt the first time `node.exe` runs; the
+bridge only makes outgoing connections, so no inbound rule is needed.
 
 ## Trying looks in the room
 
