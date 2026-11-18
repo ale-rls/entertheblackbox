@@ -1,6 +1,7 @@
 import { ServerClock } from '@entertheblackbox/shared';
 import { encodeMessage, parseServerMessage, PROTOCOL_VERSION, SHOW_ENDED_CLOSE_CODE,
-  type PhoneToServerMessage, type ServerToClientMessage } from '@entertheblackbox/protocol';
+  type PhoneToServerMessage, type ServerToClientMessage, type WallMessage } from '@entertheblackbox/protocol';
+import { acceptWall } from './wall';
 export type Socket = Pick<WebSocket, 'readyState' | 'send' | 'close' | 'onopen' | 'onmessage' | 'onclose' | 'onerror'>;
 type Options = {
   capabilities?: string[];
@@ -39,6 +40,8 @@ export class NativeConnection {
     this.options.status('Connecting');
     const socket = (this.options.factory ?? (url => new WebSocket(url)))(`${this.options.origin.replace(/^http/, 'ws')}/ws`);
     this.socket = socket;
+    // Each connection receives a fresh wall welcome, possibly from a restarted server.
+    let wall: WallMessage | null = null;
     socket.onopen = () => {
       if (this.socket !== socket || this.stopped) return;
       this.lastReceived = Date.now();
@@ -66,6 +69,10 @@ export class NativeConnection {
         this.options.saveLease(message.participantLease); this.options.status('Connected');
       }
       if (message.t === 'snapshot' || message.t === 'phase') this.clock.observe(message.serverTime, Date.now());
+      if (message.t === 'wall') {
+        if (acceptWall(wall, message) !== message) return;
+        wall = message;
+      }
       this.options.message(message);
       if (message.t === 'join_rejected') {
         // Rejection requires operator/user action; don't create an endless admission retry storm.
