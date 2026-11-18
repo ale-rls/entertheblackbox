@@ -51,8 +51,11 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   const url = media.visualSrc === src ? media.videoUrl : null;
   const ready = media.status.state === "ready";
   const key = `${state.sessionId}:${state.phaseEpoch}:${cue?.startMs}`;
-  const countdown = ready && connection.clock.ready && cue && cue.kind !== "blank" && state.resolution === null
-    ? monitorCountdown(phase, now) : null;
+  const countdown = ready && connection.clock.ready && cue && cue.kind !== "blank"
+    ? cue.countdownSeconds !== undefined
+      ? monitorCueCountdown(phase?.monitorCues?.[monitorId] ?? [], now - (phase?.startedAt ?? 0))
+      : state.resolution === null ? monitorCountdown(phase, now) : null
+    : null;
   const voteResult = cue?.kind === "vote-result" ? monitorVoteResult(cue, phase) : null;
   const answerColor = voteResult ? voteResult.color : monitorAnswerColor(phase, monitorId);
   const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
