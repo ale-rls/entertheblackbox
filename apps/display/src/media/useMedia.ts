@@ -1,7 +1,7 @@
 import { rehearsalId, runtimeApi } from "@entertheblackbox/protocol";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { mediaManifestSchema } from "@entertheblackbox/scenario";
-import { MediaStore, type MediaSyncStatus } from "./mediaStore.js";
+import { MediaStore, selectMedia, type MediaSyncStatus } from "./mediaStore.js";
 
 /**
  * Boot media synchronization for the display (plan §9): fetch and
@@ -9,7 +9,7 @@ import { MediaStore, type MediaSyncStatus } from "./mediaStore.js";
  * Blob URLs for the active video. The display is not "ready" until the
  * sync completes; failures surface as a visible retry state.
  */
-export function useMedia(manifestUrl = runtimeApi("/media-manifest.json"), revision = "") {
+export function useMedia(manifestUrl = runtimeApi("/media-manifest.json"), revision = "", scope?: { cacheName: string; sources: readonly string[] }) {
   const [status, setStatus] = useState<MediaSyncStatus>({ state: "idle" });
   const [resolvedMedia, setResolvedMedia] = useState<{
     visualSrc: string;
@@ -26,13 +26,14 @@ export function useMedia(manifestUrl = runtimeApi("/media-manifest.json"), revis
   } | null>(null);
   const generation = useRef(0);
   const currentStore = useRef<MediaStore | null>(null);
+  const scopeKey = scope ? JSON.stringify([scope.cacheName, [...new Set(scope.sources)].sort()]) : "";
   const store = useMemo(() => {
     const next = new MediaStore({
       onStatus: (value) => { if (currentStore.current === next) setStatus(value); },
-      ...(rehearsalId() ? { cacheName: `rehearsal-media-${rehearsalId()}` } : {}),
+      ...(scope ? { cacheName: `${scope.cacheName}${rehearsalId() ? `-${rehearsalId()}` : ""}` } : rehearsalId() ? { cacheName: `rehearsal-media-${rehearsalId()}` } : {}),
     });
     return next;
-  }, [revision]);
+  }, [revision, scopeKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +50,7 @@ export function useMedia(manifestUrl = runtimeApi("/media-manifest.json"), revis
           if (!response.ok) throw new Error(`manifest http ${response.status}`);
           const manifest = mediaManifestSchema.parse(await response.json());
           if (cancelled) return;
-          await store.sync(manifest);
+          await store.sync(scope ? selectMedia(manifest, scope.sources) : manifest);
           return;
         } catch (error) {
           if (cancelled) return;
