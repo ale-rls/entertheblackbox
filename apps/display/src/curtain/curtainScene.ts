@@ -77,12 +77,16 @@ export class CurtainScene {
   }
 
   /**
-   * One light per cursor in its participant's own colour (the colour their
-   * phone shows), a stronger flood once it stands in a counting area, and a
-   * brief pulse when its participant touches their phone.
+   * One light per cursor: a small dot in its participant's own colour (the
+   * colour their phone shows), so people can find themselves, and a flood on
+   * the fabric in the same warm white as the answer fields, so sixty hues
+   * never turn the curtain into confetti. The flood is stronger once the
+   * cursor stands in a counting area, and both pulse when its participant
+   * touches their phone.
    */
   cursorLights(cursors: readonly SceneCursor[], now: number): CursorLight[] {
     const { cursorFlood, cursorFloodCounted } = this.treatment.curtain;
+    const floodRgb = hexToLinear(CURTAIN_NEUTRAL_POOL_COLOR);
     return cursors.filter((cursor) => !cursor.ghost).map((cursor) => {
       const counted = quadrantOfField(this.field, cursor.x, cursor.y) !== null;
       const pulse = cursor.pulseAt === undefined ? 0 : Math.exp(-Math.max(0, now - cursor.pulseAt) / PULSE_DECAY_MS);
@@ -90,6 +94,7 @@ export class CurtainScene {
         x: cursor.x,
         y: cursor.y,
         rgb: hexToLinear(cursor.color ?? "#ffffff"),
+        floodRgb,
         flood: counted ? cursorFloodCounted : cursorFlood,
         core: counted ? 1.1 : 0.8,
         pulse,
