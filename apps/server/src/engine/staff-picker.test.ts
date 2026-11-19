@@ -10,17 +10,21 @@ const scenario = scenarioSchema.parse({
   groups: [{ id: 'ki', label: 'Stage' }, { id: 'vector', label: 'VECTOR' }],
   participantRoles: [{ id: 'lead-job', label: 'Lead', exclusiveSet: 'work' }, { id: 'lead-vector', label: 'VECTOR', capacity: 1, exclusiveSet: 'work' }],
   staffAssignments: [{ id: 'vector', label: 'VECTOR', roleId: 'lead-vector', groupId: 'vector' }],
-  phases: [{ kind: 'idle', id: 'idle' }, { kind: 'narration', id: 'hold', text: 'Casting', durationMs: 60000, next: 'idle' }],
+  participantTasks: [{
+    id: 'lead', title: 'Lead', question: 'Take the lead?', notificationBody: 'Please answer', durationMs: 10000, persistAcrossPhases: true,
+    options: [{ id: 'yes', label: 'Yes', roleId: 'lead-job', capacity: 1 }, { id: 'no', label: 'No' }],
+  }],
+  phases: [{ kind: 'idle', id: 'idle' }, { kind: 'narration', id: 'hold', text: 'Casting', taskId: 'lead', durationMs: 60000, next: 'idle' }],
 });
 
 class Socket { readyState = 1; sent: any[] = []; send(raw: string) { this.sent.push(JSON.parse(raw)); } close() { this.readyState = 3; } }
 
-function setup(pin: string | null = '2468') {
+function setup(pin: string | null = '2468', value = scenario) {
   const staffPin = pin ?? undefined;
   const now = 100;
   const registry = new ParticipantRegistry(10);
   const membership = new Map<string, string>();
-  const engine = new PhaseEngine({ scenario, registry, installationId: 'i', roomId: 'r', showId: 'show', displayToken: 'display', staffPin, now: () => now,
+  const engine = new PhaseEngine({ scenario: value, registry, installationId: 'i', roomId: 'r', showId: 'show', displayToken: 'display', staffPin, now: () => now,
     autoStartOnFirstParticipant: false, sessionIdFactory: () => 'session',
     groupSelection: { current: id => membership.get(id) ?? null, select: (id, g) => { membership.set(id, g); } } });
   const phone = (id: string) => {
@@ -47,11 +51,13 @@ describe('staff menu on the tablet', () => {
 
   it('assigns role and group to the tablet occupant, replacing a role in the same exclusive set', () => {
     const h = setup(); const tablet = h.phone('a'); h.engine.adminStart();
-    h.engine.taskCommand({ action: 'assign-role', participantId: 'a', roleId: 'lead-job', sessionId: h.engine.currentSessionId, phaseId: 'hold', phaseEpoch: h.engine.currentPhaseEpoch });
+    const task = h.engine.taskStatus.instances[0]!;
+    h.send(tablet, { t: 'participant_task_response', sessionId: task.sessionId, instanceId: task.id, optionId: 'yes' });
     h.send(tablet, { t: 'staff_assign', pin: '2468', pickId: 'vector' });
     expect(h.last(tablet, 'staff_assign_result')).toMatchObject({ ok: true, message: 'Assigned: VECTOR' });
     expect(h.engine.taskStatus.assignments).toMatchObject([{ participantId: 'a', roleId: 'lead-vector', source: 'staff' }]);
     expect(h.membership.get('a')).toBe('vector');
+    expect(h.engine.taskStatus.instances[0]!.recipients[0]?.status).toBe('withdrawn');
   });
 
   it('refuses a full role and a wrong PIN without changing anything', () => {
@@ -62,6 +68,56 @@ describe('staff menu on the tablet', () => {
     expect(h.membership.get('b')).toBe('ki');
     h.send(second, { t: 'staff_assign', pin: '1111', pickId: 'vector' });
     expect(h.last(second, 'staff_assign_result')).toMatchObject({ ok: false, message: 'Wrong PIN.' });
+  });
+
+  it('preserves the accepted task and original role when the replacement role is full', () => {
+    const h = setup();
+    const first = h.phone('a');
+    const second = h.phone('b');
+    h.engine.adminStart();
+    const task = h.engine.taskStatus.instances[0]!;
+    h.send(second, { t: 'participant_task_response', sessionId: task.sessionId, instanceId: task.id, optionId: 'yes' });
+    h.send(first, { t: 'staff_assign', pin: '2468', pickId: 'vector' });
+    const before = h.engine.taskStatus;
+    expect(before.assignments).toContainEqual(expect.objectContaining({ participantId: 'b', roleId: 'lead-job' }));
+    expect(before.instances[0]!.recipients).toContainEqual(expect.objectContaining({ participantId: 'b', status: 'accepted' }));
+
+    h.send(second, { t: 'staff_assign', pin: '2468', pickId: 'vector' });
+
+    expect(h.last(second, 'staff_assign_result')).toMatchObject({ ok: false, message: 'Role is full' });
+    expect(h.engine.taskStatus).toEqual(before);
+    expect(h.membership.get('b')).toBe('ki');
+  });
+
+  it('preserves the task, role, and group when the requested group has no running path', () => {
+    const value = scenarioSchema.parse({
+      ...scenario,
+      groups: [...scenario.groups!, { id: 'audience', label: 'Audience' }],
+      phases: [
+        ...scenario.phases.map(phase => phase.id === 'hold' ? { ...phase, next: 'split' } : phase),
+        { kind: 'group-branch', id: 'split', title: 'Choose', durationMs: 100, assignment: { type: 'self-select' },
+          branches: [{ groupId: 'ki', next: 'stage' }, { groupId: 'audience', next: 'stage' }], next: 'idle' },
+        { kind: 'narration', id: 'stage', text: 'On stage', durationMs: 60000, next: 'idle' },
+      ],
+    });
+    const h = setup('2468', value);
+    const tablet = h.phone('a');
+    h.engine.adminStart();
+    const task = h.engine.taskStatus.instances[0]!;
+    h.send(tablet, { t: 'participant_task_response', sessionId: task.sessionId, instanceId: task.id, optionId: 'yes' });
+    expect(h.engine.adminJump('split').ok).toBe(true);
+    expect(h.engine.adminAssignGroup('a', 'ki').ok).toBe(true);
+    expect(h.engine.adminStartGroupPaths().ok).toBe(true);
+    const before = h.engine.taskStatus;
+    expect(before.assignments).toContainEqual(expect.objectContaining({ participantId: 'a', roleId: 'lead-job' }));
+    expect(before.instances[0]!.recipients).toContainEqual(expect.objectContaining({ participantId: 'a', status: 'accepted' }));
+
+    h.send(tablet, { t: 'staff_assign', pin: '2468', pickId: 'vector' });
+
+    expect(h.last(tablet, 'staff_assign_result')).toMatchObject({ ok: false, message: 'Could not move this tablet into that group.' });
+    expect(h.engine.taskStatus).toEqual(before);
+    expect(h.membership.get('a')).toBe('ki');
+    expect(h.engine.groupPaths.find(path => path.groupId === 'ki')?.memberIds).toEqual(['a']);
   });
 
   it('is off without STAFF_PIN', () => {
