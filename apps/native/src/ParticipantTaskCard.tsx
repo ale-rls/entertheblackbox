@@ -1,13 +1,8 @@
 import React from 'react';
 import { View, Pressable } from 'react-native';
 import { Text } from './Text';
-import type { ServerToClientMessage } from '@entertheblackbox/protocol';
-export type ParticipantTaskState = Extract<ServerToClientMessage, { t: 'participant_task' }>;
-export function taskAlert(state: ParticipantTaskState | null, now: number) {
-  const task = state?.task;
-  return task && !task.template.autoComplete && task.status === 'open' && task.deadlineAt > now && (task.recipient.status === 'pending' || task.recipient.status === 'full')
-    ? { key: `task:${state.sessionId}:${task.id}`, body: task.template.notificationBody } : null;
-}
+import { taskAlert, type ParticipantTaskState } from './participant-task';
+export type { ParticipantTaskState } from './participant-task';
 export function ParticipantTaskCard({ state, now, enabled, respond }: { state: ParticipantTaskState | null; now: number; enabled: boolean; respond: (optionId: string) => void }) {
   const task = state?.task;
   if (!task || task.template.autoComplete || task.status === 'cancelled' || task.recipient.status === 'cancelled') return null;
