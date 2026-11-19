@@ -321,6 +321,21 @@ Two bug hunts before the performances. Each fix has its own PR.
 - Light effects run across the tablets only, not audience phones ([#471](https://github.com/ale-rls/entertheblackbox/pull/471)).
 - A withdrawn role frees its place for the next volunteer ([#455](https://github.com/ale-rls/entertheblackbox/pull/455)).
 
+**Still open**
+- Tablet cue retry, waiting for a test on a real tablet ([#453](https://github.com/ale-rls/entertheblackbox/pull/453)).
+- Two questions for the coder: a finished group path replays the split scene's lighting ([#450](https://github.com/ale-rls/entertheblackbox/issues/450)); parked cursors don't count when a video vote opens ([#451](https://github.com/ale-rls/entertheblackbox/issues/451)).
+- Polygon votes end without a sound, left as is ([#474](https://github.com/ale-rls/entertheblackbox/issues/474)).
+- At most 30 new joins per minute per IP (`JOIN_RATE_LIMIT_MAX_ATTEMPTS`). If the venue Wi-Fi puts every phone behind one public IP, raise it before doors.
+
+**Known, minor, not fixed**
+- Ghost cursors recorded from late joiners replay out of time.
+- Pressing "−10 sec" in the last seconds before a scheduled start can drop that start.
+- Eos fires timed light steps early when a scene announcement arrives later than its pre-roll.
+- With nested group splits, one reunion cancels the other groups' pending lights.
+- The curtain trackpad loses movement on laggy Wi-Fi.
+
+**Not reviewed yet:** the `protocol` and `scenario` packages.
+
 ## License
 
 No license has been declared yet. All rights are reserved unless a license file is added.
