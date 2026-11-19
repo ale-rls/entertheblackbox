@@ -788,6 +788,25 @@ it("sends the tablet script excerpt only to the groups a scene names, with their
   h.engine.stop();
 });
 
+it("counts a phone button vote in the curtain-light field", () => {
+  const value = scenarioSchema.parse({
+    ...scenario,
+    curtainLight: { src: "curtain.mp4" },
+    groups: scenario.groups!.map(group => ({ ...group, votingMethod: "phone-buttons" })),
+    phases: scenario.phases.map(phase => phase.id === "vote" ? { ...phase, curtainLightVote: true } : phase),
+  });
+  expect(validateScenario(value).ok).toBe(true);
+  const h = setup(value);
+  const phone = h.phone("one");
+  h.engine.adminStart();
+  h.choose(phone, "a");
+  h.tick(100);
+  h.send(phone, { t: "button_vote", v: 2, sessionId: "visit", phaseEpoch: phone.snapshot.phaseEpoch, outcome: "max" });
+  h.tick(200);
+  expect(h.cues.find(cue => cue.type === "result")?.payload.quadrantCounts).toEqual({ min: 0, max: 1 });
+  h.engine.stop();
+});
+
 describe("late arrivals with a device-fixed group", () => {
   const byDevice = scenarioSchema.parse({
     version: "by-device", entryPhaseId: "split", cyclesAllowed: false,

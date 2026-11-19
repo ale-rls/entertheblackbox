@@ -1304,7 +1304,7 @@ export class PhaseEngine {
           acceptsVotingInput(this.groupSelection?.method?.(participantId), "phone-buttons") &&
           this.matches(message.sessionId, phase.id, message.phaseEpoch)
         ) {
-          const point = pointForOutcome(phase.field, message.outcome);
+          const point = pointForOutcome(this.curtainFor(phase)?.field ?? phase.field, message.outcome);
           if (point !== null) this.recordInput(this.now(), participantId, point.x, point.y);
         }
         return;
