@@ -96,6 +96,36 @@ describe('connected participant workflows',()=>{
   expect(lastTask(h.phone('too-late'))).toBeNull();
  });
 
+ it('opens the scene task for free tablets and hands it to a busy tablet once it answers', () => {
+  const h = setup(scenarioSchema.parse({
+   ...scenario,
+   entryPhaseId: 'pre',
+   participantTasks: [
+    ...scenario.participantTasks!,
+    { id: 'handover', title: 'Handover', question: 'Ready?', notificationBody: 'Please answer', groupIds: ['ki'], durationMs: 5000, options: [{ id: 'yes', label: 'Yes' }] },
+   ],
+   phases: [{ kind: 'narration', id: 'pre', text: 'Before', durationMs: 1000, next: 'task' }, ...scenario.phases],
+  }));
+  const busy = h.phone('busy', 'ki', 'native');
+  h.engine.adminStart();
+  // Staff hand over a tablet near the end of the scene; the replacement has not answered yet.
+  h.engine.taskCommand({ action: 'open', templateId: 'handover', sessionId: h.engine.currentSessionId, phaseId: 'pre', phaseEpoch: h.engine.currentPhaseEpoch });
+  const handover = h.engine.taskStatus.instances.find(task => task.template.id === 'handover')!;
+  const free = h.phone('free', 'ki', 'native');
+  h.tick(1100);
+  expect(h.engine.currentPhaseId).toBe('task');
+
+  expect(h.engine.taskStatus.error).toBeNull();
+  const scene = () => h.engine.taskStatus.instances.find(task => task.template.id === 'volunteer')!;
+  expect(scene().recipients.map(r => r.participantId)).toEqual(['free']);
+  const lastTask = (socket: Socket) => socket.sent.filter(m => m.t === 'participant_task').at(-1).task;
+  expect(lastTask(free)).toMatchObject({ template: { id: 'volunteer' } });
+
+  h.respond(busy, handover.id);
+  expect(scene().recipients.map(r => r.participantId)).toEqual(['free', 'busy']);
+  expect(lastTask(busy)).toMatchObject({ template: { id: 'volunteer' }, recipient: { participantId: 'busy', status: 'pending' } });
+ });
+
  it('rejects a manually opened task with no eligible recipients', () => {
   const h = setup();
   h.phone('outside', 'audience');
