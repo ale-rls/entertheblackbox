@@ -227,6 +227,8 @@ function isOpen(socket: WebSocket): boolean {
   return socket.readyState === undefined || socket.readyState === 0 || socket.readyState === 1;
 }
 
+type MonitorVoteResult = NonNullable<PhaseSnapshotMessage["monitorVoteResults"]>[string];
+
 export class PhaseEngine {
   private readonly options: PhaseEngineOptions;
   private epochSequence = 0;
@@ -296,7 +298,7 @@ export class PhaseEngine {
   private readonly onLobbyScheduleChanged: ((startTimes: readonly number[]) => void) | undefined;
   private readonly groupSelection: PhaseEngineOptions["groupSelection"];
 
-  constructor(options: PhaseEngineOptions, private readonly path?: { tasks: TaskEngine; timelineId: string; cueTimelineKey: string; stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; routingEpochFor: (id: string) => number; assignParticipant: (id: string, groupId: string) => TransitionResult; onPhase: (phase: Phase, startedAt: number) => void; displayForGroup: (groupId: string) => WebSocket | undefined }) {
+  constructor(options: PhaseEngineOptions, private readonly path?: { tasks: TaskEngine; timelineId: string; cueTimelineKey: string; stopAt: string; waitingPhase: Extract<Phase, { kind: "group-branch" }>; nextEpoch: () => number; routingEpochFor: (id: string) => number; assignParticipant: (id: string, groupId: string) => TransitionResult; onPhase: (phase: Phase, startedAt: number) => void; onMonitorVoteResolved: (source: PhaseEngine, id: string, result: MonitorVoteResult) => void; displayForGroup: (groupId: string) => WebSocket | undefined }) {
     this.options = options;
     this.scenario = options.scenario;
     this.actorScriptParagraphs = options.scenario.actorScript ? scriptParagraphs(options.scenario.actorScript.text) : [];
@@ -423,6 +425,7 @@ export class PhaseEngine {
   private taskError: string | null = null;
   private monitorVoteResults: NonNullable<PhaseSnapshotMessage["monitorVoteResults"]> = {};
   private lastMonitorVotePhaseId: string | undefined;
+  private lastRecordedMonitorVoteEpoch: number | undefined;
   private taskVoteWinners = new Map<string, string | null>();
   /** The last result sent to the display, replayed to a display that reconnects during the same phase. */
   private spotlightGrow = false;
@@ -939,8 +942,7 @@ export class PhaseEngine {
     const { scriptCues: _scriptCues, ...publicPhase } = phase;
     return {
       ...publicPhase,
-      monitorVoteResults: { ...this.monitorVoteResults },
-      lastMonitorVotePhaseId: this.lastMonitorVotePhaseId,
+      ...this.monitorVoteSnapshot(),
       // The display lights exactly the field the server counts (same field type, gap applied).
       ...(curtain === null ? {} : { field: curtain.field as never, voteTreatment: curtain.treatment }),
       ...(phase.kind === "position-question" && phase.spotlight ? {
@@ -1706,6 +1708,8 @@ export class PhaseEngine {
     if (phase.kind === "narration" && phase.waitForGo) this.deadlineAt = null;
     this.deadlineNotified = false;
     if (phase.kind === "idle") {
+      this.monitorVoteResults = {};
+      this.lastMonitorVotePhaseId = undefined;
       this.admissionPrograms.reset();
       this.lifecycle = "idle";
       this.sessionId = "idle";
@@ -2033,8 +2037,13 @@ export class PhaseEngine {
     const winner = maxCount > 0 && leaders.length === 1 ? leaders[0]![0] : null;
     const answer = votingOptions(phase).find((option) => option.id === winner);
     const color = answer?.color ?? (winner ? this.curtainFor(phase)?.treatment.answerColors[winner] : undefined);
-    this.monitorVoteResults[phase.id] = { label: answer?.label ?? null, ...(color ? { color } : {}) };
-    this.lastMonitorVotePhaseId = phase.id;
+    // Reconnecting displays can replay a resolved composite question.
+    if (this.lastRecordedMonitorVoteEpoch !== resolution.snapshot.phaseEpoch) {
+      this.lastRecordedMonitorVoteEpoch = resolution.snapshot.phaseEpoch;
+      const monitorResult = { label: answer?.label ?? null, ...(color ? { color } : {}) };
+      this.recordMonitorVote(phase.id, monitorResult);
+      this.path?.onMonitorVoteResolved(this, phase.id, monitorResult);
+    }
     for (const socket of this.participantSockets) this.sendVotingOptions(socket);
     this.options.onCueEvent?.({
       type: "result",
@@ -2209,6 +2218,7 @@ export class PhaseEngine {
     this.phaseEpoch = this.nextEpoch();
     // Close phone selection, including phones that did not choose a group.
     this.broadcast({ ...this.getSnapshotMessage(now), t: "phase" });
+    const inheritedMonitorVotes = this.monitorVoteSnapshot();
     for (const branch of phase.branches) {
       const members = new Set(this.registry.values().filter((participant) =>
         this.selectionCohort.has(participant.clientId) && this.groupSelection?.current(participant.clientId) === branch.groupId
@@ -2234,12 +2244,18 @@ export class PhaseEngine {
         routingEpochFor: (id) => this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0,
         assignParticipant: (id, groupId) => this.path?.assignParticipant(id, groupId) ?? this.adminAssignGroup(id, groupId),
         onPhase: (localPhase, startedAt) => this.options.onParticipantPhase?.([...members], localPhase, startedAt),
+        // Match the monitor clock when the vote resolves, before a path can rejoin.
+        onMonitorVoteResolved: this.path?.onMonitorVoteResolved ?? ((source, id, result) => {
+          if (source === this.followedMonitorPath()) this.recordMonitorVote(id, result);
+        }),
         displayForGroup: (groupId) => this.path?.displayForGroup(groupId) ?? this.groupDisplays.get(groupId),
       });
       this.paths.set(branch.groupId, { engine: child, members });
       child.lifecycle = "active";
       child.sessionId = this.sessionId;
       child.sessionStartedAt = this.sessionStartedAt;
+      child.monitorVoteResults = { ...inheritedMonitorVotes.monitorVoteResults };
+      child.lastMonitorVotePhaseId = inheritedMonitorVotes.lastMonitorVotePhaseId;
       // Attach before entering: transition frames and votes go only to this roster.
       for (const [socket, id] of this.participantIds) if (members.has(id)) {
         child.clients.add(socket);
@@ -2355,12 +2371,36 @@ export class PhaseEngine {
     });
   }
 
-  private monitorSnapshot(now = this.now()): Extract<ServerToClientMessage, { t: "snapshot" }> {
+  private recordMonitorVote(id: string, result: MonitorVoteResult): void {
+    this.monitorVoteResults[id] = result;
+    this.lastMonitorVotePhaseId = id;
+  }
+
+  private monitorVoteSnapshot(): Pick<PhaseSnapshotMessage, "monitorVoteResults" | "lastMonitorVotePhaseId"> {
+    return {
+      monitorVoteResults: { ...this.monitorVoteResults },
+      lastMonitorVotePhaseId: this.lastMonitorVotePhaseId,
+    };
+  }
+
+  private followedMonitorPath(): PhaseEngine | undefined {
     const groupId = this.scenario.monitorGroupId;
-    const path = groupId === undefined ? undefined : this.pathForGroup(groupId);
-    const snapshot = (path ?? this).getSnapshotMessage(now);
-    // A finished path must not replay the split scene's old monitor cues.
-    return path?.pathDone ? { ...snapshot, phase: { ...snapshot.phase, monitorCues: undefined } } : snapshot;
+    return groupId === undefined ? undefined : this.pathForGroup(groupId);
+  }
+
+  private monitorSnapshot(now = this.now()): Extract<ServerToClientMessage, { t: "snapshot" }> {
+    const path = this.followedMonitorPath();
+    if (path === undefined) return this.getSnapshotMessage(now);
+    const snapshot = path.getSnapshotMessage(now);
+    return {
+      ...snapshot,
+      phase: {
+        ...snapshot.phase,
+        ...this.monitorVoteSnapshot(),
+        // A finished path must not replay the split scene's old monitor cues.
+        ...(path.pathDone ? { monitorCues: undefined } : {}),
+      },
+    };
   }
 
   private updateGroupMonitors(now: number): void {
