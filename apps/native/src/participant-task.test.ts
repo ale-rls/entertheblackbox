@@ -37,4 +37,16 @@ describe('participant task visibility', () => {
     expect(taskVisible(cancelled)).toBe(false);
     expect(taskVisible(state('withdrawn'))).toBe(true);
   });
+  it('never asks a tablet to act on an automatic task, open or completed', () => {
+    const open = state('pending'); open.task!.template.autoComplete = true;
+    expect(taskAlert(open, 2000)).toBeNull();
+    expect(taskVisible(open)).toBe(false);
+    const done = state('answered'); done.task!.template.autoComplete = true; done.task!.status = 'closed';
+    expect(taskVisible(done)).toBe(false);
+  });
+  it('drops show-mode attention once responses close without an answer', () => {
+    const expired = state('expired'); expired.task!.status = 'closed';
+    expect(taskVisible(expired)).toBe(false);
+    expect(taskAlert(expired, 2000)).toBeNull();
+  });
 });
