@@ -21,7 +21,7 @@ import { Countdown } from "./components/Countdown.js";
 import { QrBadge } from "./components/QrBadge.js";
 import { QuadrantOverlay, questionFieldCenter } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
-import { LoopVideo } from "./components/LoopVideo.js";
+import { LoopHandoff } from "./components/LoopVideo.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhaseVideoHandoff, type PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
 import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
@@ -357,9 +357,20 @@ export function App() {
     return () => { cancelled = true; };
   }, [phaseLoopSrc, media.store, mediaReady]);
   const loopHeldForHandoff = phaseLoopSrc === null && phaseMediaKey !== null && presentedVideoKey !== phaseMediaKey;
-  const shownLoopUrl = phaseLoopSrc !== null
-    ? (loopUrl?.src === phaseLoopSrc ? loopUrl.url : null)
-    : loopHeldForHandoff ? loopUrl?.url ?? null : null;
+  const loopPending = phaseLoopSrc !== null && loopUrl?.src !== phaseLoopSrc;
+  const loopTarget = useMemo(
+    () => phaseLoopSrc !== null && loopUrl?.src === phaseLoopSrc && loopUrl.url !== null
+      ? { src: phaseLoopSrc, url: loopUrl.url }
+      : null,
+    [phaseLoopSrc, loopUrl],
+  );
+  // Each layer waits for the other's incoming picture, so a cut changes both on one frame.
+  const [foregroundReadyKey, setForegroundReadyKey] = useState<string | null>(null);
+  const [loopReadyUrl, setLoopReadyUrl] = useState<string | null>(null);
+  const foregroundReady = phaseMediaKey === null || foregroundReadyKey === phaseMediaKey;
+  const loopReady = !loopPending && (loopTarget === null || loopReadyUrl === loopTarget.url);
+  // Keep the loop on screen loaded until its replacement is up.
+  const pinShownLoop = useCallback((src: string | null) => media.store.pin(src, "loop-shown"), [media.store]);
   useEffect(() => {
     if (phaseLoopSrc !== null || loopHeldForHandoff || loopUrl === null) return;
     media.store.pin(null, "loop");
@@ -414,12 +425,23 @@ export function App() {
           desiredKey={phaseMediaKey}
           candidate={phaseVideoCandidate}
           soundEnabled={soundEnabled}
+          revealAllowed={loopReady}
+          holdOutgoing={!loopReady}
           onMediaElement={setActiveMedia}
           onExtraAudioElement={setActiveExtraAudio}
           onActiveKey={setPresentedVideoKey}
+          onReadyKey={setForegroundReadyKey}
           send={sendDisplayMessage}
         />
-        {shownLoopUrl !== null && <LoopVideo key={shownLoopUrl} src={shownLoopUrl} clock={connection.clock} />}
+        <LoopHandoff
+          target={loopTarget}
+          pending={loopPending}
+          hold={loopHeldForHandoff}
+          revealAllowed={foregroundReady}
+          clock={connection.clock}
+          onReadyUrl={setLoopReadyUrl}
+          onActiveSrc={pinShownLoop}
+        />
       </section>
 
       {curtainHold !== null && !curtainUnavailable && <section className="layer layer-curtain">

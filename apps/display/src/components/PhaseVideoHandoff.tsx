@@ -1,5 +1,5 @@
 import type { ServerClock } from "@entertheblackbox/shared";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DisplayToServerMessage, PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import { PhaseImageAudio } from "./PhaseImageAudio.js";
 import { PhaseVideo } from "./PhaseVideo.js";
@@ -25,25 +25,35 @@ type Slot = 0 | 1;
 /**
  * Retains the outgoing picture until the incoming image has loaded or its video
  * has presented a frame. A stable slot keeps the ready element mounted when
- * it replaces the outgoing picture.
+ * it replaces the outgoing picture. `revealAllowed` lets another layer (the
+ * background loop) make the incoming picture wait so both change together, and
+ * `holdOutgoing` keeps the last picture when no media is wanted until that
+ * layer can cover it.
  */
 export function PhaseVideoHandoff({
   desiredKey,
   candidate,
   soundEnabled,
   clock,
+  revealAllowed = true,
+  holdOutgoing = false,
   onMediaElement,
   onExtraAudioElement,
   onActiveKey,
+  onReadyKey,
   send,
 }: {
   desiredKey: string | null;
   candidate: PhaseVideoCandidate | null;
   soundEnabled: boolean;
   clock?: ServerClock;
+  revealAllowed?: boolean;
+  holdOutgoing?: boolean;
   onMediaElement?: (media: HTMLMediaElement | null) => void;
   onExtraAudioElement?: (audio: HTMLAudioElement | null) => void;
   onActiveKey?: (key: string) => void;
+  /** The key of the picture that could be on screen now: a framed incoming one, else the active one. */
+  onReadyKey?: (key: string | null) => void;
   send: (message: DisplayToServerMessage) => void;
 }) {
   const [slots, setSlots] = useState<[PhaseVideoCandidate | null, PhaseVideoCandidate | null]>([
@@ -51,19 +61,34 @@ export function PhaseVideoHandoff({
     null,
   ]);
   const [activeSlot, setActiveSlot] = useState<Slot | null>(null);
+  const [framed, setFramed] = useState<[string | null, string | null]>([null, null]);
   const activeSlotRef = useRef<Slot | null>(null);
   const mediaRefs = useRef<[HTMLMediaElement | null, HTMLMediaElement | null]>([null, null]);
   const desiredKeyRef = useRef(desiredKey);
   const slotsRef = useRef(slots);
+  const revealAllowedRef = useRef(revealAllowed);
   const audioRefs = useRef<[HTMLAudioElement | null, HTMLAudioElement | null]>([null, null]);
 
   useLayoutEffect(() => {
     desiredKeyRef.current = desiredKey;
     slotsRef.current = slots;
+    revealAllowedRef.current = revealAllowed;
     const currentSlot = activeSlotRef.current;
     const current = currentSlot === null ? null : slots[currentSlot];
 
     if (desiredKey === null) {
+      if (currentSlot !== null && holdOutgoing) {
+        // Paused, the outgoing element keeps painting its last frame.
+        fadeOutSkippedAudio(mediaRefs.current[currentSlot]);
+        fadeOutSkippedAudio(audioRefs.current[currentSlot]);
+        mediaRefs.current[currentSlot]?.pause();
+        audioRefs.current[currentSlot]?.pause();
+        onMediaElement?.(null);
+        onExtraAudioElement?.(null);
+        const other: Slot = currentSlot === 0 ? 1 : 0;
+        if (slots[other] !== null) setSlots((previous) => withSlot(previous, other, null));
+        return;
+      }
       if (currentSlot !== null) {
         // Still sounding means the show moved on before the media ended: fade its audio out.
         fadeOutSkippedAudio(mediaRefs.current[currentSlot]);
@@ -109,11 +134,13 @@ export function PhaseVideoHandoff({
       next[targetSlot] = candidate;
       return next;
     });
-  }, [candidate, desiredKey, onExtraAudioElement, onMediaElement, slots]);
+  }, [candidate, desiredKey, holdOutgoing, onExtraAudioElement, onMediaElement, revealAllowed, slots]);
 
   const reveal = useCallback((slot: Slot, candidate: PhaseVideoCandidate) => {
     const current = slotsRef.current[slot];
     if (current?.key !== candidate.key || current.src !== candidate.src || candidate.key !== desiredKeyRef.current) return;
+    setFramed((previous) => previous[slot] === candidate.key ? previous : withSlot(previous, slot, candidate.key));
+    if (!revealAllowedRef.current) return;
     const previousSlot = activeSlotRef.current;
     if (previousSlot === slot) return;
     activeSlotRef.current = slot;
@@ -131,6 +158,19 @@ export function PhaseVideoHandoff({
       });
     }
   }, [onActiveKey, onExtraAudioElement, onMediaElement]);
+
+  // A picture that framed while the other layer was not ready is shown once it is.
+  useLayoutEffect(() => {
+    if (!revealAllowed || desiredKey === null) return;
+    const slot = ([0, 1] as const).find((index) => framed[index] === desiredKey && slots[index]?.key === desiredKey);
+    if (slot !== undefined && slot !== activeSlotRef.current) reveal(slot, slots[slot]!);
+  }, [desiredKey, framed, reveal, revealAllowed, slots]);
+
+  const framedSlot = ([0, 1] as const).find((index) => index !== activeSlot
+    && slots[index] !== null && framed[index] === slots[index]!.key);
+  const readyKey = framedSlot !== undefined ? slots[framedSlot]!.key
+    : activeSlot === null ? null : slots[activeSlot]?.key ?? null;
+  useEffect(() => { onReadyKey?.(readyKey); }, [onReadyKey, readyKey]);
 
   return <>
     {([0, 1] as const).map((slot) => {
@@ -174,4 +214,10 @@ export function PhaseVideoHandoff({
       );
     })}
   </>;
+}
+
+function withSlot<T>(slots: [T, T], slot: Slot, value: T): [T, T] {
+  const next: [T, T] = [...slots];
+  next[slot] = value;
+  return next;
 }
