@@ -24,7 +24,6 @@ import { IdleAttract } from "./components/IdleAttract.js";
 import { LoopVideo } from "./components/LoopVideo.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhaseVideoHandoff, type PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
-import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
 import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
 import { SceneCountdown } from "./components/SceneCountdown.js";
@@ -312,35 +311,35 @@ export function App() {
   }, [curtainSrc, media.store, mediaReady]);
   const curtainActive = curtainPhase !== null && !curtainUnavailable;
 
-  const phaseVideoKey = (phase?.kind === "video" || phase?.kind === "video-position-question")
-    && phase.audioSrc === undefined
+  const phaseMediaKey = (phase?.kind === "video" || phase?.kind === "video-position-question")
     ? `${state.sessionId ?? "pending"}:${state.phaseEpoch}`
     : null;
-  const phaseVideoCandidate: PhaseVideoCandidate | null = phaseVideoKey !== null
+  const phaseVideoCandidate: PhaseVideoCandidate | null = phaseMediaKey !== null
     && (phase?.kind === "video" || phase?.kind === "video-position-question")
-    && phase.audioSrc === undefined
     && media.visualSrc === phase.src
     && media.audioSrc === phaseAudioSrc
     && media.extraAudioSrc === phaseExtraAudioSrc
     && media.videoUrl !== null
+    && (phaseAudioSrc === null || media.audioUrl !== null)
     ? {
-        key: phaseVideoKey,
+        key: phaseMediaKey,
         sessionId: state.sessionId,
         phase,
         phaseEpoch: state.phaseEpoch,
         src: media.videoUrl,
+        // A soundtrack is what makes this a still + audio scene, never a video.
+        ...(phaseAudioSrc === null || media.audioUrl === null ? {} : { audioSrc: media.audioUrl }),
         ...(media.extraAudioUrl === null ? {} : { extraAudioSrc: media.extraAudioUrl }),
       }
     : null;
   // Keep the already-decoded attract player mounted for the lifetime of the
   // app. It stays visible beneath an outgoing phase frame until an incoming
-  // phase video is presented, and stays paused/hidden during the show. This
+  // phase picture is presented, and stays paused/hidden during the show. This
   // also gives video -> idle transitions an immediately available frame.
   const idleMediaVisible = isIdle
-    || (phaseVideoKey !== null && presentedVideoKey !== phaseVideoKey);
+    || (phaseMediaKey !== null && presentedVideoKey !== phaseMediaKey);
   // A scene's background loop (e.g. an idle curtain) sits over a still + MP3 scene's
-  // image. It stays up while an incoming scene video is still being presented, so
-  // the curtain never flashes black between the loop and the next video.
+  // image. Hold the loop until the incoming primary picture can replace it.
   const phaseLoopSrc = phase !== null && phase !== undefined
     && (phase.kind === "narration" || phase.kind === "position-question"
       || ((phase.kind === "video" || phase.kind === "video-position-question") && phase.audioSrc !== undefined))
@@ -357,7 +356,7 @@ export function App() {
     });
     return () => { cancelled = true; };
   }, [phaseLoopSrc, media.store, mediaReady]);
-  const loopHeldForHandoff = phaseLoopSrc === null && phaseVideoKey !== null && presentedVideoKey !== phaseVideoKey;
+  const loopHeldForHandoff = phaseLoopSrc === null && phaseMediaKey !== null && presentedVideoKey !== phaseMediaKey;
   const shownLoopUrl = phaseLoopSrc !== null
     ? (loopUrl?.src === phaseLoopSrc ? loopUrl.url : null)
     : loopHeldForHandoff ? loopUrl?.url ?? null : null;
@@ -412,34 +411,14 @@ export function App() {
         />
         <PhaseVideoHandoff
           clock={connection.clock}
-          desiredKey={phaseVideoKey}
+          desiredKey={phaseMediaKey}
           candidate={phaseVideoCandidate}
           soundEnabled={soundEnabled}
-          onVideoElement={setActiveMedia}
+          onMediaElement={setActiveMedia}
           onExtraAudioElement={setActiveExtraAudio}
           onActiveKey={setPresentedVideoKey}
           send={sendDisplayMessage}
         />
-        {(phase?.kind === "video" || phase?.kind === "video-position-question")
-          && phase.audioSrc !== undefined
-          && media.visualSrc === phase.src
-          && media.audioSrc === phaseAudioSrc
-          && media.extraAudioSrc === phaseExtraAudioSrc
-          && media.videoUrl !== null
-          && media.audioUrl !== null && (
-          <PhaseImageAudio
-            clock={connection.clock}
-            key={phase.id}
-            sessionId={state.sessionId}
-            phase={phase as typeof phase & { audioSrc: string }}
-            phaseEpoch={state.phaseEpoch}
-            imageSrc={media.videoUrl}
-            audioSrc={media.audioUrl}
-            soundEnabled={soundEnabled}
-            onAudioElement={setActiveMedia}
-            send={sendDisplayMessage}
-          />
-        )}
         {shownLoopUrl !== null && <LoopVideo key={shownLoopUrl} src={shownLoopUrl} clock={connection.clock} />}
       </section>
 

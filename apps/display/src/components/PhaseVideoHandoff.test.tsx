@@ -100,6 +100,84 @@ describe("PhaseVideoHandoff", () => {
     expect(document.querySelector('video[src="blob:first"]')).toBeNull();
   });
 
+  it("holds the last picture through video, still, and video transitions and clears on a media-free cue", async () => {
+    callbacks = new Map();
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    const first = candidate("first", 1);
+    const still = { ...candidate("still", 2), audioSrc: "blob:soundtrack" };
+    const final = candidate("final", 3);
+    const send = vi.fn();
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+
+    const render = async (desiredKey: string | null, value: PhaseVideoCandidate | null) => {
+      await act(async () => { root!.render(<PhaseVideoHandoff desiredKey={desiredKey} candidate={value} soundEnabled={false} send={send} />); });
+    };
+    const activeKey = () => document.querySelector(".phase-video-slot-active")?.getAttribute("data-phase-key");
+    const present = async (video: HTMLVideoElement) => {
+      await act(async () => {
+        video.dispatchEvent(new Event("playing"));
+        callbacks.get(video)?.(performance.now(), { mediaTime: 0 } as VideoFrameCallbackMetadata);
+      });
+    };
+
+    await render(first.key, first);
+    const firstVideo = document.querySelector("video")!;
+    await present(firstVideo);
+    expect(activeKey()).toBe(first.key);
+
+    await render(still.key, null);
+    expect(activeKey()).toBe(first.key);
+    await render(still.key, still);
+    expect(activeKey()).toBe(first.key);
+    const image = document.querySelector("img")!;
+    const audio = document.querySelector("audio")!;
+    expect(audio.autoplay).toBe(true);
+    await act(async () => { image.dispatchEvent(new Event("load")); });
+    expect(activeKey()).toBe(still.key);
+
+    await render(final.key, final);
+    expect(activeKey()).toBe(still.key);
+    expect(audio.autoplay).toBe(false);
+    expect(pause.mock.contexts).toContain(audio);
+
+    const pendingVideo = document.querySelector("video")!;
+    await act(async () => { pendingVideo.dispatchEvent(new Event("playing")); });
+    const staleCallback = callbacks.get(pendingVideo)!;
+
+    await render(null, null);
+    expect(activeKey()).toBeUndefined();
+    await act(async () => { staleCallback(performance.now(), { mediaTime: 0 } as VideoFrameCallbackMetadata); });
+    expect(document.querySelector("video, img, audio")).toBeNull();
+  });
+
+  it("keeps a still visible while the next still loads and stops the old soundtrack", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    const send = vi.fn();
+    const first = { ...candidate("first-still", 1), audioSrc: "blob:audio-first" };
+    const second = { ...candidate("second-still", 2), audioSrc: "blob:audio-second" };
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    const render = async (value: PhaseVideoCandidate) => {
+      await act(async () => { root!.render(<PhaseVideoHandoff desiredKey={value.key} candidate={value} soundEnabled={false} send={send} />); });
+    };
+
+    await render(first);
+    const firstImage = document.querySelector("img")!;
+    const firstAudio = document.querySelector("audio")!;
+    await act(async () => { firstImage.dispatchEvent(new Event("load")); });
+    await render(second);
+    expect(document.querySelector(".phase-video-slot-active img")).toBe(firstImage);
+    expect(firstAudio.autoplay).toBe(false);
+    expect(pause.mock.contexts).toContain(firstAudio);
+    const secondImage = document.querySelector<HTMLImageElement>('img[src="blob:second-still"]')!;
+    await act(async () => { secondImage.dispatchEvent(new Event("load")); });
+    expect(document.querySelector(".phase-video-slot-active img")).toBe(secondImage);
+    expect(firstImage.isConnected).toBe(false);
+  });
+
   it("updates a prepared slot when its extra audio changes", async () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     const value = {

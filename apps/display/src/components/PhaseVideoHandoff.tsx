@@ -1,6 +1,7 @@
 import type { ServerClock } from "@entertheblackbox/shared";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { DisplayToServerMessage, PhaseSnapshotMessage } from "@entertheblackbox/protocol";
+import { PhaseImageAudio } from "./PhaseImageAudio.js";
 import { PhaseVideo } from "./PhaseVideo.js";
 import { fadeOutSkippedAudio } from "../media/skipFade.js";
 
@@ -15,22 +16,23 @@ export type PhaseVideoCandidate = {
   phase: VideoPhase;
   phaseEpoch: number;
   src: string;
+  audioSrc?: string;
   extraAudioSrc?: string;
 };
 
 type Slot = 0 | 1;
 
 /**
- * Retains the outgoing decoded frame until the incoming browser video has
- * actually presented a frame. The two stable slots are important: moving a
- * ready <video> between React branches would remount it and recreate the gap.
+ * Retains the outgoing picture until the incoming image has loaded or its video
+ * has presented a frame. A stable slot keeps the ready element mounted when
+ * it replaces the outgoing picture.
  */
 export function PhaseVideoHandoff({
   desiredKey,
   candidate,
   soundEnabled,
   clock,
-  onVideoElement,
+  onMediaElement,
   onExtraAudioElement,
   onActiveKey,
   send,
@@ -39,7 +41,7 @@ export function PhaseVideoHandoff({
   candidate: PhaseVideoCandidate | null;
   soundEnabled: boolean;
   clock?: ServerClock;
-  onVideoElement?: (video: HTMLVideoElement | null) => void;
+  onMediaElement?: (media: HTMLMediaElement | null) => void;
   onExtraAudioElement?: (audio: HTMLAudioElement | null) => void;
   onActiveKey?: (key: string) => void;
   send: (message: DisplayToServerMessage) => void;
@@ -50,23 +52,27 @@ export function PhaseVideoHandoff({
   ]);
   const [activeSlot, setActiveSlot] = useState<Slot | null>(null);
   const activeSlotRef = useRef<Slot | null>(null);
-  const videoRefs = useRef<[HTMLVideoElement | null, HTMLVideoElement | null]>([null, null]);
+  const mediaRefs = useRef<[HTMLMediaElement | null, HTMLMediaElement | null]>([null, null]);
+  const desiredKeyRef = useRef(desiredKey);
+  const slotsRef = useRef(slots);
   const audioRefs = useRef<[HTMLAudioElement | null, HTMLAudioElement | null]>([null, null]);
 
   useLayoutEffect(() => {
+    desiredKeyRef.current = desiredKey;
+    slotsRef.current = slots;
     const currentSlot = activeSlotRef.current;
     const current = currentSlot === null ? null : slots[currentSlot];
 
     if (desiredKey === null) {
       if (currentSlot !== null) {
         // Still sounding means the show moved on before the media ended: fade its audio out.
-        fadeOutSkippedAudio(videoRefs.current[currentSlot]);
+        fadeOutSkippedAudio(mediaRefs.current[currentSlot]);
         fadeOutSkippedAudio(audioRefs.current[currentSlot]);
-        videoRefs.current[currentSlot]?.pause();
+        mediaRefs.current[currentSlot]?.pause();
         audioRefs.current[currentSlot]?.pause();
         activeSlotRef.current = null;
         setActiveSlot(null);
-        onVideoElement?.(null);
+        onMediaElement?.(null);
         onExtraAudioElement?.(null);
       }
       if (slots[0] !== null || slots[1] !== null) setSlots([null, null]);
@@ -77,11 +83,11 @@ export function PhaseVideoHandoff({
       // Pause without removing the element: an ended/paused video continues to
       // paint its last decoded frame while the next Blob is prepared. Audio that
       // is still sounding was skipped and fades out from a detached copy.
-      fadeOutSkippedAudio(videoRefs.current[currentSlot!]);
+      fadeOutSkippedAudio(mediaRefs.current[currentSlot!]);
       fadeOutSkippedAudio(audioRefs.current[currentSlot!]);
-      videoRefs.current[currentSlot!]?.pause();
+      mediaRefs.current[currentSlot!]?.pause();
       audioRefs.current[currentSlot!]?.pause();
-      onVideoElement?.(null);
+      onMediaElement?.(null);
       onExtraAudioElement?.(null);
     }
 
@@ -94,6 +100,7 @@ export function PhaseVideoHandoff({
       if (
         previous[targetSlot]?.key === candidate.key
         && previous[targetSlot]?.src === candidate.src
+        && previous[targetSlot]?.audioSrc === candidate.audioSrc
         && previous[targetSlot]?.extraAudioSrc === candidate.extraAudioSrc
       ) {
         return previous;
@@ -102,19 +109,20 @@ export function PhaseVideoHandoff({
       next[targetSlot] = candidate;
       return next;
     });
-  }, [candidate, desiredKey, onExtraAudioElement, onVideoElement, slots]);
+  }, [candidate, desiredKey, onExtraAudioElement, onMediaElement, slots]);
 
-  const reveal = useCallback((slot: Slot, key: string) => {
-    const current = slots[slot];
-    if (current?.key !== key || key !== desiredKey) return;
+  const reveal = useCallback((slot: Slot, candidate: PhaseVideoCandidate) => {
+    const current = slotsRef.current[slot];
+    if (current?.key !== candidate.key || current.src !== candidate.src || candidate.key !== desiredKeyRef.current) return;
     const previousSlot = activeSlotRef.current;
+    if (previousSlot === slot) return;
     activeSlotRef.current = slot;
     setActiveSlot(slot);
-    onActiveKey?.(key);
-    onVideoElement?.(videoRefs.current[slot]);
+    onActiveKey?.(candidate.key);
+    onMediaElement?.(mediaRefs.current[slot]);
     onExtraAudioElement?.(audioRefs.current[slot]);
-    if (previousSlot !== null && previousSlot !== slot) {
-      videoRefs.current[previousSlot]?.pause();
+    if (previousSlot !== null) {
+      mediaRefs.current[previousSlot]?.pause();
       audioRefs.current[previousSlot]?.pause();
       setSlots((previous) => {
         const next: [PhaseVideoCandidate | null, PhaseVideoCandidate | null] = [...previous];
@@ -122,7 +130,7 @@ export function PhaseVideoHandoff({
         return next;
       });
     }
-  }, [desiredKey, onActiveKey, onExtraAudioElement, onVideoElement, slots]);
+  }, [onActiveKey, onExtraAudioElement, onMediaElement]);
 
   return <>
     {([0, 1] as const).map((slot) => {
@@ -134,7 +142,21 @@ export function PhaseVideoHandoff({
           className={`phase-video-slot${activeSlot === slot ? " phase-video-slot-active" : ""}`}
           data-phase-key={value.key}
         >
-          <PhaseVideo
+          {value.audioSrc !== undefined ? <PhaseImageAudio
+            key={value.key}
+            sessionId={value.sessionId}
+            phase={value.phase}
+            phaseEpoch={value.phaseEpoch}
+            imageSrc={value.src}
+            audioSrc={value.audioSrc}
+            soundEnabled={soundEnabled}
+            {...(clock ? { clock } : {})}
+            playbackEnabled={value.key === desiredKey}
+            onAudioElement={(audio) => { mediaRefs.current[slot] = audio; }}
+            onFirstFrame={() => reveal(slot, value)}
+            send={send}
+          /> : <PhaseVideo
+            key={value.key}
             sessionId={value.sessionId}
             phase={value.phase}
             phaseEpoch={value.phaseEpoch}
@@ -143,11 +165,11 @@ export function PhaseVideoHandoff({
             soundEnabled={soundEnabled}
             {...(clock ? { clock } : {})}
             playbackEnabled={value.key === desiredKey}
-            onVideoElement={(video) => { videoRefs.current[slot] = video; }}
+            onVideoElement={(video) => { mediaRefs.current[slot] = video; }}
             onExtraAudioElement={(audio) => { audioRefs.current[slot] = audio; }}
-            onFirstFrame={() => reveal(slot, value.key)}
+            onFirstFrame={() => reveal(slot, value)}
             send={send}
-          />
+          />}
         </div>
       );
     })}
