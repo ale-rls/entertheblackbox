@@ -11,6 +11,9 @@ class FakeWebSocket {
   onclose: ((event: CloseEvent) => void) | null = null;
   onerror: ((event: Event) => void) | null = null;
   readonly sent: unknown[] = [];
+  /** When set, close() leaves the close event pending, as a slow network does. */
+  static deferClose = false;
+  private closePending = false;
 
   constructor(readonly url: string) {}
 
@@ -19,7 +22,19 @@ class FakeWebSocket {
   }
 
   close(): void {
+    if (FakeWebSocket.deferClose) {
+      this.readyState = 2;
+      this.closePending = true;
+      return;
+    }
     this.serverClose();
+  }
+
+  /** Deliver a deferred close event to whatever handler is attached now. */
+  finishClose(code = 1006): void {
+    if (!this.closePending) return;
+    this.closePending = false;
+    this.serverClose(code);
   }
 
   /** Simulate the server closing this socket, optionally with a code. */
@@ -51,7 +66,33 @@ function harness() {
 }
 
 describe("DisplayConnection close handling", () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    FakeWebSocket.deferClose = false;
+  });
+
+  it("ignores a late close from a socket it already stopped and replaced", () => {
+    vi.useFakeTimers();
+    FakeWebSocket.deferClose = true;
+    const { connection, sockets, statuses } = harness();
+    connection.start();
+    sockets[0]!.onopen?.({} as Event);
+    // Media readiness drops and returns: the old socket's close is still in flight.
+    connection.stop();
+    connection.start();
+    sockets[1]!.onopen?.({} as Event);
+
+    sockets[0]!.finishClose();
+    vi.advanceTimersByTime(15_000);
+
+    // The live socket keeps its ping timer and is not replaced by a third one.
+    expect(sockets).toHaveLength(2);
+    expect(statuses.at(-1)).toBe("open");
+    expect(sockets[1]!.sent.filter((m) => (m as { t: string }).t === "ping").length).toBeGreaterThan(1);
+    connection.send({ t: "video_ended" } as never);
+    expect(sockets[1]!.sent.at(-1)).toMatchObject({ t: "video_ended" });
+    connection.stop();
+  });
 
   it("reconnects after an ordinary close", () => {
     vi.useFakeTimers();
