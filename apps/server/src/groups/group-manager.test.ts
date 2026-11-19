@@ -53,6 +53,31 @@ describe("GroupManager", () => {
     expect(groups.groupFor("missing")).toBe("a");
   });
 
+  it("records a tablet's answer on the field its own path counted, when another path runs the same question on the curtain", () => {
+    const field = { type: "two-quadrant", axis: "x", variant: "spectrum", labels: { minLabel: "L", maxLabel: "R" } } as const;
+    const shared = scenarioSchema.parse({
+      version: "shared-question", entryPhaseId: "idle", cyclesAllowed: false,
+      groups: [{ id: "theater", label: "Theater", voteTreatment: "curtain-light" }, { id: "ki", label: "KI" }],
+      curtainLight: { src: "curtain.mp4" },
+      phases: [
+        { kind: "idle", id: "idle" },
+        { kind: "group-branch", id: "split", durationMs: 1_000, assignment: { type: "manual", fallbackGroupId: "ki" },
+          branches: [{ groupId: "theater", next: "question" }, { groupId: "ki", next: "question" }], next: "idle" },
+        { kind: "position-question", id: "question", text: "Choose", durationMs: 1_000, freezeMs: 0, connectionStaleAfterMs: 1_000,
+          showLiveCounts: false, field, next: { type: "fixed", target: "idle" } },
+      ],
+    });
+    const groups = new GroupManager(shared);
+    groups.beginSession(["tablet"]);
+    // The KI path counted this right-hand press on the plain field; the curtain's neutral gap does not apply to it.
+    groups.recordAnswers("question", field, {
+      sessionId: "s", questionId: "question", phaseEpoch: 1, recordedAt: 1,
+      votes: [{ sessionId: "s", questionId: "question", participantId: "tablet", x: 0.5, y: 0.5, status: "valid", lastInputAt: 1, lastHeartbeatAt: 1, currentPhaseStartedAt: 0, currentPhaseDeadline: 2, recordedAt: 1 }],
+    }, field);
+    groups.applyBranch(branch({ type: "vote", questionId: "question", map: { min: "a", max: "b" }, fallbackGroupId: "c" }), ["tablet"]);
+    expect(groups.groupFor("tablet")).toBe("b");
+  });
+
   it("preserves valid operator choices for manual branching", () => {
     const groups = new GroupManager(scenario);
     groups.beginSession(["one", "two"]);
