@@ -72,6 +72,9 @@ export function App() {
   const [configError, setConfigError] = useState("");
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
+  // Choices only reach the server on an open, joined socket; while reconnecting a
+  // tap would be dropped without a trace, so the buttons wait instead.
+  const online = state.join.kind === "accepted";
   const position = useRef<TrackpadState>({ ...TRACKPAD_CENTER });
   const cursorSurfaceSize = useRef(trackpadSurfaceSize(window.innerWidth, window.innerHeight));
   const cursorMarker = useRef<HTMLSpanElement | null>(null);
@@ -337,7 +340,7 @@ export function App() {
   };
 
   const selectGroup = (groupId: string) => {
-    if (state.sessionId === null) return;
+    if (state.sessionId === null || !online) return;
     connection?.send({
       t: "group_selection",
       v: PROTOCOL_VERSION,
@@ -348,7 +351,7 @@ export function App() {
   };
 
   const voteByButton = (outcome: string) => {
-    if (state.sessionId === null) return;
+    if (state.sessionId === null || !online) return;
     connection?.send({
       t: "button_vote",
       v: PROTOCOL_VERSION,
@@ -413,7 +416,7 @@ export function App() {
                   <button
                     key={option.id}
                     type="button"
-                    disabled={state.voting?.closed}
+                    disabled={state.voting?.closed || !online}
                     style={option.color === undefined ? undefined : { "--group-color": option.color } as React.CSSProperties}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
@@ -425,6 +428,7 @@ export function App() {
                   </button>
                 ))}
               </div>
+              {!online && !state.voting.closed && <p className="join-message" role="status">Reconnecting…</p>}
             </section>
           )}
           {state.participantState === "finished" && <p className="phone-phase-text" role="status">Deine Gruppe ist fertig. Die anderen Gruppen machen noch weiter.</p>}
@@ -450,6 +454,7 @@ export function App() {
                     key={group.id}
                     type="button"
                     className={state.groupSelection?.selectedGroupId === group.id ? "selected" : ""}
+                    disabled={!online}
                     style={group.color === undefined ? undefined : { "--group-color": group.color } as React.CSSProperties}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => { event.stopPropagation(); selectGroup(group.id); }}

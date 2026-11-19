@@ -33,8 +33,11 @@ export class NativeConnection {
     const old = this.socket; this.socket = null; old?.close();
     this.connect();
   }
-  send(message: PhoneToServerMessage) {
-    if (this.socket?.readyState === 1) this.socket.send(encodeMessage(message.t === 'input' || message.t === 'reaction' || message.t === 'group_selection' || message.t === 'button_vote' || message.t === 'participant_task_response' || message.t === 'admission_choice' || message.t === 'staff_menu_request' || message.t === 'staff_assign' ? { ...message, ...(this.occupantId ? { occupantId: this.occupantId } : {}) } : message));
+  /** Returns false when there is no open socket and the message was not sent. */
+  send(message: PhoneToServerMessage): boolean {
+    if (this.socket?.readyState !== 1) return false;
+    this.socket.send(encodeMessage(message.t === 'input' || message.t === 'reaction' || message.t === 'group_selection' || message.t === 'button_vote' || message.t === 'participant_task_response' || message.t === 'admission_choice' || message.t === 'staff_menu_request' || message.t === 'staff_assign' ? { ...message, ...(this.occupantId ? { occupantId: this.occupantId } : {}) } : message));
+    return true;
   }
   private connect() {
     if (this.stopped) return;
