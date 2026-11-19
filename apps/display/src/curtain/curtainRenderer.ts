@@ -116,11 +116,16 @@ void main(){
 
 export type CurtainFabricParams = { baked: number; folds: number; shine: number; shadow: number };
 
-/** One cursor light: position, linear colour, flood amount, core amount and pulse (0..1). */
+/**
+ * One cursor light: position, linear colours of the core (the participant's
+ * dot) and of the flood it throws on the fabric, flood amount, core amount
+ * and pulse (0..1).
+ */
 export type CursorLight = {
   x: number;
   y: number;
   rgb: readonly [number, number, number];
+  floodRgb: readonly [number, number, number];
   flood: number;
   core: number;
   pulse: number;
@@ -311,9 +316,9 @@ export class CurtainRenderer {
       const o = n * 7;
       this.instances[o] = cursor.x;
       this.instances[o + 1] = cursor.y;
-      this.instances[o + 2] = core ? 0.35 + 0.65 * cursor.rgb[0] : cursor.rgb[0];
-      this.instances[o + 3] = core ? 0.35 + 0.65 * cursor.rgb[1] : cursor.rgb[1];
-      this.instances[o + 4] = core ? 0.35 + 0.65 * cursor.rgb[2] : cursor.rgb[2];
+      this.instances[o + 2] = core ? 0.35 + 0.65 * cursor.rgb[0] : cursor.floodRgb[0];
+      this.instances[o + 3] = core ? 0.35 + 0.65 * cursor.rgb[1] : cursor.floodRgb[1];
+      this.instances[o + 4] = core ? 0.35 + 0.65 * cursor.rgb[2] : cursor.floodRgb[2];
       this.instances[o + 5] = amount;
       this.instances[o + 6] = core ? CORE_RADIUS * (1 + 1.2 * cursor.pulse) : FLOOD_RADIUS;
       n += 1;

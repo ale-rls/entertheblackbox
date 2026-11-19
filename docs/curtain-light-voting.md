@@ -53,10 +53,13 @@ phones. Pools keep a base glow and brighten with their share of the
 authoritative live counts, smoothed and capped. Areas never move or grow with
 popularity.
 
-Each cursor is a bright centre with a soft flood in its participant's own
-colour: the identity colour the server assigns on join and the phone shows as
-its background (`PARTICIPANT_COLORS`). The coloured floods are what colour the
-neutral fabric. A flood strengthens once it stands in a counting area. The title
+Each cursor is a small bright centre tinted in its participant's own colour
+(the identity colour the server assigns on join and the phone shows as its
+background, `PARTICIPANT_COLORS`) with a soft flood in the same warm white as
+the fields. Only the centre carries the identity colour, so people can find
+themselves while the fabric stays one neutral light; with many participants,
+coloured floods read as confetti. A flood strengthens once it stands in a
+counting area. The title
 and labels stay visible throughout in white, with a soft dark halo for contrast
 over both lit pools and unlit fabric.
 
