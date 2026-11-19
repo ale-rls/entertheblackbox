@@ -39,6 +39,12 @@ audio and shows task prompts.
   everyone has answered. Anyone who joins, or is moved into its audience
   group, during that window becomes a recipient and gets the prompt.
   Operator-sent tasks still close once every recipient has answered.
+  For bookkeeping in Studio → Show properties → Participant task templates, choose
+  **Complete automatically at scene end or deadline**. Use one unlimited option
+  without an assignment, outcome recording or follow-up. Republish the show and
+  update the tablet app before using the setting. The server records the option
+  at the earlier of scene end and deadline. A task sent by the operator uses its
+  deadline. Participants see no response prompt.
 - **Outcomes by order and when full.** An option can give the Nth accepted
   response its own outcome (`rankOutcomes`: role, group, recording, message,
   follow-up task; empty fields fall back to the option's own). An option with

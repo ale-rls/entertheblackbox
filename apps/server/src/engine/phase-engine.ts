@@ -954,8 +954,8 @@ export class PhaseEngine {
     this.qr?.start();
   }
 
-  stop(): void {
-    this.clearPaths();
+  stop(endedAt?: number): void {
+    this.clearPaths(endedAt);
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.cursors.stop();
@@ -1628,9 +1628,9 @@ export class PhaseEngine {
   }
 
   private enterPhase(target: string, now: number, reason: string): void {
-    this.tasks.cancelPhase(this.phaseId, this.phaseEpoch);
+    this.tasks.endPhase(this.phaseId, this.phaseEpoch, now);
+    this.clearPaths(now);
     if (target === "idle" && !this.path) { this.tasks.cancelAll(); this.tasks.clearRoles(); }
-    this.clearPaths();
     if (this.path && (target === this.path.stopAt || target === "idle")) {
       this.pathDone = true;
       this.phaseId = this.path.waitingPhase.id;
@@ -2197,8 +2197,11 @@ export class PhaseEngine {
     return true;
   }
 
-  private clearPaths(): void {
-    for (const { engine } of this.paths.values()) { engine.tasks.cancelPhase(engine.phaseId, engine.phaseEpoch); engine.stop(); }
+  private clearPaths(endedAt?: number): void {
+    for (const { engine } of this.paths.values()) {
+      engine.tasks.endPhase(engine.phaseId, engine.phaseEpoch, endedAt);
+      engine.stop(endedAt);
+    }
     this.paths.clear();
     this.pathsStarted = false;
     for (const socket of this.groupDisplays.values()) this.sendBlankDisplay(socket);
