@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
-import { activeMonitorCue, monitorMediaSources, type MonitorId } from "@entertheblackbox/scenario";
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
+import { activeMonitorCue, monitorMediaSources, type MonitorCue, type MonitorId } from "@entertheblackbox/scenario";
 import { rehearsalId, runtimeWebSocket } from "@entertheblackbox/protocol";
 import type { ServerClock } from "@entertheblackbox/shared";
 import { DisplayConnection } from "../lib/connection.js";
@@ -8,7 +8,7 @@ import { displayReducer, initialDisplayState } from "../state/store.js";
 import { useMedia } from "../media/useMedia.js";
 import { FullscreenControl } from "../components/FullscreenControl.js";
 import { performReload } from "../lib/kiosk.js";
-import { monitorVideoTime } from "./playback.js";
+import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorVideoTime } from "./playback.js";
 import { monitorCountdown, monitorCueCountdown } from "./countdown.js";
 import { monitorAnswerColor } from "./answerColor.js";
 import { monitorVoteResult } from "./voteResult.js";
@@ -17,10 +17,19 @@ import "./monitors.css";
 declare const __BUILD_VERSION__: string | undefined;
 declare const __DISPLAY_TOKEN__: string | undefined;
 
+type MonitorVideoCue = {
+  key: string;
+  scene: string;
+  cue: Extract<MonitorCue, { kind: "video" }>;
+  url: string;
+  startedAt: number;
+};
+
 export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   const [state, dispatch] = useReducer(displayReducer, initialDisplayState);
   const [now, setNow] = useState(0);
   const [error, setError] = useState("");
+  const [presented, setPresented] = useState<MonitorVideoCue | null>(null);
   const setup = new URLSearchParams(location.search).get("setup") === "1";
   const connection = useMemo(() => new DisplayConnection({
     url: runtimeWebSocket(location), ...currentInstallation(), monitorId,
@@ -42,15 +51,31 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   }, [connection]);
   useEffect(() => { if (state.reloadRequired) void performReload(); }, [state.reloadRequired]);
   const phase = state.phase;
-  const cue = phase && connection.clock.ready ? activeMonitorCue(phase.monitorCues?.[monitorId] ?? [], now - phase.startedAt) : null;
+  const cues = phase?.monitorCues?.[monitorId] ?? [];
+  const elapsed = now - (phase?.startedAt ?? 0);
+  const cue = phase && connection.clock.ready ? activeMonitorCue(cues, elapsed) : null;
   const src = cue && "src" in cue ? cue.src : null;
+  const url = media.visualSrc === src ? media.videoUrl : null;
+  const ready = media.status.state === "ready";
+  const scene = JSON.stringify([monitorId, state.sessionId, state.phaseEpoch, phase?.startedAt, mediaRevision, sourceKey]);
+  const key = JSON.stringify([scene, cue?.startMs, src]);
+  const current: MonitorVideoCue | null = ready && cue?.kind === "video" && url && phase
+    ? { key, scene, cue, url, startedAt: phase.startedAt + cue.startMs }
+    : null;
+  const outgoing = ready && !error && presented?.scene === scene && presented.key !== key &&
+    isAdjacentMonitorVideoCut(cues, presented.cue.startMs, cue, elapsed) ? presented : null;
+  const activeVideo = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    activeVideo.current = current?.key ?? null;
+  }, [current?.key]);
+  useLayoutEffect(() => {
+    // Protect the paused outgoing element before showMedia drops the prior source.
+    if (outgoing) media.store.holdUrl(outgoing.url, MONITOR_CUT_HOLD_MS);
+  }, [outgoing, media.store]);
   useEffect(() => {
     setError("");
     void media.showMedia(src).catch((cause) => setError(String(cause)));
   }, [src, state.sessionId, state.phaseEpoch, mediaRevision, sourceKey]);
-  const url = media.visualSrc === src ? media.videoUrl : null;
-  const ready = media.status.state === "ready";
-  const key = `${state.sessionId}:${state.phaseEpoch}:${cue?.startMs}`;
   const countdown = ready && connection.clock.ready && cue && cue.kind !== "blank"
     ? cue.countdownSeconds !== undefined
       ? monitorCueCountdown(phase?.monitorCues?.[monitorId] ?? [], now - (phase?.startedAt ?? 0))
@@ -64,7 +89,10 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
     {ready && cue?.kind === "text" && <div className="monitor-text">{cue.text}</div>}
     {ready && cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
     {ready && cue?.kind === "image" && url && <figure className="monitor-image"><img src={url} alt={cue.text ?? ""} style={{ objectFit: cue.fit }} onError={() => setError("Image could not be decoded")} />{cue.text && <figcaption>{cue.text}</figcaption>}</figure>}
-    {ready && cue?.kind === "video" && url && phase && <MonitorVideo key={key} src={url} startedAt={phase.startedAt + cue.startMs} loop={cue.loop} fit={cue.fit} clock={connection.clock} onError={setError} />}
+    {[outgoing, current].map((video) => video && <MonitorVideo key={video.key} src={video.url} startedAt={video.startedAt}
+      loop={video.cue.loop} fit={video.cue.fit} clock={connection.clock} active={video === current}
+      hidden={video === current && outgoing !== null} onError={setError}
+      onFrame={() => { if (activeVideo.current === video.key) setPresented(video); }} />)}
     {countdown !== null && <div className="monitor-countdown" aria-label="Seconds remaining">{countdown}</div>}
     {(!ready || setup || state.connection !== "open" || error || state.notice) && <aside className="monitor-status" role="status">
       <strong>{monitorId}</strong> · {state.connection} · {media.status.state}{ready ? " — media verified" : " — preparing media"}
@@ -79,20 +107,29 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   </main>;
 }
 
-function MonitorVideo({ src, startedAt, loop, fit, clock, onError }: {
-  src: string; startedAt: number; loop: boolean; fit: "contain" | "cover"; clock: ServerClock; onError: (message: string) => void;
+function MonitorVideo({ src, startedAt, loop, fit, clock, active, hidden, onError, onFrame }: {
+  src: string; startedAt: number; loop: boolean; fit: "contain" | "cover"; clock: ServerClock;
+  active: boolean; hidden: boolean; onError: (message: string) => void; onFrame: () => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const frameCallback = useRef(onFrame);
+  useLayoutEffect(() => { frameCallback.current = onFrame; }, [onFrame]);
   useEffect(() => {
     const video = ref.current;
-    if (!video) return;
+    if (!video || !active) return;
     let pending = false;
     let disposed = false;
     let retryAt = 0;
+    let reportedFrame = false;
     const update = () => {
       if (video.readyState < 1 || !clock.ready) return;
       const target = monitorVideoTime(clock.now() - startedAt, video.duration, loop);
       if (!video.seeking && Math.abs(video.currentTime - target.time) > 0.15) video.currentTime = target.time;
+      if (!reportedFrame && video.readyState >= 2 && video.videoWidth > 0 && !video.seeking
+        && Math.abs(video.currentTime - target.time) <= 0.15) {
+        reportedFrame = true;
+        frameCallback.current();
+      }
       if (!target.playing) { video.pause(); return; }
       if (video.paused && !pending && Date.now() >= retryAt) {
         pending = true;
@@ -103,9 +140,18 @@ function MonitorVideo({ src, startedAt, loop, fit, clock, onError }: {
       }
     };
     video.addEventListener("loadedmetadata", update);
+    video.addEventListener("loadeddata", update);
+    video.addEventListener("seeked", update);
     const timer = setInterval(update, 50);
     update();
-    return () => { disposed = true; clearInterval(timer); video.removeEventListener("loadedmetadata", update); video.pause(); };
-  }, [src, startedAt, loop, clock, onError]);
-  return <video ref={ref} src={src} muted playsInline preload="auto" style={{ objectFit: fit }} onError={() => onError("Video could not be decoded")} />;
+    return () => {
+      disposed = true;
+      clearInterval(timer);
+      video.removeEventListener("loadedmetadata", update);
+      video.removeEventListener("loadeddata", update);
+      video.removeEventListener("seeked", update);
+      video.pause();
+    };
+  }, [src, startedAt, loop, clock, active, onError]);
+  return <video ref={ref} src={src} muted playsInline preload="auto" style={{ objectFit: fit, opacity: hidden ? 0 : 1 }} onError={() => { if (active) onError("Video could not be decoded"); }} />;
 }
