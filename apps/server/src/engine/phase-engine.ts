@@ -1771,8 +1771,9 @@ export class PhaseEngine {
   private transition(reason: string, sessionEnded?: { reason: string; sessionId: string; endedAt: number }): void {
     this.emitCheckpoint("transition", reason);
     const phase = this.currentPhase();
-    // Opening the lobby is not the end of a show: the bridges play their show-end look and MIDI on this reset.
-    if (!this.path && (reason === "group-branch-complete" || reason === "admin-force-reunion" || (phase.kind === "idle" && reason !== "lobby-start"))) {
+    // Only a return to idle ends a show: the bridges play their show-end look and MIDI on this reset.
+    // The lobby also sits on the idle phase (opening it, rescheduling or nudging its start), and is no show end.
+    if (!this.path && (reason === "group-branch-complete" || reason === "admin-force-reunion" || (phase.kind === "idle" && this.lifecycle !== "lobby"))) {
       this.options.onCueEvent?.({
         type: "reset",
         timelineId: "main",

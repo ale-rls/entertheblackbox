@@ -1430,7 +1430,7 @@ describe("PhaseEngine lifecycle", () => {
     ]);
   });
 
-  it("does not tell the lighting and sound bridges the show ended when the lobby opens", () => {
+  it("does not tell the lighting and sound bridges the show ended when the lobby opens or is rescheduled", () => {
     let now = 1_000;
     const cueEvents: Array<{ type: string; phaseId?: string }> = [];
     const { engine, registry } = setup({ now: () => now, interactiveIdleTimeoutMs: 1_000, cueEvents });
@@ -1439,6 +1439,14 @@ describe("PhaseEngine lifecycle", () => {
     engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
     expect(engine.lifecycleState).toBe("lobby");
     expect(cueEvents.filter((event) => event.type === "reset")).toEqual([]);
+
+    // Front of house moves the start while the audience waits in the lobby.
+    const later = now + 600_000;
+    expect(engine.setLobbyStartTimes([later], now)).toEqual({ ok: true });
+    expect(engine.adjustLobbyStart(60_000, now)).toEqual({ ok: true });
+    expect(engine.lifecycleState).toBe("lobby");
+    expect(cueEvents.filter((event) => event.type === "reset")).toEqual([]);
+    expect(engine.setLobbyStartTimes([], now)).toEqual({ ok: true });
 
     // Ending a running show still does.
     now = 1_100;
