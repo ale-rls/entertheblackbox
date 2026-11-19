@@ -1410,6 +1410,24 @@ describe("PhaseEngine lifecycle", () => {
     ]);
   });
 
+  it("does not tell the lighting and sound bridges the show ended when the lobby opens", () => {
+    let now = 1_000;
+    const cueEvents: Array<{ type: string; phaseId?: string }> = [];
+    const { engine, registry } = setup({ now: () => now, interactiveIdleTimeoutMs: 1_000, cueEvents });
+    const phone = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    expect(engine.lifecycleState).toBe("lobby");
+    expect(cueEvents.filter((event) => event.type === "reset")).toEqual([]);
+
+    // Ending a running show still does.
+    now = 1_100;
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    expect(engine.lifecycleState).toBe("active");
+    expect(engine.adminIdle(now + 10)).toEqual({ ok: true });
+    expect(cueEvents.filter((event) => event.type === "reset").map((event) => event.phaseId)).toEqual(["idle"]);
+  });
+
   it("shows the result again on a display that reconnects during the freeze", () => {
     let now = 1_000;
     const cueEvents: Array<{ type: string }> = [];
