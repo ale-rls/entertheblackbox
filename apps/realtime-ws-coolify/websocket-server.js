@@ -177,15 +177,24 @@ const app = uWS.App()
 
     close: (ws) => {
       const data = ws.getUserData();
-      roomMembers(data.room).delete(data.id);
-      const pending = pendingByRoom.get(data.room);
-      if (pending) pending.delete(data.clientId);
-      if (roomMembers(data.room).size === 0) {
+      const members = roomMembers(data.room);
+      members.delete(data.id);
+      rateLimits.delete(data.id);
+      // A phone that reconnected already has a newer socket under the same
+      // clientId. Its old socket is often only reaped by the ping sweep, up to a
+      // minute later; announcing a leave then would erase the live cursor on
+      // the displays, and a phone that is holding still never sends the update
+      // that would bring it back.
+      const stillPresent = [...members.values()].some((socket) => socket.getUserData().clientId === data.clientId);
+      if (!stillPresent) {
+        const pending = pendingByRoom.get(data.room);
+        if (pending) pending.delete(data.clientId);
+      }
+      if (members.size === 0) {
         rooms.delete(data.room);
         pendingByRoom.delete(data.room);
       }
-      rateLimits.delete(data.id);
-      broadcastToDisplays(data.room, { t: "cursor_leave", clientId: data.clientId });
+      if (!stillPresent) broadcastToDisplays(data.room, { t: "cursor_leave", clientId: data.clientId });
     },
   })
 
