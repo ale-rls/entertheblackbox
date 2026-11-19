@@ -298,6 +298,29 @@ Open work is tracked in [GitHub issues](https://github.com/ale-rls/entertheblack
 
 This repository forked from the smartphonecracy production, which supplied the runtime, Show Studio, and venue tooling. The two shows are independent and do not share fixes. The engine and Show Studio v1 are implemented and tested; what Enter the Blackbox still needs is its own content — scenario graph, media, and director decisions. The only deferred Studio feature is the post-v1 multi-participant drag simulator; outcome shortcuts cover the same resolution branches in v1.
 
+### Show fixes, 19 November 2026
+
+Two bug hunts before the performances. Each fix has its own PR.
+
+**Lighting and sound**
+- The winning field's lamp now lights after a vote, also when the next scene is fixed ([#461](https://github.com/ale-rls/entertheblackbox/pull/461)).
+- The first phone joining no longer triggers the show-end look and music stop ([#467](https://github.com/ale-rls/entertheblackbox/pull/467)).
+- The Ableton (MIDI) bridge reconnects after a server restart ([#463](https://github.com/ale-rls/entertheblackbox/pull/463)), and starts music with synchronized videos instead of 3 s early ([#465](https://github.com/ale-rls/entertheblackbox/pull/465)).
+
+**Audience**
+- The entrance signage keeps its join QR during the show while late joining is on ([#469](https://github.com/ale-rls/entertheblackbox/pull/469)).
+- Phones keep retrying when the join page can't load at first ([#443](https://github.com/ale-rls/entertheblackbox/pull/443)).
+- A vote or group choice tapped while a phone or tablet is reconnecting waits instead of getting lost ([#445](https://github.com/ale-rls/entertheblackbox/pull/445)).
+
+**Projector and monitors**
+- A projector that reconnects shows the vote result again ([#447](https://github.com/ale-rls/entertheblackbox/pull/447)) and no longer drops its new connection ([#441](https://github.com/ale-rls/entertheblackbox/pull/441)).
+- On a tie, only the tied answers blink ([#449](https://github.com/ale-rls/entertheblackbox/pull/449)).
+- Monitors keep downloaded clips across scenes, and show texts on time while a video is still loading ([#473](https://github.com/ale-rls/entertheblackbox/pull/473)).
+
+**Tablets**
+- Light effects run across the tablets only, not audience phones ([#471](https://github.com/ale-rls/entertheblackbox/pull/471)).
+- A withdrawn role frees its place for the next volunteer ([#455](https://github.com/ale-rls/entertheblackbox/pull/455)).
+
 ## License
 
 No license has been declared yet. All rights are reserved unless a license file is added.
