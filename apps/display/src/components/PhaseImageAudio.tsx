@@ -8,7 +8,7 @@ import {
 import { useVideoPlaybackDiagnostics } from "../media/useVideoPlaybackDiagnostics.js";
 import { fadeOutSkippedAudio } from "../media/skipFade.js";
 
-type ImageAudioPhase = Extract<PhaseSnapshotMessage, { kind: "video" | "video-position-question" }> & { audioSrc: string };
+type ImageAudioPhase = Extract<PhaseSnapshotMessage, { kind: "video" | "video-position-question" }>;
 
 export function PhaseImageAudio({
   sessionId,
@@ -18,7 +18,9 @@ export function PhaseImageAudio({
   audioSrc,
   soundEnabled,
   clock,
+  playbackEnabled = true,
   onAudioElement,
+  onFirstFrame,
   send,
 }: {
   sessionId: string | null;
@@ -28,6 +30,8 @@ export function PhaseImageAudio({
   audioSrc: string;
   soundEnabled: boolean;
   clock?: ServerClock;
+  playbackEnabled?: boolean;
+  onFirstFrame?: () => void;
   onAudioElement?: (audio: HTMLAudioElement | null) => void;
   send: (message: DisplayToServerMessage) => void;
 }) {
@@ -38,7 +42,7 @@ export function PhaseImageAudio({
     phaseEpoch,
     mediaId: phase.src,
     videoUrl: audioSrc,
-    autoPlay: !clock,
+    autoPlay: !clock && playbackEnabled,
     send,
   });
   const setAudioRef = useCallback((audio: HTMLAudioElement | null) => {
@@ -82,17 +86,18 @@ export function PhaseImageAudio({
     const audio = diagnostics.ref.current;
     if (!clock || !audio) return;
     return followMediaClock(audio, clock, phase.startedAt, {
+      enabled: playbackEnabled,
       ended: handleEnded,
       blocked: diagnostics.onError,
     });
-  }, [clock, phase.startedAt, phaseEpoch, audioSrc]);
+  }, [clock, phase.startedAt, phaseEpoch, audioSrc, playbackEnabled]);
 
   return <div className="phase-image-audio">
-    <img src={imageSrc} alt="" />
+    <img src={imageSrc} alt="" onLoad={onFirstFrame} />
     <audio
       ref={setAudioRef}
       src={audioSrc}
-      autoPlay={!clock}
+      autoPlay={!clock && playbackEnabled}
       muted={!soundEnabled}
       onEnded={clock ? undefined : handleEnded}
       onPlaying={diagnostics.onPlaying}

@@ -32,7 +32,7 @@ uniform sampler2D tex;      // packed curtain frame (2560x1408)
 uniform sampler2D pool;     // answer-pool light, sqrt-encoded linear RGB
 uniform sampler2D cursorLight; // accumulated cursor floods, linear RGB
 uniform sampler2D txt;      // text at output size: RGBA lettering and shadow
-uniform bool hasTex;
+uniform bool hasTex, spotlight;
 uniform vec4 crop;          // clip-space crop: xy offset, zw size (cover fit)
 uniform float baked, folds, shine, shadow, opacity, cursorScale;
 const float ASPECT = 1280. / 704.;
@@ -42,7 +42,11 @@ vec2 tile(vec2 q, vec2 off){ return clamp(q, HALF, .5 - HALF) + off; }
 vec3 colour(vec2 q){ return hasTex ? texture(tex, tile(q * .5, vec2(0.))).rgb : vec3(.2); }
 float depth(vec2 q){ return hasTex ? texture(tex, tile(q * .5, vec2(.5))).r : .5; }
 vec3 normal(vec2 q){
-  if (!hasTex) return vec3(0., 0., 1.);
+  if (!hasTex) {
+    if (!spotlight) return vec3(0., 0., 1.);
+    float fold = sin(q.x * 85. + .4 * sin(q.y * 6.));
+    return normalize(vec3(.75 * fold, 0., 1.));
+  }
   vec2 n = vec2(texture(tex, tile(q * .5, vec2(.5, 0.))).r, texture(tex, tile(q * .5, vec2(0., .5))).r) * 2. - 1.;
   return normalize(vec3(n * folds, sqrt(max(.04, 1. - dot(n, n)))));
 }
@@ -116,11 +120,16 @@ void main(){
 
 export type CurtainFabricParams = { baked: number; folds: number; shine: number; shadow: number };
 
-/** One cursor light: position, linear colour, flood amount, core amount and pulse (0..1). */
+/**
+ * One cursor light: position, linear colours of the core (the participant's
+ * dot) and of the flood it throws on the fabric, flood amount, core amount
+ * and pulse (0..1).
+ */
 export type CursorLight = {
   x: number;
   y: number;
   rgb: readonly [number, number, number];
+  floodRgb: readonly [number, number, number];
   flood: number;
   core: number;
   pulse: number;
@@ -131,6 +140,7 @@ export type CurtainFrame = {
   /** Fades cursor floods and cores together (e.g. after the vote closes). */
   cursorOpacity: number;
   fabric: CurtainFabricParams;
+  spotlightRadius?: number;
   cursors: readonly CursorLight[];
 };
 
@@ -301,7 +311,7 @@ export class CurtainRenderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, text);
   }
 
-  private writeInstances(cursors: readonly CursorLight[], core: boolean, fade: number): number {
+  private writeInstances(cursors: readonly CursorLight[], core: boolean, fade: number, floodRadius = FLOOD_RADIUS): number {
     const needed = cursors.length * 7;
     if (this.instances.length < needed) this.instances = new Float32Array(Math.max(needed, 64 * 7));
     let n = 0;
@@ -311,11 +321,11 @@ export class CurtainRenderer {
       const o = n * 7;
       this.instances[o] = cursor.x;
       this.instances[o + 1] = cursor.y;
-      this.instances[o + 2] = core ? 0.35 + 0.65 * cursor.rgb[0] : cursor.rgb[0];
-      this.instances[o + 3] = core ? 0.35 + 0.65 * cursor.rgb[1] : cursor.rgb[1];
-      this.instances[o + 4] = core ? 0.35 + 0.65 * cursor.rgb[2] : cursor.rgb[2];
+      this.instances[o + 2] = core ? 0.35 + 0.65 * cursor.rgb[0] : cursor.floodRgb[0];
+      this.instances[o + 3] = core ? 0.35 + 0.65 * cursor.rgb[1] : cursor.floodRgb[1];
+      this.instances[o + 4] = core ? 0.35 + 0.65 * cursor.rgb[2] : cursor.floodRgb[2];
       this.instances[o + 5] = amount;
-      this.instances[o + 6] = core ? CORE_RADIUS * (1 + 1.2 * cursor.pulse) : FLOOD_RADIUS;
+      this.instances[o + 6] = core ? CORE_RADIUS * (1 + 1.2 * cursor.pulse) : floodRadius;
       n += 1;
     }
     const gl = this.gl;
@@ -343,11 +353,11 @@ export class CurtainRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT);
     // RGBA8 cannot hold values above 1, so floods are stored scaled down.
     const storeScale = this.floatLight ? 1 : 0.25;
-    const floods = this.writeInstances(frame.cursors, false, frame.cursorOpacity * storeScale);
+    const floods = this.writeInstances(frame.cursors, false, frame.cursorOpacity * storeScale, frame.spotlightRadius);
     if (floods > 0) {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
-      this.drawSprites(floods, 2.2);
+      this.drawSprites(floods, frame.spotlightRadius === undefined ? 2.2 : 0.8);
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
@@ -365,6 +375,7 @@ export class CurtainRenderer {
     bind(2, this.lightTexture, "cursorLight");
     bind(3, this.textTexture, "txt");
     const u = (name: string) => gl.getUniformLocation(this.fabric, name);
+    gl.uniform1i(u("spotlight"), frame.spotlightRadius === undefined ? 0 : 1);
     gl.uniform1i(u("hasTex"), this.hasVideo ? 1 : 0);
     gl.uniform4fv(u("crop"), coverCrop(this.canvas.width / Math.max(1, this.canvas.height)));
     gl.uniform1f(u("baked"), frame.fabric.baked);

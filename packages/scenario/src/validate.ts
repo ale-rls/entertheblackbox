@@ -28,7 +28,8 @@ export type ScenarioIssue = {
     | "curtain-light"
     | "script-cue"
     | "unused-rank-outcome"
-    | "surface-cue";
+    | "surface-cue"
+    | "spotlight";
   phaseId?: string;
   message: string;
 };
@@ -215,8 +216,33 @@ export function validateScenario(
     severity: "error", code: "unknown-group", message: `initialGroupIds references unknown group "${groupId}"`,
   });
 
+  const spotlightPhases = scenario.phases.filter(phase => phase.kind === "position-question" && phase.spotlight);
+  // Spotlight cues need the shared projection. A group path ends at its reunion.
+  const pathSpotlights = new Set<string>();
+  for (const phase of spotlightPhases.length ? scenario.phases : []) {
+    if (phase.kind !== "group-branch") continue;
+    const visited = new Set([phase.next, "idle"]);
+    const pending = phase.branches.flatMap(branch => branch.next ? [branch.next] : []);
+    while (pending.length) {
+      const id = pending.pop()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const scene = byId.get(id);
+      if (!scene) continue;
+      if (scene.kind === "position-question" && scene.spotlight) pathSpotlights.add(id);
+      pending.push(...targetsOf(scene).map(({ target }) => target));
+    }
+  }
+  for (const phaseId of pathSpotlights) {
+    errors.push({ severity: "error", code: "spotlight", phaseId, message: "Spotlight cues must run on the main timeline." });
+  }
+
   if (mediaManifest) {
     const known = new Set(mediaManifest.files.map((f) => f.src));
+    const spotlightSrc = scenario.curtainLight?.src;
+    if (spotlightPhases.length && spotlightSrc && !known.has(spotlightSrc)) {
+      errors.push({ severity: "error", code: "missing-media", message: `Spotlight curtain video "${spotlightSrc}" is not in the media manifest.` });
+    }
     for (const phase of scenario.phases) {
       const sources = [
         ...monitorMediaSources(phase.monitorCues),

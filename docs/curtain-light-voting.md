@@ -53,10 +53,13 @@ phones. Pools keep a base glow and brighten with their share of the
 authoritative live counts, smoothed and capped. Areas never move or grow with
 popularity.
 
-Each cursor is a bright centre with a soft flood in its participant's own
-colour: the identity colour the server assigns on join and the phone shows as
-its background (`PARTICIPANT_COLORS`). The coloured floods are what colour the
-neutral fabric. A flood strengthens once it stands in a counting area. The title
+Each cursor is a small bright centre tinted in its participant's own colour
+(the identity colour the server assigns on join and the phone shows as its
+background, `PARTICIPANT_COLORS`) with a soft flood in the same warm white as
+the fields. Only the centre carries the identity colour, so people can find
+themselves while the fabric stays one neutral light; with many participants,
+coloured floods read as confetti. A flood strengthens once it stands in a
+counting area. The title
 and labels stay visible throughout in white, with a soft dark halo for contrast
 over both lit pools and unlit fabric.
 
@@ -96,3 +99,16 @@ The prototype's `tools/make_maps.py` builds one from a 1280×704, 24 fps clip:
 colour top-left, normal X top-right, normal Y bottom-left, depth
 bottom-right, 2560×1408 in total. Normal and depth tiles must not be colour
 managed or tone mapped.
+
+## Casting spotlights
+
+On a main-timeline **Position question** with a fixed target, enable
+**Use spotlights on the main display** in Studio. Set the countdown, the
+spotlight diameter as a percentage of the screen height, and how long to hold
+the final positions. The main display uses the shared curtain video when
+configured, or a built-in fabric pattern. It requires WebGL2.
+
+Participants steer their spots with the browser trackpad. When the countdown
+ends, the server holds their last positions and then advances to the fixed
+target. Casting is decided in the room. Rehearse diameter, brightness and hold
+time on the gauze before using the cue in a performance.

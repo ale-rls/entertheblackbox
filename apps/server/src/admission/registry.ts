@@ -177,7 +177,11 @@ export class ParticipantRegistry {
 
   pruneExpired(now = Date.now()): void {
     for (const [lease, participant] of this.participants) {
-      if (participant.leaseExpiresAt <= now) {
+      // A lease only gates admission. Someone still connected when it runs
+      // out is mid-show: cutting them off here would bring them back as a new
+      // participant, without their group, roles or vote history (#433).
+      const connected = participant.disconnectedAt === undefined && socketIsConnected(participant.socket);
+      if (participant.leaseExpiresAt <= now && !connected) {
         participant.socket?.terminate();
         this.participants.delete(lease);
         this.connectedLeases.delete(lease);

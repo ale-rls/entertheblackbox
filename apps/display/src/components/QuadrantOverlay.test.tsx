@@ -269,6 +269,19 @@ describe("QuadrantOverlay", () => {
     expect(html).not.toContain("quadrant-count");
   });
 
+  it("blinks only the tied leaders on a plain tie", () => {
+    const html = renderToStaticMarkup(
+      <QuadrantOverlay
+        field={fourField}
+        liveField={null}
+        liveCounts={null}
+        resolution={{ ...resolved(fourField, "tie"), quadrantCounts: { q1: 20, q2: 20, q3: 4, q4: 0 } } as QuestionResolvedMessage}
+      />,
+    );
+    const blinking = [...html.matchAll(/class="quadrant [^"]*quadrant-blink[^"]*" data-quadrant="(q\d)"/g)].map((m) => m[1]);
+    expect(blinking.sort()).toEqual(["q1", "q2"]);
+  });
+
   it("renders tie and empty outcomes while fixed freezes counts neutrally", () => {
     const tie = renderToStaticMarkup(
       <QuadrantOverlay

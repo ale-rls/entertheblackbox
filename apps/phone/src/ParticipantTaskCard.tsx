@@ -9,7 +9,7 @@ export function ParticipantTaskCard({ state, enabled, clock, respond }: {
   const [, refresh] = useState(0);
   useEffect(() => { const timer = setInterval(() => refresh(n => n + 1), 250); return () => clearInterval(timer); }, []);
   const task = state?.task;
-  if (!task || task.status === "cancelled") return null;
+  if (!task || task.template.autoComplete || task.status === "cancelled") return null;
   const remaining = task.deadlineAt - (clock?.now() ?? Date.now());
   const canAnswer = enabled && task.status === "open" && remaining > 0 &&
     (task.recipient.status === "pending" || task.recipient.status === "full");

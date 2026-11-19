@@ -7,8 +7,10 @@ type Timers = {
 };
 
 /** Natural tablet-label order (T2 before T10), the same order Admin's Instrument plays in. */
-export function surfaceDeviceOrder(devices: Iterable<{ clientId: string; name?: string | undefined }>): string[] {
+export function surfaceDeviceOrder(devices: Iterable<{ clientId: string; name?: string | undefined; client?: string | undefined }>): string[] {
   return [...devices]
+    // Audience browsers have no light surface: a chase step on one would leave every tablet dark for it.
+    .filter((device) => device.client !== "web")
     .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? "", undefined, { numeric: true, sensitivity: "base" }) || a.clientId.localeCompare(b.clientId))
     .map((device) => device.clientId);
 }

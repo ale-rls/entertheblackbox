@@ -2,9 +2,13 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 const storage = vi.hoisted(() => ({ files: new Map<string, Uint8Array>(), keys: new Map<string, string>(), downloads: new Map<string, string>() }));
 vi.mock('expo-file-system', () => {
-  class Directory { uri: string; constructor(...parts: any[]) { this.uri = parts.map(p => p.uri ?? p).join('/'); } create() {} }
+  class Directory {
+    uri: string; constructor(...parts: any[]) { this.uri = parts.map(p => p.uri ?? p).join('/'); } create() {}
+    list() { return [...storage.files.keys()].filter(uri => uri.startsWith(this.uri + '/')).map(uri => new File(uri)); }
+  }
   class File {
     uri: string; constructor(...parts: any[]) { this.uri = parts.map(p => p.uri ?? p).join('/'); }
+    get name() { return this.uri.split('/').at(-1); }
     get exists() { return storage.files.has(this.uri); } get size() { return storage.files.get(this.uri)?.length ?? 0; }
     async bytes() { return storage.files.get(this.uri)!; } async text() { return new TextDecoder().decode(await this.bytes()); }
     write(text: string) { storage.files.set(this.uri, new TextEncoder().encode(text)); }
@@ -19,7 +23,7 @@ vi.mock('expo-crypto', () => ({ CryptoDigestAlgorithm: { SHA256: 'sha256' },
   digestStringAsync: async (_: unknown, data: string) => createHash('sha256').update(data).digest('hex') }));
 vi.mock('expo-secure-store', () => ({ getItemAsync: async (key: string) => storage.keys.get(key) ?? null,
   setItemAsync: async (key: string, value: string) => { storage.keys.set(key, value); } }));
-import { downloadShow, loadShow, localAudio } from './content';
+import { downloadShow, downloadWallSlice, loadShow, localAudio } from './content';
 import { manifestPayload } from '@entertheblackbox/show-content';
 const origin = 'https://venue.test';
 function release(text: string) {
@@ -123,4 +127,87 @@ it('hashes small wall files and checks only the size of large ones on low-memory
   expect(wallVerification(10 * 1024 * 1024)).toBe('sha256');
   expect(wallVerification(WALL_HASH_LIMIT_BYTES)).toBe('sha256');
   expect(wallVerification(WALL_HASH_LIMIT_BYTES + 1)).toBe('size');
+});
+
+function wallSlice(text: string) {
+  const url = `/media/${text}.mp4`;
+  storage.downloads.set(origin + url, text);
+  return { url, bytes: text.length, sha256: createHash('sha256').update(text).digest('hex') };
+}
+
+it('keeps the latest wall slice cached when a superseded download finishes later', async () => {
+  const older = wallSlice('older'), newer = wallSlice('newer');
+  const { File } = await import('expo-file-system');
+  const original = File.downloadFileAsync;
+  const slow = Promise.withResolvers<void>();
+  const started = Promise.withResolvers<void>();
+  const download = vi.spyOn(File, 'downloadFileAsync').mockImplementation(async (url, destination, options) => {
+    if (url === origin + older.url) { started.resolve(); await slow.promise; }
+    return original(url, destination, options);
+  });
+  try {
+    const pending = downloadWallSlice(origin, older).catch(() => null);
+    await started.promise;
+    const current = await downloadWallSlice(origin, newer);
+    slow.resolve();
+    await pending;
+    expect([...storage.files.keys()]).toEqual([current]);
+    expect(await downloadWallSlice(origin, newer)).toBe(current);
+    expect(download).toHaveBeenCalledTimes(2);
+  } finally {
+    download.mockRestore();
+  }
+});
+
+it('reuses an in-flight wall slice when the operator switches back to it', async () => {
+  const first = wallSlice('first'), second = wallSlice('second');
+  const { File } = await import('expo-file-system');
+  const original = File.downloadFileAsync;
+  const firstGate = Promise.withResolvers<void>(), secondGate = Promise.withResolvers<void>();
+  const started = Promise.withResolvers<void>();
+  const download = vi.spyOn(File, 'downloadFileAsync').mockImplementation(async (url, destination, options) => {
+    if (url === origin + first.url) { started.resolve(); await firstGate.promise; }
+    else await secondGate.promise;
+    return original(url, destination, options);
+  });
+  try {
+    const pending = downloadWallSlice(origin, first);
+    await started.promise;
+    const displaced = downloadWallSlice(origin, second).catch(() => null);
+    const selected = downloadWallSlice(origin, first);
+    secondGate.resolve();
+    firstGate.resolve();
+    const current = await selected;
+    expect(await pending).toBe(current);
+    await displaced;
+    expect([...storage.files.keys()]).toEqual([current]);
+    expect(download).toHaveBeenCalledTimes(2);
+  } finally {
+    download.mockRestore();
+  }
+});
+
+it('redownloads a reselected cached slice pruned during verification', async () => {
+  const first = wallSlice('first'), second = wallSlice('second');
+  const firstUri = await downloadWallSlice(origin, first);
+  const { File } = await import('expo-file-system');
+  const original = File.prototype.bytes;
+  const started = Promise.withResolvers<void>(), resume = Promise.withResolvers<void>();
+  const read = vi.spyOn(File.prototype, 'bytes').mockImplementation(async function (this: InstanceType<typeof File>) {
+    if (this.uri === firstUri) { started.resolve(); await resume.promise; }
+    if (!this.exists) throw new Error('File no longer exists');
+    return original.call(this);
+  });
+  try {
+    const pending = downloadWallSlice(origin, first);
+    await started.promise;
+    await downloadWallSlice(origin, second);
+    const selected = downloadWallSlice(origin, first);
+    resume.resolve();
+    expect(await selected).toBe(firstUri);
+    expect(await pending).toBe(firstUri);
+    expect([...storage.files.keys()]).toEqual([firstUri]);
+  } finally {
+    read.mockRestore();
+  }
 });

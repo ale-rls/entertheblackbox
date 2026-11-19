@@ -7,6 +7,7 @@ import { useDisplaySettings } from "./lib/useDisplaySettings.js";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { DisplayToServerMessage } from "@entertheblackbox/protocol";
 import { CursorField } from "./cursors/cursorField.js";
+import { SpotlightCurtain } from "./curtain/SpotlightCurtain.js";
 import { CursorCanvas } from "./cursors/CursorCanvas.js";
 import { SpectrumGlowCanvas } from "./cursors/SpectrumGlowCanvas.js";
 import { RealtimeWsClient } from "./cursors/realtimeWsClient.js";
@@ -21,10 +22,9 @@ import { Countdown } from "./components/Countdown.js";
 import { QrBadge } from "./components/QrBadge.js";
 import { QuadrantOverlay, questionFieldCenter } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
-import { LoopVideo } from "./components/LoopVideo.js";
+import { LoopHandoff } from "./components/LoopVideo.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { PhaseVideoHandoff, type PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
-import { PhaseImageAudio } from "./components/PhaseImageAudio.js";
 import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
 import { SceneCountdown } from "./components/SceneCountdown.js";
@@ -95,6 +95,7 @@ export function App() {
   const activeExtraAudioRef = useRef<HTMLAudioElement | null>(null);
   stateRef.current = state;
 
+  const spotlightFeed = useRef(false);
   const cursorField = useMemo(() => new CursorField(), []);
 
   const connection = useMemo(
@@ -107,6 +108,10 @@ export function App() {
           if (message.t === "cursors") {
             cursorField.ingest(message, Date.now());
             return;
+          }
+          if (message.t === "snapshot" || message.t === "phase") {
+            spotlightFeed.current = message.phase.kind === "position-question" && !!message.phase.spotlight;
+            if (spotlightFeed.current) cursorField.setFrozen(false);
           }
           if (
             (message.t === "snapshot" || message.t === "phase") &&
@@ -131,15 +136,17 @@ export function App() {
         url: config.realtimeWsUrl,
         room: `${config.installationId}:${config.roomId}`,
         onSnapshot: (cursors) => {
+          if (spotlightFeed.current) return;
           const at = Date.now();
           for (const cursor of cursors) {
             cursorField.upsertOne(cursor.clientId, cursor.color, cursor.x, cursor.y, at);
           }
         },
         onUpdate: (cursor) => {
+          if (spotlightFeed.current) return;
           cursorField.upsertOne(cursor.clientId, cursor.color, cursor.x, cursor.y, Date.now());
         },
-        onLeave: (clientId) => cursorField.removeOne(clientId),
+        onLeave: (clientId) => { if (!spotlightFeed.current) cursorField.removeOne(clientId); },
       }),
     [cursorField],
   );
@@ -270,6 +277,7 @@ export function App() {
     : null;
   // Curtain-light votes (a curtain-light group's own display): the lit
   // curtain replaces the field overlay, spectrum glow and cursor dots.
+  const spotlightPhase = phase?.kind === "position-question" && phase.spotlight ? phase : null;
   const curtainPhase = spectrumPhase?.voteTreatment !== undefined ? spectrumPhase : null;
   const curtainKey = curtainPhase === null ? null : `${state.sessionId ?? "pending"}:${state.phaseEpoch}`;
   const [curtainHold, setCurtainHold] = useState<CurtainHold | null>(null);
@@ -299,7 +307,7 @@ export function App() {
     const timer = setTimeout(() => setCurtainHold(null), CURTAIN_LEAVE_MS + 100);
     return () => clearTimeout(timer);
   }, [curtainHold?.leavingSince]);
-  const curtainSrc = curtainHold?.treatment.curtain.src ?? null;
+  const curtainSrc = spotlightPhase?.spotlightCurtainSrc ?? curtainHold?.treatment.curtain.src ?? null;
   useEffect(() => {
     if (curtainSrc === null) return;
     let cancelled = false;
@@ -312,35 +320,35 @@ export function App() {
   }, [curtainSrc, media.store, mediaReady]);
   const curtainActive = curtainPhase !== null && !curtainUnavailable;
 
-  const phaseVideoKey = (phase?.kind === "video" || phase?.kind === "video-position-question")
-    && phase.audioSrc === undefined
+  const phaseMediaKey = (phase?.kind === "video" || phase?.kind === "video-position-question")
     ? `${state.sessionId ?? "pending"}:${state.phaseEpoch}`
     : null;
-  const phaseVideoCandidate: PhaseVideoCandidate | null = phaseVideoKey !== null
+  const phaseVideoCandidate: PhaseVideoCandidate | null = phaseMediaKey !== null
     && (phase?.kind === "video" || phase?.kind === "video-position-question")
-    && phase.audioSrc === undefined
     && media.visualSrc === phase.src
     && media.audioSrc === phaseAudioSrc
     && media.extraAudioSrc === phaseExtraAudioSrc
     && media.videoUrl !== null
+    && (phaseAudioSrc === null || media.audioUrl !== null)
     ? {
-        key: phaseVideoKey,
+        key: phaseMediaKey,
         sessionId: state.sessionId,
         phase,
         phaseEpoch: state.phaseEpoch,
         src: media.videoUrl,
+        // A soundtrack is what makes this a still + audio scene, never a video.
+        ...(phaseAudioSrc === null || media.audioUrl === null ? {} : { audioSrc: media.audioUrl }),
         ...(media.extraAudioUrl === null ? {} : { extraAudioSrc: media.extraAudioUrl }),
       }
     : null;
   // Keep the already-decoded attract player mounted for the lifetime of the
   // app. It stays visible beneath an outgoing phase frame until an incoming
-  // phase video is presented, and stays paused/hidden during the show. This
+  // phase picture is presented, and stays paused/hidden during the show. This
   // also gives video -> idle transitions an immediately available frame.
   const idleMediaVisible = isIdle
-    || (phaseVideoKey !== null && presentedVideoKey !== phaseVideoKey);
+    || (phaseMediaKey !== null && presentedVideoKey !== phaseMediaKey);
   // A scene's background loop (e.g. an idle curtain) sits over a still + MP3 scene's
-  // image. It stays up while an incoming scene video is still being presented, so
-  // the curtain never flashes black between the loop and the next video.
+  // image. Hold the loop until the incoming primary picture can replace it.
   const phaseLoopSrc = phase !== null && phase !== undefined
     && (phase.kind === "narration" || phase.kind === "position-question"
       || ((phase.kind === "video" || phase.kind === "video-position-question") && phase.audioSrc !== undefined))
@@ -357,10 +365,21 @@ export function App() {
     });
     return () => { cancelled = true; };
   }, [phaseLoopSrc, media.store, mediaReady]);
-  const loopHeldForHandoff = phaseLoopSrc === null && phaseVideoKey !== null && presentedVideoKey !== phaseVideoKey;
-  const shownLoopUrl = phaseLoopSrc !== null
-    ? (loopUrl?.src === phaseLoopSrc ? loopUrl.url : null)
-    : loopHeldForHandoff ? loopUrl?.url ?? null : null;
+  const loopHeldForHandoff = phaseLoopSrc === null && phaseMediaKey !== null && presentedVideoKey !== phaseMediaKey;
+  const loopPending = phaseLoopSrc !== null && loopUrl?.src !== phaseLoopSrc;
+  const loopTarget = useMemo(
+    () => phaseLoopSrc !== null && loopUrl?.src === phaseLoopSrc && loopUrl.url !== null
+      ? { src: phaseLoopSrc, url: loopUrl.url }
+      : null,
+    [phaseLoopSrc, loopUrl],
+  );
+  // Each layer waits for the other's incoming picture, so a cut changes both on one frame.
+  const [foregroundReadyKey, setForegroundReadyKey] = useState<string | null>(null);
+  const [loopReadyUrl, setLoopReadyUrl] = useState<string | null>(null);
+  const foregroundReady = phaseMediaKey === null || foregroundReadyKey === phaseMediaKey;
+  const loopReady = !loopPending && (loopTarget === null || loopReadyUrl === loopTarget.url);
+  // Keep the loop on screen loaded until its replacement is up.
+  const pinShownLoop = useCallback((src: string | null) => media.store.pin(src, "loop-shown"), [media.store]);
   useEffect(() => {
     if (phaseLoopSrc !== null || loopHeldForHandoff || loopUrl === null) return;
     media.store.pin(null, "loop");
@@ -397,6 +416,18 @@ export function App() {
     {waitingVideoUrl && <IdleAttract key={waitingVideoUrl} grant={null} qrHidden clock={connection.clock} videoUrls={[waitingVideoUrl]} />}
   </main>;
 
+  if (spotlightPhase !== null) return <main className="display-root" aria-label="Spotlight cue" style={{ background: "#000" }}>
+    {config.groupId === undefined && spotlightPhase.deadlineAt !== null && <>
+      <SpotlightCurtain key={`${state.sessionId}:${state.phaseEpoch}`} field={cursorField} clock={connection.clock}
+        size={spotlightPhase.spotlight!.diameterPercent} startedAt={spotlightPhase.startedAt}
+        deadlineAt={spotlightPhase.deadlineAt} grow={spotlightPhase.spotlightGrow === true}
+        videoUrl={curtainUrl?.src === spotlightPhase.spotlightCurtainSrc ? curtainUrl?.url ?? null : null} />
+      <section className="layer layer-ui">
+        <Countdown clock={connection.clock} deadlineAt={spotlightPhase.deadlineAt} className="curtain-countdown" hideAtZero />
+      </section>
+    </>}
+  </main>;
+
   return (
     <main className="display-root">
       {clockOverlay}
@@ -412,35 +443,26 @@ export function App() {
         />
         <PhaseVideoHandoff
           clock={connection.clock}
-          desiredKey={phaseVideoKey}
+          desiredKey={phaseMediaKey}
           candidate={phaseVideoCandidate}
           soundEnabled={soundEnabled}
-          onVideoElement={setActiveMedia}
+          revealAllowed={loopReady}
+          holdOutgoing={!loopReady}
+          onMediaElement={setActiveMedia}
           onExtraAudioElement={setActiveExtraAudio}
           onActiveKey={setPresentedVideoKey}
+          onReadyKey={setForegroundReadyKey}
           send={sendDisplayMessage}
         />
-        {(phase?.kind === "video" || phase?.kind === "video-position-question")
-          && phase.audioSrc !== undefined
-          && media.visualSrc === phase.src
-          && media.audioSrc === phaseAudioSrc
-          && media.extraAudioSrc === phaseExtraAudioSrc
-          && media.videoUrl !== null
-          && media.audioUrl !== null && (
-          <PhaseImageAudio
-            clock={connection.clock}
-            key={phase.id}
-            sessionId={state.sessionId}
-            phase={phase as typeof phase & { audioSrc: string }}
-            phaseEpoch={state.phaseEpoch}
-            imageSrc={media.videoUrl}
-            audioSrc={media.audioUrl}
-            soundEnabled={soundEnabled}
-            onAudioElement={setActiveMedia}
-            send={sendDisplayMessage}
-          />
-        )}
-        {shownLoopUrl !== null && <LoopVideo key={shownLoopUrl} src={shownLoopUrl} clock={connection.clock} />}
+        <LoopHandoff
+          target={loopTarget}
+          pending={loopPending}
+          hold={loopHeldForHandoff}
+          revealAllowed={foregroundReady}
+          clock={connection.clock}
+          onReadyUrl={setLoopReadyUrl}
+          onActiveSrc={pinShownLoop}
+        />
       </section>
 
       {curtainHold !== null && !curtainUnavailable && <section className="layer layer-curtain">

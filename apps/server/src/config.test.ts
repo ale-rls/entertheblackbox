@@ -47,6 +47,15 @@ describe("production secret configuration", () => {
     expect(loadConfig({ TRACKINGBOX_URL: "" }).trackingBoxUrl).toBeNull();
   });
 
+  it("accepts an optional runtime staff PIN while preserving leading zeroes", () => {
+    const env = { NODE_ENV: "production", ...productionSecrets };
+    expect(loadConfig(env).staffPin).toBeUndefined();
+    expect(loadConfig({ ...env, STAFF_PIN: "" }).staffPin).toBeUndefined();
+    expect(loadConfig({ ...env, STAFF_PIN: "0429" }).staffPin).toBe("0429");
+    expect(() => loadConfig({ ...env, STAFF_PIN: "bad" }))
+      .toThrow(new ConfigError("invalid server configuration: STAFF_PIN: STAFF_PIN must be 4-12 digits"));
+  });
+
   it("ignores retired stream configuration for native-only participants", () => {
     const config = loadConfig({ AUDIO_BRIDGE_URL: "not-a-url", AUDIO_BRIDGE_TOKEN: "old",
       AUDIO_PUBLIC_URL: "", REQUIRE_PHONE_AUDIO: "true", JANUS_ENABLED: "true",

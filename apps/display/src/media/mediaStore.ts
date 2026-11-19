@@ -135,11 +135,11 @@ export class MediaStore {
    * cache holds every manifest file (or stop() is called). Resolves true
    * once ready; false only when stopped.
    */
-  async sync(manifest: MediaManifest): Promise<boolean> {
+  async sync(manifest: MediaManifest, published: MediaManifest = manifest): Promise<boolean> {
     this.manifest = manifest;
     for (let attempt = 0; !this.stopped; attempt += 1) {
       try {
-        await this.syncOnce(manifest);
+        await this.syncOnce(manifest, published);
         this.onStatus({ state: "ready" });
         return true;
       } catch (error) {
@@ -153,12 +153,13 @@ export class MediaStore {
     return false;
   }
 
-  private async syncOnce(manifest: MediaManifest): Promise<void> {
+  private async syncOnce(manifest: MediaManifest, published: MediaManifest): Promise<void> {
     this.onStatus({ state: "checking", total: manifest.files.length });
     const cache = await this.cachesObj.open(this.cacheName);
 
-    // Drop cache entries no longer referenced by the manifest.
-    const wanted = new Set(manifest.files.map((f) => cacheKeyFor(f.hash)));
+    // Drop cache entries the published show no longer references. A monitor syncs one scene's
+    // files at a time: what an earlier scene verified stays for when that clip comes back.
+    const wanted = new Set(published.files.map((f) => cacheKeyFor(f.hash)));
     for (const request of await cache.keys()) {
       const path = new URL(request.url, "http://local").pathname;
       if (path.startsWith("/media-cache/") && !wanted.has(path)) {

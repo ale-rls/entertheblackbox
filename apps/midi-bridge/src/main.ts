@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { EventSource } from "eventsource";
 import { CueBridge } from "./bridge.js";
 import { parseBridgeConfig } from "./config.js";
+import { CueFeed, feedFetch, type FeedSource } from "./feed.js";
 import { dryRunOutput, listOutputs, openOutput } from "./midi.js";
 
 const usage = `MIDI bridge: show cue feed → MIDI (Ableton).
@@ -66,37 +67,20 @@ async function main(): Promise<void> {
     }, 200);
   });
 
-  const url = new URL("/api/cues", server);
-  const source = new EventSource(url, {
-    fetch: (input, init) => fetch(input, { ...init, headers: { ...init?.headers, Authorization: `Bearer ${token}` } }),
-  });
-  let connected = false;
-  let failingSince: number | null = null;
-  let lastWarning = 0;
-  log(`connecting to ${url.origin}…`);
-  source.onopen = () => {
-    connected = true;
-    failingSince = null;
-    log(`listening to ${url.origin}`);
-  };
-  source.onerror = (error) => {
-    const status = "code" in error ? (error as { code?: number }).code : undefined;
-    if (status === 401) { log("server rejected the display token (401); check DISPLAY_TOKEN"); source.close(); output.close(); process.exit(1); }
-    const now = Date.now();
-    if (connected) log("connection lost · reconnecting…");
-    else if (now - lastWarning > 10_000) {
-      // Say so while it keeps failing, so whoever watches the MacBook sees cues are not arriving.
-      log(`cannot reach ${url.origin}${status ? ` (HTTP ${status})` : ""}${failingSince ? ` for ${Math.round((now - failingSince) / 1000)} s` : ""} · retrying`);
-      lastWarning = now;
-    }
-    failingSince ??= now;
-    connected = false;
-  };
-  source.onmessage = (message) => {
-    try { bridge.handle(JSON.parse(message.data) as Parameters<CueBridge["handle"]>[0]); }
-    catch (error) { log(`ignored a malformed event: ${error instanceof Error ? error.message : String(error)}`); }
-  };
-  const stop = () => { source.close(); output.close(); process.exit(0); };
+  // Same feed as the Eos bridge: it reopens after an HTTP error (a 502 while the server restarts, a 503 from
+  // the proxy), which EventSource itself never does, and asks for an uncompressed stream the proxy passes on.
+  const feed = new CueFeed(
+    new URL("/api/cues", server),
+    (url) => new EventSource(url, { fetch: feedFetch(token) }) as unknown as FeedSource,
+    (data) => {
+      try { bridge.handle(JSON.parse(data) as Parameters<CueBridge["handle"]>[0]); }
+      catch (error) { log(`ignored a malformed event: ${error instanceof Error ? error.message : String(error)}`); }
+    },
+    log,
+    () => { output.close(); process.exit(1); },
+  );
+  feed.start();
+  const stop = () => { feed.stop(); output.close(); process.exit(0); };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
 }
