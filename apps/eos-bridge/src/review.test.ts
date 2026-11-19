@@ -23,7 +23,8 @@ function setup(extra: Record<string, unknown> = {}) {
     for (const timer of timers.filter((entry) => !entry.cancelled && entry.at <= now)) { timer.cancelled = true; timer.fn(); }
   };
   const lines: string[] = [];
-  const bridge = new LightingBridge(config, new LookPlayer(output), (line) => lines.push(line), schedule);
+  // The fake clock drives lateness too: real time passing between two handle() calls would read as late delivery.
+  const bridge = new LightingBridge(config, new LookPlayer(output), (line) => lines.push(line), schedule, () => now);
   return { bridge, sent, lines, advance };
 }
 let sequence = 0;
