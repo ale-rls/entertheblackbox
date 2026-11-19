@@ -88,6 +88,9 @@ export async function downloadShow(origin: string, channel: ShowChannel, progres
 // ------------------------------------------------------------- video wall slices
 
 const wallRoot = new Directory(Paths.document, 'wall');
+type WallSlice = { url: string; bytes: number; sha256: string };
+const wallDownloads = new Map<string, Promise<string>>();
+let requestedWallHash: string | undefined;
 /**
  * SHA-256 here reads the whole file into memory. The venue tablets (Lenovo
  * Tab M7, 2 GB RAM) can't afford that for a large uncut video, so above this
@@ -104,21 +107,40 @@ async function wallVerified(file: File, slice: { bytes: number; sha256: string }
  * by hash so a re-load of the same clip is instant. Other slices are deleted
  * to free storage once the new one verifies.
  */
-export async function downloadWallSlice(origin: string, slice: { url: string; bytes: number; sha256: string }): Promise<string> {
+export function downloadWallSlice(origin: string, slice: WallSlice): Promise<string> {
+  requestedWallHash = slice.sha256;
+  const pending = wallDownloads.get(slice.sha256);
+  if (pending) return pending;
+  const download = cacheWallSlice(origin, slice).finally(() => wallDownloads.delete(slice.sha256));
+  wallDownloads.set(slice.sha256, download);
+  return download;
+}
+
+async function cacheWallSlice(origin: string, slice: WallSlice): Promise<string> {
   wallRoot.create({ intermediates: true, idempotent: true });
   const final = new File(wallRoot, `${slice.sha256}.mp4`);
-  if (!await wallVerified(final, slice)) {
-    const temporary = new File(wallRoot, `${slice.sha256}.download`);
-    try {
+  const temporary = new File(wallRoot, `${slice.sha256}.download`);
+  try {
+    // A competing selection may prune the cached file while its hash is being read.
+    const cached = await wallVerified(final, slice).catch(error => {
+      if (!final.exists) return false;
+      throw error;
+    });
+    const needsDownload = !cached || !final.exists;
+    if (needsDownload) {
       await transfer('the video wall slice', () => {}, async () => {
         if (temporary.exists) temporary.delete();
         await File.downloadFileAsync(`${origin}${slice.url}`, temporary, { idempotent: true });
       });
       if (!await wallVerified(temporary, slice)) throw new Error('Video wall slice verification failed. Check the uploaded file in the media library.');
+    }
+    // A late completion may clean up its temporary file, but cannot replace the selected slice.
+    if (requestedWallHash !== slice.sha256) throw new Error('Video wall slice was superseded');
+    if (needsDownload) {
       if (final.exists) final.delete();
       temporary.move(final);
-    } catch (error) { if (temporary.exists) temporary.delete(); throw error; }
-  }
+    }
+  } catch (error) { if (temporary.exists) temporary.delete(); throw error; }
   for (const entry of wallRoot.list()) if (entry instanceof File && entry.name !== final.name && !entry.name.endsWith('.download')) entry.delete();
   return final.uri;
 }
