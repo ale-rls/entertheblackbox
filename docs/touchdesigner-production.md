@@ -48,6 +48,8 @@ str(op('labels')['ki:x_max', 'text']) if op('labels')['ki:x_max', 'text'] is not
 ```
 
 Replace `ki` with the timeline shown in the table (`main` for the shared show).
+Nested timelines use their path, for example `trade/ki`. When a group finishes
+its path, the receiver removes that path's labels and timeline row.
 Vertical spectra use `y_min`/`y_max`; cross questions expose all four slots;
 polygon fields use their zone IDs. Match these slots to the physical monitor
 placement. A phase without labels clears that timeline's labels.

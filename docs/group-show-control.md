@@ -63,7 +63,9 @@ Every video, question, video-question, or group branch can declare one-shot exte
 }
 ```
 
-TouchDesigner can subscribe to `GET /api/cues` as a Server-Sent Events stream. Send the same secret used by a display as `Authorization: Bearer <DISPLAY_TOKEN>`. Each JSON event has `version`, `bootId`, `sequence`, `type`, `timelineId`, `sessionId`, `phaseId`, `phaseEpoch`, `timestamp`, and `payload`. The stream sends a `snapshot` first so a reconnecting receiver can restore every active timeline. Later events are `phase`, `cue`, `result`, or `reset`.
+TouchDesigner can subscribe to `GET /api/cues` as a Server-Sent Events stream. Send the same secret used by a display as `Authorization: Bearer <DISPLAY_TOKEN>`. Each JSON event has `version`, `bootId`, `sequence`, `type`, `timelineId`, `sessionId`, `phaseId`, `phaseEpoch`, `timestamp`, and `payload`. The stream sends a `snapshot` first so a reconnecting receiver can restore every active timeline. Later events are `phase`, `cue`, `result`, `retire`, or `reset`.
+
+Use `timelineKey` when present, otherwise `timelineId`, to address timeline state. For example, `a/b` identifies group `b` inside group `a`, while `timelineId` still identifies the catalogue group as `b`. A group named `main` at the top level uses `/main` to distinguish it from the shared timeline. A `retire` event removes the matching timeline and phase epoch and cancels any pending cues for that scene. A `reset` clears the whole show timeline state.
 
 ```sh
 curl -N -H "Authorization: Bearer $DISPLAY_TOKEN" -H 'Accept-Encoding: identity' https://bb-frontend.enabler.space/api/cues

@@ -143,6 +143,118 @@ describe("Studio shell", () => {
     vi.useRealTimers();
   });
 
+  it("preserves pending edits when another draft is opened during the debounce window", async () => {
+    vi.useFakeTimers();
+    try {
+      const db = new MemoryDb();
+      const autosave = new Autosave(db, 20);
+      const first = importRuntime(scenario, manifest, "First");
+      const second = importRuntime(scenario, manifest, "Second");
+      autosave.schedule(first);
+      autosave.schedule(second);
+      autosave.schedule({ ...first, name: "First edited" });
+      await vi.advanceTimersByTimeAsync(20);
+
+      expect(await db.list()).toEqual([
+        expect.objectContaining({ id: first.id, name: "First edited" }),
+        expect.objectContaining({ id: second.id, name: "Second" }),
+      ]);
+      expect(await db.revisions(first.id)).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("waits for an in-flight save before writing newer edits", async () => {
+    vi.useFakeTimers();
+    try {
+      const db = new MemoryDb();
+      const autosave = new Autosave(db, 20);
+      const draft = importRuntime(scenario, manifest, "Original");
+      const put = db.put.bind(db);
+      let finishFirst!: () => void;
+      const firstWrite = new Promise<void>((resolve) => { finishFirst = resolve; });
+      const writes = vi.spyOn(db, "put").mockImplementationOnce(async (value) => {
+        await firstWrite;
+        await put(value);
+      });
+      const changed = vi.fn();
+
+      autosave.schedule(draft, changed);
+      await vi.advanceTimersByTimeAsync(20);
+      autosave.schedule({ ...draft, name: "Updated" }, changed);
+      await vi.advanceTimersByTimeAsync(20);
+      expect(writes).toHaveBeenCalledTimes(1);
+      expect(autosave.status).toBe("saving");
+
+      finishFirst();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await db.list()).toEqual([expect.objectContaining({ name: "Updated" })]);
+      expect(changed.mock.calls).toEqual([["saving"], ["saved"]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports a failed background draft and retries its retained edits", async () => {
+    vi.useFakeTimers();
+    try {
+      const db = new MemoryDb();
+      const autosave = new Autosave(db, 20);
+      const first = importRuntime(scenario, manifest, "First");
+      const second = importRuntime(scenario, manifest, "Second");
+      const changed = vi.fn();
+      vi.spyOn(db, "put").mockRejectedValueOnce(new Error("Offline"));
+
+      autosave.schedule(first, changed);
+      autosave.schedule(second, changed);
+      await vi.advanceTimersByTimeAsync(20);
+      expect(await db.list()).toEqual([expect.objectContaining({ id: second.id })]);
+      expect(autosave.status).toBe("error");
+      expect(changed.mock.calls).toEqual([["saving"], ["error"]]);
+
+      autosave.retryFailed();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(await db.list()).toEqual([
+        expect.objectContaining({ id: first.id }),
+        expect.objectContaining({ id: second.id }),
+      ]);
+      expect(changed.mock.calls).toEqual([["saving"], ["error"], ["saving"], ["saved"]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("deletes a draft after a pending write fails without retrying it", async () => {
+    vi.useFakeTimers();
+    try {
+      const db = new MemoryDb();
+      const autosave = new Autosave(db, 20);
+      const draft = importRuntime(scenario, manifest, "Original");
+      await db.put(draft);
+      let rejectWrite!: (error: Error) => void;
+      const failedWrite = new Promise<void>((_, reject) => { rejectWrite = reject; });
+      const writes = vi.spyOn(db, "put").mockImplementationOnce(() => failedWrite);
+      const remove = vi.spyOn(db, "delete");
+
+      autosave.schedule({ ...draft, name: "Updated" });
+      await vi.advanceTimersByTimeAsync(20);
+      autosave.schedule({ ...draft, name: "Discard this pending edit" });
+      const deleting = autosave.deleteDraft(draft.id);
+      expect(remove).not.toHaveBeenCalled();
+      rejectWrite(new Error("Offline"));
+      await deleting;
+      autosave.retryFailed();
+      await vi.advanceTimersByTimeAsync(20);
+      expect(writes).toHaveBeenCalledTimes(1);
+      expect(await db.list()).toEqual([]);
+      expect(await db.revisions(draft.id)).toEqual([]);
+      expect(autosave.status).toBe("saved");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("recovers the newest structurally good revision after a corrupt latest draft", async () => {
     const db = new MemoryDb();
     const project = parseRuntimeScenario(scenario, manifest);

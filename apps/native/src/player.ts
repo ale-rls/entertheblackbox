@@ -22,6 +22,9 @@ type MediaTiming = ClockTiming['media'][number];
  * the audio on the server clock, so playback keeps working while JavaScript timers
  * are frozen (Android) or throttled (iOS) behind a locked screen.
  */
+/** How long to wait before installing a cue again after the native scheduler refused it. */
+const CUE_RETRY_MS = 2_000;
+
 export class ShowPlayer {
   private static disposal: Promise<void> = Promise.resolve();
   private admissionKey = '';
@@ -52,6 +55,8 @@ export class ShowPlayer {
   private cue: Cue | null = null;
   private cueUri: string | null = null;
   private cueApplied = false;
+  /** After a failed install, the earliest time housekeeping tries the same cue again. */
+  private cueRetryAt = 0;
   private enabled = true;
   private disposed = false;
   private status = 'Ready';
@@ -104,7 +109,7 @@ export class ShowPlayer {
     // A different cue replaces the layer: let the outgoing one fade. The same cue with a new end
     // is only retimed by the scheduler, without restarting or fading.
     if (this.cueApplied && this.cue?.key !== cue?.key) this.queue(() => AudioScheduler.fadeOutLayer(CUE, SKIP_FADE_MS));
-    this.cue = null; this.cueUri = null; this.cueApplied = false;
+    this.cue = null; this.cueUri = null; this.cueApplied = false; this.cueRetryAt = 0;
     if (!cue) { this.clearCue('Waiting for the next cue'); return; }
     if (cue.scenarioVersion !== this.manifest.scenarioVersion) {
       this.clearCue('Show changed — leave and download the matching show'); return;
@@ -120,18 +125,29 @@ export class ShowPlayer {
   }
   private applyCue() {
     const cue = this.cue;
-    if (!cue || !this.cueUri || this.cueApplied || this.disposed) return;
+    if (!cue || !this.cueUri || this.cueApplied || this.disposed || Date.now() < this.cueRetryAt) return;
     // Wait for a measured offset; the snapshot-only estimate can be off by the network delay.
     if (!this.clock.hasSamples) { this.report('Waiting for clock'); return; }
     this.cueApplied = true;
     AudioScheduler.setClock(this.clock.now());
     const uri = this.cueUri;
-    this.queue(() => AudioScheduler.setLayer(CUE, { uri, startAt: cue.startedAt, endAt: cue.endsAt }));
+    this.queue(async () => {
+      try {
+        await AudioScheduler.setLayer(CUE, { uri, startAt: cue.startedAt, endAt: cue.endsAt });
+      } catch (error) {
+        // The layer never got installed: while this cue is still current, housekeeping
+        // (or Resume) installs it again instead of leaving the rest of the cue silent.
+        if (this.cue === cue) { this.cueApplied = false; this.cueRetryAt = Date.now() + CUE_RETRY_MS; }
+        throw error;
+      }
+    });
     this.report(this.enabled ? 'Scheduled' : 'Paused on this device');
   }
   setEnabled(enabled: boolean) {
     this.enabled = enabled;
     (enabled ? AudioScheduler.resume() : AudioScheduler.pause()).catch(error => this.fail(error));
+    // Resume is the participant's "try again": retry a cue whose install failed right away.
+    if (enabled && !this.cueApplied) { this.cueRetryAt = 0; this.applyCue(); }
     if (!enabled) this.report('Paused on this device');
   }
   private sync() {

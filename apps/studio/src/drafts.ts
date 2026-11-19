@@ -8,23 +8,98 @@ export interface DraftDatabase {
   delete(id: string): Promise<void>;
 }
 
+type PendingSave = {
+  draft: Draft;
+  timer?: ReturnType<typeof setTimeout>;
+  write?: Promise<boolean>;
+  failed?: boolean;
+};
+
 export class Autosave {
   status: SaveStatus = "saved";
-  private timer?: ReturnType<typeof setTimeout>;
+  private readonly pending = new Map<string, PendingSave>();
+  private writes = Promise.resolve();
+  private changed: ((status: SaveStatus) => void) | undefined;
+
   constructor(private db: DraftDatabase, private delayMs = 500) {}
+
   schedule(draft: Draft, changed?: (status: SaveStatus) => void) {
-    clearTimeout(this.timer);
-    this.status = "saving";
-    changed?.(this.status);
-    this.timer = setTimeout(async () => {
+    clearTimeout(this.pending.get(draft.id)?.timer);
+    this.changed = changed;
+    const save: PendingSave = { draft };
+    this.pending.set(draft.id, save);
+    save.timer = setTimeout(() => { void this.write(save); }, this.delayMs);
+    this.reportStatus();
+  }
+
+  async flush(id: string): Promise<boolean> {
+    for (let save = this.pending.get(id); save; save = this.pending.get(id)) {
+      // A failed save stays available for a subsequent close or explicit retry.
+      const saved = await (save.write ?? this.write(save));
+      if (!saved && this.pending.get(id) === save) return false;
+    }
+    return true;
+  }
+
+  retryFailed() {
+    for (const [id, save] of this.pending) {
+      if (save.failed) void this.flush(id);
+    }
+  }
+
+  deleteDraft(id: string): Promise<void> {
+    const save = this.pending.get(id);
+    if (!save) return this.db.delete(id);
+    clearTimeout(save.timer);
+    this.pending.delete(id);
+    const remove = async () => {
+      // Earlier revisions can be queued even when the latest snapshot is still debouncing.
+      await this.writes;
       try {
-        await this.db.put(draft);
-        this.status = "saved";
-      } catch {
-        this.status = "error";
+        await this.db.delete(id);
+      } catch (error) {
+        if (!this.pending.has(id)) {
+          delete save.write;
+          save.failed = true;
+          this.pending.set(id, save);
+        }
+        throw error;
+      } finally {
+        this.reportStatus();
       }
-      changed?.(this.status);
-    }, this.delayMs);
+    };
+    return remove();
+  }
+
+  private write(save: PendingSave): Promise<boolean> {
+    const { draft } = save;
+    clearTimeout(save.timer);
+    save.failed = false;
+    // PocketBase can cancel overlapping collection writes, even across draft IDs.
+    const write = this.writes.then(() => this.db.put(draft));
+    this.writes = write.catch(() => {});
+    const finish = (saved: boolean) => {
+      if (this.pending.get(draft.id) === save) {
+        if (saved) this.pending.delete(draft.id);
+        else {
+          save.failed = true;
+          delete save.write;
+        }
+        this.reportStatus();
+      }
+      return saved;
+    };
+    save.write = write.then(() => finish(true), () => finish(false));
+    this.reportStatus();
+    return save.write;
+  }
+
+  private reportStatus() {
+    const failed = [...this.pending.values()].some((save) => save.failed);
+    const status = failed ? "error" : this.pending.size ? "saving" : "saved";
+    if (status === this.status) return;
+    this.status = status;
+    this.changed?.(status);
   }
 }
 

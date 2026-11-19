@@ -1,5 +1,6 @@
 import AudioScheduler from '@entertheblackbox/expo-audio-scheduler';
-import { ParticipantTaskCard, taskAlert, type ParticipantTaskState } from './ParticipantTaskCard';
+import { ParticipantTaskCard } from './ParticipantTaskCard';
+import { taskAlert, taskVisible, type ParticipantTaskState } from './participant-task';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';

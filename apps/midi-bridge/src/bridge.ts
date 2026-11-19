@@ -4,18 +4,18 @@ export type MidiOutput = { name: string; send: (bytes: number[]) => void };
 export type Log = (line: string) => void;
 
 type Envelope = {
-  type?: unknown; bootId?: unknown; sequence?: unknown; timelineId?: unknown; phaseId?: unknown; phaseEpoch?: unknown;
-  payload?: { cue?: unknown; reason?: unknown; phase?: { startedAt?: unknown } | undefined } | undefined;
+  type?: unknown; bootId?: unknown; sequence?: unknown; timelineId?: unknown; timelineKey?: unknown; phaseId?: unknown; phaseEpoch?: unknown;
+  payload?: { cue?: unknown; reason?: unknown } | undefined;
   timelines?: unknown;
   timestamp?: unknown;
   /** The feed sends more (version, sessionId …); the bridge ignores it. */
   [key: string]: unknown;
 };
 
-/** A scene start announced further ahead than this is not a synchronized pre-roll: fire at once. */
-const MAX_LEAD_MS = 60_000;
-/** How long an arrival sample counts towards "how fast events usually arrive". */
-const ARRIVAL_WINDOW_MS = 10 * 60_000;
+function timelineKey(event: Envelope): string {
+  if (typeof event.timelineKey === "string") return event.timelineKey;
+  return typeof event.timelineId === "string" ? event.timelineId : "main";
+}
 
 /**
  * Turns cue feed events (GET /api/cues) into MIDI. Fires on live `phase` and
@@ -57,15 +57,17 @@ export class CueBridge {
     switch (event.type) {
       case "snapshot": {
         const timelines = Array.isArray(event.timelines) ? event.timelines as Envelope[] : [];
-        const scenes = timelines.map((timeline) => `${String(timeline.timelineId)}: ${String(timeline.phaseId)}`);
+        const scenes = timelines.map((timeline) => `${timelineKey(timeline)}: ${String(timeline.phaseId)}`);
         this.log(`connected · ${scenes.length ? `current scene ${scenes.join(", ")}` : "no show running"} · nothing replayed`);
+        this.firedEpochs.clear();
         for (const timeline of timelines) {
-          if (typeof timeline.timelineId === "string" && typeof timeline.phaseEpoch === "number") this.firedEpochs.set(timeline.timelineId, timeline.phaseEpoch);
+          if (typeof timeline.timelineId === "string" && typeof timeline.phaseEpoch === "number") this.firedEpochs.set(timelineKey(timeline), timeline.phaseEpoch);
         }
         return;
       }
       case "phase": {
         if (typeof event.phaseId !== "string") return;
+        const timeline = timelineKey(event);
         if (typeof event.phaseEpoch === "number") {
           if (this.firedEpochs.get(timeline) === event.phaseEpoch) return;
           this.firedEpochs.set(timeline, event.phaseEpoch);
@@ -87,7 +89,13 @@ export class CueBridge {
         this.at(timeline, event, this.leadMs(timeline, event, late), () => this.fire(actions, `cue "${cue}"`));
         return;
       }
+      case "retire": {
+        const timeline = timelineKey(event);
+        if (this.firedEpochs.get(timeline) === event.phaseEpoch) this.firedEpochs.delete(timeline);
+        return;
+      }
       case "reset": {
+        this.firedEpochs.clear();
         // Group paths reunite with a reset too; only the return to idle ends the show.
         if (event.phaseId !== "idle") return;
         this.resets += 1;
