@@ -1921,3 +1921,55 @@ describe("retained monitor vote results", () => {
     expect(engine.getSnapshot().lastMonitorVotePhaseId).toBeUndefined();
   });
 });
+
+it("holds live spotlights through display reconnect without publishing a casting result", () => {
+  let now = 1000;
+  const votes: FinalVoteSnapshot[] = [];
+  const cueEvents: Array<{ type: string }> = [];
+  const question = scenario.phases.find(phase => phase.kind === "position-question")!;
+  const spotlightScenario = scenarioSchema.parse({
+    ...scenario,
+    phases: [
+      ...scenario.phases.map(phase => phase.id === "question" ? { ...phase, next: { type: "fixed", target: "spotlights" } } : phase),
+      { ...question, id: "spotlights", spotlight: { diameterPercent: 24 }, durationMs: 1000, freezeMs: 2000 },
+    ],
+  });
+  const { engine, registry } = setup({
+    now: () => now, testScenario: spotlightScenario, interactiveIdleTimeoutMs: 10_000,
+    onVoteSnapshotEnqueued: vote => votes.push(vote), cueEvents,
+  });
+  const phone = new MockSocket() as unknown as WebSocket;
+  addParticipant(registry, phone, now, "p1");
+  engine.participantJoined(phone, registry.get("lease-p1"));
+  engine.startRehearsalAt("question", now);
+  expect(engine.adminJump("spotlights", now)).toMatchObject({ ok: true });
+  const display = new MockSocket();
+  connectDisplay(engine, display as unknown as WebSocket);
+  expect(display.sent.find(message => message.t === "snapshot")?.phase).toMatchObject({
+    spotlight: { diameterPercent: 24 }, spotlightGrow: true, deadlineAt: 2000,
+  });
+  const move = (seq: number, x: number) => engine.handleClientMessage({
+    t: "input", v: 2, sessionId: engine.currentSessionId, phaseEpoch: engine.currentPhaseEpoch, seq, x, y: 0.35,
+  }, phone);
+  now = 1999;
+  move(1, 0.72);
+  now = 2000;
+  move(2, 0.9);
+  engine.tick(now);
+  engine.socketClosed(phone);
+  now = 3000;
+  const replacement = new MockSocket();
+  connectDisplay(engine, replacement as unknown as WebSocket);
+  expect(replacement.sent.find(message => message.t === "cursors")?.cursors).toMatchObject([
+    { clientId: "p1", x: 0.72, y: 0.35 },
+  ]);
+  expect([...display.sent, ...replacement.sent].some(message => message.t === "question_resolved")).toBe(false);
+  expect(votes).toEqual([]);
+  expect(cueEvents.some(event => event.type === "result")).toBe(false);
+  now = 3999;
+  engine.tick(now);
+  expect(engine.currentPhaseId).toBe("spotlights");
+  now = 4000;
+  engine.tick(now);
+  expect(engine.currentPhaseId).toBe("idle");
+});

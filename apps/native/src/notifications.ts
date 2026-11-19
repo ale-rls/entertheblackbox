@@ -1,11 +1,16 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { ActionAlerts } from './action-prompt';
 const channelId = 'show-actions';
-Notifications.setNotificationHandler({ handleNotification: async () => ({
-  // Android suppresses heads-up alerts when this is false; the silent channel/content control audio.
-  shouldShowBanner: true, shouldShowList: true, shouldPlaySound: Platform.OS === 'android', shouldSetBadge: false,
-}) });
+Notifications.setNotificationHandler({ handleNotification: async () => {
+  // An alert queued as the app returns to the foreground must not cover the staff corner.
+  const background = AppState.currentState !== 'active';
+  return {
+    shouldShowBanner: background, shouldShowList: background,
+    // The silent Android channel controls audio while allowing a heads-up alert in the background.
+    shouldPlaySound: background && Platform.OS === 'android', shouldSetBadge: false,
+  };
+} });
 export async function enableActionNotifications(): Promise<boolean> {
   if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync(channelId, {
     name: 'Show actions', importance: Notifications.AndroidImportance.HIGH,

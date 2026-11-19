@@ -14,6 +14,7 @@ const HEX = /^#[0-9a-f]{6}$/i;
  */
 export function monitorAnswerColor(phase: PhaseSnapshotMessage | null, monitorId: MonitorId): string | null {
   if (!phase || !("field" in phase) || !phase.field) return null;
+  if (phase.kind === "position-question" && phase.spotlight) return null;
   const outcomes = curtainOutcomes(phase.field);
   const index = MONITOR_IDS.indexOf(monitorId);
   const answerId = index < 0 || outcomes.length === 0 ? undefined : outcomes[index % outcomes.length];

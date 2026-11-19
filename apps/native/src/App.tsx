@@ -1,5 +1,6 @@
 import AudioScheduler from '@entertheblackbox/expo-audio-scheduler';
-import { ParticipantTaskCard, taskAlert, type ParticipantTaskState } from './ParticipantTaskCard';
+import { ParticipantTaskCard } from './ParticipantTaskCard';
+import { taskAlert, taskVisible, type ParticipantTaskState } from './participant-task';
 import React, { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -63,7 +64,7 @@ export default function App() {
   if (!alerts.current) alerts.current = createActionAlerts(() => setNotificationStatus('Could not show an alert. Keep the app open for show actions.'));
   const [paused, setPaused] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const [identity, setIdentity] = useState<{ name: string; color: string } | null>(null);
+  const [identity, setIdentity] = useState<{ clientId: string; name: string; color: string } | null>(null);
   const [clockText, setClockText] = useState('');
   const [serverNow, setServerNow] = useState(Date.now());
   const [wall, setWall] = useState<WallMessage | null>(null);
@@ -116,10 +117,11 @@ export default function App() {
   // The person and the tablet are separate: the participant's name, else the tablet's label.
   const joinName = (name.trim() || deviceLabel.trim()).trim();
   const prompt = taskAlert(task, serverNow) ?? actionPrompt(snapshot, voting, groups, serverNow);
+  const activePrompt = connected && status === 'Connected' && prompt?.key !== answered && identity && prompt
+    ? { ...prompt, key: `${identity.clientId}:${prompt.key}` } : null;
   useEffect(() => {
-    alerts.current?.update(connected && status === 'Connected' && notificationsEnabled && prompt?.key !== answered ? prompt : null);
-  }, [connected, status, notificationsEnabled, prompt?.key, answered]);
-  const activePrompt = connected && status === 'Connected' && prompt?.key !== answered ? prompt : null;
+    alerts.current?.update(notificationsEnabled && !foreground ? activePrompt : null);
+  }, [notificationsEnabled, foreground, activePrompt?.key]);
   useEffect(() => {
     attention.current?.update(foreground && !paused ? activePrompt : null);
   }, [foreground, paused, activePrompt?.key]);
@@ -202,10 +204,12 @@ export default function App() {
         if (message.t === 'identity') {
           if (occupantId.current !== null && occupantId.current !== message.clientId) {
             latest.current = null; setSnapshot(null); setTask(null); setVoting(null); setGroups(null); setAdmission(null); setAnswered(null);
-            alerts.current?.update(null); player.current?.setAdmission(null); player.current?.setCue(null);
+            setStaffReply(null);
+            alerts.current?.update(null); attention.current?.update(null);
+            player.current?.setAdmission(null); player.current?.setCue(null);
           }
           occupantId.current = message.clientId;
-          resetSurface(); setIdentity({ name: joinName, color: message.color }); player.current?.startMusic(); }
+          resetSurface(); setIdentity({ clientId: message.clientId, name: joinName, color: message.color }); player.current?.startMusic(); }
         if (message.t === 'surface') scheduleSurface(message, c);
         if (message.t === 'wall') setWall(message);
         if (message.t === 'admission_state') { setAdmission(message); player.current?.setAdmission(message); }
@@ -273,7 +277,9 @@ export default function App() {
       serverNow={() => connection.current?.clock.now() ?? Date.now()} onPlayback={setWallPlayback} />
     : null;
   const view = stageState({ connected, busy, status, error, audioStatus, paused, snapshot, voting, groups, now: serverNow });
-  return <><StageCompanion actionPrompt={activePrompt} admission={admission} onAdmissionGroup={groupId => { if (admission && authorized.current) connection.current?.send({ t: 'admission_choice', v: PROTOCOL_VERSION, generation: admission.generation, groupId }); }} participantTask={<ParticipantTaskCard state={task} now={serverNow} enabled={connected && status === 'Connected'} respond={optionId => { if (task?.task && authorized.current) connection.current?.send({ t: 'participant_task_response', v: PROTOCOL_VERSION, sessionId: task.sessionId, instanceId: task.task.id, optionId }); }} />} taskVisible={!!task?.task && task.task.status !== 'cancelled'} answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
+  return <StageCompanion staffCorner={<StaffMenu key={identity?.clientId} connected={connected && status === 'Connected'}
+    reply={staffReply} send={message => { if (authorized.current) connection.current?.send(message); }} />}
+    actionPrompt={activePrompt} admission={admission} onAdmissionGroup={groupId => { if (admission && authorized.current) connection.current?.send({ t: 'admission_choice', v: PROTOCOL_VERSION, generation: admission.generation, groupId }); }} participantTask={<ParticipantTaskCard state={task} now={serverNow} enabled={connected && status === 'Connected'} respond={optionId => { if (task?.task && authorized.current) connection.current?.send({ t: 'participant_task_response', v: PROTOCOL_VERSION, sessionId: task.sessionId, instanceId: task.task.id, optionId }); }} />} taskVisible={!!task?.task && task.task.status !== 'cancelled'} answered={answered} connected={connected} busy={busy} status={status} error={error} audioStatus={audioStatus}
     paused={paused} playing={playing} snapshot={snapshot} voting={voting} groups={groups} now={serverNow}
     surface={visibleSurface(surface)} wall={wallLayer} wallVisible={!!wallLayer && wall?.startAt != null} onShowMode={setShowMode} origin={origin} name={name} deviceLabel={deviceLabel} onDeviceLabel={saveDeviceLabel} musicVolume={musicVolume} onMusicVolume={saveMusicVolume} manifest={manifest} identity={identity} clockText={clockText}
     notificationStatus={notificationStatus} appChannel={Updates.channel ?? 'development'}
@@ -295,6 +301,5 @@ export default function App() {
       if (s && authorized.current && view.ratingOpen) {
         if (connection.current?.send({ t: 'reaction', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, kind })) acknowledgeAction('rating');
       }
-    }} />
-    <StaffMenu connected={connected && status === 'Connected'} reply={staffReply} send={message => { if (authorized.current) connection.current?.send(message); }} /></>;
+    }} />;
 }
