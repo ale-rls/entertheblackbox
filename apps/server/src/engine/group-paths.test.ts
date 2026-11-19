@@ -118,6 +118,35 @@ describe("independent group paths", () => {
     h.engine.stop();
   });
 
+  it.each([
+    { occupied: false, reunites: true },
+    { occupied: true, reunites: false },
+  ])("reunites past a path waiting for GO only when nobody is in it (occupied: $occupied)", ({ occupied, reunites }) => {
+    const holding = scenarioSchema.parse({
+      ...scenario,
+      phases: [
+        ...scenario.phases.map((phase) => phase.kind === "group-branch"
+          ? { ...phase, branches: [{ groupId: "a", next: "vote" }, { groupId: "b", next: "hold" }] }
+          : phase),
+        { kind: "narration", id: "hold", text: "Wait for the actors", durationMs: 1_000, waitForGo: true, next: "together" },
+      ],
+    });
+    const h = setup(holding);
+    const a = h.phone("one");
+    const b = occupied ? h.phone("two") : null;
+    h.engine.adminStart();
+    h.choose(a, "a");
+    if (b) h.choose(b, "b");
+    h.tick(100);
+    expect(h.engine.groupPathsStarted).toBe(true);
+    h.tick(250);
+    h.tick(400);
+    // An occupied path waiting for GO still holds the others; they wait at the split.
+    expect(a.snapshot.phase.id).toBe(reunites ? "together" : "split");
+    expect(h.engine.currentPhaseId).toBe(reunites ? "together" : "split");
+    h.engine.stop();
+  });
+
   it("moves a late arrival into the live scene without replaying cues or changing its clock", () => {
     const h = setup(); h.display();
     const b = h.phone("two"); h.engine.adminStart(); h.choose(b, "b"); h.tick(100);
