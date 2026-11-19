@@ -96,6 +96,25 @@ it('refuses to start without downloaded background music', () => {
   expect(() => new ShowPlayer({ format: 1, revision: 'a'.repeat(64), scenarioVersion: 'one', backgroundMusic: { src: 'bed.mp3', volume: 0.2 },
     files: [{ src: 'bed.mp3', sha256: '0'.repeat(64), bytes: 5 }] }, new ServerClock(), vi.fn())).toThrow('Missing downloaded background music');
 });
+it('installs a cue again after the native scheduler refused it, from housekeeping or Resume', async () => {
+  const { p, status } = setup();
+  scheduler.setLayer.mockRejectedValueOnce(new Error('decoder busy'));
+  p.setCue(cue); await p.settled();
+  expect(status).toHaveBeenLastCalledWith(expect.stringContaining('decoder busy'));
+  // Housekeeping waits a moment, then installs the still-current cue again.
+  await vi.advanceTimersByTimeAsync(1000); expect(scheduler.setLayer).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1500); await p.settled();
+  expect(scheduler.setLayer).toHaveBeenCalledTimes(2);
+  expect(scheduler.setLayer).toHaveBeenLastCalledWith('cue', { uri: 'file://b.mp3', startAt: 1000, endAt: 11000 });
+  await vi.advanceTimersByTimeAsync(5000); expect(scheduler.setLayer).toHaveBeenCalledTimes(2);
+
+  // Resume retries at once.
+  scheduler.setLayer.mockRejectedValueOnce(new Error('decoder busy'));
+  p.setCue({ ...cue, key: 'next', startedAt: 12000, endsAt: 20000 }); await p.settled();
+  const calls = scheduler.setLayer.mock.calls.length;
+  p.setEnabled(false); p.setEnabled(true); await p.settled();
+  expect(scheduler.setLayer).toHaveBeenCalledTimes(calls + 1);
+});
 it('pauses and resumes every layer natively on device pause', () => {
   const { p, status } = setup(); p.setEnabled(false);
   expect(scheduler.pause).toHaveBeenCalledOnce(); expect(status).toHaveBeenLastCalledWith('Paused on this device');
