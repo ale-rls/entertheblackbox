@@ -1,0 +1,181 @@
+// @vitest-environment jsdom
+import { act, useState } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_DISPLAY_SETTINGS, type PhaseSnapshotMessage, type ServerToClientMessage } from "@entertheblackbox/protocol";
+import { App } from "./App.js";
+
+const harness = vi.hoisted(() => ({
+  receive: null as ((message: ServerToClientMessage) => void) | null,
+  now: 5_000,
+  store: {
+    getBlobUrl: vi.fn(async (src: string) => `blob:${src}`),
+    pin: vi.fn(),
+  },
+}));
+
+vi.mock("./lib/connection.js", () => ({
+  DisplayConnection: vi.fn(({ onMessage }: { onMessage: NonNullable<typeof harness.receive> }) => {
+    harness.receive = onMessage;
+    return { start: vi.fn(), stop: vi.fn(), send: vi.fn(), clock: {
+      ready: true, now: () => harness.now, sampleAgeMs: () => null, localDelayUntil: () => 0,
+    } };
+  }),
+}));
+vi.mock("./lib/useDisplaySettings.js", () => ({ useDisplaySettings: () => DEFAULT_DISPLAY_SETTINGS }));
+vi.mock("./lib/kiosk.js", () => ({ applyKioskGuards: () => () => {}, performReload: vi.fn() }));
+vi.mock("./lib/heartbeat.js", () => ({ IDLE_PLACEHOLDER: "idle", startHeartbeat: () => () => {} }));
+vi.mock("./cursors/realtimeWsClient.js", () => ({
+  RealtimeWsClient: vi.fn(() => ({ start: vi.fn(), stop: vi.fn() })),
+}));
+vi.mock("./components/IdleAttract.js", () => ({ IdleAttract: () => null }));
+vi.mock("./components/LobbyCountdown.js", () => ({ LobbyCountdown: () => null }));
+vi.mock("./cursors/CursorCanvas.js", () => ({ CursorCanvas: () => null }));
+vi.mock("./media/useMedia.js", () => ({
+  useMedia: () => {
+    const [media, setMedia] = useState({
+      visualSrc: null as string | null,
+      audioSrc: null as string | null,
+      extraAudioSrc: null as string | null,
+    });
+    return {
+      ...media,
+      status: { state: "ready" },
+      videoUrl: media.visualSrc && `blob:${media.visualSrc}`,
+      audioUrl: media.audioSrc && `blob:${media.audioSrc}`,
+      extraAudioUrl: media.extraAudioSrc && `blob:${media.extraAudioSrc}`,
+      showMedia: (visualSrc: string | null, audioSrc: string | null, extraAudioSrc: string | null) =>
+        setMedia({ visualSrc, audioSrc, extraAudioSrc }),
+      store: harness.store,
+    };
+  },
+}));
+
+let root: Root;
+let frameCallbacks: Map<HTMLVideoElement, VideoFrameRequestCallback>;
+
+beforeEach(async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+  vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+  frameCallbacks = new Map();
+  Object.defineProperties(HTMLVideoElement.prototype, {
+    requestVideoFrameCallback: { configurable: true, value(this: HTMLVideoElement, callback: VideoFrameRequestCallback) {
+      frameCallbacks.set(this, callback);
+      return 1;
+    } },
+    cancelVideoFrameCallback: { configurable: true, value(this: HTMLVideoElement) { frameCallbacks.delete(this); } },
+  });
+  document.body.innerHTML = '<div id="root"></div>';
+  root = createRoot(document.querySelector("#root")!);
+  await act(async () => root.render(<App />));
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  Reflect.deleteProperty(HTMLVideoElement.prototype, "requestVideoFrameCallback");
+  Reflect.deleteProperty(HTMLVideoElement.prototype, "cancelVideoFrameCallback");
+  document.body.replaceChildren();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+const timing = { scenarioVersion: "show", startedAt: 1_000, deadlineAt: null };
+const film = (src: string): Extract<PhaseSnapshotMessage, { kind: "video" }> => ({
+  ...timing, kind: "video", id: src, src, expectedDurationMs: 10_000, next: "next",
+});
+const loop = (loopVideoSrc?: string): PhaseSnapshotMessage => ({
+  ...timing, kind: "narration", id: loopVideoSrc ?? "blank", text: "", durationMs: 10_000, next: "next",
+  ...(loopVideoSrc ? { loopVideoSrc } : {}),
+});
+const still = (src: string, loopVideoSrc?: string): PhaseSnapshotMessage => ({
+  ...film(src), audioSrc: "cue.mp3", ...(loopVideoSrc ? { loopVideoSrc } : {}),
+});
+const phase = (epoch: number, snapshot: PhaseSnapshotMessage) => act(async () => harness.receive?.({
+  t: "phase", v: 2, sessionId: "session", phaseEpoch: epoch, serverTime: harness.now, phase: snapshot,
+}));
+const video = (src: string) => document.querySelector<HTMLVideoElement>(`video[src="blob:${src}"]`)!;
+const image = (src: string) => document.querySelector<HTMLImageElement>(`img[src="blob:${src}"]`)!;
+const activeForeground = () => document.querySelector(".phase-video-slot-active video, .phase-video-slot-active img");
+const activeLoop = () => document.querySelector(".phase-loop-video-active");
+
+async function present(element: HTMLVideoElement) {
+  Object.defineProperties(element, {
+    readyState: { configurable: true, value: 2 },
+    videoWidth: { configurable: true, value: 64 },
+    videoHeight: { configurable: true, value: 36 },
+    paused: { configurable: true, value: false },
+    duration: { configurable: true, value: 20 },
+  });
+  await act(async () => {
+    element.dispatchEvent(new Event("loadedmetadata"));
+    element.dispatchEvent(new Event("playing"));
+  });
+  await act(async () => frameCallbacks.get(element)?.(0, { mediaTime: element.currentTime } as VideoFrameCallbackMetadata));
+}
+
+describe("projection loop handoffs", () => {
+  it("keeps a film and then a loop visible until each replacement is presented", async () => {
+    await phase(1, film("opening.mp4"));
+    const opening = video("opening.mp4");
+    await present(opening);
+    expect(activeForeground()).toBe(opening);
+
+    await phase(2, loop("first-loop.mp4"));
+    const firstLoop = video("first-loop.mp4");
+    expect(activeForeground()).toBe(opening);
+    expect(activeLoop()).toBeNull();
+    await present(firstLoop);
+    expect(activeForeground()).toBeNull();
+    expect(activeLoop()).toBe(firstLoop);
+
+    await phase(3, loop("second-loop.webm"));
+    const secondLoop = video("second-loop.webm");
+    expect(activeLoop()).toBe(firstLoop);
+    await present(secondLoop);
+    expect(activeLoop()).toBe(secondLoop);
+    expect(video("first-loop.mp4")).toBeNull();
+
+    await phase(4, loop());
+    expect(activeLoop()).toBeNull();
+    expect(video("second-loop.webm")).toBeNull();
+  });
+
+  it("keeps a shared loop mounted across cues with a new still under it", async () => {
+    await phase(1, loop("alpha.webm"));
+    const overlay = video("alpha.webm");
+    await present(overlay);
+    await phase(2, still("new.jpg", "alpha.webm"));
+    expect(activeLoop()).toBe(overlay);
+    expect(activeForeground()).toBeNull();
+    expect(document.querySelector('audio[src="blob:cue.mp3"]')).not.toBeNull();
+    const incoming = image("new.jpg");
+    await act(async () => incoming.dispatchEvent(new Event("load")));
+    expect(activeForeground()).toBe(incoming);
+    expect(activeLoop()).toBe(overlay);
+  });
+
+  it("switches both layers together for a new loop over a still and ignores superseded frames", async () => {
+    await phase(1, film("old.mp4"));
+    const outgoing = video("old.mp4");
+    await present(outgoing);
+    await phase(2, loop("stale.mp4"));
+    const stale = video("stale.mp4");
+    Object.defineProperty(stale, "duration", { value: 20 });
+    await act(async () => stale.dispatchEvent(new Event("playing")));
+    const staleFrame = frameCallbacks.get(stale);
+
+    await phase(3, still("new.jpg", "new-alpha.webm"));
+    const overlay = video("new-alpha.webm");
+    await present(overlay);
+    await act(async () => staleFrame?.(0, { mediaTime: 5 } as VideoFrameCallbackMetadata));
+    expect(activeForeground()).toBe(outgoing);
+    expect(activeLoop()).toBeNull();
+
+    const incoming = image("new.jpg");
+    await act(async () => incoming.dispatchEvent(new Event("load")));
+    expect(activeForeground()).toBe(incoming);
+    expect(activeLoop()).toBe(overlay);
+    expect(video("old.mp4")).toBeNull();
+  });
+});

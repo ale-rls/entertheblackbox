@@ -35,6 +35,8 @@ export type DisplayConnectionOptions = {
   webSocketFactory?: (url: string) => WebSocket;
   backoff?: Backoff;
   pingIntervalMs?: number;
+  /** Reconnect when nothing (not even a pong) has arrived for this long. */
+  staleAfterMs?: number;
   now?: () => number;
 };
 
@@ -49,13 +51,16 @@ export class DisplayConnection {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private lastPingSentAt = 0;
+  private lastReceivedAt = 0;
   private readonly backoff: Backoff;
   private readonly pingIntervalMs: number;
+  private readonly staleAfterMs: number;
   private readonly now: () => number;
 
   constructor(private readonly options: DisplayConnectionOptions) {
     this.backoff = options.backoff ?? new Backoff();
     this.pingIntervalMs = options.pingIntervalMs ?? 10_000;
+    this.staleAfterMs = options.staleAfterMs ?? 25_000;
     this.now = options.now ?? (() => Date.now());
   }
 
@@ -71,8 +76,7 @@ export class DisplayConnection {
   stop(): void {
     this.stopped = true;
     this.clearTimers();
-    this.ws?.close();
-    this.ws = null;
+    this.drop();
     this.setStatus("closed");
   }
 
@@ -90,6 +94,8 @@ export class DisplayConnection {
     this.ws = ws;
 
     ws.onopen = () => {
+      if (this.ws !== ws) return;
+      this.lastReceivedAt = this.now();
       this.backoff.reset();
       this.setStatus("open");
       this.send({
@@ -104,10 +110,20 @@ export class DisplayConnection {
         ...(this.options.monitorId === undefined ? {} : { monitorId: this.options.monitorId }),
       });
       this.sendPing();
-      this.pingTimer = setInterval(() => this.sendPing(), this.pingIntervalMs);
+      this.pingTimer = setInterval(() => {
+        // Pongs answer every ping, so silence means a half-open socket that
+        // would leave this screen frozen on its last scene until the OS gives up.
+        if (this.now() - this.lastReceivedAt > this.staleAfterMs) {
+          this.reconnectNow();
+          return;
+        }
+        this.sendPing();
+      }, this.pingIntervalMs);
     };
 
     ws.onmessage = (event: MessageEvent) => {
+      if (this.ws !== ws) return;
+      this.lastReceivedAt = this.now();
       const parsed = parseServerMessage(event.data);
       if (!parsed.ok) {
         // Never crash the kiosk on a bad frame; surface it for diagnostics.
@@ -128,6 +144,8 @@ export class DisplayConnection {
     };
 
     ws.onclose = (event) => {
+      // Only the current socket owns the timers and the reconnect.
+      if (this.ws !== ws) return;
       this.clearTimers();
       this.ws = null;
       if (this.stopped) return;
@@ -151,6 +169,31 @@ export class DisplayConnection {
     ws.onerror = () => {
       // onclose follows and owns the reconnect; nothing to do here.
     };
+  }
+
+  /** Drop the current socket without its close handler and join again straight away. */
+  private reconnectNow(): void {
+    if (this.stopped) return;
+    this.clearTimers();
+    this.drop();
+    this.connect("reconnecting");
+  }
+
+  /**
+   * Close the current socket and detach its handlers first. A close event
+   * arrives asynchronously -- seconds later on bad Wi-Fi -- and by then a
+   * replacement socket may be live; the old handler would otherwise clear the
+   * replacement's ping timer, forget it, and open yet another connection.
+   */
+  private drop(): void {
+    const old = this.ws;
+    this.ws = null;
+    if (!old) return;
+    old.onopen = null;
+    old.onmessage = null;
+    old.onclose = null;
+    old.onerror = null;
+    try { old.close(); } catch { /* already gone */ }
   }
 
   private sendPing(): void {

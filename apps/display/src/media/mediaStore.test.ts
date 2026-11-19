@@ -373,6 +373,16 @@ describe("monitor media selection", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(fetchFn.mock.calls[0]?.[0]).toBe("/media/a.mp4");
   });
+  it("keeps a clip an earlier scene verified when a later scene needs other files or none", async () => {
+    const { caches, stores } = fakeCaches();
+    const fetchFn = vi.fn(fakeFetch());
+    // Scene 1 plays a.mp4, scene 2 is text only, scene 3 plays a.mp4 again.
+    await makeStore({ caches, fetchFn }).sync(selectMedia(manifest, ["a.mp4"]), manifest);
+    await makeStore({ caches, fetchFn }).sync(selectMedia(manifest, []), manifest);
+    expect(stores.get("entertheblackbox-media-v1")!.has("/media-cache/hash-a")).toBe(true);
+    await makeStore({ caches, fetchFn }).sync(selectMedia(manifest, ["a.mp4"]), manifest);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
   it("needs no files for text/blank scenes and rejects missing sources", () => {
     expect(selectMedia(manifest, []).files).toEqual([]);
     expect(() => selectMedia(manifest, ["missing.png"])).toThrow("Missing monitor media");

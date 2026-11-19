@@ -19,7 +19,7 @@ import { actionPrompt } from './action-prompt';
 import { createActionAlerts, enableActionNotifications } from './notifications';
 import { createForegroundAttention } from './foreground-attention';
 import { applySurface, expireSurface, initialSurface, surfaceDelay, visibleSurface } from './surface';
-import { acceptWall, wallStatus, type WallPlayback, type WallSliceState } from './wall';
+import { wallStatus, type WallPlayback, type WallSliceState } from './wall';
 import { WallVideo } from './WallVideo';
 import { StaffMenu } from './StaffMenu';
 
@@ -207,7 +207,7 @@ export default function App() {
           occupantId.current = message.clientId;
           resetSurface(); setIdentity({ name: joinName, color: message.color }); player.current?.startMusic(); }
         if (message.t === 'surface') scheduleSurface(message, c);
-        if (message.t === 'wall') setWall(current => acceptWall(current, message));
+        if (message.t === 'wall') setWall(message);
         if (message.t === 'admission_state') { setAdmission(message); player.current?.setAdmission(message); }
         if (message.t === 'staff_menu' || message.t === 'staff_assign_result') setStaffReply(message);
         if (message.t === 'participant_task' && message.sessionId === latest.current?.sessionId) { setTask(message); player.current?.setCue(cueForPlayback(latest.current, message, c.clock.now())); }
@@ -244,7 +244,9 @@ export default function App() {
   }
   function vote(outcome: string) {
     const s = latest.current;
-    if (s && authorized.current && view.canAct && view.voting?.method === 'phone-buttons' && !view.voting.closed) { acknowledgeAction('vote'); connection.current?.send({ t: 'button_vote', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, outcome }); }
+    if (!s || !authorized.current || !view.canAct || view.voting?.method !== 'phone-buttons' || view.voting.closed) return;
+    // Only an answer that actually left the tablet dismisses the prompt; otherwise it stays up to tap again.
+    if (connection.current?.send({ t: 'button_vote', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, outcome })) acknowledgeAction('vote');
   }
   // Video wall: fetch this tablet's slice whenever the loaded clip changes.
   const slice = wall?.clip ?? null;
@@ -285,15 +287,13 @@ export default function App() {
     onGroup={groupId => {
       const s = latest.current;
       if (s && authorized.current && view.canAct) {
-        acknowledgeAction('group');
-        connection.current?.send({ t: 'group_selection', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, groupId });
+        if (connection.current?.send({ t: 'group_selection', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, groupId })) acknowledgeAction('group');
       }
     }}
     onReaction={kind => {
       const s = latest.current;
       if (s && authorized.current && view.ratingOpen) {
-        acknowledgeAction('rating');
-        connection.current?.send({ t: 'reaction', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, kind });
+        if (connection.current?.send({ t: 'reaction', v: PROTOCOL_VERSION, sessionId: s.sessionId, phaseEpoch: s.phaseEpoch, kind })) acknowledgeAction('rating');
       }
     }} />
     <StaffMenu connected={connected && status === 'Connected'} reply={staffReply} send={message => { if (authorized.current) connection.current?.send(message); }} /></>;

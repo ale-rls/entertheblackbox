@@ -5,6 +5,7 @@ import { PROTOCOL_VERSION } from "@entertheblackbox/protocol";
 import { PhoneConnection, type EndedPhoneSession } from "./lib/connection.js";
 import { RealtimeCursorPublisher } from "./lib/realtimeWsClient.js";
 import { loadLease } from "./lib/lease.js";
+import { fetchJoinConfig, loadJoinConfig, type JoinConfig } from "./lib/join-config.js";
 import {
   applyDelta,
   InputThrottle,
@@ -32,7 +33,6 @@ const baseConfig = {
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };
 
-type JoinConfig = { installationId: string; roomId: string };
 type ConsentStatus = "prompt" | "submitting" | "granted" | "deleted";
 type ConsentState = {
   session: EndedPhoneSession;
@@ -72,6 +72,9 @@ export function App() {
   const [configError, setConfigError] = useState("");
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
+  // Choices only reach the server on an open, joined socket; while reconnecting a
+  // tap would be dropped without a trace, so the buttons wait instead.
+  const online = state.join.kind === "accepted";
   const position = useRef<TrackpadState>({ ...TRACKPAD_CENTER });
   const cursorSurfaceSize = useRef(trackpadSurfaceSize(window.innerWidth, window.innerHeight));
   const cursorMarker = useRef<HTMLSpanElement | null>(null);
@@ -83,19 +86,17 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch(runtimeApi("/api/join-config"))
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Join service unavailable (${response.status})`);
-        const value = await response.json() as JoinConfig;
-        if (!cancelled) {
-          setJoinConfig(value);
-          const savedName = loadParticipantName().trim();
-          if (savedName && loadLease(value.installationId) !== null) setSubmittedName(savedName);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setConfigError(error instanceof Error ? error.message : "Join service unavailable");
-      });
+    void loadJoinConfig({
+      load: () => fetchJoinConfig(runtimeApi("/api/join-config")),
+      cancelled: () => cancelled,
+      onError: (message) => { if (!cancelled) setConfigError(message); },
+    }).then((value) => {
+      if (cancelled || value === null) return;
+      setConfigError("");
+      setJoinConfig(value);
+      const savedName = loadParticipantName().trim();
+      if (savedName && loadLease(value.installationId) !== null) setSubmittedName(savedName);
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -130,7 +131,17 @@ export function App() {
   useEffect(() => {
     if (connection === null) return;
     connection.start();
-    return () => connection.stop();
+    // Waking the phone or getting the network back replaces a socket that went quiet meanwhile.
+    const resume = () => { if (document.visibilityState === "visible") connection.resume(); };
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("pageshow", resume);
+    window.addEventListener("online", resume);
+    return () => {
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("pageshow", resume);
+      window.removeEventListener("online", resume);
+      connection.stop();
+    };
   }, [connection]);
 
   useEffect(() => () => {
@@ -327,7 +338,7 @@ export function App() {
   };
 
   const selectGroup = (groupId: string) => {
-    if (state.sessionId === null) return;
+    if (state.sessionId === null || !online) return;
     connection?.send({
       t: "group_selection",
       v: PROTOCOL_VERSION,
@@ -338,7 +349,7 @@ export function App() {
   };
 
   const voteByButton = (outcome: string) => {
-    if (state.sessionId === null) return;
+    if (state.sessionId === null || !online) return;
     connection?.send({
       t: "button_vote",
       v: PROTOCOL_VERSION,
@@ -403,7 +414,7 @@ export function App() {
                   <button
                     key={option.id}
                     type="button"
-                    disabled={state.voting?.closed}
+                    disabled={state.voting?.closed || !online}
                     style={option.color === undefined ? undefined : { "--group-color": option.color } as React.CSSProperties}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
@@ -415,6 +426,7 @@ export function App() {
                   </button>
                 ))}
               </div>
+              {!online && !state.voting.closed && <p className="join-message" role="status">Reconnecting…</p>}
             </section>
           )}
           {state.participantState === "finished" && <p className="phone-phase-text" role="status">Deine Gruppe ist fertig. Die anderen Gruppen machen noch weiter.</p>}
@@ -440,6 +452,7 @@ export function App() {
                     key={group.id}
                     type="button"
                     className={state.groupSelection?.selectedGroupId === group.id ? "selected" : ""}
+                    disabled={!online}
                     style={group.color === undefined ? undefined : { "--group-color": group.color } as React.CSSProperties}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => { event.stopPropagation(); selectGroup(group.id); }}

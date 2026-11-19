@@ -401,7 +401,7 @@ describe("HTTP readiness and bundles", () => {
     display.close();
   });
 
-  it("serves the media manifest and immutable media without changing readiness", async () => {
+  it("serves the media manifest and revalidates unversioned media without changing readiness", async () => {
     const runtime = await buildServer({ config: await fixture() });
     runtimes.push(runtime);
 
@@ -420,7 +420,7 @@ describe("HTTP readiness and bundles", () => {
     expect(media.statusCode).toBe(200);
     expect(media.body).toBe("video");
     expect(media.headers["content-type"]).toBe("video/mp4");
-    expect(media.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+    expect(media.headers["cache-control"]).toBe("no-cache");
     expect(media.headers["accept-ranges"]).toBe("bytes");
     expect(media.headers["content-length"]).toBe("5");
 
@@ -446,6 +446,7 @@ describe("HTTP readiness and bundles", () => {
     expect(partial.headers["accept-ranges"]).toBe("bytes");
     expect(partial.headers["content-length"]).toBe("3");
     expect(partial.headers["content-type"]).toBe("video/mp4");
+    expect(partial.headers["cache-control"]).toBe("no-cache");
 
     const suffix = await runtime.app.inject({
       url: "/media/intro.mp4",
@@ -748,6 +749,7 @@ it("prepares native downloads from the running scenario without a separate publi
   try {
     const channel = await runtime.app.inject("/media/native-shows/channels/production.json");
     expect(channel.statusCode).toBe(200);
+    expect(channel.headers["cache-control"]).toBe("no-store");
     expect(channel.json().scenarioVersion).toBe(runtime.engine?.getSnapshot().scenarioVersion);
     expect((await runtime.app.inject("/media/native-shows/channels/rehearsal.json")).json()).toEqual(channel.json());
   } finally { await runtime.app.close(); }

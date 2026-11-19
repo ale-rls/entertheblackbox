@@ -363,10 +363,18 @@ describe("App media-readiness gate", () => {
     expect(loop?.getAttribute("src")).toBe("blob:curtain-loop.mp4");
     expect(loop?.muted).toBe(true);
     expect(harness.store.pin).toHaveBeenCalledWith("curtain-loop.mp4", "loop");
+    // A loop goes on screen once it has a decoded frame.
+    Object.defineProperties(loop!, {
+      readyState: { configurable: true, value: 2 },
+      videoWidth: { configurable: true, value: 64 },
+      paused: { configurable: true, value: false },
+    });
+    await act(async () => { loop!.dispatchEvent(new Event("loadeddata")); });
+    expect(loop?.classList.contains("phase-loop-video-active")).toBe(true);
 
     // The opening video is not presented yet: the curtain loop stays up.
     await send(2, { kind: "video", id: "opening", src: "curtain-open.mp4", expectedDurationMs: 10_000, next: "idle" });
-    expect(document.querySelector("video.phase-loop-video")).not.toBeNull();
+    expect(document.querySelector("video.phase-loop-video-active")).toBe(loop);
   });
 
   it("ignores a loop video on a scene whose own video would cover it", async () => {

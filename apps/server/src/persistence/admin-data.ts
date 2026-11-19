@@ -10,6 +10,9 @@ import type { FinalVoteSnapshot, PositionVote } from "../votes/index.js";
 import type { PocketBaseClient } from "./pocketbase-client.js";
 
 const RECENT_ERRORS_LIMIT = 100;
+/** About 150 samples each: a few MB at most, minutes of a full house's movement. */
+export const MAX_PENDING_MOVEMENT_BATCHES = 1_000;
+const DROP_REPORT_EVERY_MS = 10_000;
 
 type AdminErrorRecord = { message: string; at: string; path: string };
 type SessionCheckpointRecord = PhaseCheckpoint & { installationId: string; roomId: string };
@@ -58,10 +61,16 @@ function votesToCsv(votes: readonly PositionVote[]): string {
 export class PocketBaseAdminDataSource implements AdminDataSource {
   private movementWriteQueue: Promise<void> = Promise.resolve();
   private readonly recordingIdsByParticipant = new Map<string, Set<string>>();
+  /** Movement batches queued for PocketBase but not yet written. */
+  private pendingMovementBatches = 0;
+  private droppedMovementBatches = 0;
+  private lastDropReportAt = Number.NEGATIVE_INFINITY;
 
   constructor(
     private readonly client: PocketBaseClient,
     private readonly installation: { installationId: string; roomId: string },
+    private readonly maxPendingMovementBatches = MAX_PENDING_MOVEMENT_BATCHES,
+    private readonly now: () => number = Date.now,
   ) {}
 
   recordError(entry: { message: string; at: string; path: string }): void {
@@ -112,6 +121,19 @@ export class PocketBaseAdminDataSource implements AdminDataSource {
   }
 
   recordMovementBatch(event: MovementBatchFlushed): void {
+    // Writes run one at a time. If PocketBase stalls, a full house keeps
+    // producing batches and the queue would grow until the server runs out
+    // of memory mid-show. Past the limit, newer batches are dropped instead.
+    if (this.pendingMovementBatches >= this.maxPendingMovementBatches) {
+      this.droppedMovementBatches += 1;
+      const at = this.now();
+      if (at - this.lastDropReportAt >= DROP_REPORT_EVERY_MS) {
+        this.lastDropReportAt = at;
+        console.error(`pocketbase: movement writes are backed up; dropped ${this.droppedMovementBatches} batch(es) so far`);
+      }
+      return;
+    }
+    this.pendingMovementBatches += 1;
     void this.enqueueMovementWrite(async () => {
       await this.createOrThrow("movement_recording_batches", {
         recordingId: event.recordingId,
@@ -120,7 +142,8 @@ export class PocketBaseAdminDataSource implements AdminDataSource {
         recordedAt: event.recordedAt,
         samples: event.samples,
       });
-    }).catch((error) => console.error("pocketbase: failed to write to movement_recording_batches", error));
+    }).catch((error) => console.error("pocketbase: failed to write to movement_recording_batches", error))
+      .finally(() => { this.pendingMovementBatches -= 1; });
   }
 
   recordMovementFinalized(event: MovementRecordingFinalized): void {

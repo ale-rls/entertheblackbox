@@ -20,16 +20,27 @@ export class TaskEngine {
   configureRoles(roles: ParticipantRole[]) { this.roles = roles; }
   roleAssignments() { return structuredClone(this.assignments); }
   assignRole(participantId: string, roleId: string, source: string, now: number): void {
+    this.prepareRoleAssignment(participantId, roleId, source, now)();
+  }
+  prepareRoleAssignment(participantId: string, roleId: string, source: string, now: number, replaceExclusive = false): () => void {
     const role = this.roles.find(r => r.id === roleId);
     if (!role) throw new Error('Unknown role');
-    if (this.assignments.some(a => a.participantId === participantId && a.roleId === roleId)) return;
+    if (this.assignments.some(a => a.participantId === participantId && a.roleId === roleId)) return () => {};
     if (role.capacity !== undefined && this.assignments.filter(a => a.roleId === roleId).length >= role.capacity) throw new Error('Role is full');
-    if (role.exclusiveSet && this.assignments.some(a => a.participantId === participantId && this.roles.find(r => r.id === a.roleId)?.exclusiveSet === role.exclusiveSet)) throw new Error('Withdraw the existing role in this exclusive set first');
-    this.assignments.push({participantId,roleId,source,assignedAt:now});
+    const conflicts = role.exclusiveSet ? this.assignments.filter(a => a.participantId === participantId && this.roles.find(r => r.id === a.roleId)?.exclusiveSet === role.exclusiveSet) : [];
+    if (conflicts.length && !replaceExclusive) throw new Error('Withdraw the existing role in this exclusive set first');
+    // Staff picks commit this synchronously after validating the group move.
+    return () => {
+      for (const conflict of conflicts) this.withdraw(participantId, conflict.roleId);
+      this.assignments.push({ participantId, roleId, source, assignedAt: now });
+    };
   }
   withdraw(participantId: string, roleId: string): void {
+    // A role can come from the option itself or from one of its rank/overflow outcomes; the
+    // assignment's source names the task that gave it, so that response gives its place back too.
+    const sources = new Set(this.assignments.filter(a => a.participantId === participantId && a.roleId === roleId).map(a => a.source));
     this.assignments = this.assignments.filter(a => a.participantId !== participantId || a.roleId !== roleId);
-    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId && t.template.options.find(o => o.id === r.optionId)?.roleId === roleId && (r.status === 'accepted' || r.status === 'answered')) { r.status = 'withdrawn'; r.message = 'Assignment withdrawn by the operator.'; }
+    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId && (sources.has(t.id) || t.template.options.find(o => o.id === r.optionId)?.roleId === roleId) && (r.status === 'accepted' || r.status === 'answered')) { r.status = 'withdrawn'; r.message = 'Assignment withdrawn by the operator.'; }
   }
   endOccupant(participantId: string): void {
     for (const a of [...this.assignments]) if (a.participantId === participantId) this.withdraw(participantId,a.roleId);
@@ -40,7 +51,7 @@ export class TaskEngine {
   all(): TaskInstance[] { return structuredClone(this.instances); }
   open(template: ParticipantTask, sessionId: string, ids: string[], now: number, phase: { id: string; epoch: number } | null = null): TaskInstance {
     this.tick(now);
-    if (!ids.length) throw new Error('No eligible participants');
+    if (!ids.length && phase === null) throw new Error('No eligible participants');
     if (this.instances.some(t => t.sessionId === sessionId && t.status === 'open' && t.recipients.some(r => ids.includes(r.participantId) && (r.status === 'pending' || r.status === 'full')))) throw new Error('Recipients already have an open task. Close or cancel it first.');
     const task: TaskInstance = { id: randomUUID(), sessionId, template: structuredClone(template),
       phaseId: phase?.id ?? null, phaseEpoch: phase?.epoch ?? null, createdAt: now, deadlineAt: now + template.durationMs, status: 'open',

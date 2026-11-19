@@ -29,6 +29,13 @@ Cue names and scenes fire **once, when the scene starts**. When the bridge
 so a restart of the bridge never relaunches clips. A cue that fires while the
 bridge is disconnected is missed: the operator then launches it by hand.
 
+Scenes with synchronized phone audio start a few seconds after they are
+announced (the phones' preparation time, 3 s by default). Their scene and cue
+MIDI waits for that moment, timed on the server's clock, so music starts with
+the video and not before it, the same way the lighting bridge times its looks.
+If the announcement arrived later than events usually do, it waits that much
+less. A scene skipped during the wait sends nothing.
+
 ## One-time setup on the MacBook
 
 1. **Repo and Node:** Node 22 and pnpm 9 (`corepack enable`), then in this repo

@@ -50,6 +50,7 @@ import {
 } from "../votes/index.js";
 import { VideoPhaseHandler } from "./video.js";
 import { acceptsVotingInput, pointForOutcome, votingOptions } from "../groups/voting.js";
+import { guardedInterval } from "./guarded-interval.js";
 
 type GroupPath = { engine: PhaseEngine; members: Set<string> };
 
@@ -353,7 +354,8 @@ export class PhaseEngine {
     });
     this.qr = options.qr === undefined ? null : new QrGrantPushLoop({
       ...options.qr,
-      send: (message) => { this.sendToDisplay(message); for (const socket of this.signageDisplays.values()) this.send(socket, message); },
+      send: (message) => this.sendToDisplay(message),
+      sendSignage: (message) => { for (const socket of this.signageDisplays.values()) this.send(socket, message); },
       lifecycle: () => this.lifecycle,
       hasDisplay: () => this.displaySocket !== undefined || this.signageDisplays.size > 0,
       now: this.now,
@@ -415,6 +417,8 @@ export class PhaseEngine {
   private monitorVoteResults: NonNullable<PhaseSnapshotMessage["monitorVoteResults"]> = {};
   private lastMonitorVotePhaseId: string | undefined;
   private taskVoteWinners = new Map<string, string | null>();
+  /** The last result sent to the display, replayed to a display that reconnects during the same phase. */
+  private lastQuestionResolved: Extract<ServerToClientMessage, { t: "question_resolved" }> | null = null;
   private lastTaskState = '';
   get taskStatus() {
     const phase = this.currentPhase();
@@ -480,16 +484,16 @@ export class PhaseEngine {
     if (verdict !== 'ok') return result(false, staffGateMessage(verdict));
     const pick = picks.find(p => p.id === message.pickId);
     if (!pick) return result(false, 'This pick no longer exists. Reopen the staff menu.');
+    let assignRole: (() => void) | undefined;
     if (pick.roleId) {
-      const roles = this.scenario.participantRoles ?? [];
-      const role = roles.find(r => r.id === pick.roleId);
-      if (role?.exclusiveSet) for (const held of this.tasks.roleAssignments()) {
-        if (held.participantId === participantId && held.roleId !== role.id && roles.find(r => r.id === held.roleId)?.exclusiveSet === role.exclusiveSet) this.tasks.withdraw(participantId, held.roleId);
-      }
-      try { this.tasks.assignRole(participantId, pick.roleId, 'staff', this.now()); }
-      catch (error) { this.pushTasks(true); return result(false, error instanceof Error ? error.message : 'Role unavailable'); }
+      try { assignRole = this.tasks.prepareRoleAssignment(participantId, pick.roleId, 'staff', this.now(), true); }
+      catch (error) { return result(false, error instanceof Error ? error.message : 'Role unavailable'); }
     }
-    if (pick.groupId && !this.adminAssignGroup(participantId, pick.groupId).ok) { this.pushTasks(true); return result(false, 'Could not move this tablet into that group.'); }
+    if (pick.groupId) {
+      if (!this.assignParticipantGroup(participantId, pick.groupId, undefined, false, assignRole).ok) return result(false, 'Could not move this tablet into that group.');
+    } else {
+      assignRole?.();
+    }
     this.pushTasks(true);
     result(true, `Assigned: ${pick.label}`);
   }
@@ -749,7 +753,7 @@ export class PhaseEngine {
     return this.assignParticipantGroup(participantId, groupId, expectedEpoch);
   }
 
-  private assignParticipantGroup(participantId: string, groupId: string, expectedEpoch?: number, parentOnly = false): TransitionResult {
+  private assignParticipantGroup(participantId: string, groupId: string, expectedEpoch?: number, parentOnly = false, onValidated?: () => void): TransitionResult {
     if (expectedEpoch !== undefined && expectedEpoch !== this.phaseEpoch) return { ok: false, reason: "stale" };
     const participant = this.registry.values().find((row) => row.clientId === participantId);
     if (!participant || !this.groupSelection || !this.scenario.groups?.some((group) => group.id === groupId)) return { ok: false, reason: "invalid-target" };
@@ -765,8 +769,10 @@ export class PhaseEngine {
     if (selection) {
       // Move to the parent selection first when admitting someone from another path.
       if (selection !== this && !selection.registry.values().some((p) => p.clientId === participantId)) {
-        const moved = this.assignParticipantGroup(participantId, selection.path!.timelineId, expectedEpoch, true);
+        const moved = this.assignParticipantGroup(participantId, selection.path!.timelineId, expectedEpoch, true, onValidated);
         if (!moved.ok) return moved;
+      } else {
+        onValidated?.();
       }
       selection.selectionCohort.add(participantId);
       if (this.groupSelection.current(participantId) === groupId) return { ok: true };
@@ -785,6 +791,7 @@ export class PhaseEngine {
     // Containers with running subgroups have no single playback clock to join.
     if (this.pathsStarted && (!destination || destination.engine.pathsStarted)) return { ok: false, reason: "invalid-target" };
     const sourceChain = this.pathChainForParticipant(participantId);
+    onValidated?.();
     if (destination && sourceChain.at(-1) === destination) return { ok: true };
     this.groupSelection.select(participantId, groupId);
     if (!destination) {
@@ -908,6 +915,7 @@ export class PhaseEngine {
     this.joinMovementRecordingForConnectedParticipants();
     this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "admin-restart");
+    this.cursors.requestSnapshot();
     return { ok: true };
   }
 
@@ -945,7 +953,7 @@ export class PhaseEngine {
 
   start(): void {
     if (this.timer !== null) return;
-    this.timer = setInterval(() => this.tick(), 250);
+    this.timer = guardedInterval("show timer", () => this.tick(), 250);
     this.cursors.start();
     this.movement.start();
     this.ghosts.start();
@@ -1089,10 +1097,17 @@ export class PhaseEngine {
       localPath.participantJoined(socket, _participant);
       return;
     }
+    if (_participant && this.pathsStarted && this.joinDeviceGroupPath(_participant)) return;
     if (_participant && this.pathsStarted) this.options.onParticipantPhase?.([_participant.clientId], { kind: "idle", id: "idle" }, this.now());
-    // Late arrivals may choose while an unrestricted selection is still open.
-    if (_participant && this.currentPhase().kind === "group-branch" &&
-      !(this.currentPhase() as Extract<Phase, { kind: "group-branch" }>).sourceGroupIds) this.selectionCohort.add(_participant.clientId);
+    const phase = this.currentPhase();
+    if (_participant && phase.kind === "group-branch" && !phase.sourceGroupIds) {
+      // Automatic assignment runs when the scene starts. Only admit late
+      // arrivals who can choose or already belong to an output group.
+      const groupId = this.groupSelection?.current(_participant.clientId);
+      if (phase.assignment.type === "self-select" || phase.branches.some((branch) => branch.groupId === groupId)) {
+        this.selectionCohort.add(_participant.clientId);
+      }
+    }
     this.send(socket, this.getSnapshotMessage());
     this.sendGroupSelectionOptions(socket);
     this.sendVotingOptions(socket);
@@ -1103,6 +1118,23 @@ export class PhaseEngine {
     if (this.lifecycle === "idle" && this.registry.connectedCount >= 1) {
       this.startLobby(this.now());
     }
+  }
+
+  /**
+   * A late arrival whose group is fixed by its device (`groupByClient`, e.g.
+   * browsers → theater) joins that group's running timeline at once, as an
+   * operator transfer would. Without this it waits outside every path: its
+   * phone shows the split and its cursor reaches no display. A group that
+   * already finished takes it into its reunion wait. Anyone else
+   * (self-selected or vote-derived groups, a group with running subgroups)
+   * still waits for the operator or the reunion.
+   */
+  private joinDeviceGroupPath(participant: ParticipantRecord): boolean {
+    if (this.path) return false;
+    const groupId = participant.client === undefined ? undefined : this.scenario.groupByClient?.[participant.client];
+    if (groupId === undefined || this.groupSelection?.current(participant.clientId) !== groupId) return false;
+    if (this.pathChainForGroup(groupId).length === 0) return false;
+    return this.assignParticipantGroup(participant.clientId, groupId).ok;
   }
 
   socketClosed(socket: WebSocket): void {
@@ -1282,7 +1314,7 @@ export class PhaseEngine {
           acceptsVotingInput(this.groupSelection?.method?.(participantId), "phone-buttons") &&
           this.matches(message.sessionId, phase.id, message.phaseEpoch)
         ) {
-          const point = pointForOutcome(phase.field, message.outcome);
+          const point = pointForOutcome(this.curtainFor(phase)?.field ?? phase.field, message.outcome);
           if (point !== null) this.recordInput(this.now(), participantId, point.x, point.y);
         }
         return;
@@ -1506,10 +1538,18 @@ export class PhaseEngine {
     this.clients.add(socket);
     this.send(socket, this.getSnapshotMessage());
     this.send(socket, { t: "presence", v: PROTOCOL_VERSION, count: this.registry.connectedCount });
-    const phase = this.currentPhase();
-    const resolution = this.votes.currentResolution();
-    if (phase.kind === "video-position-question" && resolution !== null) {
-      this.emitQuestionResolved(resolution, phase, this.now());
+    // A display that (re)joins after a vote closed still shows its result. Resend
+    // the frame the other displays got -- same counts, same freeze end -- rather
+    // than resolving again, which would also repeat the cue feed's result event.
+    const resolved = this.lastQuestionResolved;
+    if (resolved !== null && resolved.sessionId === this.sessionId && resolved.phaseEpoch === this.phaseEpoch) {
+      this.send(socket, resolved);
+    } else {
+      const phase = this.currentPhase();
+      const resolution = this.votes.currentResolution();
+      if (phase.kind === "video-position-question" && resolution !== null) {
+        this.emitQuestionResolved(resolution, phase, this.now());
+      }
     }
     if (this.lifecycle === "idle" && (this.registry.connectedCount >= 1 || this.nextLobbyStartAt !== null)) {
       this.startLobby(this.now());
@@ -1577,6 +1617,8 @@ export class PhaseEngine {
     this.joinMovementRecordingForConnectedParticipants();
     this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "session-start");
+    // The display clears its cursor field on the session change.
+    this.cursors.requestSnapshot();
   }
 
   private joinMovementRecordingForConnectedParticipants(): void {
@@ -1732,6 +1774,8 @@ export class PhaseEngine {
       phase: this.getSnapshot(),
       serverTime: this.now(),
     });
+    // Lobby updates use the idle phase kind, which clears the display's cursor field.
+    if (this.lifecycle === "lobby") this.cursors.requestSnapshot();
     for (const socket of this.participantSockets) {
       this.sendGroupSelectionOptions(socket);
       this.sendVotingOptions(socket);
@@ -1925,6 +1969,10 @@ export class PhaseEngine {
     const opensAt = this.phaseStartedAt + phase.openAtMs;
     if (!force && now < opensAt) return;
     this.beginPositionVote(phase, opensAt, this.phaseStartedAt + phase.closeAtMs);
+    // A forced open only prepares a result for an operator skip or video end.
+    if (!force) {
+      for (const socket of this.participantSockets) this.sendVotingOptions(socket);
+    }
     this.questionStatusDirty = true;
     this.broadcastQuestionStatus(now, true);
   }
@@ -1965,11 +2013,14 @@ export class PhaseEngine {
       timestamp: now,
       payload: {
         winner: resolution.winner,
+        // The field the audience chose (unique plurality), also when routing is fixed:
+        // the lighting bridge lights it for a "winner" cue.
+        leader: winner,
         quadrantCounts: resolution.quadrantCounts,
         resolvedTarget: resolution.resolvedTarget,
       },
     });
-    this.sendToDisplay({
+    this.lastQuestionResolved = {
       t: "question_resolved",
       v: PROTOCOL_VERSION,
       sessionId: this.sessionId,
@@ -1983,7 +2034,8 @@ export class PhaseEngine {
       quadrantCounts: resolution.quadrantCounts,
       winner: resolution.winner,
       ...(resolution.tieBreak === undefined ? {} : { tieBreak: resolution.tieBreak }),
-    } as Extract<ServerToClientMessage, { t: "question_resolved" }>);
+    } as Extract<ServerToClientMessage, { t: "question_resolved" }>;
+    this.sendToDisplay(this.lastQuestionResolved);
   }
 
   private queueQuestionStatus(now = this.now()): void {
@@ -2251,13 +2303,17 @@ export class PhaseEngine {
       participantId === undefined ||
       (phase.kind !== "position-question" && phase.kind !== "video-position-question")
     ) return;
+    const method = this.groupSelection?.method?.(participantId) ?? "phone-cursor";
+    const awaitingOpen = method === "phone-buttons" &&
+      phase.kind === "video-position-question" && this.votes.currentQuestion() === null;
+    const closesAt = this.phaseStartedAt + (phase.kind === "position-question" ? phase.durationMs : phase.closeAtMs);
     this.send(socket, {
       t: "voting_options",
       v: PROTOCOL_VERSION,
       sessionId: this.sessionId,
       phaseEpoch: this.phaseEpoch,
-      method: this.groupSelection?.method?.(participantId) ?? "phone-cursor",
-      closed: this.votes.currentResolution() !== null || this.now() >= this.phaseStartedAt + (phase.kind === "position-question" ? phase.durationMs : phase.closeAtMs),
+      method,
+      closed: awaitingOpen || this.votes.currentResolution() !== null || this.now() >= closesAt,
       question: phase.text,
       options: votingOptions(phase),
     });

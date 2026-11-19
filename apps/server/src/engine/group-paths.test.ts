@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { scenarioSchema, validateScenario } from "@entertheblackbox/scenario";
 import { parseServerMessage, type ClientToServerMessage } from "@entertheblackbox/protocol";
 import type { WebSocket } from "ws";
@@ -75,11 +75,11 @@ function setup(value = scenario) {
       ...(groupId === undefined ? {} : { groupId }) });
     return socket;
   };
-  const phone = (id: string) => {
+  const phone = (id: string, client?: "web" | "native") => {
     const socket = new Socket();
-    const result = registry.admit({ clientId: id, participantLease: id, name: id, leaseExpiresAt: 100_000, socket: socket.ws, now });
+    const result = registry.admit({ clientId: id, participantLease: id, name: id, leaseExpiresAt: 100_000, socket: socket.ws, now, ...(client ? { client } : {}) });
     if (!result.ok) throw new Error("admission failed");
-    groups.ensureParticipant(id);
+    groups.ensureParticipant(id, client);
     engine.participantJoined(socket.ws, result.participant);
     return socket;
   };
@@ -89,6 +89,35 @@ function setup(value = scenario) {
 }
 
 describe("independent group paths", () => {
+  it.each(["deadline", "operator command"])("starts an automatic split by %s despite an unassigned late arrival", (start) => {
+    const automatic = scenarioSchema.parse({
+      ...scenario,
+      initialGroupIds: undefined,
+      phases: scenario.phases.map((phase) => phase.kind === "group-branch" ? {
+        ...phase,
+        assignment: { type: "manual", fallbackGroupId: "a" },
+        branches: phase.branches.filter((branch) => branch.groupId !== "c"),
+      } : phase),
+    });
+    const h = setup(automatic);
+    const present = h.phone("present");
+    h.engine.adminStart();
+    h.setNow(50);
+    h.groups.assign("preassigned", "b");
+    const preassigned = h.phone("preassigned");
+    const late = h.phone("late");
+    expect(h.groups.groupFor("late")).toBeNull();
+
+    if (start === "deadline") h.tick(100);
+    else expect(h.engine.adminStartGroupPaths()).toEqual({ ok: true });
+
+    expect(h.engine.groupPathsStarted).toBe(true);
+    expect(present.snapshot.phase.id).toBe("vote");
+    expect(preassigned.snapshot.phase.id).toBe("film");
+    expect(late.snapshot).toMatchObject({ participantState: "unassigned", phase: { id: "split" } });
+    h.engine.stop();
+  });
+
   it("moves a late arrival into the live scene without replaying cues or changing its clock", () => {
     const h = setup(); h.display();
     const b = h.phone("two"); h.engine.adminStart(); h.choose(b, "b"); h.tick(100);
@@ -809,4 +838,84 @@ it("sends the tablet script excerpt only to the groups a scene names, with their
   // Nobody outside the named groups, and no display, ever receives the script text.
   for (const socket of [a, display]) expect(JSON.stringify(socket.sent)).not.toContain("First line");
   h.engine.stop();
+});
+
+it("counts a phone button vote in the curtain-light field", () => {
+  const value = scenarioSchema.parse({
+    ...scenario,
+    curtainLight: { src: "curtain.mp4" },
+    groups: scenario.groups!.map(group => ({ ...group, votingMethod: "phone-buttons" })),
+    phases: scenario.phases.map(phase => phase.id === "vote" ? { ...phase, curtainLightVote: true } : phase),
+  });
+  expect(validateScenario(value).ok).toBe(true);
+  const h = setup(value);
+  const phone = h.phone("one");
+  h.engine.adminStart();
+  h.choose(phone, "a");
+  h.tick(100);
+  h.send(phone, { t: "button_vote", v: 2, sessionId: "visit", phaseEpoch: phone.snapshot.phaseEpoch, outcome: "max" });
+  h.tick(200);
+  expect(h.cues.find(cue => cue.type === "result")?.payload.quadrantCounts).toEqual({ min: 0, max: 1 });
+  h.engine.stop();
+});
+
+describe("late arrivals with a device-fixed group", () => {
+  const byDevice = scenarioSchema.parse({
+    version: "by-device", entryPhaseId: "split", cyclesAllowed: false,
+    groups: [{ id: "ki", label: "KI" }, { id: "theater", label: "Theater" }],
+    groupByClient: { native: "ki", web: "theater" },
+    phases: [
+      { kind: "idle", id: "idle" },
+      { kind: "group-branch", id: "split", title: "Split", durationMs: 100,
+        assignment: { type: "manual", fallbackGroupId: "theater" }, branches: [{ groupId: "ki", next: "ki-film" }, { groupId: "theater", next: "scale" }], next: "together" },
+      { kind: "video", id: "ki-film", src: "ki.mp4", expectedDurationMs: 600_000, next: "together" },
+      { kind: "position-question", id: "scale", text: "How often?", durationMs: 600_000, freezeMs: 0,
+        connectionStaleAfterMs: 1_000_000, showLiveCounts: true,
+        field: { type: "two-quadrant", axis: "x", variant: "split", labels: { minLabel: "Never", maxLabel: "Daily" } },
+        next: { type: "fixed", target: "together" } },
+      { kind: "video", id: "together", src: "together.mp4", expectedDurationMs: 1_000, next: "idle" },
+    ],
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it("puts a browser that joins after the split into the theater scene, with its cursor on the theater display and its vote counted", () => {
+    vi.useFakeTimers();
+    const h = setup(byDevice); h.display();
+    const projector = h.display("theater");
+    h.phone("tablet", "native"); h.phone("early", "web");
+    h.engine.start(); h.engine.adminStart(); h.tick(100);
+    h.setNow(30_000);
+    const guest = h.phone("guest", "web");
+    expect(guest.snapshot.phase.id).toBe("scale");
+    expect(h.engine.groupPaths.find((p) => p.groupId === "theater")?.memberIds).toEqual(["early", "guest"]);
+    expect(h.audio.at(-1)).toEqual({ ids: ["guest"], phase: "scale" });
+    h.send(guest, { t: "input", v: 2, sessionId: guest.snapshot.sessionId, phaseEpoch: guest.snapshot.phaseEpoch, seq: 1, x: 0.9, y: 0.5 });
+    vi.advanceTimersByTime(100);
+    const cursors = projector.sent.filter((m) => m.t === "cursors").at(-1);
+    expect(cursors?.cursors.map((c: { clientId: string }) => c.clientId)).toContain("guest");
+    h.tick(600_100);
+    expect(h.votes[0]?.votes.find((v) => v.participantId === "guest")).toMatchObject({ x: 0.9 });
+    h.engine.stop();
+  });
+
+  it("puts a tablet that joins after the split into the KI scene", () => {
+    const h = setup(byDevice); h.display();
+    h.phone("tablet", "native"); h.phone("early", "web");
+    h.engine.adminStart(); h.tick(100);
+    const late = h.phone("late-tablet", "native");
+    expect(late.snapshot.phase.id).toBe("ki-film");
+    expect(h.engine.groupPaths.find((p) => p.groupId === "ki")?.memberIds).toEqual(["tablet", "late-tablet"]);
+    h.engine.stop();
+  });
+
+  it("leaves a late arrival whose group is not fixed by its device waiting for the operator", () => {
+    const h = setup(); h.display();
+    const b = h.phone("two"); h.engine.adminStart(); h.choose(b, "b"); h.tick(100);
+    const late = h.phone("late", "web");
+    expect(late.snapshot.phase.id).toBe("split");
+    expect(h.engine.groupPaths.flatMap((p) => p.memberIds)).not.toContain("late");
+    expect(h.audio.at(-1)).toEqual({ ids: ["late"], phase: "idle" });
+    h.engine.stop();
+  });
 });

@@ -1,3 +1,4 @@
+import { guardedInterval } from "../engine/guarded-interval.js";
 export const MOVEMENT_FLUSH_INTERVAL_MS = 5_000;
 export const MOVEMENT_FLUSH_SAMPLE_THRESHOLD = 150;
 const MOVEMENT_TICK_INTERVAL_MS = 1_000;
@@ -136,7 +137,7 @@ export class MovementRecorder {
 
   start(): void {
     if (this.timer !== null) return;
-    this.timer = setInterval(() => this.tick(Date.now()), MOVEMENT_TICK_INTERVAL_MS);
+    this.timer = guardedInterval("movement recording", () => this.tick(Date.now()), MOVEMENT_TICK_INTERVAL_MS);
   }
 
   stop(): void {

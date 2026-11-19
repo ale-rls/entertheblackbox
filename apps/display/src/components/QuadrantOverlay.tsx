@@ -45,6 +45,12 @@ function leadingTwoWayRegions(counts: TwoQuadrantCounts): TwoQuadrant[] {
     : (["min", "max"] as const).filter((id) => counts[id] === highest);
 }
 
+/** The regions sharing the top count: a 20/20/4/0 tie blinks only the two at 20. */
+export function tiedLeaders(counts: Record<string, number>): string[] {
+  const highest = Math.max(0, ...Object.values(counts));
+  return highest === 0 ? [] : Object.keys(counts).filter((id) => counts[id] === highest);
+}
+
 function sameArena(a: Arena | undefined, b: Arena | undefined): boolean {
   if (a === undefined) return b === undefined;
   if (b === undefined || a.type !== b.type) return false;
@@ -443,7 +449,7 @@ export function QuadrantOverlay({
   const lotterySelected = resolutionMatches ? resolution?.tieBreak?.selected ?? null : null;
   const resolvedHighlights = resolutionMatches
     ? resolution.tieBreak?.candidates
-      ?? (winner === "tie" ? Object.keys(resolution.quadrantCounts) : winner === null || winner === "empty" ? [] : [winner])
+      ?? (winner === "tie" ? tiedLeaders(resolution.quadrantCounts) : winner === null || winner === "empty" ? [] : [winner])
     : [];
   const fixedTwoWayHighlights = resolutionMatches
     && resolution.winner === "fixed"
