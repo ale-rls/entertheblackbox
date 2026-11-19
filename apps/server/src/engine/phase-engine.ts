@@ -905,6 +905,7 @@ export class PhaseEngine {
     this.joinMovementRecordingForConnectedParticipants();
     this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "admin-restart");
+    this.cursors.requestSnapshot();
     return { ok: true };
   }
 
@@ -1573,6 +1574,8 @@ export class PhaseEngine {
     this.joinMovementRecordingForConnectedParticipants();
     this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "session-start");
+    // The display clears its cursor field on the session change.
+    this.cursors.requestSnapshot();
   }
 
   private joinMovementRecordingForConnectedParticipants(): void {
@@ -1728,6 +1731,8 @@ export class PhaseEngine {
       phase: this.getSnapshot(),
       serverTime: this.now(),
     });
+    // Lobby updates use the idle phase kind, which clears the display's cursor field.
+    if (this.lifecycle === "lobby") this.cursors.requestSnapshot();
     for (const socket of this.participantSockets) {
       this.sendGroupSelectionOptions(socket);
       this.sendVotingOptions(socket);
