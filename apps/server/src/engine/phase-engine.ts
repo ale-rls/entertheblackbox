@@ -968,6 +968,7 @@ export class PhaseEngine {
 
   stop(endedAt?: number): void {
     this.clearPaths(endedAt);
+    this.retirePathCue();
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     this.cursors.stop();
@@ -1759,7 +1760,8 @@ export class PhaseEngine {
   private transition(reason: string, sessionEnded?: { reason: string; sessionId: string; endedAt: number }): void {
     this.emitCheckpoint("transition", reason);
     const phase = this.currentPhase();
-    if (!this.path && (reason === "group-branch-complete" || reason === "admin-force-reunion" || phase.kind === "idle")) {
+    // Opening the lobby is not the end of a show: the bridges play their show-end look and MIDI on this reset.
+    if (!this.path && (reason === "group-branch-complete" || reason === "admin-force-reunion" || (phase.kind === "idle" && reason !== "lobby-start"))) {
       this.options.onCueEvent?.({
         type: "reset",
         timelineId: "main",

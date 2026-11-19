@@ -120,6 +120,16 @@ describe("CueBridge", () => {
     expect(sent.filter((bytes) => bytes[1] === 61 && bytes[0] === 0x90)).toHaveLength(0);
   });
 
+  it("drops music waiting for a pre-roll when its group timeline is retired", () => {
+    const { bridge, sent, pending, setNow } = setup();
+    setNow(10_000);
+    bridge.handle({ ...event(1, { type: "phase", timelineId: "a", timelineKey: "a/a", phaseId: "T1-titel", phaseEpoch: 7, payload: { phase: { startedAt: 13_000 } } }), timestamp: 10_000 });
+    expect(pending.map((item) => item.ms)).toEqual([3_000]);
+    bridge.handle({ ...event(2, { type: "retire", timelineId: "a", timelineKey: "a/a", phaseId: "T1-titel", phaseEpoch: 7 }), timestamp: 10_500 });
+    pending.shift()!.fn();
+    expect(sent).toEqual([]);
+  });
+
   it("sends a single entry for testing in Ableton, and picks up an edited mapping", () => {
     const { bridge, sent } = setup();
     expect(bridge.test("musik-T1-start")).toBe(true);
