@@ -10,6 +10,8 @@ export function TaskEditor({ tasks, roles, groups, onChange }: { tasks: Particip
       <label>Question<textarea value={t.question} onChange={e => update(index, { ...t, question: e.target.value })} /></label>
       <label>Notification text<input value={t.notificationBody} onChange={e => update(index, { ...t, notificationBody: e.target.value })} /></label>
       <label>Response time (seconds)<input type="number" min="1" value={t.durationMs / 1000} onChange={e => update(index, { ...t, durationMs: Number(e.target.value) * 1000 })} /></label>
+      <label><input type="checkbox" checked={!!t.autoComplete} onChange={e => update(index, { ...t, autoComplete: e.target.checked || undefined })} />Complete automatically at scene end or deadline</label>
+      {t.autoComplete && <p>No response button. Use one unlimited bookkeeping option without routing, outcome recordings, or persistence across scenes.</p>}
       <p>No audience selected means all recipients in the current timeline.</p>
       {groups.map(g => <label key={g.id}><input type="checkbox" checked={t.groupIds.includes(g.id)} onChange={e => update(index, { ...t, groupIds: e.target.checked ? [...t.groupIds, g.id] : t.groupIds.filter(id => id !== g.id) })} />{g.label}</label>)}
       {t.options.map((o, oi) => <fieldset key={oi}><legend>Option {oi + 1}</legend>
@@ -24,7 +26,7 @@ export function TaskEditor({ tasks, roles, groups, onChange }: { tasks: Particip
       <button type="button" disabled={t.options.length >= 12} onClick={() => update(index, { ...t, options: [...t.options, { id: `option-${t.options.length + 1}`, label: 'New option', message: '' }] })}>Add option</button>
       <label>Full option message<textarea value={t.fullMessage} onChange={e => update(index, { ...t, fullMessage: e.target.value })} /></label>
       {t.fullAudio && <p>Full option recording: {t.fullAudio.src}</p>}
-      {!participantTaskSchema.safeParse(t).success && <p role="alert">Complete all fields and use unique option IDs, positive capacities and a response time of 1–3600 seconds.</p>}
+      {participantTaskSchema.safeParse(t).error?.issues.map((issue, i) => <p key={i} role="alert">{issue.path.join(".")}: {issue.message}</p>)}
       <button type="button" onClick={() => onChange(tasks.filter((_, i) => i !== index))}>Delete template</button>
     </fieldset>)}
     {error && <p role="alert">{error}</p>}

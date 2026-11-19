@@ -1,6 +1,7 @@
 import { ServerClock } from '@entertheblackbox/shared';
 import { encodeMessage, parseServerMessage, PROTOCOL_VERSION, SHOW_ENDED_CLOSE_CODE,
-  type PhoneToServerMessage, type ServerToClientMessage } from '@entertheblackbox/protocol';
+  type PhoneToServerMessage, type ServerToClientMessage, type WallMessage } from '@entertheblackbox/protocol';
+import { acceptWall } from './wall';
 export type Socket = Pick<WebSocket, 'readyState' | 'send' | 'close' | 'onopen' | 'onmessage' | 'onclose' | 'onerror'>;
 type Options = {
   capabilities?: string[];
@@ -16,6 +17,7 @@ export class NativeConnection {
   private occupantId: string | null = null;
   private attempt = 0;
   private lastReceived = 0;
+  private retryNotBefore = 0;
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private retry: ReturnType<typeof setTimeout> | undefined;
   constructor(private options: Options) {}
@@ -31,14 +33,26 @@ export class NativeConnection {
     const old = this.socket; this.socket = null; old?.close();
     this.connect();
   }
-  send(message: PhoneToServerMessage) {
-    if (this.socket?.readyState === 1) this.socket.send(encodeMessage(message.t === 'input' || message.t === 'reaction' || message.t === 'group_selection' || message.t === 'button_vote' || message.t === 'participant_task_response' || message.t === 'admission_choice' || message.t === 'staff_menu_request' || message.t === 'staff_assign' ? { ...message, ...(this.occupantId ? { occupantId: this.occupantId } : {}) } : message));
+  /** Returns false when there is no open socket and the message was not sent. */
+  send(message: PhoneToServerMessage): boolean {
+    if (this.socket?.readyState !== 1) return false;
+    this.socket.send(encodeMessage(message.t === 'input' || message.t === 'reaction' || message.t === 'group_selection' || message.t === 'button_vote' || message.t === 'participant_task_response' || message.t === 'admission_choice' || message.t === 'staff_menu_request' || message.t === 'staff_assign' ? { ...message, ...(this.occupantId ? { occupantId: this.occupantId } : {}) } : message));
+    return true;
   }
   private connect() {
     if (this.stopped) return;
+    const remaining = this.retryNotBefore - Date.now();
+    if (remaining > 0) {
+      this.options.status('Rate limited — retrying');
+      this.retry = setTimeout(() => this.connect(), remaining);
+      return;
+    }
+    this.retryNotBefore = 0;
     this.options.status('Connecting');
     const socket = (this.options.factory ?? (url => new WebSocket(url)))(`${this.options.origin.replace(/^http/, 'ws')}/ws`);
     this.socket = socket;
+    // Each connection receives a fresh wall welcome, possibly from a restarted server.
+    let wall: WallMessage | null = null;
     socket.onopen = () => {
       if (this.socket !== socket || this.stopped) return;
       this.lastReceived = Date.now();
@@ -59,6 +73,12 @@ export class NativeConnection {
       if (!parsed.ok) return;
       this.lastReceived = Date.now();
       const message = parsed.message;
+      if (message.t === 'join_rejected' && message.reason === 'rate_limited') {
+        // Keep temporary admission backoff out of the app's terminal rejection handler.
+        this.retryNotBefore = this.lastReceived + Math.max(1_000, message.retryAfterMs ?? 60_000);
+        this.resume();
+        return;
+      }
       if (message.t === 'pong') this.clock.addSample(message.echoClientTime, Date.now(), message.serverTime);
       if (message.t === 'identity') {
         this.occupantId = message.clientId;
@@ -66,6 +86,10 @@ export class NativeConnection {
         this.options.saveLease(message.participantLease); this.options.status('Connected');
       }
       if (message.t === 'snapshot' || message.t === 'phase') this.clock.observe(message.serverTime, Date.now());
+      if (message.t === 'wall') {
+        if (acceptWall(wall, message) !== message) return;
+        wall = message;
+      }
       this.options.message(message);
       if (message.t === 'join_rejected') {
         // Rejection requires operator/user action; don't create an endless admission retry storm.

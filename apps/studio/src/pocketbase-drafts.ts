@@ -32,14 +32,14 @@ export class PocketbaseDraftDatabase implements DraftDatabase {
   }
 
   async list(): Promise<Draft[]> {
-    const records = await this.pb.collection<DraftRecord>("studio_drafts").getFullList({ sort: "-updatedAt" });
+    const records = await this.pb.collection<DraftRecord>("studio_drafts").getFullList({ sort: "-updatedAt", requestKey: null });
     return records.map(toDraft);
   }
 
   async revisions(id: string): Promise<Draft[]> {
     const filter = this.pb.filter("draftId = {:id}", { id });
     const records = await this.pb.collection<DraftRecord>("studio_draft_revisions")
-      .getFullList({ filter, sort: "-updatedAt" });
+      .getFullList({ filter, sort: "-updatedAt", requestKey: null });
     return records.map(toDraft);
   }
 
@@ -63,8 +63,8 @@ export class PocketbaseDraftDatabase implements DraftDatabase {
   async delete(id: string): Promise<void> {
     const filter = this.pb.filter("draftId = {:id}", { id });
     const [drafts, revisions] = await Promise.all([
-      this.pb.collection<DraftRecord>("studio_drafts").getFullList({ filter }),
-      this.pb.collection<DraftRecord>("studio_draft_revisions").getFullList({ filter }),
+      this.pb.collection<DraftRecord>("studio_drafts").getFullList({ filter, requestKey: null }),
+      this.pb.collection<DraftRecord>("studio_draft_revisions").getFullList({ filter, requestKey: null }),
     ]);
     await Promise.all([
       ...drafts.map((record) => this.pb.collection("studio_drafts").delete(record.id)),

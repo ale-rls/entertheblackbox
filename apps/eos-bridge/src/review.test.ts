@@ -23,7 +23,8 @@ function setup(extra: Record<string, unknown> = {}) {
     for (const timer of timers.filter((entry) => !entry.cancelled && entry.at <= now)) { timer.cancelled = true; timer.fn(); }
   };
   const lines: string[] = [];
-  const bridge = new LightingBridge(config, new LookPlayer(output), (line) => lines.push(line), schedule);
+  // The fake clock drives lateness too: real time passing between two handle() calls would read as late delivery.
+  const bridge = new LightingBridge(config, new LookPlayer(output), (line) => lines.push(line), schedule, () => now);
   return { bridge, sent, lines, advance };
 }
 let sequence = 0;
@@ -171,6 +172,20 @@ describe("waiting looks that became obsolete (second review)", () => {
     ]));
     advance(3_000);
     expect(sent.map((entry) => entry.values.intens)).toEqual([100]);
+  });
+
+  it("retires only the matching scene and leaves siblings with the same group ID scheduled", () => {
+    const { bridge, sent, advance } = setup({ scenes: { sibling: "an", nested: "aus", revisited: "unentschieden" } });
+    bridge.handle(synced("c", "sibling", 2));
+    bridge.handle({ ...synced("c", "nested", 3), timelineKey: "a/c" });
+    bridge.handle(event({ type: "retire", timelineId: "c", timelineKey: "a/c", phaseEpoch: 3 }));
+    advance(3_000);
+    expect(sent.map(entry => entry.values.intens)).toEqual([100]);
+
+    bridge.handle({ ...synced("c", "revisited", 4), timelineKey: "a/c" });
+    bridge.handle(event({ type: "retire", timelineId: "c", timelineKey: "a/c", phaseEpoch: 3 }));
+    advance(3_000);
+    expect(sent.map(entry => entry.values.intens)).toEqual([100, 50]);
   });
 
   it("a reunion does not count as the show ending", () => {

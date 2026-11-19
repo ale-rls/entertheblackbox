@@ -427,6 +427,8 @@ const positionQuestionBaseSchema = z.object({
   text: z.string().min(1, "question text must be non-empty"),
   durationMs: z.number().int().positive(),
   freezeMs: z.number().int().nonnegative(),
+  /** Spotlight diameter as a percentage of the main display height. */
+  spotlight: z.object({ diameterPercent: z.number().int().min(5).max(100) }).optional(),
   connectionStaleAfterMs: z.number().int().positive(),
   showLiveCounts: z.boolean(),
   /** Whether display renders live/ghost cursors during this phase. Defaults to true when omitted. */
@@ -464,7 +466,11 @@ const canonicalPositionQuestionPhaseSchema = z.union([
     next: z.union([fixedPositionQuestionNextSchema, twoQuadrantPluralityNextSchema]),
   }),
   polygonZonesQuestionVariantSchema,
-]);
+]).superRefine((phase, ctx) => {
+  if (phase.spotlight && (phase.next.type !== "fixed" || phase.freezeMs < 1 || phase.showCursors === false || phase.curtainLightVote)) {
+    ctx.addIssue({ code: "custom", path: ["spotlight"], message: "Spotlights require a fixed target, visible cursors and a positive end hold. Turn off curtain-light voting." });
+  }
+});
 
 const videoPositionQuestionBaseSchema = z.object({
   ...curtainStageFields,

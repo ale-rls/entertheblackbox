@@ -35,7 +35,7 @@ describe("CurtainScene", () => {
     expect(counted!.pulse).toBe(0);
   });
 
-  it("lights each cursor in its participant's own colour, wherever it stands", () => {
+  it("colours each cursor's dot in its participant's own colour, wherever it stands", () => {
     const scene = new CurtainScene(field, treatment);
     // #ff0000 is the "min" answer's colour; this cursor stands in the "max" field.
     const [light, plain] = scene.cursorLights([
@@ -45,6 +45,16 @@ describe("CurtainScene", () => {
     expect(light!.rgb[0]).toBe(0);
     expect(light!.rgb[1]).toBeGreaterThan(0.8);
     expect(plain!.rgb).toEqual([1, 1, 1]);
+  });
+
+  it("throws every cursor's flood in the fields' warm white, never the participant's hue", () => {
+    const scene = new CurtainScene(field, treatment);
+    const [cyan, red] = scene.cursorLights([
+      { x: 0.9, y: 0.5, ghost: false, color: "#00f5d4" },
+      { x: 0.1, y: 0.5, ghost: false, color: "#ff595e" },
+    ], 0);
+    expect(cyan!.floodRgb).toEqual(scene.colorsLinear[0]);
+    expect(red!.floodRgb).toEqual(cyan!.floodRgb);
   });
 
   it("lights every field in the same neutral colour and divides them with a line", () => {

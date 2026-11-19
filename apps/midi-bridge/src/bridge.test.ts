@@ -12,9 +12,11 @@ const setup = () => {
   const sent: number[][] = [];
   const lines: string[] = [];
   const pending: Array<{ fn: () => void; ms: number }> = [];
-  const bridge = new CueBridge(config, { name: "test", send: (bytes) => sent.push(bytes) }, (line) => lines.push(line), (fn, ms) => pending.push({ fn, ms }));
+  let now = 0;
+  const bridge = new CueBridge(config, { name: "test", send: (bytes) => sent.push(bytes) }, (line) => lines.push(line), (fn, ms) => pending.push({ fn, ms }), () => now);
   const flush = () => { for (const item of pending.splice(0)) item.fn(); };
-  return { bridge, sent, lines, pending, flush };
+  const setNow = (ms: number) => { now = ms; };
+  return { bridge, sent, lines, pending, flush, setNow };
 };
 const event = (sequence: number, rest: Record<string, unknown>) => ({ version: 1, bootId: "boot-1", sequence, timelineId: "main", sessionId: "s", timestamp: 0, ...rest });
 
@@ -88,6 +90,44 @@ describe("CueBridge", () => {
     bridge.handle(event(1, { type: "phase", timelineId: "main", phaseId: "split", phaseEpoch: 2 }));
     bridge.handle(event(2, { type: "phase", timelineId: "ki", phaseId: "T1-titel", phaseEpoch: 2 }));
     expect(sent[0]).toEqual([0x90, 61, 90]);
+  });
+
+  it("waits out a synchronized pre-roll before starting a scene's music", () => {
+    const { bridge, sent, pending, setNow } = setup();
+    const phase = (sequence: number, epoch: number, timestamp: number, startedAt: number) =>
+      ({ ...event(sequence, { type: "phase", phaseId: "T1-titel", phaseEpoch: epoch, payload: { phase: { startedAt } } }), timestamp });
+    // Announced 3 s before the video starts; arrives on time.
+    setNow(10_000);
+    bridge.handle(phase(1, 4, 10_000, 13_000));
+    bridge.handle({ ...event(2, { type: "cue", phaseId: "T1-titel", phaseEpoch: 4, payload: { cue: "musik-T1-start" } }), timestamp: 10_000 });
+    expect(sent).toEqual([]);
+    expect(pending.map((item) => item.ms)).toEqual([3_000, 3_000]);
+    for (const item of pending.splice(0)) item.fn();
+    expect(sent.slice(0, 2)).toEqual([[0x90, 61, 90], [0xc0, 3]]);
+    expect(sent).toContainEqual([0x90, 60, 127]);
+
+    // The next scene arrives 1 s later than usual: its wait shrinks by that second.
+    sent.length = 0; pending.length = 0;
+    setNow(21_000);
+    bridge.handle(phase(3, 5, 20_000, 23_000));
+    expect(pending.map((item) => item.ms)).toEqual([2_000]);
+
+    // Skipped during the pre-roll: the next scene's start drops the waiting one.
+    bridge.handle(phase(4, 6, 20_500, 20_500));
+    const waiting = pending.shift()!;
+    sent.length = 0;
+    waiting.fn();
+    expect(sent.filter((bytes) => bytes[1] === 61 && bytes[0] === 0x90)).toHaveLength(0);
+  });
+
+  it("drops music waiting for a pre-roll when its group timeline is retired", () => {
+    const { bridge, sent, pending, setNow } = setup();
+    setNow(10_000);
+    bridge.handle({ ...event(1, { type: "phase", timelineId: "a", timelineKey: "a/a", phaseId: "T1-titel", phaseEpoch: 7, payload: { phase: { startedAt: 13_000 } } }), timestamp: 10_000 });
+    expect(pending.map((item) => item.ms)).toEqual([3_000]);
+    bridge.handle({ ...event(2, { type: "retire", timelineId: "a", timelineKey: "a/a", phaseId: "T1-titel", phaseEpoch: 7 }), timestamp: 10_500 });
+    pending.shift()!.fn();
+    expect(sent).toEqual([]);
   });
 
   it("sends a single entry for testing in Ableton, and picks up an edited mapping", () => {

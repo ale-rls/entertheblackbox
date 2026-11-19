@@ -24,7 +24,7 @@ On ordinary components, **Phone headphones** accepts a broadcast MP3 plus option
 
 ## Group by client
 
-`groupByClient` maps the participant client to a group: `{ "native": "ki", "web": "theater" }` puts everyone in the native app in `ki` and everyone voting in the browser in `theater`. It is applied the moment a participant joins, in the lobby or mid-show, so late joiners always get a group. It takes precedence over `initialGroupIds`, and a group-branch with `manual` assignment keeps it (its fallback only covers people without a valid group). Self-select and vote splits still reassign. Studio: Show properties → Audience groups → "App joins go to" / "Web browser joins go to".
+`groupByClient` maps the participant client to a group: `{ "native": "ki", "web": "theater" }` puts everyone in the native app in `ki` and everyone voting in the browser in `theater`. It is applied the moment a participant joins, in the lobby or mid-show, so late joiners always get a group. A late joiner whose group is already running its own timeline is moved straight into that group's current scene, as **Move to group** would; if the group has finished, it joins the reunion wait. If that group has split into subgroups, the late joiner waits for the operator. It takes precedence over `initialGroupIds`, and a group-branch with `manual` assignment keeps it (its fallback only covers people without a valid group). Self-select and vote splits still reassign. Studio: Show properties → Audience groups → "App joins go to" / "Web browser joins go to".
 
 The browser client sends `client: "web"` and the native app `client: "native"`. Apps released before this field are recognised by their `occupant-handover-v1` capability, which the browser client never declares.
 
@@ -83,7 +83,7 @@ Assignments are process-local session state and contain participant IDs only; th
 
 Open the usual display URL with `group=<group-id>` added to its query string, for example `/display/?group=red`. A display without `group` is the main display. Each group has one authenticated display slot; reconnecting or replacing a group display does not replace main or another group display. Group displays stay black outside their active paths and use only their own roster's cursor feed. Media duration fallback still advances a path when its group display is unavailable.
 
-Path rosters are created at selection close and can then be changed by an operator transfer. Late visitors wait silently until assigned or until the shared reunion. Nested splits run within their parent path; transfers into or out of a subgroup update all ancestor rosters. The outcome preview can follow one selected group path at a time.
+Path rosters are created at selection close and can then be changed by an operator transfer. Late visitors whose group is not fixed by their device wait silently until assigned or until the shared reunion. Nested splits run within their parent path; transfers into or out of a subgroup update all ancestor rosters. The outcome preview can follow one selected group path at a time.
 
 Personal audio is cued at the elapsed time on the destination scene's authoritative clock, including time spent uploading/resetting the stream. Recovery and late audio registration retain that clock. This is a live-stream alignment, not a guarantee of sample-accurate synchronization between different phones: encoder, network and browser buffers still contribute latency. Rehearse transfers with the actual venue audio backend and locked phones.
 

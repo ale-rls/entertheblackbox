@@ -130,6 +130,8 @@ export function App() {
   const autosave = useMemo(() => new Autosave(db), [db]);
   const [recent, setRecent] = useState<Draft[]>([]);
   const [draft, setDraft] = useState<Draft>();
+  const currentDraft = useRef<Draft>();
+  const openingDraft = useRef<{ id: string }>();
   const [status, setStatus] = useState<SaveStatusValue>("saved");
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -219,8 +221,13 @@ export function App() {
     window.scrollTo({ top: 0, left: 0 });
   }, [Boolean(draft)]);
 
-  const save = (next: Draft) => {
+  const showDraft = (next: Draft | undefined) => {
+    openingDraft.current = undefined;
+    currentDraft.current = next;
     setDraft(next);
+  };
+  const save = (next: Draft) => {
+    showDraft(next);
     autosave.schedule(next, (value) => {
       setStatus(value);
       if (value === "saved") void db.list().then(setRecent);
@@ -375,8 +382,9 @@ export function App() {
       trigger,
       onConfirm: async () => {
         try {
-          await db.delete(source.id);
-          if (draft?.id === source.id) setDraft(undefined);
+          if (openingDraft.current?.id === source.id) openingDraft.current = undefined;
+          await autosave.deleteDraft(source.id);
+          if (currentDraft.current?.id === source.id) showDraft(undefined);
           setRecent(await db.list());
           setImportFeedback({ status: "success", message: `Deleted “${source.name}” from this browser.` });
         } catch (error) {
@@ -428,8 +436,20 @@ export function App() {
       else editorRef.current?.focus();
     });
   };
-  const closeShow = () => {
-    setDraft(undefined);
+  const openDraft = async (id: string) => {
+    const opening = { id };
+    openingDraft.current = opening;
+    if (!await autosave.flush(id)) return;
+    const recovered = await recoverDraft(db, id);
+    if (openingDraft.current !== opening) return;
+    showDraft(recovered && localManifest ? refreshDraftLocalMedia(recovered, localManifest) : recovered);
+  };
+  const closeShow = async () => {
+    if (!draft || !await autosave.flush(draft.id)) return;
+    const closed = currentDraft.current;
+    if (closed?.id !== draft.id) return;
+    setRecent((drafts) => [closed, ...drafts.filter((item) => item.id !== closed.id)]);
+    showDraft(undefined);
     setNodes([]);
     setEdges([]);
     setSelectedId(undefined);
@@ -879,9 +899,10 @@ export function App() {
       </> : <><p className="sc-tool-help">Signed in as {operatorEmail}. The active production record will be copied into a new immutable-baseline draft.</p><div className="publish-panel-actions"><button className="sc-tool-button" type="button" onClick={() => setProductionImportOpen(false)}>Cancel</button><button className="sc-tool-button" data-sc-tool-variant="primary" type="button" onClick={() => void importLatestProduction()}>Create production fork</button></div></>}
     </div>}
     {importFeedback && <Feedback id="studio-home-feedback" feedback={importFeedback} />}
+    {status === "error" && <div><p role="alert">Draft changes could not be saved.</p><button className="sc-tool-button" type="button" onClick={() => autosave.retryFailed()}>Retry save</button></div>}
     <h2>Recent drafts</h2>{recent.length === 0 && <p className="sc-tool-copy lede">No local drafts yet. Import scenario.json and media-manifest.json together.</p>}
     {localManifest && <p className="sc-tool-copy lede">Media library: {localManifest.files.length} file{localManifest.files.length === 1 ? "" : "s"} available.</p>}
-    {recent.map((item) => <article key={item.id}><button className="sc-tool-button draft-open" data-sc-tool-variant="quiet" onClick={() => void recoverDraft(db, item.id).then((recovered) => setDraft(recovered && localManifest ? refreshDraftLocalMedia(recovered, localManifest) : recovered))}>{item.name}</button><small className="sc-tool-copy sc-tool-mono">{new Date(item.updatedAt).toLocaleString()}</small><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => duplicate(item)}>Duplicate</button><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => download(`${item.name}.studio-backup.json`, exportBackup(item))}>Export backup</button><button className="sc-tool-button" data-sc-tool-variant="danger" onClick={(event) => remove(item, event.currentTarget)}>Delete</button></article>)}
+    {recent.map((item) => <article key={item.id}><button className="sc-tool-button draft-open" data-sc-tool-variant="quiet" onClick={() => void openDraft(item.id)}>{item.name}</button><small className="sc-tool-copy sc-tool-mono">{new Date(item.updatedAt).toLocaleString()}</small><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => duplicate(item)}>Duplicate</button><button className="sc-tool-button" data-sc-tool-variant="secondary" onClick={() => download(`${item.name}.studio-backup.json`, exportBackup(item))}>Export backup</button><button className="sc-tool-button" data-sc-tool-variant="danger" onClick={(event) => remove(item, event.currentTarget)}>Delete</button></article>)}
     {mediaLibraryOpen && <MediaLibraryDialog manifest={localManifest} project={undefined} feedback={importFeedback} uploading={mediaUploading} showActive={showLifecycle === "active"} onUpload={addMedia} onDelete={requestMediaRemoval} onClose={() => setMediaLibraryOpen(false)} />}
     {confirmation && <ConfirmationDialog details={confirmation} onClose={closeConfirmation} />}
   </main>;
@@ -1029,7 +1050,7 @@ export function App() {
         { separator: true },
         { label: "Save backup", onSelect: () => download(`${draft.name}.studio-backup.json`, exportBackup(draft)) },
         { separator: true },
-        { label: "Close show", onSelect: closeShow },
+        { label: "Close show", onSelect: () => void closeShow() },
       ]} />
       <Menu label="Edit" items={[
         { label: "Undo", onSelect: () => { if (history.current) applyHistory(history.current.undo()); }, disabled: !history.current?.canUndo },
@@ -1059,6 +1080,7 @@ export function App() {
       <button className="sc-tool-button" data-sc-tool-variant="secondary" type="button" onClick={openMediaLibrary}>Media</button>
       <input aria-label="Show name" className="sc-tool-field show-name" value={draft.name} onChange={(event) => saveCanvas({ ...draft, name: event.target.value })} />
       <SaveStatus status={status} />
+      {status === "error" && <button className="sc-tool-button" type="button" onClick={() => autosave.retryFailed()}>Retry save</button>}
       {showLifecycle === "active" && <LiveShowWarning compact />}
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/display/" target="_blank" rel="noreferrer">Display</a>
       <a className="sc-tool-button" data-sc-tool-variant="secondary" href="/admin/" target="_blank" rel="noreferrer">Admin</a>

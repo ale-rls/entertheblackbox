@@ -42,6 +42,22 @@ describe('task outcomes', () => {
     expect(e.respond(t.id, 's', 'f', 'lead', 20)).toBe(true);
     expect(recipient(e, 'f').outcome).toBe('overflow');
   });
+  it('frees the place of a withdrawn rank-awarded role for the next volunteer', () => {
+    const curtain = participantTaskSchema.parse({ ...casting, id: 'curtain',
+      options: [{ id: 'open', label: 'Open', capacity: 1, message: 'You open it.', rankOutcomes: [{ roleId: 'vector' }] }] });
+    const e = new TaskEngine();
+    e.configureRoles([{ id: 'vector', label: 'vector', capacity: 1 }]);
+    e.configureWorkflow([curtain], { assignGroup: () => true, winner: () => null });
+    const t = e.open(curtain, 's', ['a', 'b'], 0);
+    e.respond(t.id, 's', 'a', 'open', 1);
+    expect(recipient(e, 'a').status).toBe('accepted');
+    // The first volunteer backs out; the operator withdraws the role.
+    e.withdraw('a', 'vector');
+    expect(recipient(e, 'a').status).toBe('withdrawn');
+    e.respond(t.id, 's', 'b', 'open', 2);
+    expect([recipient(e, 'b').status, recipient(e, 'b').outcome]).toEqual(['accepted', 'rank-1']);
+    expect(e.roleAssignments().map(a => [a.participantId, a.roleId])).toEqual([['b', 'vector']]);
+  });
   it('falls back to overflow when the rank role is still held from an earlier task', () => {
     const { e, groups } = engine(); e.assignRole('earlier', 'vector', 'admin', 0);
     const t = e.open(casting, 's', ['a'], 1);
