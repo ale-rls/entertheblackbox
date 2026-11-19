@@ -1899,6 +1899,10 @@ export class PhaseEngine {
     const opensAt = this.phaseStartedAt + phase.openAtMs;
     if (!force && now < opensAt) return;
     this.beginPositionVote(phase, opensAt, this.phaseStartedAt + phase.closeAtMs);
+    // A forced open only prepares a result for an operator skip or video end.
+    if (!force) {
+      for (const socket of this.participantSockets) this.sendVotingOptions(socket);
+    }
     this.questionStatusDirty = true;
     this.broadcastQuestionStatus(now, true);
   }
@@ -2221,13 +2225,17 @@ export class PhaseEngine {
       participantId === undefined ||
       (phase.kind !== "position-question" && phase.kind !== "video-position-question")
     ) return;
+    const method = this.groupSelection?.method?.(participantId) ?? "phone-cursor";
+    const awaitingOpen = method === "phone-buttons" &&
+      phase.kind === "video-position-question" && this.votes.currentQuestion() === null;
+    const closesAt = this.phaseStartedAt + (phase.kind === "position-question" ? phase.durationMs : phase.closeAtMs);
     this.send(socket, {
       t: "voting_options",
       v: PROTOCOL_VERSION,
       sessionId: this.sessionId,
       phaseEpoch: this.phaseEpoch,
-      method: this.groupSelection?.method?.(participantId) ?? "phone-cursor",
-      closed: this.votes.currentResolution() !== null || this.now() >= this.phaseStartedAt + (phase.kind === "position-question" ? phase.durationMs : phase.closeAtMs),
+      method,
+      closed: awaitingOpen || this.votes.currentResolution() !== null || this.now() >= closesAt,
       question: phase.text,
       options: votingOptions(phase),
     });
