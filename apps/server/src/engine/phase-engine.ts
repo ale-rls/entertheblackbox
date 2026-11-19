@@ -463,13 +463,15 @@ export class PhaseEngine {
     const template = this.scenario.participantTasks?.find(t => t.id === templateId);
     if (!template) throw new Error('Unknown published task template');
     const roster = this.registry.values().map(p => p.clientId);
-    const ids = [...new Set(roster)].filter(id => (!selected || selected.includes(id)) && (!template.groupIds.length || template.groupIds.includes(this.groupSelection?.current(id) ?? '')));
+    const ids = [...new Set(roster)].filter(id => (!selected || selected.includes(id)) && (!template.groupIds.length || template.groupIds.includes(this.groupSelection?.current(id) ?? ''))
+      // A scene's task opens for everyone free now; a tablet still answering another task gets it once it is free.
+      && (!graph || !this.tasks.busy(id, this.sessionId)));
     this.tasks.open(template, this.sessionId, ids, this.now(), graph ? { id: this.phaseId, epoch: this.phaseEpoch } : null);
     this.taskError = null;
   }
   /** Late joiners and newly grouped participants get this scene's task while it is still open. */
-  private offerOpenPhaseTasks(participantId: string): void {
-    if (this.lifecycle !== 'active') return;
+  private offerOpenPhaseTasks(participantId: string, push = true): boolean {
+    if (this.lifecycle !== 'active') return false;
     const group = this.groupSelection?.current(participantId) ?? '';
     let added = false;
     for (const task of this.tasks.all()) {
@@ -477,7 +479,8 @@ export class PhaseEngine {
       if (task.template.groupIds.length && !task.template.groupIds.includes(group)) continue;
       if (this.tasks.addRecipient(task.id, participantId, this.now())) added = true;
     }
-    if (added) this.pushTasks(true);
+    if (added && push) this.pushTasks(true);
+    return added;
   }
   /** Staff menu on a tablet: assigns a published staff pick to whoever holds that tablet. */
   private staffCommand(participantId: string, message: Extract<ClientToServerMessage, { t: 'staff_menu_request' | 'staff_assign' }>, socket: WebSocket): void {
@@ -519,8 +522,12 @@ export class PhaseEngine {
   }
   private pushTasks(force = false): void {
     this.tasks.tick(this.now());
-    const key = JSON.stringify(this.tasks.all());
+    let key = JSON.stringify(this.tasks.all());
     if (!force && key === this.lastTaskState) return;
+    // Someone just answered, timed out or was cancelled: hand them the scene task they were too busy for.
+    let offered = false;
+    for (const id of new Set(this.participantIds.values())) if (this.offerOpenPhaseTasks(id, false)) offered = true;
+    if (offered) key = JSON.stringify(this.tasks.all());
     this.lastTaskState = key;
     const tasks = this.tasks.all();
     const revision = this.tasks.nextExportRevision();
