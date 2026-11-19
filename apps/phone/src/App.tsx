@@ -5,6 +5,7 @@ import { PROTOCOL_VERSION } from "@entertheblackbox/protocol";
 import { PhoneConnection, type EndedPhoneSession } from "./lib/connection.js";
 import { RealtimeCursorPublisher } from "./lib/realtimeWsClient.js";
 import { loadLease } from "./lib/lease.js";
+import { fetchJoinConfig, loadJoinConfig, type JoinConfig } from "./lib/join-config.js";
 import {
   applyDelta,
   InputThrottle,
@@ -32,7 +33,6 @@ const baseConfig = {
     typeof __REALTIME_WS_URL__ === "string" ? __REALTIME_WS_URL__ : "ws://localhost:9001",
 };
 
-type JoinConfig = { installationId: string; roomId: string };
 type ConsentStatus = "prompt" | "submitting" | "granted" | "deleted";
 type ConsentState = {
   session: EndedPhoneSession;
@@ -83,19 +83,17 @@ export function App() {
 
   useEffect(() => {
     let cancelled = false;
-    void fetch(runtimeApi("/api/join-config"))
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Join service unavailable (${response.status})`);
-        const value = await response.json() as JoinConfig;
-        if (!cancelled) {
-          setJoinConfig(value);
-          const savedName = loadParticipantName().trim();
-          if (savedName && loadLease(value.installationId) !== null) setSubmittedName(savedName);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) setConfigError(error instanceof Error ? error.message : "Join service unavailable");
-      });
+    void loadJoinConfig({
+      load: () => fetchJoinConfig(runtimeApi("/api/join-config")),
+      cancelled: () => cancelled,
+      onError: (message) => { if (!cancelled) setConfigError(message); },
+    }).then((value) => {
+      if (cancelled || value === null) return;
+      setConfigError("");
+      setJoinConfig(value);
+      const savedName = loadParticipantName().trim();
+      if (savedName && loadLease(value.installationId) !== null) setSubmittedName(savedName);
+    });
     return () => { cancelled = true; };
   }, []);
 
