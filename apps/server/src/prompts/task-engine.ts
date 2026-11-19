@@ -44,7 +44,7 @@ export class TaskEngine {
   }
   endOccupant(participantId: string): void {
     for (const a of [...this.assignments]) if (a.participantId === participantId) this.withdraw(participantId,a.roleId);
-    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId) { r.status = 'cancelled'; r.message = 'Participation ended.'; }
+    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId && !(t.template.autoComplete && r.status === 'answered')) { r.status = 'cancelled'; r.message = 'Participation ended.'; }
   }
   clearRoles(): void { this.assignments = []; }
 
@@ -72,7 +72,7 @@ export class TaskEngine {
     const task = this.instances.find(t => t.id === instanceId && t.sessionId === sessionId);
     const r = task?.recipients.find(r => r.participantId === participantId);
     const option = task?.template.options.find(o => o.id === optionId);
-    if (!task || !r || !option || task.status !== 'open' || this.current(participantId, sessionId)?.task.id !== task.id) return false;
+    if (!task || task.template.autoComplete || !r || !option || task.status !== 'open' || this.current(participantId, sessionId)?.task.id !== task.id) return false;
     if (r.status === 'accepted' || r.status === 'answered') return r.optionId === optionId;
     if (r.status !== 'pending' && r.status !== 'full') return false;
     const winner = option.audioByVote ? this.workflow?.winner(option.audioByVote.questionId) : null;
@@ -125,14 +125,29 @@ export class TaskEngine {
   close(id: string, cancel = false): boolean {
     const task = this.instances.find(t => t.id === id);
     if (!task) return false;
+    if (cancel && task.template.autoComplete && task.status === 'closed') return true;
     task.status = cancel ? 'cancelled' : 'closed';
     for (const r of task.recipients) if (cancel || r.status === 'pending' || r.status === 'full') {
       r.status = cancel ? 'cancelled' : 'expired'; r.message = cancel ? 'Task cancelled.' : 'Responses closed.';
     }
     return true;
   }
+  private complete(task: TaskInstance, at: number): void {
+    const option = task.template.options[0]!;
+    for (const recipient of task.recipients) {
+      if (recipient.status !== 'pending') continue;
+      delete recipient.audio;
+      Object.assign(recipient, { status: 'answered', optionId: option.id, sequence: ++this.sequence,
+        respondedAt: at, message: option.message });
+    }
+    task.status = 'closed';
+  }
   tick(now: number): void {
-    for (const t of this.instances) if (t.status === 'open' && now >= t.deadlineAt) this.close(t.id);
+    for (const task of this.instances) {
+      if (task.status !== 'open' || now < task.deadlineAt) continue;
+      if (task.template.autoComplete) this.complete(task, task.deadlineAt);
+      else this.close(task.id);
+    }
     const due = this.followups.filter(f => f.at <= now);
     this.followups = this.followups.filter(f => f.at > now);
     for (const f of due) {
@@ -144,7 +159,15 @@ export class TaskEngine {
       this.open(template, source.sessionId, [f.participantId], now, source.phaseId === null || source.template.persistAcrossPhases ? null : { id: source.phaseId, epoch: source.phaseEpoch! });
     }
   }
-  cancelPhase(phaseId: string, phaseEpoch: number): void { for (const t of this.instances) if (!t.template.persistAcrossPhases && t.phaseId === phaseId && t.phaseEpoch === phaseEpoch && t.status !== 'cancelled') this.close(t.id, true); }
+  endPhase(phaseId: string, phaseEpoch: number, endedAt?: number): void {
+    for (const task of this.instances) {
+      if (task.template.persistAcrossPhases || task.phaseId !== phaseId || task.phaseEpoch !== phaseEpoch || task.status === 'cancelled') continue;
+      if (endedAt !== undefined && task.template.autoComplete && task.status === 'open') {
+        this.complete(task, Math.min(endedAt, task.deadlineAt));
+      }
+      else this.close(task.id, true);
+    }
+  }
   cancelAll(): void { for (const t of this.instances) this.close(t.id, true); }
   current(participantId: string, sessionId: string): { task: TaskInstance; recipient: TaskRecipient } | null {
     const task = [...this.instances].reverse().find(t => t.sessionId === sessionId && t.recipients.some(r => r.participantId === participantId));

@@ -106,7 +106,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - QR-based admission with signed join grants — `admission/qr.ts`, `tokens.ts`
 - Participant registry, capacity limits, returning-participant lease/reconnect — `admission/registry.ts`
 - Per-path admission programs (intro + loop clocks per device), capability-gated join with compatible update notice, occupant handover with `occupantId` validation of queued commands — `admission/admission-program.ts`, `admission/controller.ts`
-- Server-arbitrated participant tasks and capacity-limited roles; restart cancels old-session tasks; late joiners in the audience join a scene task that is still open — `apps/server/src/prompts/task-engine.ts`
+- Server-arbitrated participant tasks and capacity-limited roles; Studio can mark bookkeeping tasks to complete at scene end or deadline without a response button; restart cancels old-session tasks; late joiners in the audience join a scene task that is still open — `apps/server/src/prompts/task-engine.ts`
 - PIN-protected staff menu on native tablets: assigns a published staff pick (role and/or group) to that tablet's occupant; PIN from env `STAFF_PIN`, per-participant lockout — `apps/server/src/prompts/staff-gate.ts`, `PhaseEngine.staffCommand`, `apps/native/src/StaffMenu.tsx`, protocol `staff_menu_request`/`staff_assign`, Studio `StaffPickEditor.tsx`
 - Per-IP join rate limiting
 - Late-join toggle, printed/hidden phone join URL

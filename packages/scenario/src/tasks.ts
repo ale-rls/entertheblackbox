@@ -20,6 +20,7 @@ export const participantTaskSchema = z.object({
   // Show-scoped workflows survive scene changes, but are cancelled on show end/restart.
   persistAcrossPhases: z.boolean().optional(),
   audio: taskAudioSchema.optional(),
+  autoComplete: z.boolean().optional(),
   durationMs: z.number().int().min(1000).max(3_600_000),
   options: z.array(z.object({ id, label: z.string().trim().min(1).max(200),
     roleId: id.optional(),
@@ -37,6 +38,15 @@ export const participantTaskSchema = z.object({
   fullMessage: z.string().max(2000).default('This option is full. Choose another available option.'),
   /** Plays with fullMessage when a chosen option is full and has no overflow. */
   fullAudio: taskAudioSchema.optional(),
+}).refine(task => {
+  if (!task.autoComplete) return true;
+  const [option] = task.options;
+  return !task.persistAcrossPhases && task.options.length === 1 && !!option &&
+    option.capacity === undefined && !option.roleId && !option.groupId && !option.nextTaskId &&
+    !option.audio && !option.audioByVote && !option.rankOutcomes && !option.overflow;
+}, {
+  path: ['autoComplete'],
+  message: 'Automatic completion requires one unlimited bookkeeping option without routing, outcome recordings, or persistence across scenes.',
 });
 export type ParticipantTask = z.infer<typeof participantTaskSchema>;
 export const taskRecipientSchema = z.object({
