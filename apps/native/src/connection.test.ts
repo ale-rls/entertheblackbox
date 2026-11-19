@@ -16,6 +16,13 @@ function fixture() {
   clients.push(c); c.start(); sockets[0]!.onopen?.(); return { c, sockets, message, saveLease, ended, status };
 }
 describe('native connection lifecycle', () => {
+  it('reports whether a message actually left the tablet', () => {
+    const { c, sockets } = fixture();
+    expect(c.send({ t: 'button_vote', v: 2, sessionId: 's', phaseEpoch: 1, outcome: 'A' })).toBe(true);
+    sockets[0]!.readyState = 3;
+    expect(c.send({ t: 'button_vote', v: 2, sessionId: 's', phaseEpoch: 1, outcome: 'A' })).toBe(false);
+    expect(sockets[0]!.send).toHaveBeenCalledTimes(3);
+  });
   it('joins with stored identity and ignores events from replaced sockets', () => {
     const { c, sockets, message } = fixture();
     expect(JSON.parse(sockets[0]!.send.mock.calls[0]![0])).toMatchObject({ t: 'join', participantLease: 'stored-lease' });

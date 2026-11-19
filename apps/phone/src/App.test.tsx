@@ -88,3 +88,25 @@ it("answers tasks, handles full outcomes, and disables responses on disconnect a
   await receive({ ...task, task: { ...task.task!, status: "cancelled" } }); expect(host.querySelector('.participant-task')).toBeNull();
   await receive({ ...task, sessionId: "old-show" }); expect(host.querySelector('.participant-task')).toBeNull();
 });
+
+it("holds vote buttons while reconnecting instead of dropping the tap", async () => {
+  await receive({ t: "identity", v: 2, clientId: "visitor", color: "#ffffff", sessionId: "show", participantLease: "lease", leaseExpiresAt: 1e12 });
+  await receive({ t: "phase", v: 2, sessionId: "show", phaseEpoch: 1, serverTime: 1000,
+    phase: { id: "intro", kind: "video", src: "video.mp4", startedAt: 1000, expectedDurationMs: 10000, scenarioVersion: "v1", deadlineAt: 11000, next: "end" } });
+  await receive({ t: "voting_options", v: 2, sessionId: "show", phaseEpoch: 1, method: "phone-buttons", closed: false, question: "Open the curtain?",
+    options: [{ id: "A", label: "JA" }, { id: "B", label: "NEIN" }] });
+  const yes = () => host.querySelector<HTMLButtonElement>('section[aria-label="Antwort wählen"] button')!;
+  expect(yes().disabled).toBe(false);
+
+  await act(async () => mock.options!.onSocketLost!());
+  expect(yes().disabled).toBe(true);
+  expect(host.textContent).toContain("Reconnecting…");
+  mock.send.mockClear();
+  await act(async () => yes().click());
+  expect(mock.send).not.toHaveBeenCalled();
+
+  await receive({ t: "identity", v: 2, clientId: "visitor", color: "#ffffff", sessionId: "show", participantLease: "lease", leaseExpiresAt: 1e12 });
+  expect(yes().disabled).toBe(false);
+  await act(async () => yes().click());
+  expect(mock.send).toHaveBeenCalledWith(expect.objectContaining({ t: "button_vote", sessionId: "show", outcome: "A" }));
+});
