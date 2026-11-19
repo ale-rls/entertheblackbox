@@ -161,7 +161,7 @@ export class CursorPipeline {
   }
 
   requestSnapshot(): void {
-    if (this.cursors.size === 0) return;
+    if (this.cursors.size === 0 && (this.entryStage || this.ghostCursors.length === 0)) return;
     this.lastEmittedCursors = [];
     this.dirty = true;
   }
