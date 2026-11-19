@@ -53,7 +53,7 @@ export class CueBridge {
   handle(event: Envelope): void {
     if (typeof event.bootId === "string" && typeof event.sequence === "number") {
       if (event.bootId === this.bootId && event.sequence <= this.lastSequence && event.type !== "snapshot") return;
-      if (event.bootId !== this.bootId) this.firedEpochs.clear();
+      if (event.bootId !== this.bootId) { this.firedEpochs.clear(); this.sceneStarts.clear(); }
       this.bootId = event.bootId;
       this.lastSequence = Math.max(event.type === "snapshot" ? -1 : this.lastSequence, event.sequence);
     }
@@ -65,9 +65,17 @@ export class CueBridge {
         const scenes = timelines.map((timeline) => `${timelineKey(timeline)}: ${String(timeline.phaseId)}`);
         this.log(`connected · ${scenes.length ? `current scene ${scenes.join(", ")}` : "no show running"} · nothing replayed`);
         this.firedEpochs.clear();
+        // As in the Eos bridge: a group scene older than the shared timeline belongs to a branch that has ended.
+        const mainEpoch = timelines.find((entry) => timelineKey(entry) === "main")?.phaseEpoch;
+        const current = new Map<string, number>();
         for (const timeline of timelines) {
-          if (typeof timeline.timelineId === "string" && typeof timeline.phaseEpoch === "number") this.firedEpochs.set(timelineKey(timeline), timeline.phaseEpoch);
+          if (typeof timeline.timelineId !== "string" || typeof timeline.phaseEpoch !== "number") continue;
+          this.firedEpochs.set(timelineKey(timeline), timeline.phaseEpoch);
+          if (timelineKey(timeline) === "main" || typeof mainEpoch !== "number" || timeline.phaseEpoch > mainEpoch) current.set(timelineKey(timeline), timeline.phaseEpoch);
         }
+        // Events (a retire, a reunion) may have been missed while disconnected: music still waiting for its
+        // scene's pre-roll only survives if that scene is still the current one on its timeline.
+        for (const [waiting, { epoch }] of [...this.sceneStarts]) if (current.get(waiting) !== epoch) this.sceneStarts.delete(waiting);
         return;
       }
       case "phase": {
