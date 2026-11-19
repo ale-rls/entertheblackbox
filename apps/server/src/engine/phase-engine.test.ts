@@ -72,6 +72,7 @@ function setup(options: {
   qr?: boolean;
   autoStartOnFirstParticipant?: boolean;
   scheduledStartTimes?: number[];
+  groupSelection?: NonNullable<ConstructorParameters<typeof PhaseEngine>[0]["groupSelection"]>;
 } ) {
   const registry = new ParticipantRegistry(2, 50);
   const checkpoints = options.checkpoints ?? [];
@@ -91,6 +92,7 @@ function setup(options: {
       displayDisconnectTimeoutMs: options.displayDisconnectTimeoutMs ?? 1_000_000,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
+    ...(options.groupSelection === undefined ? {} : { groupSelection: options.groupSelection }),
     ...(options.autoStartOnFirstParticipant === undefined ? {} : { autoStartOnFirstParticipant: options.autoStartOnFirstParticipant }),
     ...(options.scheduledStartTimes === undefined ? {} : { scheduledStartTimes: options.scheduledStartTimes }),
     ...(options.sessionEnds === undefined
@@ -565,6 +567,53 @@ describe("PhaseEngine lifecycle", () => {
     });
     now = finishVideo(engine);
     expect(engine.currentPhaseId).toBe("idle");
+  });
+
+  it.each(["open", "skip"] as const)("keeps video vote buttons disabled until the engine opens the vote (%s)", (action) => {
+    let now = 1_000;
+    const { engine, registry } = setup({
+      now: () => now,
+      testScenario: compositeVideoQuestionScenario,
+      groupSelection: { current: () => null, select: () => {}, method: () => "phone-buttons" },
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    const socket = phone as unknown as WebSocket;
+    addParticipant(registry, socket, now, "p1");
+    engine.participantJoined(socket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    const votingOptions = (client: MockSocket) => client.sent.filter((message) => message.t === "voting_options");
+
+    now = 1_100;
+    engine.tick(now);
+    expect(votingOptions(phone).map((message) => message.closed)).toEqual([true]);
+
+    const reconnected = new MockSocket();
+    const replacementSocket = reconnected as unknown as WebSocket;
+    engine.socketClosed(socket);
+    now = action === "open" ? 1_120 : 1_119;
+    addParticipant(registry, replacementSocket, now, "p1");
+    engine.participantJoined(replacementSocket, registry.get("lease-p1"));
+    expect(votingOptions(reconnected).map((message) => message.closed)).toEqual([true]);
+
+    const vote = (outcome: string) => engine.handleClientMessage({
+      t: "button_vote", v: 2, sessionId: "session-1", phaseEpoch: engine.currentPhaseEpoch, outcome,
+    }, replacementSocket);
+    vote("q1");
+    if (action === "skip") {
+      engine.adminSkip(now);
+      expect(votingOptions(reconnected).map((message) => message.closed)).toEqual([true, true]);
+      expect(display.sent.find((message) => message.t === "question_resolved")?.quadrantCounts).toMatchObject({ q1: 0 });
+      return;
+    }
+
+    engine.tick(now);
+    expect(votingOptions(reconnected).map((message) => message.closed)).toEqual([true, false]);
+    vote("q2");
+    now = 1_140;
+    engine.tick(now);
+    expect(votingOptions(reconnected).map((message) => message.closed)).toEqual([true, false, true]);
+    expect(display.sent.find((message) => message.t === "question_resolved")?.quadrantCounts).toMatchObject({ q1: 0, q2: 1 });
   });
 
   it("ignores display video_ended: only the server clock ends a video", () => {
