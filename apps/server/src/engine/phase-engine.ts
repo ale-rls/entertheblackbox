@@ -1086,6 +1086,7 @@ export class PhaseEngine {
       localPath.participantJoined(socket, _participant);
       return;
     }
+    if (_participant && this.pathsStarted && this.joinDeviceGroupPath(_participant)) return;
     if (_participant && this.pathsStarted) this.options.onParticipantPhase?.([_participant.clientId], { kind: "idle", id: "idle" }, this.now());
     const phase = this.currentPhase();
     if (_participant && phase.kind === "group-branch" && !phase.sourceGroupIds) {
@@ -1106,6 +1107,23 @@ export class PhaseEngine {
     if (this.lifecycle === "idle" && this.registry.connectedCount >= 1) {
       this.startLobby(this.now());
     }
+  }
+
+  /**
+   * A late arrival whose group is fixed by its device (`groupByClient`, e.g.
+   * browsers → theater) joins that group's running timeline at once, as an
+   * operator transfer would. Without this it waits outside every path: its
+   * phone shows the split and its cursor reaches no display. A group that
+   * already finished takes it into its reunion wait. Anyone else
+   * (self-selected or vote-derived groups, a group with running subgroups)
+   * still waits for the operator or the reunion.
+   */
+  private joinDeviceGroupPath(participant: ParticipantRecord): boolean {
+    if (this.path) return false;
+    const groupId = participant.client === undefined ? undefined : this.scenario.groupByClient?.[participant.client];
+    if (groupId === undefined || this.groupSelection?.current(participant.clientId) !== groupId) return false;
+    if (this.pathChainForGroup(groupId).length === 0) return false;
+    return this.assignParticipantGroup(participant.clientId, groupId).ok;
   }
 
   socketClosed(socket: WebSocket): void {
