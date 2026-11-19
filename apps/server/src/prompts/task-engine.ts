@@ -169,8 +169,14 @@ export class TaskEngine {
     }
   }
   cancelAll(): void { for (const t of this.instances) this.close(t.id, true); }
+  /** The task this participant should see: one still waiting on their answer, else the one they last touched (for its feedback). */
   current(participantId: string, sessionId: string): { task: TaskInstance; recipient: TaskRecipient } | null {
-    const task = [...this.instances].reverse().find(t => t.sessionId === sessionId && t.recipients.some(r => r.participantId === participantId));
+    const mine = [...this.instances].reverse().filter(t => t.sessionId === sessionId && t.recipients.some(r => r.participantId === participantId));
+    const own = (t: TaskInstance) => t.recipients.find(r => r.participantId === participantId)!;
+    // A late recipient added to an older open task must not be hidden behind a newer, finished one.
+    const waiting = mine.find(t => t.status === 'open' && ['pending', 'full'].includes(own(t).status));
+    const touched = (t: TaskInstance) => Math.max(t.createdAt, own(t).respondedAt ?? -Infinity);
+    const task = waiting ?? mine.reduce<TaskInstance | undefined>((best, t) => !best || touched(t) > touched(best) ? t : best, undefined);
     const recipient = task?.recipients.find(r => r.participantId === participantId);
     return task && recipient ? { task, recipient } : null;
   }
