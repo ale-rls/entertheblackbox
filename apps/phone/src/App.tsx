@@ -130,7 +130,17 @@ export function App() {
   useEffect(() => {
     if (connection === null) return;
     connection.start();
-    return () => connection.stop();
+    // Waking the phone or getting the network back replaces a socket that went quiet meanwhile.
+    const resume = () => { if (document.visibilityState === "visible") connection.resume(); };
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("pageshow", resume);
+    window.addEventListener("online", resume);
+    return () => {
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("pageshow", resume);
+      window.removeEventListener("online", resume);
+      connection.stop();
+    };
   }, [connection]);
 
   useEffect(() => () => {

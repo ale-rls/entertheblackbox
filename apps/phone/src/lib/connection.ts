@@ -29,6 +29,8 @@ export type PhoneConnectionOptions = {
   webSocketFactory?: (url: string) => WebSocket;
   storage?: Pick<Storage, "getItem" | "setItem" | "removeItem">;
   pingIntervalMs?: number;
+  /** Reconnect when nothing (not even a pong) has arrived for this long. */
+  staleAfterMs?: number;
   now?: () => number;
   rng?: () => number;
 };
@@ -48,12 +50,15 @@ export class PhoneConnection {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private endedSession: EndedPhoneSession | null = null;
+  private lastReceivedAt = 0;
   private readonly pingIntervalMs: number;
+  private readonly staleAfterMs: number;
   private readonly now: () => number;
   private readonly rng: () => number;
 
   constructor(private readonly options: PhoneConnectionOptions) {
     this.pingIntervalMs = options.pingIntervalMs ?? 10_000;
+    this.staleAfterMs = options.staleAfterMs ?? 25_000;
     this.now = options.now ?? (() => Date.now());
     this.rng = options.rng ?? Math.random;
   }
@@ -70,6 +75,20 @@ export class PhoneConnection {
     this.ws = null;
   }
 
+  /**
+   * The page is visible or online again. A socket that slept through a Wi-Fi
+   * change or a locked screen can still look open while nothing arrives, so a
+   * quiet one is replaced at once instead of waiting for the backoff timer.
+   */
+  resume(): void {
+    if (this.stopped || this.now() < this.retryNotBefore) return;
+    if (this.ws?.readyState === WebSocket.OPEN && this.now() - this.lastReceivedAt < this.pingIntervalMs + 2_000) {
+      this.send({ t: "ping", v: PROTOCOL_VERSION, clientTime: this.now() });
+      return;
+    }
+    this.reconnectNow();
+  }
+
   send(message: PhoneToServerMessage): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(encodeMessage(message));
@@ -83,6 +102,7 @@ export class PhoneConnection {
     this.ws = ws;
 
     ws.onopen = () => {
+      this.lastReceivedAt = this.now();
       this.options.onSocketOpen?.();
       const lease = loadLease(this.options.installationId, this.options.storage);
       this.send({
@@ -97,13 +117,19 @@ export class PhoneConnection {
         ...(lease === null ? {} : { participantLease: lease }),
       });
       this.send({ t: "ping", v: PROTOCOL_VERSION, clientTime: this.now() });
-      this.pingTimer = setInterval(
-        () => this.send({ t: "ping", v: PROTOCOL_VERSION, clientTime: this.now() }),
-        this.pingIntervalMs,
-      );
+      this.pingTimer = setInterval(() => {
+        // Pongs answer every ping, so silence means a half-open socket: the
+        // phone would keep showing "online" while its cursor and votes go nowhere.
+        if (this.now() - this.lastReceivedAt > this.staleAfterMs) {
+          this.reconnectNow();
+          return;
+        }
+        this.send({ t: "ping", v: PROTOCOL_VERSION, clientTime: this.now() });
+      }, this.pingIntervalMs);
     };
 
     ws.onmessage = (event: MessageEvent) => {
+      this.lastReceivedAt = this.now();
       const parsed = parseServerMessage(event.data);
       if (!parsed.ok) {
         console.warn("phone: dropped invalid server message:", parsed.reason);
@@ -164,6 +190,23 @@ export class PhoneConnection {
     ws.onerror = () => {
       // onclose follows and owns reconnection.
     };
+  }
+
+  /** Drop the current socket without its close handler and join again straight away. */
+  private reconnectNow(): void {
+    if (this.stopped) return;
+    this.clearTimers();
+    const old = this.ws;
+    this.ws = null;
+    if (old) {
+      old.onopen = null;
+      old.onmessage = null;
+      old.onclose = null;
+      old.onerror = null;
+      try { old.close(); } catch { /* already gone */ }
+    }
+    this.options.onSocketLost?.();
+    this.connect();
   }
 
   private clearTimers(): void {

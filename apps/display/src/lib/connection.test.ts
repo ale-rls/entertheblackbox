@@ -99,3 +99,42 @@ describe("DisplayConnection close handling", () => {
     expect(sockets).toHaveLength(1);
   });
 });
+
+describe("DisplayConnection watchdog", () => {
+  afterEach(() => vi.useRealTimers());
+  const pong = (socket: FakeWebSocket) => socket.onmessage?.({
+    data: JSON.stringify({ t: "pong", v: 2, echoClientTime: Date.now(), serverTime: Date.now() }),
+  } as MessageEvent);
+
+  it("replaces a socket that stays open but stops answering, and joins again", () => {
+    vi.useFakeTimers();
+    const { connection, sockets, statuses } = harness();
+    connection.start();
+    sockets[0]!.onopen?.({} as Event);
+    vi.advanceTimersByTime(20_000);
+    expect(sockets).toHaveLength(1);
+    vi.advanceTimersByTime(10_000);
+    expect(sockets).toHaveLength(2);
+    expect(statuses.at(-1)).toBe("reconnecting");
+    // The old socket's late close must not start a second reconnect.
+    sockets[0]!.serverClose();
+    vi.advanceTimersByTime(1_000);
+    expect(sockets).toHaveLength(2);
+    sockets[1]!.onopen?.({} as Event);
+    expect(sockets[1]!.sent[0]).toMatchObject({ t: "display_join", displayToken: "token" });
+    connection.stop();
+  });
+
+  it("keeps a socket that answers its pings", () => {
+    vi.useFakeTimers();
+    const { connection, sockets } = harness();
+    connection.start();
+    sockets[0]!.onopen?.({} as Event);
+    for (let i = 0; i < 30; i += 1) {
+      vi.advanceTimersByTime(10_000);
+      pong(sockets[0]!);
+    }
+    expect(sockets).toHaveLength(1);
+    connection.stop();
+  });
+});
