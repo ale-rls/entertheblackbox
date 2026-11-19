@@ -351,7 +351,8 @@ export class PhaseEngine {
     });
     this.qr = options.qr === undefined ? null : new QrGrantPushLoop({
       ...options.qr,
-      send: (message) => { this.sendToDisplay(message); for (const socket of this.signageDisplays.values()) this.send(socket, message); },
+      send: (message) => this.sendToDisplay(message),
+      sendSignage: (message) => { for (const socket of this.signageDisplays.values()) this.send(socket, message); },
       lifecycle: () => this.lifecycle,
       hasDisplay: () => this.displaySocket !== undefined || this.signageDisplays.size > 0,
       now: this.now,
