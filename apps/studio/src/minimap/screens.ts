@@ -110,6 +110,8 @@ function mainLayers(scenario: Scenario, phase: Phase, groupId: string | undefine
       break;
     }
     case "position-question":
+      if (phase.spotlight) return groupId === undefined ? [{ kind: "placeholder", text: "Spotlights" }] : [];
+      // fall through to the shared question preview
     case "video-position-question": {
       if (phase.kind === "video-position-question") layers.push(phase.audioSrc ? { kind: "image", src: phase.src } : { kind: "video", src: phase.src });
       if (phase.title && phase.kind === "position-question") layers.push({ kind: "title", text: phase.title });
@@ -171,7 +173,7 @@ function appLayers(scenario: Scenario, phase: Phase, groupId: string | undefined
   }
   const choices = groupChoices(scenario, phase);
   if (choices.length) layers.push({ kind: "buttons", options: choices });
-  if (isVote(phase) && audienceGroups(scenario, groupId).some((group) => group.votingMethod === "phone-buttons")) layers.push({ kind: "buttons", options: answerOptions(phase) });
+  if (isVote(phase) && !(phase.kind === "position-question" && phase.spotlight) && audienceGroups(scenario, groupId).some((group) => group.votingMethod === "phone-buttons")) layers.push({ kind: "buttons", options: answerOptions(phase) });
   if ((phase.kind === "video" || phase.kind === "video-position-question") && phase.rating) layers.push({ kind: "rating" });
   if ("taskId" in phase && phase.taskId) layers.push({ kind: "task", title: scenario.participantTasks?.find((task) => task.id === phase.taskId)?.title ?? phase.taskId });
   const audio = phase.kind === "group-branch"
@@ -190,7 +192,7 @@ function webLayers(scenario: Scenario, phase: Phase, groupId: string | undefined
   if (choices.length) layers.push({ kind: "buttons", options: choices });
   if (isVote(phase)) {
     const groups = audienceGroups(scenario, groupId);
-    const cursor = groups.length === 0 || groups.some((group) => group.votingMethod !== "phone-buttons" && group.votingMethod !== "physical");
+    const cursor = (phase.kind === "position-question" && !!phase.spotlight) || groups.length === 0 || groups.some((group) => group.votingMethod !== "phone-buttons" && group.votingMethod !== "physical");
     if (cursor) layers.push({ kind: "cursor-pad" });
     else if (groups.some((group) => group.votingMethod === "phone-buttons")) layers.push({ kind: "buttons", options: answerOptions(phase) });
   }

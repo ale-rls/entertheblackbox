@@ -11,12 +11,14 @@ export function Countdown({
   deadlineAt,
   className,
   minimumSeconds = 0,
+  hideAtZero = false,
   center,
 }: {
   clock: ServerClock;
   deadlineAt: number;
   className?: string;
   minimumSeconds?: number;
+  hideAtZero?: boolean;
   center?: { x: number; y: number } | null;
 }) {
   const [remainingMs, setRemainingMs] = useState(() =>
@@ -31,6 +33,7 @@ export function Countdown({
     return () => clearInterval(timer);
   }, [clock, deadlineAt]);
 
+  if (hideAtZero && remainingMs <= 0) return null;
   return (
     <div
       className={["countdown", center ? "countdown-field-centered" : "", className].filter(Boolean).join(" ")}

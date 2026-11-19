@@ -99,3 +99,16 @@ The prototype's `tools/make_maps.py` builds one from a 1280×704, 24 fps clip:
 colour top-left, normal X top-right, normal Y bottom-left, depth
 bottom-right, 2560×1408 in total. Normal and depth tiles must not be colour
 managed or tone mapped.
+
+## Casting spotlights
+
+On a main-timeline **Position question** with a fixed target, enable
+**Use spotlights on the main display** in Studio. Set the countdown, the
+spotlight diameter as a percentage of the screen height, and how long to hold
+the final positions. The main display uses the shared curtain video when
+configured, or a built-in fabric pattern. It requires WebGL2.
+
+Participants steer their spots with the browser trackpad. When the countdown
+ends, the server holds their last positions and then advances to the fixed
+target. Casting is decided in the room. Rehearse diameter, brightness and hold
+time on the gauze before using the cue in a performance.
