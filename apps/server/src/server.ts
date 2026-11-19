@@ -137,7 +137,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   const surface = new SurfaceController({ recipients: () => admission.registry.values().map((participant) => ({ ...participant, name: participant.deviceLabel ?? participant.name })) });
   const surfaceEffects = new SurfaceEffectRunner(surface);
   const surfaceCues = new SurfaceCueScheduler(surfaceEffects, () => surfaceDeviceOrder(
-    admission.registry.values().map((participant) => ({ clientId: participant.clientId, name: participant.deviceLabel ?? participant.name }))));
+    admission.registry.values().map((participant) => ({ clientId: participant.clientId, name: participant.deviceLabel ?? participant.name, client: participant.client }))));
   // Admin's Instrument takes over from scene cues whenever the operator starts or stops an effect.
   const operatorSurfaceEffects = {
     get state() { return surfaceEffects.state; },
