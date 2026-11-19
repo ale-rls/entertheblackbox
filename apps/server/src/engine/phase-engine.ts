@@ -50,6 +50,7 @@ import {
 } from "../votes/index.js";
 import { VideoPhaseHandler } from "./video.js";
 import { acceptsVotingInput, pointForOutcome, votingOptions } from "../groups/voting.js";
+import { guardedInterval } from "./guarded-interval.js";
 
 type GroupPath = { engine: PhaseEngine; members: Set<string> };
 
@@ -942,7 +943,7 @@ export class PhaseEngine {
 
   start(): void {
     if (this.timer !== null) return;
-    this.timer = setInterval(() => this.tick(), 250);
+    this.timer = guardedInterval("show timer", () => this.tick(), 250);
     this.cursors.start();
     this.movement.start();
     this.ghosts.start();

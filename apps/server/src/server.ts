@@ -37,6 +37,7 @@ import { writeLobbyStartTimes } from "./persistence/lobby-config.js";
 import type { PocketBaseClient } from "./persistence/pocketbase-client.js";
 import { getLatestPublishedShow, listPublishedShows, loadScenarioReadiness, publishShow, type ScenarioReadiness } from "./readiness.js";
 import { registerBundleRoutes, registerFontRoutes, registerMediaRoutes } from "./static.js";
+import { setTimerErrorReporter } from "./engine/guarded-interval.js";
 
 export const WEBSOCKET_MAX_PAYLOAD_BYTES = 16 * 1024;
 export const DEFAULT_MAX_WEBSOCKET_CONNECTIONS = 300;
@@ -83,6 +84,12 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   const startedAt = Date.now();
   const app = Fastify({ logger: config.nodeEnv !== "test" });
   const rehearsals = new Rehearsals(config, (error) => app.log.error({ error }, "rehearsal failed"));
+  // A failing show timer is logged and listed in Admin instead of ending the process.
+  setTimerErrorReporter((label, error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    app.log.error({ error }, `${label} failed`);
+    options.adminData?.recordError?.({ message: `${label}: ${message}`, at: new Date().toISOString(), path: "timer" });
+  });
   rehearsals.registerPublic(app);
   const cueFeed = new CueFeed();
   cueFeed.register(app, config.displayToken);
@@ -584,6 +591,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     surfaceEffects.stop();
     tracking?.stop();
     engine?.stop();
+    setTimerErrorReporter(null);
     for (const socket of webSockets.clients) socket.terminate();
     await new Promise<void>((resolve) => webSockets.close(() => resolve()));
   });

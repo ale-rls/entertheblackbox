@@ -1,4 +1,5 @@
 import { PROTOCOL_VERSION, type Cursor, type CursorsMessage, type PresenceMessage } from "@entertheblackbox/protocol";
+import { guardedInterval } from "../engine/guarded-interval.js";
 
 export const CURSOR_TICK_INTERVAL_MS = 40;
 
@@ -167,7 +168,7 @@ export class CursorPipeline {
 
   start(): void {
     if (this.timer !== null) return;
-    this.timer = setInterval(() => this.tick(), this.intervalMs);
+    this.timer = guardedInterval("cursor frames", () => this.tick(), this.intervalMs);
   }
 
   stop(): void {
