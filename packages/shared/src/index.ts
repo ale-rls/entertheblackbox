@@ -9,7 +9,9 @@ export const DEFAULT_INSTALLATION_POLICY = {
   maxParticipants: 30,
   qrRotationMs: 60_000,
   joinGrantTtlMs: 120_000,
-  participantLeaseTtlMs: 7_200_000,
+  // Long enough for a whole evening, Einlass to curtain call (#433). Leases
+  // from a visit are still revoked the moment that show ends.
+  participantLeaseTtlMs: 21_600_000,
   allowLateJoin: true,
   activeQrVisibility: "corner",
   lobbyCountdownMs: 10_000,
