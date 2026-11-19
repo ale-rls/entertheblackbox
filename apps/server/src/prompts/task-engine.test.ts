@@ -18,6 +18,18 @@ describe('participant tasks', () => {
     expect(e.respond(t.id,'s','late','yes',4)).toBe(true);
     expect(e.addRecipient(t.id,'too-late',1000)).toBe(false); expect(e.all()[0]!.status).toBe('closed');
   });
+  it('shows and accepts an older open task a participant was added to after finishing a newer one', () => {
+    const e = new TaskEngine();
+    const casting = e.open(template, 's', [], 0, { id: 'scene', epoch: 1 });
+    const operator = e.open(template, 's', ['a'], 1);
+    expect(e.respond(operator.id, 's', 'a', 'no', 2)).toBe(true);
+    // Staff move them into the casting group before its deadline.
+    expect(e.addRecipient(casting.id, 'a', 3)).toBe(true);
+    expect(e.current('a', 's')).toMatchObject({ task: { id: casting.id }, recipient: { status: 'pending' } });
+    expect(e.respond(casting.id, 's', 'a', 'yes', 4)).toBe(true);
+    // Once answered, the tablet keeps the feedback of the choice it just made.
+    expect(e.current('a', 's')).toMatchObject({ task: { id: casting.id }, recipient: { status: 'accepted' } });
+  });
   it('rejects wrong session, unknown recipients/options and expired responses', () => {
     const e = new TaskEngine(); const t = e.open(template,'s',['a'],0);
     expect(e.respond(t.id,'old','a','yes',1)).toBe(false);
