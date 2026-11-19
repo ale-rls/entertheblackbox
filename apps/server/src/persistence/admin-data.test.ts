@@ -85,3 +85,40 @@ describe("PocketBaseAdminDataSource movement deletion", () => {
     ]);
   });
 });
+
+describe("PocketBaseAdminDataSource movement write limit", () => {
+  it("drops newer batches while PocketBase is stalled, instead of queueing without limit, and writes again once it recovers", async () => {
+    const releases: Array<() => void> = [];
+    const created: number[] = [];
+    let stalled = true;
+    const client = {
+      ensureAuth: vi.fn(async () => undefined),
+      pb: {
+        collection: () => ({
+          create: (data: { batchIndex: number }) => new Promise<void>((resolve) => {
+            const done = () => { created.push(data.batchIndex); resolve(); };
+            if (stalled) releases.push(done); else done();
+          }),
+        }),
+      },
+    } as unknown as PocketBaseClient;
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const data = new PocketBaseAdminDataSource(client, { installationId: "inst-1", roomId: "room-1" }, 3, () => 0);
+    const batch = (batchIndex: number) => data.recordMovementBatch({
+      recordingId: "recording-1", sessionId: "session-1", participantId: "participant-1",
+      batchIndex, recordedAt: batchIndex, samples: [{ t: batchIndex, x: 0.5, y: 0.5 }],
+    } as Parameters<typeof data.recordMovementBatch>[0]);
+
+    for (let index = 0; index < 10; index += 1) batch(index);
+    await vi.waitFor(() => expect(releases).toHaveLength(1));
+    expect(console.error).toHaveBeenCalledTimes(1);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining("dropped 1 batch"));
+
+    stalled = false;
+    releases.shift()!();
+    await vi.waitFor(() => expect(created).toEqual([0, 1, 2]));
+    batch(10);
+    await vi.waitFor(() => expect(created).toEqual([0, 1, 2, 10]));
+    vi.restoreAllMocks();
+  });
+});
