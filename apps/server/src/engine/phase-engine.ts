@@ -1014,7 +1014,7 @@ export class PhaseEngine {
       if (!this.pathsStarted && this.deadlineAt !== null && now >= this.deadlineAt) this.startGroupPaths(phase, now);
       if (this.pathsStarted) {
         for (const { engine } of this.paths.values()) engine.tick(now);
-        if ([...this.paths.values()].every(({ engine }) => engine.pathDone)) this.advanceTo(phase.next, now, "group-branch-complete");
+        if (this.pathsReunite()) this.advanceTo(phase.next, now, "group-branch-complete");
       }
       this.updateGroupMonitors(now);
       return;
@@ -2275,6 +2275,19 @@ export class PhaseEngine {
       if (this.timer !== null) child.cursors.start();
     }
     return true;
+  }
+
+  /**
+   * Every path has reached the reunion, or sits empty on a scene that waits for GO. Empty paths otherwise keep
+   * their clock (late arrivals and returnees rejoin them), but one parked for a GO nobody will give must not hold the show.
+   */
+  private pathsReunite(): boolean {
+    return [...this.paths.values()].every(({ engine, members }) => engine.pathDone || (members.size === 0 && engine.parkedForGo));
+  }
+
+  private get parkedForGo(): boolean {
+    const phase = this.currentPhase();
+    return phase.kind === "narration" && !!phase.waitForGo && this.deadlineAt === null;
   }
 
   private clearPaths(endedAt?: number): void {
