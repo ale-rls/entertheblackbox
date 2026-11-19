@@ -69,7 +69,7 @@ function setup(options: {
   movementBatches?: MovementBatchFlushed[];
   movementFinalized?: MovementRecordingFinalized[];
   ghostPool?: GhostPool;
-  qr?: boolean;
+  qr?: boolean | { allowLateJoin: boolean };
   autoStartOnFirstParticipant?: boolean;
   scheduledStartTimes?: number[];
   groupSelection?: NonNullable<ConstructorParameters<typeof PhaseEngine>[0]["groupSelection"]>;
@@ -124,6 +124,7 @@ function setup(options: {
               token: `grant-${issuedAt}`,
               claims: { installationId: "inst-1", roomId: "room-1", expiresAt: issuedAt + 120_000 },
             }),
+            ...(typeof options.qr === "object" ? options.qr : {}),
           },
         }
       : {}),
@@ -364,6 +365,25 @@ describe("PhaseEngine lifecycle", () => {
     expect(lobby.closes.length).toBeGreaterThan(0);
     expect(entrance.closes).toEqual([]);
     expect(display.closes).toEqual([]);
+  });
+
+  it.each([true, false])("keeps the join QR on signage during the show only while late joining is allowed (%s)", (allowLateJoin) => {
+    const { engine } = setup({ now: () => 1_000, qr: { allowLateJoin } });
+    const display = new MockSocket();
+    const entrance = new MockSocket();
+    connectDisplay(engine, display as unknown as WebSocket);
+    connectSignage(engine, entrance as unknown as WebSocket, "entrance");
+    display.sent.length = 0;
+    entrance.sent.length = 0;
+    expect(engine.adminStart(1_000)).toEqual({ ok: true });
+    // Never over the projection while the show runs.
+    expect(display.sent.filter((message) => message.t === "qr_grant")).toEqual([]);
+    expect(display.sent.some((message) => message.t === "qr_hidden")).toBe(true);
+    const lastQr = () => entrance.sent.filter((message) => message.t === "qr_grant" || message.t === "qr_hidden").at(-1)?.t;
+    expect(lastQr()).toBe(allowLateJoin ? "qr_grant" : "qr_hidden");
+    entrance.sent.length = 0;
+    engine.handleClientMessage({ t: "qr_grant_request", v: 2 }, entrance as unknown as WebSocket);
+    expect(lastQr()).toBe(allowLateJoin ? "qr_grant" : "qr_hidden");
   });
 
   it("starts the lobby and show without a display", () => {
