@@ -3,6 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { describe, expect, it, vi } from "vitest";
 import { parseServerMessage, SHOW_ENDED_CLOSE_CODE } from "@entertheblackbox/protocol";
 import { z } from "zod";
+import { DEFAULT_INSTALLATION_POLICY } from "@entertheblackbox/shared";
 import { AdmissionController, InMemoryIpRateLimiter, issueJoinGrant, issueParticipantLease, verifyJoinGrant, verifyParticipantLease } from "./index.js";
 import type { WebSocket } from "ws";
 
@@ -291,6 +292,30 @@ describe("participant admission", () => {
     join(admission, retry, grant, expiredLease, "198.51.100.7");
 
     expect(lastMessage(retry)).toMatchObject({ t: "join_rejected", reason: "expired_grant" });
+  });
+
+  it("keeps a participant who is still connected when their lease runs out, and drops them once they leave (#433)", () => {
+    let now = 1_000;
+    const admission = controller({ now: () => now });
+    const early = socket();
+    join(admission, early, admission.issueJoinGrant(now).token, undefined, "198.51.100.10");
+    expect(lastMessage(early)).toMatchObject({ t: "identity" });
+
+    // Past the lease's end, someone else joins: that join prunes the registry.
+    now = 7_300_000;
+    const late = socket();
+    join(admission, late, admission.issueJoinGrant(now).token, undefined, "198.51.100.11");
+    expect(lastMessage(late)).toMatchObject({ t: "identity" });
+    expect((early as unknown as MockSocket).closeCalls).toEqual([]);
+    expect(admission.registry.leaseCount).toBe(2);
+
+    (early as unknown as MockSocket).close();
+    admission.registry.pruneExpired(now + 1);
+    expect(admission.registry.leaseCount).toBe(1);
+  });
+
+  it("issues leases that last a whole evening by default (#433)", () => {
+    expect(DEFAULT_INSTALLATION_POLICY.participantLeaseTtlMs).toBeGreaterThanOrEqual(6 * 60 * 60 * 1000);
   });
 
   it("soft-upgrades stale phone and display bundles without blocking admission or valid messages", () => {
