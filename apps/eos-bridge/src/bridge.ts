@@ -161,12 +161,13 @@ export class LightingBridge {
         const winner = typeof event.payload?.winner === "string" ? event.payload.winner : null;
         // A question with a fixed next scene still has a field the audience chose: light that one.
         const leader = winner === "fixed" && typeof event.payload?.leader === "string" ? event.payload.leader : null;
-        const shown = leader ?? winner;
+        const leaderLook = leader !== null ? own(looks, leader) : undefined;
+        const shown = leaderLook ? leader : winner;
         // A field's own look; for tie/empty/fixed (or no winner) a look named after it, else `none`.
-        const look = (leader !== null ? own(looks, leader) : undefined)
+        const look = leaderLook
           ?? (winner !== null ? own(looks, winner) : undefined)
           ?? (winner === null || NO_FIELD_WINNER.has(winner) ? own(looks, "none") : undefined);
-        this.log(`vote ${event.phaseId} → ${leader ? `${leader} (fixed next scene)` : winner ?? "no winner"}${look ? "" : " · no look"}`);
+        this.log(`vote ${event.phaseId} → ${leaderLook ? `${leader} (fixed next scene)` : winner ?? "no winner"}${look ? "" : " · no look"}`);
         if (look) this.play(look, `vote ${event.phaseId} → ${shown ?? "none"}`);
         return;
       }
