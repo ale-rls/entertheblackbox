@@ -34,6 +34,7 @@ services:
       SHOW_ID: ${SHOW_ID:-entertheblackbox}
       DISPLAY_TOKEN: ${DISPLAY_TOKEN:?set in Coolify}
       JOIN_GRANT_SECRET: ${JOIN_GRANT_SECRET:?set in Coolify}
+      STAFF_PIN: ${STAFF_PIN:-}
       TRUST_PROXY: "true"
       ALLOW_LATE_JOIN: ${ALLOW_LATE_JOIN:-true}
       PHONE_JOIN_BASE_URL: ${PHONE_JOIN_BASE_URL:?set to the public frontend URL ending in /phone/}

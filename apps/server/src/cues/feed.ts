@@ -20,13 +20,15 @@ export class CueFeed {
 
   publish(event: ShowCueEvent): CueEnvelope {
     const envelope = { version: 1 as const, bootId: this.bootId, sequence: ++this.sequence, ...event };
+    const timeline = event.timelineKey ?? event.timelineId;
     if (event.type === "reset") this.currentByTimeline.clear();
-    if (event.type === "phase") this.currentByTimeline.set(event.timelineId, envelope);
-    if (event.type === "result") {
-      const current = this.currentByTimeline.get(event.timelineId);
-      this.currentByTimeline.set(event.timelineId, current === undefined
-        ? envelope
-        : { ...current, payload: { ...current.payload, result: event.payload } });
+    if (event.type === "phase") this.currentByTimeline.set(timeline, envelope);
+    if (event.type === "retire" || event.type === "result") {
+      const current = this.currentByTimeline.get(timeline);
+      if (current?.phaseEpoch === event.phaseEpoch && current.sessionId === event.sessionId) {
+        if (event.type === "retire") this.currentByTimeline.delete(timeline);
+        else this.currentByTimeline.set(timeline, { ...current, payload: { ...current.payload, result: event.payload } });
+      }
     }
     for (const listener of this.listeners) this.write(listener, envelope);
     return envelope;
