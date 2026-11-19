@@ -76,8 +76,7 @@ export class DisplayConnection {
   stop(): void {
     this.stopped = true;
     this.clearTimers();
-    this.ws?.close();
-    this.ws = null;
+    this.drop();
     this.setStatus("closed");
   }
 
@@ -95,6 +94,7 @@ export class DisplayConnection {
     this.ws = ws;
 
     ws.onopen = () => {
+      if (this.ws !== ws) return;
       this.lastReceivedAt = this.now();
       this.backoff.reset();
       this.setStatus("open");
@@ -122,6 +122,7 @@ export class DisplayConnection {
     };
 
     ws.onmessage = (event: MessageEvent) => {
+      if (this.ws !== ws) return;
       this.lastReceivedAt = this.now();
       const parsed = parseServerMessage(event.data);
       if (!parsed.ok) {
@@ -143,6 +144,8 @@ export class DisplayConnection {
     };
 
     ws.onclose = (event) => {
+      // Only the current socket owns the timers and the reconnect.
+      if (this.ws !== ws) return;
       this.clearTimers();
       this.ws = null;
       if (this.stopped) return;
@@ -172,16 +175,25 @@ export class DisplayConnection {
   private reconnectNow(): void {
     if (this.stopped) return;
     this.clearTimers();
+    this.drop();
+    this.connect("reconnecting");
+  }
+
+  /**
+   * Close the current socket and detach its handlers first. A close event
+   * arrives asynchronously -- seconds later on bad Wi-Fi -- and by then a
+   * replacement socket may be live; the old handler would otherwise clear the
+   * replacement's ping timer, forget it, and open yet another connection.
+   */
+  private drop(): void {
     const old = this.ws;
     this.ws = null;
-    if (old) {
-      old.onopen = null;
-      old.onmessage = null;
-      old.onclose = null;
-      old.onerror = null;
-      try { old.close(); } catch { /* already gone */ }
-    }
-    this.connect("reconnecting");
+    if (!old) return;
+    old.onopen = null;
+    old.onmessage = null;
+    old.onclose = null;
+    old.onerror = null;
+    try { old.close(); } catch { /* already gone */ }
   }
 
   private sendPing(): void {
