@@ -4,19 +4,32 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Draft } from "./model.js";
 
-const database = vi.hoisted(() => ({ drafts: [] as Draft[], deleted: [] as string[] }));
+const database = vi.hoisted(() => ({
+  drafts: [] as Draft[],
+  deleted: [] as string[],
+  put: vi.fn<(draft: Draft) => Promise<void>>(),
+  realAutosave: false,
+}));
 const media = vi.hoisted(() => ({ load: vi.fn(), upload: vi.fn(), remove: vi.fn() }));
 
-vi.mock("./drafts.js", () => ({
-  Autosave: class {
-    schedule(_draft: Draft, changed?: (status: "saved") => void) { changed?.("saved"); }
-  },
-  recoverDraft: async () => undefined,
-}));
+vi.mock("./drafts.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./drafts.js")>();
+  return {
+    ...actual,
+    Autosave: class extends actual.Autosave {
+      schedule(draft: Draft, changed?: (status: import("./drafts.js").SaveStatus) => void) {
+        if (database.realAutosave) super.schedule(draft, changed);
+        else changed?.("saved");
+      }
+    },
+  };
+});
 
 vi.mock("./pocketbase-drafts.js", () => ({
   PocketbaseDraftDatabase: class {
     async list() { return database.drafts; }
+    async revisions() { return []; }
+    put = database.put;
     async delete(id: string) {
       database.deleted.push(id);
       database.drafts = database.drafts.filter((draft) => draft.id !== id);
@@ -53,6 +66,10 @@ beforeAll(() => {
 beforeEach(() => {
   database.drafts = [];
   database.deleted = [];
+  database.realAutosave = false;
+  database.put.mockReset().mockImplementation(async (draft) => {
+    database.drafts = [structuredClone(draft), ...database.drafts.filter((item) => item.id !== draft.id)];
+  });
   media.load.mockReset().mockResolvedValue(undefined);
   media.upload.mockReset().mockResolvedValue(undefined);
   media.remove.mockReset().mockResolvedValue(undefined);
@@ -90,6 +107,71 @@ function button(label: string): HTMLButtonElement {
   if (!(match instanceof HTMLButtonElement)) throw new Error(`Button not found: ${label}`);
   return match;
 }
+
+it("flushes the latest edits on close before the draft can be reopened", async () => {
+  vi.useFakeTimers();
+  database.realAutosave = true;
+  media.load.mockResolvedValue({ files: [] });
+  await render(<App />);
+  await act(async () => { button("New show").click(); });
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+
+  const name = document.querySelector<HTMLInputElement>('input[aria-label="Show name"]')!;
+  const rename = (value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(name, value);
+    name.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await rename("Updated show");
+  expect(database.drafts[0]?.name).toBe("Untitled show");
+
+  database.put.mockRejectedValueOnce(new Error("Offline"));
+  const close = async () => {
+    await act(async () => { button("File").click(); });
+    await act(async () => { button("Close show").click(); });
+  };
+  await close();
+  expect(name.value).toBe("Updated show");
+  expect(document.querySelector("[data-save-status]")?.textContent).toBe("error");
+
+  let allowWrite!: () => void;
+  const delayed = new Promise<void>((resolve) => { allowWrite = resolve; });
+  const put = database.put.getMockImplementation()!;
+  database.put.mockImplementationOnce(async (draft) => {
+    await delayed;
+    await put(draft);
+  });
+  await close();
+  await rename("Final show");
+  await act(async () => { allowWrite(); });
+  expect(database.drafts[0]?.name).toBe("Final show");
+  await act(async () => { button("Final show").click(); });
+  expect(document.querySelector<HTMLInputElement>('input[aria-label="Show name"]')?.value).toBe("Final show");
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+});
+
+it("keeps the newly opened editor when a previous close finishes saving", async () => {
+  vi.useFakeTimers();
+  database.realAutosave = true;
+  await render(<App />);
+  await act(async () => { button("New show").click(); });
+  let allowWrite!: () => void;
+  const delayed = new Promise<void>((resolve) => { allowWrite = resolve; });
+  const put = database.put.getMockImplementation()!;
+  database.put.mockImplementationOnce(async (draft) => {
+    await delayed;
+    await put(draft);
+  });
+
+  await act(async () => { button("File").click(); });
+  await act(async () => { button("Close show").click(); });
+  await act(async () => { button("File").click(); });
+  await act(async () => { button("New show").click(); });
+  await act(async () => { allowWrite(); });
+
+  expect(document.querySelector('input[aria-label="Show name"]')).toBeTruthy();
+  await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+  expect(database.drafts).toHaveLength(2);
+});
 
 describe("Studio confirmations", () => {
   it("warns when the production show is active", async () => {
