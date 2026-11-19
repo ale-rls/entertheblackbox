@@ -28,8 +28,11 @@ export class TaskEngine {
     this.assignments.push({participantId,roleId,source,assignedAt:now});
   }
   withdraw(participantId: string, roleId: string): void {
+    // A role can come from the option itself or from one of its rank/overflow outcomes; the
+    // assignment's source names the task that gave it, so that response gives its place back too.
+    const sources = new Set(this.assignments.filter(a => a.participantId === participantId && a.roleId === roleId).map(a => a.source));
     this.assignments = this.assignments.filter(a => a.participantId !== participantId || a.roleId !== roleId);
-    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId && t.template.options.find(o => o.id === r.optionId)?.roleId === roleId && (r.status === 'accepted' || r.status === 'answered')) { r.status = 'withdrawn'; r.message = 'Assignment withdrawn by the operator.'; }
+    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId && (sources.has(t.id) || t.template.options.find(o => o.id === r.optionId)?.roleId === roleId) && (r.status === 'accepted' || r.status === 'answered')) { r.status = 'withdrawn'; r.message = 'Assignment withdrawn by the operator.'; }
   }
   endOccupant(participantId: string): void {
     for (const a of [...this.assignments]) if (a.participantId === participantId) this.withdraw(participantId,a.roleId);
