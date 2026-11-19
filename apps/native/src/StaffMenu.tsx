@@ -19,8 +19,8 @@ export function StaffMenu({ connected, reply, send }: { connected: boolean; repl
   const assign = (pickId: string) => { setState(staffAssign(state)); send({ t: 'staff_assign', v: PROTOCOL_VERSION, pin: state.pin, pickId }); };
   const busy = state.step === 'unlocking' || state.step === 'assigning';
   return <>
-    <Pressable accessibilityLabel="Staff menu" onLongPress={() => { if (connected) setState(staffOpen()); }} delayLongPress={STAFF_LONG_PRESS_MS}
-      style={{ position: 'absolute', top: 0, right: 0, width: 72, height: 72 }} />
+    {connected && <Pressable accessibilityLabel="Staff menu" onLongPress={() => setState(staffOpen())} delayLongPress={STAFF_LONG_PRESS_MS}
+      style={{ position: 'absolute', top: 0, right: 0, width: 72, height: 72, zIndex: 1 }} />}
     <Modal visible={state.step !== 'closed'} transparent animationType="fade" onRequestClose={() => setState(STAFF_CLOSED)}>
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,.85)', justifyContent: 'center', padding: 24 }}>
         <View style={{ backgroundColor: '#202226', borderRadius: 12, padding: 20, gap: 12 }}>
