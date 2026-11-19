@@ -418,6 +418,7 @@ export class PhaseEngine {
   private lastMonitorVotePhaseId: string | undefined;
   private taskVoteWinners = new Map<string, string | null>();
   /** The last result sent to the display, replayed to a display that reconnects during the same phase. */
+  private spotlightGrow = false;
   private lastQuestionResolved: Extract<ServerToClientMessage, { t: "question_resolved" }> | null = null;
   private lastTaskState = '';
   get taskStatus() {
@@ -682,6 +683,7 @@ export class PhaseEngine {
       return { ok: true };
     }
     if (phase.kind === "position-question") {
+      if (phase.spotlight && phase.next.type === "fixed") return this.advanceTo(phase.next.target, now, "admin-skip");
       if (this.questionResolutionTarget !== null) {
         return this.advanceTo(this.questionResolutionTarget, now, "admin-skip");
       }
@@ -934,6 +936,10 @@ export class PhaseEngine {
       lastMonitorVotePhaseId: this.lastMonitorVotePhaseId,
       // The display lights exactly the field the server counts (same field type, gap applied).
       ...(curtain === null ? {} : { field: curtain.field as never, voteTreatment: curtain.treatment }),
+      ...(phase.kind === "position-question" && phase.spotlight ? {
+        spotlightGrow: this.spotlightGrow,
+        spotlightCurtainSrc: this.scenario.curtainLight?.src,
+      } : {}),
       scenarioVersion: this.scenario.version,
       startedAt: this.phaseStartedAt,
       deadlineAt: this.deadlineAt,
@@ -1326,7 +1332,9 @@ export class PhaseEngine {
         ) {
           const participantId = this.participantIds.get(socket);
           if (participantId !== undefined && this.registry.values().find(p => p.clientId === participantId)?.client === "native") return;
-          const curtain = this.lifecycle === "active" && !this.pathDone ? this.curtainFor(this.currentPhase()) : null;
+          const phase = this.currentPhase();
+          if (phase.kind === "position-question" && phase.spotlight && this.deadlineAt !== null && this.now() >= this.deadlineAt) return;
+          const curtain = this.lifecycle === "active" && !this.pathDone ? this.curtainFor(phase) : null;
           if (participantId !== undefined && curtain !== null) {
             this.curtainInput(participantId, message, curtain);
           } else if (participantId !== undefined) {
@@ -1338,7 +1346,7 @@ export class PhaseEngine {
                 this.movement.recordSample(participantId, message.x, message.y, this.now());
                 const activePhase = this.currentPhase();
                 if (
-                  activePhase.kind === "position-question" ||
+                  (activePhase.kind === "position-question" && !activePhase.spotlight) ||
                   (activePhase.kind === "video-position-question" &&
                     this.now() >= this.phaseStartedAt + activePhase.openAtMs &&
                     this.now() < this.phaseStartedAt + activePhase.closeAtMs)
@@ -1536,6 +1544,8 @@ export class PhaseEngine {
     this.displayPlaybackIssue = null;
     this.clients.add(socket);
     this.send(socket, this.getSnapshotMessage());
+    const joinedPhase = this.currentPhase();
+    if (joinedPhase.kind === "position-question" && joinedPhase.spotlight) this.cursors.tick();
     this.send(socket, { t: "presence", v: PROTOCOL_VERSION, count: this.registry.connectedCount });
     // A display that (re)joins after a vote closed still shows its result. Resend
     // the frame the other displays got -- same counts, same freeze end -- rather
@@ -1652,6 +1662,9 @@ export class PhaseEngine {
       return;
     }
     const phase = this.requirePhase(target);
+    const previous = this.currentPhase();
+    this.spotlightGrow = (previous.kind === "position-question" || previous.kind === "video-position-question") &&
+      previous.showCursors !== false && !(previous.kind === "position-question" && previous.spotlight) && this.curtainFor(previous) === null;
     if ('cancelParticipantTasks' in phase && phase.cancelParticipantTasks) this.tasks.cancelAll();
     this.selectionCohort = phase.kind === "group-branch" ? new Set(this.registry.values().filter((participant) =>
       !phase.sourceGroupIds || phase.sourceGroupIds.includes(this.groupSelection?.current(participant.clientId) ?? "")
@@ -1692,10 +1705,13 @@ export class PhaseEngine {
     } else {
       this.lifecycle = "active";
     }
+    const spotlightDeadline = phase.kind === "position-question" && phase.spotlight ? this.deadlineAt : null;
+    this.cursors.setSpotlightClock(spotlightDeadline === null ? null : () => this.now() >= spotlightDeadline);
     this.cursors.setEntryStage(this.lifecycle === "active" && this.curtainFor(phase) !== null);
     this.trackpad.reset();
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
+    if (spotlightDeadline !== null) this.cursors.tick();
     this.path?.onPhase(phase, this.phaseStartedAt);
     if ((phase.kind === 'narration' || phase.kind === 'video') && phase.taskId) {
       try { this.openTask(phase.taskId, undefined, true); }
@@ -1712,7 +1728,7 @@ export class PhaseEngine {
       this.ratingStatusDirty = true;
       this.broadcastRatingStatus(now, true);
     }
-    if (phase.kind === "position-question") {
+    if (phase.kind === "position-question" && !phase.spotlight) {
       this.beginPositionVote(phase, this.phaseStartedAt, this.deadlineAt!);
       this.questionStatusDirty = true;
       this.broadcastQuestionStatus(now, true);
@@ -1843,6 +1859,7 @@ export class PhaseEngine {
    */
   private curtainFor(phase: Phase): { treatment: CurtainTreatment; field: PositionField } | null {
     if (phase.kind !== "position-question" && phase.kind !== "video-position-question") return null;
+    if (phase.kind === "position-question" && phase.spotlight) return null;
     const groupId = this.path?.timelineId;
     const groupCurtain = groupId !== undefined
       && this.scenario.groups?.find((group) => group.id === groupId)?.voteTreatment === "curtain-light";
@@ -1925,6 +1942,13 @@ export class PhaseEngine {
   }
 
   private resolveQuestionAtDeadline(now: number, phase: Extract<Phase, { kind: "position-question" }>): void {
+    if (phase.spotlight && phase.next.type === "fixed") {
+      this.questionResolutionTarget = phase.next.target;
+      this.questionFreezeUntil = (this.deadlineAt ?? now) + phase.freezeMs;
+      this.cursors.tick();
+      for (const socket of this.participantSockets) this.sendVotingOptions(socket);
+      return;
+    }
     const resolution = this.votes.finalize(now);
     if (!resolution) return;
     this.emitQuestionResolved(resolution, phase, now);
@@ -2305,7 +2329,8 @@ export class PhaseEngine {
       participantId === undefined ||
       (phase.kind !== "position-question" && phase.kind !== "video-position-question")
     ) return;
-    const method = this.groupSelection?.method?.(participantId) ?? "phone-cursor";
+    const spotlight = phase.kind === "position-question" && phase.spotlight;
+    const method = spotlight ? "phone-cursor" : this.groupSelection?.method?.(participantId) ?? "phone-cursor";
     const awaitingOpen = method === "phone-buttons" &&
       phase.kind === "video-position-question" && this.votes.currentQuestion() === null;
     const closesAt = this.phaseStartedAt + (phase.kind === "position-question" ? phase.durationMs : phase.closeAtMs);
@@ -2317,7 +2342,7 @@ export class PhaseEngine {
       method,
       closed: awaitingOpen || this.votes.currentResolution() !== null || this.now() >= closesAt,
       question: phase.text,
-      options: votingOptions(phase),
+      options: spotlight ? [] : votingOptions(phase),
     });
   }
 

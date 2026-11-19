@@ -18,8 +18,11 @@ export class CursorPipeline {
   private readonly cursors = new Map<string, CursorState>();
   private readonly intervalMs: number;
   private lastEmittedCursors: Cursor[] = [];
+  private spotlightClock: (() => boolean) | null = null;
+  private heldSpotlights: Cursor[] | null = null;
   private ghostCursors: readonly Cursor[] = [];
   private dirty = false;
+  private forceSnapshot = false;
   /**
    * Curtain-light stages: cursors stay hidden (and ghosts are suppressed)
    * until the participant first touches their phone during the stage.
@@ -38,6 +41,7 @@ export class CursorPipeline {
   }
 
   join(clientId: string, color: string): void {
+    this.captureSpotlights();
     const existing = this.cursors.get(clientId);
     if (existing) {
       existing.lastSeq = -1;
@@ -51,6 +55,7 @@ export class CursorPipeline {
   }
 
   leave(clientId: string): void {
+    this.captureSpotlights();
     const cursor = this.cursors.get(clientId);
     // A reconnect within the same stage resumes where the cursor was.
     if (cursor && this.entryStage && this.entered.has(clientId)) this.parked.set(clientId, { x: cursor.x, y: cursor.y });
@@ -135,7 +140,22 @@ export class CursorPipeline {
     this.dirty = true;
   }
 
+  setSpotlightClock(hasClosed: (() => boolean) | null): void {
+    this.spotlightClock = hasClosed;
+    this.heldSpotlights = null;
+    this.forceSnapshot ||= hasClosed !== null;
+    this.dirty = true;
+  }
+
+  private captureSpotlights(): void {
+    if (this.heldSpotlights === null && this.spotlightClock?.()) {
+      this.heldSpotlights = [...this.cursors.values()].map(({ lastSeq: _lastSeq, ...cursor }) => cursor);
+      this.dirty = true;
+    }
+  }
+
   tick(): void {
+    this.captureSpotlights();
     if (!this.dirty || this.options.canSendCursors?.() === false) return;
     const liveCursors = [...this.cursors.values()]
       .filter((cursor) => !this.entryStage || this.entered.has(cursor.clientId))
@@ -144,8 +164,8 @@ export class CursorPipeline {
         return pulse === undefined ? cursor : { ...cursor, pulse };
       });
     // Replayed cursors never "enter", so they would light the curtain unasked.
-    const cursors = this.entryStage ? liveCursors : [...liveCursors, ...this.ghostCursors];
-    if (this.matchesLastEmission(cursors)) {
+    const cursors = this.heldSpotlights ?? (this.entryStage ? liveCursors : [...liveCursors, ...this.ghostCursors]);
+    if (!this.forceSnapshot && this.matchesLastEmission(cursors)) {
       this.dirty = false;
       return;
     }
@@ -156,13 +176,15 @@ export class CursorPipeline {
       cursors,
     });
     this.lastEmittedCursors = cursors;
+    this.forceSnapshot = false;
     this.dirty = false;
     this.tickNumber += 1;
   }
 
   requestSnapshot(): void {
-    if (this.cursors.size === 0 && (this.entryStage || this.ghostCursors.length === 0)) return;
-    this.lastEmittedCursors = [];
+    this.captureSpotlights();
+    if (!this.spotlightClock && this.cursors.size === 0 && (this.entryStage || this.ghostCursors.length === 0)) return;
+    this.forceSnapshot = true;
     this.dirty = true;
   }
 
