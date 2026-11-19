@@ -239,11 +239,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         }
       },
       onTasksChanged: (sessionId, tasks, revision) => adminData?.audit({ action: 'participant-task-state', at: new Date().toISOString(), detail: { sessionId, tasks, revision } }),
-      onVoteSnapshotEnqueued: (snapshot) => {
+      onVoteSnapshotEnqueued: (snapshot, countedField) => {
         adminData?.recordVoteSnapshot?.(snapshot);
         const question = readiness.scenario.phases.find((phase) => phase.id === snapshot.questionId);
         if (question?.kind === "position-question" || question?.kind === "video-position-question") {
-          groups?.recordAnswers(question.id, question.field, snapshot);
+          groups?.recordAnswers(question.id, question.field, snapshot, countedField);
         }
       },
       onMovementRecordingStarted: (event) => {

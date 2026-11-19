@@ -124,7 +124,7 @@ export type PhaseEngineOptions = {
   onTasksChanged?: (sessionId: string, tasks: ReturnType<TaskEngine["all"]>, revision: number) => void;
   onCheckpoint?: (checkpoint: PhaseCheckpoint) => void;
   onPhaseDeadline?: (event: PhaseDeadlineEvent) => void;
-  onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
+  onVoteSnapshotEnqueued?: (snapshot: FinalVoteSnapshot, countedField: PositionField) => void;
   onCueEvent?: (event: ShowCueEvent) => void;
   onSessionEnded?: (event: { reason: string; sessionId: string; endedAt: number }) => void;
   onMovementRecordingStarted?: (event: MovementRecordingStarted) => void;
@@ -463,13 +463,15 @@ export class PhaseEngine {
     const template = this.scenario.participantTasks?.find(t => t.id === templateId);
     if (!template) throw new Error('Unknown published task template');
     const roster = this.registry.values().map(p => p.clientId);
-    const ids = [...new Set(roster)].filter(id => (!selected || selected.includes(id)) && (!template.groupIds.length || template.groupIds.includes(this.groupSelection?.current(id) ?? '')));
+    const ids = [...new Set(roster)].filter(id => (!selected || selected.includes(id)) && (!template.groupIds.length || template.groupIds.includes(this.groupSelection?.current(id) ?? ''))
+      // A scene's task opens for everyone free now; a tablet still answering another task gets it once it is free.
+      && (!graph || !this.tasks.busy(id, this.sessionId)));
     this.tasks.open(template, this.sessionId, ids, this.now(), graph ? { id: this.phaseId, epoch: this.phaseEpoch } : null);
     this.taskError = null;
   }
   /** Late joiners and newly grouped participants get this scene's task while it is still open. */
-  private offerOpenPhaseTasks(participantId: string): void {
-    if (this.lifecycle !== 'active') return;
+  private offerOpenPhaseTasks(participantId: string, push = true): boolean {
+    if (this.lifecycle !== 'active') return false;
     const group = this.groupSelection?.current(participantId) ?? '';
     let added = false;
     for (const task of this.tasks.all()) {
@@ -477,7 +479,8 @@ export class PhaseEngine {
       if (task.template.groupIds.length && !task.template.groupIds.includes(group)) continue;
       if (this.tasks.addRecipient(task.id, participantId, this.now())) added = true;
     }
-    if (added) this.pushTasks(true);
+    if (added && push) this.pushTasks(true);
+    return added;
   }
   /** Staff menu on a tablet: assigns a published staff pick to whoever holds that tablet. */
   private staffCommand(participantId: string, message: Extract<ClientToServerMessage, { t: 'staff_menu_request' | 'staff_assign' }>, socket: WebSocket): void {
@@ -519,8 +522,12 @@ export class PhaseEngine {
   }
   private pushTasks(force = false): void {
     this.tasks.tick(this.now());
-    const key = JSON.stringify(this.tasks.all());
+    let key = JSON.stringify(this.tasks.all());
     if (!force && key === this.lastTaskState) return;
+    // Someone just answered, timed out or was cancelled: hand them the scene task they were too busy for.
+    let offered = false;
+    for (const id of new Set(this.participantIds.values())) if (this.offerOpenPhaseTasks(id, false)) offered = true;
+    if (offered) key = JSON.stringify(this.tasks.all());
     this.lastTaskState = key;
     const tasks = this.tasks.all();
     const revision = this.tasks.nextExportRevision();
@@ -1014,7 +1021,7 @@ export class PhaseEngine {
       if (!this.pathsStarted && this.deadlineAt !== null && now >= this.deadlineAt) this.startGroupPaths(phase, now);
       if (this.pathsStarted) {
         for (const { engine } of this.paths.values()) engine.tick(now);
-        if ([...this.paths.values()].every(({ engine }) => engine.pathDone)) this.advanceTo(phase.next, now, "group-branch-complete");
+        if (this.pathsReunite()) this.advanceTo(phase.next, now, "group-branch-complete");
       }
       this.updateGroupMonitors(now);
       return;
@@ -1771,8 +1778,9 @@ export class PhaseEngine {
   private transition(reason: string, sessionEnded?: { reason: string; sessionId: string; endedAt: number }): void {
     this.emitCheckpoint("transition", reason);
     const phase = this.currentPhase();
-    // Opening the lobby is not the end of a show: the bridges play their show-end look and MIDI on this reset.
-    if (!this.path && (reason === "group-branch-complete" || reason === "admin-force-reunion" || (phase.kind === "idle" && reason !== "lobby-start"))) {
+    // Only a return to idle ends a show: the bridges play their show-end look and MIDI on this reset.
+    // The lobby also sits on the idle phase (opening it, rescheduling or nudging its start), and is no show end.
+    if (!this.path && (reason === "group-branch-complete" || reason === "admin-force-reunion" || (phase.kind === "idle" && this.lifecycle !== "lobby"))) {
       this.options.onCueEvent?.({
         type: "reset",
         timelineId: "main",
@@ -2254,6 +2262,8 @@ export class PhaseEngine {
       child.lifecycle = "active";
       child.sessionId = this.sessionId;
       child.sessionStartedAt = this.sessionStartedAt;
+      // One session-wide record of vote winners: task audio after the reunion follows a vote cast inside a path.
+      child.taskVoteWinners = this.taskVoteWinners;
       child.monitorVoteResults = { ...inheritedMonitorVotes.monitorVoteResults };
       child.lastMonitorVotePhaseId = inheritedMonitorVotes.lastMonitorVotePhaseId;
       // Attach before entering: transition frames and votes go only to this roster.
@@ -2275,6 +2285,19 @@ export class PhaseEngine {
       if (this.timer !== null) child.cursors.start();
     }
     return true;
+  }
+
+  /**
+   * Every path has reached the reunion, or sits empty on a scene that waits for GO. Empty paths otherwise keep
+   * their clock (late arrivals and returnees rejoin them), but one parked for a GO nobody will give must not hold the show.
+   */
+  private pathsReunite(): boolean {
+    return [...this.paths.values()].every(({ engine, members }) => engine.pathDone || (members.size === 0 && engine.parkedForGo));
+  }
+
+  private get parkedForGo(): boolean {
+    const phase = this.currentPhase();
+    return phase.kind === "narration" && !!phase.waitForGo && this.deadlineAt === null;
   }
 
   private clearPaths(endedAt?: number): void {
@@ -2374,6 +2397,10 @@ export class PhaseEngine {
   private recordMonitorVote(id: string, result: MonitorVoteResult): void {
     this.monitorVoteResults[id] = result;
     this.lastMonitorVotePhaseId = id;
+    // A result cue later in this same scene needs the winner now: the next phase frame may be minutes away.
+    if (this.monitorDisplays.size === 0) return;
+    const frame = { ...this.getSnapshotMessage(), t: "phase" as const };
+    for (const socket of this.monitorDisplays.values()) this.send(socket, frame);
   }
 
   private monitorVoteSnapshot(): Pick<PhaseSnapshotMessage, "monitorVoteResults" | "lastMonitorVotePhaseId"> {

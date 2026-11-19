@@ -63,7 +63,7 @@ export class TaskEngine {
     this.tick(now);
     const task = this.instances.find(t => t.id === instanceId);
     if (!task || task.status !== 'open' || task.recipients.some(r => r.participantId === participantId)) return false;
-    if (this.instances.some(t => t.sessionId === task.sessionId && t.status === 'open' && t.recipients.some(r => r.participantId === participantId && (r.status === 'pending' || r.status === 'full')))) return false;
+    if (this.busy(participantId, task.sessionId)) return false;
     task.recipients.push({ participantId, optionId: null, sequence: null, status: 'pending', message: '', respondedAt: null, ...(task.template.audio ? { audio: this.audio(task.template, now) } : {}) });
     return true;
   }
@@ -169,6 +169,11 @@ export class TaskEngine {
     }
   }
   cancelAll(): void { for (const t of this.instances) this.close(t.id, true); }
+  /** Waiting on this participant's answer to an open task, or about to open their follow-up task. */
+  busy(participantId: string, sessionId: string): boolean {
+    return this.followups.some(f => f.participantId === participantId && this.instances.find(t => t.id === f.sourceId)?.sessionId === sessionId)
+      || this.instances.some(t => t.sessionId === sessionId && t.status === 'open' && t.recipients.some(r => r.participantId === participantId && (r.status === 'pending' || r.status === 'full')));
+  }
   /** The task this participant should see: one still waiting on their answer, else the one they last touched (for its feedback). */
   current(participantId: string, sessionId: string): { task: TaskInstance; recipient: TaskRecipient } | null {
     const mine = [...this.instances].reverse().filter(t => t.sessionId === sessionId && t.recipients.some(r => r.participantId === participantId));

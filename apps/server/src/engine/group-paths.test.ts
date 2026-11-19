@@ -118,6 +118,35 @@ describe("independent group paths", () => {
     h.engine.stop();
   });
 
+  it.each([
+    { occupied: false, reunites: true },
+    { occupied: true, reunites: false },
+  ])("reunites past a path waiting for GO only when nobody is in it (occupied: $occupied)", ({ occupied, reunites }) => {
+    const holding = scenarioSchema.parse({
+      ...scenario,
+      phases: [
+        ...scenario.phases.map((phase) => phase.kind === "group-branch"
+          ? { ...phase, branches: [{ groupId: "a", next: "vote" }, { groupId: "b", next: "hold" }] }
+          : phase),
+        { kind: "narration", id: "hold", text: "Wait for the actors", durationMs: 1_000, waitForGo: true, next: "together" },
+      ],
+    });
+    const h = setup(holding);
+    const a = h.phone("one");
+    const b = occupied ? h.phone("two") : null;
+    h.engine.adminStart();
+    h.choose(a, "a");
+    if (b) h.choose(b, "b");
+    h.tick(100);
+    expect(h.engine.groupPathsStarted).toBe(true);
+    h.tick(250);
+    h.tick(400);
+    // An occupied path waiting for GO still holds the others; they wait at the split.
+    expect(a.snapshot.phase.id).toBe(reunites ? "together" : "split");
+    expect(h.engine.currentPhaseId).toBe(reunites ? "together" : "split");
+    h.engine.stop();
+  });
+
   it("moves a late arrival into the live scene without replaying cues or changing its clock", () => {
     const h = setup(); h.display();
     const b = h.phone("two"); h.engine.adminStart(); h.choose(b, "b"); h.tick(100);
@@ -362,6 +391,33 @@ describe("independent group paths", () => {
       expect.objectContaining({ type: "cue", timelineId: "a", phaseId: "vote", payload: { cue: "vote-open" } }),
       expect.objectContaining({ type: "cue", timelineId: "b", phaseId: "vote", payload: { cue: "vote-open" } }),
     ]));
+    h.engine.stop();
+  });
+
+  it("plays task audio for the winner of a vote cast inside a group path, after the reunion", () => {
+    const clip = (src: string) => ({ src, durationMs: 1_000 });
+    const withTask = scenarioSchema.parse({
+      ...scenario,
+      participantTasks: [{ id: "chore", title: "Chore", question: "Ready?", notificationBody: "Please answer", groupIds: [], durationMs: 5_000,
+        options: [{ id: "go", label: "Go", audioByVote: { questionId: "vote", clips: { max: clip("max.mp3") }, fallback: clip("fallback.mp3") } }] }],
+    });
+    const h = setup(withTask);
+    const a = h.phone("one");
+    h.engine.adminStart();
+    h.choose(a, "a");
+    h.tick(100);
+    expect(a.snapshot.phase.id).toBe("vote");
+    h.send(a, { t: "input", v: 2, sessionId: "visit", phaseEpoch: a.snapshot.phaseEpoch, seq: 1, x: 0.9, y: 0.5 });
+    h.tick(200);
+    h.tick(1_200);
+    h.tick(1_300);
+    expect(h.engine.currentPhaseId).toBe("together");
+
+    h.engine.taskCommand({ action: "open", templateId: "chore", sessionId: "visit", phaseId: "together", phaseEpoch: h.engine.currentPhaseEpoch });
+    const task = h.engine.taskStatus.instances.at(-1)!;
+    h.send(a, { t: "participant_task_response", v: 2, sessionId: "visit", instanceId: task.id, optionId: "go" });
+    const recipient = h.engine.taskStatus.instances.at(-1)!.recipients.find((r) => r.participantId === "one");
+    expect(recipient?.audio?.src).toBe("max.mp3");
     h.engine.stop();
   });
 

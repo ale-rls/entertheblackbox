@@ -144,7 +144,7 @@ export function resolveSnapshot(
 }
 
 export class VoteEngine {
-  private readonly onSnapshotEnqueued: ((snapshot: FinalVoteSnapshot) => void) | undefined;
+  private readonly onSnapshotEnqueued: ((snapshot: FinalVoteSnapshot, countedField: PositionField) => void) | undefined;
   private readonly heartbeatRetentionMs: number;
   private readonly heartbeatTimes = new Map<string, number>();
   private nextHeartbeatPruneAt: number | null = null;
@@ -162,7 +162,8 @@ export class VoteEngine {
 
   constructor(options: {
     heartbeatRetentionMs?: number;
-    onSnapshotEnqueued?: (snapshot: FinalVoteSnapshot) => void;
+    /** `countedField` is the field this vote was counted on (a curtain stage's neutral gap applied). */
+    onSnapshotEnqueued?: (snapshot: FinalVoteSnapshot, countedField: PositionField) => void;
   } = {}) {
     this.heartbeatRetentionMs = options.heartbeatRetentionMs
       ?? DEFAULT_INSTALLATION_POLICY.participantLeaseTtlMs;
@@ -335,7 +336,7 @@ export class VoteEngine {
     // accidentally re-enter and mutate the live question.
     question.finalized = snapshot;
     this._lastSnapshot = snapshot;
-    this.onSnapshotEnqueued?.(snapshot);
+    this.onSnapshotEnqueued?.(snapshot, question.question.field);
 
     const resolved = resolveSnapshot(question.question, snapshot);
     const resolution = { snapshot, ...resolved } as VoteResolution;

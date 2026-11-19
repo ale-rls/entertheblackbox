@@ -1430,7 +1430,7 @@ describe("PhaseEngine lifecycle", () => {
     ]);
   });
 
-  it("does not tell the lighting and sound bridges the show ended when the lobby opens", () => {
+  it("does not tell the lighting and sound bridges the show ended when the lobby opens or is rescheduled", () => {
     let now = 1_000;
     const cueEvents: Array<{ type: string; phaseId?: string }> = [];
     const { engine, registry } = setup({ now: () => now, interactiveIdleTimeoutMs: 1_000, cueEvents });
@@ -1439,6 +1439,14 @@ describe("PhaseEngine lifecycle", () => {
     engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
     expect(engine.lifecycleState).toBe("lobby");
     expect(cueEvents.filter((event) => event.type === "reset")).toEqual([]);
+
+    // Front of house moves the start while the audience waits in the lobby.
+    const later = now + 600_000;
+    expect(engine.setLobbyStartTimes([later], now)).toEqual({ ok: true });
+    expect(engine.adjustLobbyStart(60_000, now)).toEqual({ ok: true });
+    expect(engine.lifecycleState).toBe("lobby");
+    expect(cueEvents.filter((event) => event.type === "reset")).toEqual([]);
+    expect(engine.setLobbyStartTimes([], now)).toEqual({ ok: true });
 
     // Ending a running show still does.
     now = 1_100;
@@ -1832,6 +1840,22 @@ describe("authored stage monitor connections", () => {
     expect(replacement.sent.at(-1)).toMatchObject({ t: "snapshot", serverTime: 1050, phase: { startedAt: 1000 } });
     engine.tick(1100);
     expect(replacement.sent.filter(message => message.t === "phase").at(-1)?.phase.id).toBe("question");
+  });
+  it("hands a monitor the vote result in the same scene, without a new phase", () => {
+    let now = 1000;
+    const { engine } = setup({ now: () => now });
+    const screen = new MockSocket();
+    join(engine, screen, "M1");
+    expect(engine.adminStart(now).ok).toBe(true);
+    engine.tick(1100);
+    expect(engine.currentPhaseId).toBe("question");
+    const epoch = engine.currentPhaseEpoch;
+    expect(engine.adminSkip(1_110)).toEqual({ ok: true });
+    expect(engine.currentPhaseEpoch).toBe(epoch);
+    const last = screen.sent.filter(message => message.t === "phase").at(-1);
+    expect(last).toMatchObject({ phaseEpoch: epoch, phase: { id: "question", lastMonitorVotePhaseId: "question" } });
+    expect(last.phase.monitorVoteResults).toHaveProperty("question");
+    engine.stop();
   });
   it("rejects invalid credentials and mixed display roles", () => {
     const { engine } = setup({ now: () => 0 });
