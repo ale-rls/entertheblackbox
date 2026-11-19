@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MonitorCue } from "@entertheblackbox/scenario";
-import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorVideoTime } from "./playback.js";
+import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorCueReady, monitorVideoTime } from "./playback.js";
 describe("monitor video clock", () => {
   it("seeks late arrivals, holds finite endings and wraps loops", () => {
     expect(monitorVideoTime(4500, 10, false)).toEqual({ time: 4.5, playing: true });
@@ -29,5 +29,16 @@ describe("monitor video cuts", () => {
     expect(isAdjacentMonitorVideoCut([{ ...first, durationMs: 1900 }, next], first.startMs, next, next.startMs)).toBe(false);
     expect(isAdjacentMonitorVideoCut([first, blank, next], first.startMs, blank, blank.startMs)).toBe(false);
     expect(isAdjacentMonitorVideoCut([first, blank, next], first.startMs, next, next.startMs)).toBe(false);
+  });
+});
+
+describe("monitor cue readiness", () => {
+  it("shows text on time while the scene's later video is still downloading", () => {
+    const text: MonitorCue = { kind: "text", text: "Geht zum Feld", startMs: 0 } as MonitorCue;
+    const video: MonitorCue = { kind: "video", src: "clip.mp4", loop: false, fit: "cover", startMs: 5000 } as MonitorCue;
+    expect(monitorCueReady(text, false)).toBe(true);
+    expect(monitorCueReady(video, false)).toBe(false);
+    expect(monitorCueReady(video, true)).toBe(true);
+    expect(monitorCueReady(null, true)).toBe(false);
   });
 });
