@@ -6,7 +6,7 @@ import type {
   QuestionStatusMessage,
 } from "@entertheblackbox/protocol";
 import type { ServerClock } from "../lib/serverClock.js";
-import { QuadrantOverlay, questionFieldCenter } from "./QuadrantOverlay.js";
+import { QuadrantOverlay, questionFieldCenter, tiedLeaders } from "./QuadrantOverlay.js";
 import { VoteCloseCountdown } from "./VoteCloseCountdown.js";
 import { VideoTitle } from "./VideoTitle.js";
 
@@ -79,7 +79,7 @@ export function VideoQuestionOverlay({
   const highlightRegionIds = displayStage === "closed" && resolution !== null
     ? resolution.tieBreak?.candidates
       ?? (resolution.winner === "tie"
-        ? Object.keys(resolution.quadrantCounts)
+        ? tiedLeaders(resolution.quadrantCounts)
         : resolution.winner === "empty" || resolution.winner === "fixed" ? [] : [resolution.winner])
     : [];
 
