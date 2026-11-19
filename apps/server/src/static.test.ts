@@ -102,17 +102,56 @@ describe("bundle video assets", () => {
   });
 });
 
-it('never caches mutable native show channels but keeps hashed audio immutable', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'native-show-route-')); roots.push(root);
-  await mkdir(join(root, 'native-shows/channels'), { recursive: true });
-  await mkdir(join(root, 'native-shows/audio'), { recursive: true });
-  await writeFile(join(root, 'native-shows/channels/rehearsal.json'), '{"format":1}');
-  await writeFile(join(root, 'native-shows/audio/hash.mp3'), 'audio');
-  const app = Fastify(); apps.push(app); registerMediaRoutes(app, root);
-  const channel = await app.inject({ url: '/media/native-shows/channels/rehearsal.json' });
-  expect(channel.statusCode).toBe(200); expect(channel.headers['cache-control']).toBe('no-store');
-  const audio = await app.inject({ url: '/media/native-shows/audio/hash.mp3' });
-  expect(audio.headers['cache-control']).toContain('immutable');
+describe("media cache policy", () => {
+  async function mediaApp() {
+    const root = await mkdtemp(join(tmpdir(), "show-media-route-"));
+    roots.push(root);
+    const app = Fastify();
+    apps.push(app);
+    registerMediaRoutes(app, root);
+    return { app, root };
+  }
+
+  it("revalidates waiting and signage clips that can change at the same URL", async () => {
+    const { app, root } = await mediaApp();
+    const file = join(root, "Lobby QR.mp4");
+    const url = "/media/Lobby%20QR.mp4";
+    await writeFile(file, "before");
+
+    const full = await app.inject({ url });
+    expect(full.statusCode).toBe(200);
+    expect(full.body).toBe("before");
+    expect(full.headers["cache-control"]).toBe("no-cache");
+
+    await writeFile(file, "update");
+    const partial = await app.inject({ url, headers: { range: "bytes=0-2" } });
+    expect(partial.statusCode).toBe(206);
+    expect(partial.body).toBe("upd");
+    expect(partial.headers["cache-control"]).toBe("no-cache");
+    expect(partial.headers["content-range"]).toBe("bytes 0-2/6");
+  });
+
+  const digest = "a".repeat(64);
+  it.each([
+    ["channels", "rehearsal.json", "no-store"],
+    ["audio", `${digest}.mp3`, "public, max-age=31536000, immutable"],
+    ["assets", `${digest}.mp4`, "public, max-age=31536000, immutable"],
+    ["assets", "draft.mp4", "no-cache"],
+    ["releases", `${digest}.json`, "public, max-age=31536000, immutable"],
+  ])("sets the cache policy for native-shows/%s/%s", async (directory, name, cacheControl) => {
+    const { app, root } = await mediaApp();
+    const parent = join(root, "native-shows", directory);
+    await mkdir(parent, { recursive: true });
+    await writeFile(join(parent, name), "content");
+    const url = `/media/native-shows/${directory}/${name}`;
+
+    const full = await app.inject({ url });
+    expect(full.statusCode).toBe(200);
+    expect(full.headers["cache-control"]).toBe(cacheControl);
+    const partial = await app.inject({ url, headers: { range: "bytes=0-2" } });
+    expect(partial.statusCode).toBe(206);
+    expect(partial.headers["cache-control"]).toBe(cacheControl);
+  });
 });
 
 

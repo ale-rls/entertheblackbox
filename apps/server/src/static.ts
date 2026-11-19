@@ -22,6 +22,9 @@ const contentTypes: Record<string, string> = {
   ".woff2": "font/woff2",
 };
 
+const immutableCacheControl = "public, max-age=31536000, immutable";
+const publishedMediaPath = /^native-shows\/(?:assets\/[0-9a-f]{64}(?:\.[^/]+)?|audio\/[0-9a-f]{64}\.mp3|releases\/[0-9a-f]{64}\.json)$/;
+
 async function sendFile(
   reply: FastifyReply,
   filePath: string,
@@ -71,7 +74,7 @@ async function sendBundleFile(
   // times the server gets redeployed with a fix.
   const cacheControl = relative === "sw.js"
     ? "no-cache"
-    : extension === ".html" ? "no-cache" : "public, max-age=31536000, immutable";
+    : extension === ".html" ? "no-cache" : immutableCacheControl;
 
   await sendFile(reply, filePath, cacheControl, "asset_not_found");
 }
@@ -109,7 +112,7 @@ async function sendRangedFile(
   filePath: string,
   rangeHeader: string | undefined,
   notFoundError: string,
-  cacheControl = "public, max-age=31536000, immutable",
+  cacheControl = immutableCacheControl,
 ): Promise<void> {
   let fileSize: number;
   try {
@@ -164,21 +167,24 @@ export function registerMediaRoutes(
   activeNativeManifest?: () => Promise<unknown>,
 ): void {
   app.get<{ Params: { "*": string } }>("/media/*", async (request, reply) => {
-    if (/^native-shows\/channels\/(rehearsal|production)\.json$/.test(request.params["*"]) && activeNativeManifest) {
+    const mediaPath = request.params["*"];
+    const mutableShowChannel = /^native-shows\/channels\/(rehearsal|production)\.json$/.test(mediaPath);
+    if (mutableShowChannel && activeNativeManifest) {
       reply.header("cache-control", "no-store");
       try { return reply.send(await activeNativeManifest()); }
       catch { return reply.code(503).send({ error: "active_show_content_unavailable" }); }
     }
     const rootPath = resolve(mediaDir);
-    const filePath = resolve(rootPath, request.params["*"]);
+    const filePath = resolve(rootPath, mediaPath);
     if (filePath === rootPath || !filePath.startsWith(`${rootPath}${sep}`)) {
       await reply.code(404).send({ error: "media_not_found" });
       return;
     }
 
-    const mutableShowChannel = /^native-shows\/channels\/(rehearsal|production)\.json$/.test(request.params["*"]);
-    await sendRangedFile(reply, filePath, request.headers.range, "media_not_found",
-      mutableShowChannel ? "no-store" : "public, max-age=31536000, immutable");
+    // Library files can be replaced in place, including display waiting clips.
+    const cacheControl = mutableShowChannel ? "no-store"
+      : publishedMediaPath.test(mediaPath) ? immutableCacheControl : "no-cache";
+    await sendRangedFile(reply, filePath, request.headers.range, "media_not_found", cacheControl);
   });
 }
 
