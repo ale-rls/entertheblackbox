@@ -2397,6 +2397,10 @@ export class PhaseEngine {
   private recordMonitorVote(id: string, result: MonitorVoteResult): void {
     this.monitorVoteResults[id] = result;
     this.lastMonitorVotePhaseId = id;
+    // A result cue later in this same scene needs the winner now: the next phase frame may be minutes away.
+    if (this.monitorDisplays.size === 0) return;
+    const frame = { ...this.getSnapshotMessage(), t: "phase" as const };
+    for (const socket of this.monitorDisplays.values()) this.send(socket, frame);
   }
 
   private monitorVoteSnapshot(): Pick<PhaseSnapshotMessage, "monitorVoteResults" | "lastMonitorVotePhaseId"> {

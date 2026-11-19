@@ -1841,6 +1841,22 @@ describe("authored stage monitor connections", () => {
     engine.tick(1100);
     expect(replacement.sent.filter(message => message.t === "phase").at(-1)?.phase.id).toBe("question");
   });
+  it("hands a monitor the vote result in the same scene, without a new phase", () => {
+    let now = 1000;
+    const { engine } = setup({ now: () => now });
+    const screen = new MockSocket();
+    join(engine, screen, "M1");
+    expect(engine.adminStart(now).ok).toBe(true);
+    engine.tick(1100);
+    expect(engine.currentPhaseId).toBe("question");
+    const epoch = engine.currentPhaseEpoch;
+    expect(engine.adminSkip(1_110)).toEqual({ ok: true });
+    expect(engine.currentPhaseEpoch).toBe(epoch);
+    const last = screen.sent.filter(message => message.t === "phase").at(-1);
+    expect(last).toMatchObject({ phaseEpoch: epoch, phase: { id: "question", lastMonitorVotePhaseId: "question" } });
+    expect(last.phase.monitorVoteResults).toHaveProperty("question");
+    engine.stop();
+  });
   it("rejects invalid credentials and mixed display roles", () => {
     const { engine } = setup({ now: () => 0 });
     const socket = new MockSocket();
