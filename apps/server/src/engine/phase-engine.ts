@@ -1984,6 +1984,9 @@ export class PhaseEngine {
       timestamp: now,
       payload: {
         winner: resolution.winner,
+        // The field the audience chose (unique plurality), also when routing is fixed:
+        // the lighting bridge lights it for a "winner" cue.
+        leader: winner,
         quadrantCounts: resolution.quadrantCounts,
         resolvedTarget: resolution.resolvedTarget,
       },

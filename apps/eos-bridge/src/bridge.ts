@@ -6,7 +6,7 @@ import { swatches } from "./swatch.js";
 type Envelope = {
   type?: unknown; bootId?: unknown; sequence?: unknown; timelineId?: unknown; phaseId?: unknown; phaseEpoch?: unknown;
   timestamp?: unknown;
-  payload?: { cue?: unknown; winner?: unknown; phase?: { startedAt?: unknown } | undefined } | undefined;
+  payload?: { cue?: unknown; winner?: unknown; leader?: unknown; phase?: { startedAt?: unknown } | undefined } | undefined;
   timelines?: unknown;
   /** The feed sends more (version, sessionId …); the bridge ignores it. */
   [key: string]: unknown;
@@ -159,11 +159,16 @@ export class LightingBridge {
         const looks = own(this.config.results, event.phaseId);
         if (!looks) return;
         const winner = typeof event.payload?.winner === "string" ? event.payload.winner : null;
+        // A question with a fixed next scene still has a field the audience chose: light that one.
+        const leader = winner === "fixed" && typeof event.payload?.leader === "string" ? event.payload.leader : null;
+        const leaderLook = leader !== null ? own(looks, leader) : undefined;
+        const shown = leaderLook ? leader : winner;
         // A field's own look; for tie/empty/fixed (or no winner) a look named after it, else `none`.
-        const look = (winner !== null ? own(looks, winner) : undefined)
+        const look = leaderLook
+          ?? (winner !== null ? own(looks, winner) : undefined)
           ?? (winner === null || NO_FIELD_WINNER.has(winner) ? own(looks, "none") : undefined);
-        this.log(`vote ${event.phaseId} → ${winner ?? "no winner"}${look ? "" : " · no look"}`);
-        if (look) this.play(look, `vote ${event.phaseId} → ${winner ?? "none"}`);
+        this.log(`vote ${event.phaseId} → ${leaderLook ? `${leader} (fixed next scene)` : winner ?? "no winner"}${look ? "" : " · no look"}`);
+        if (look) this.play(look, `vote ${event.phaseId} → ${shown ?? "none"}`);
         return;
       }
       case "reset": {
