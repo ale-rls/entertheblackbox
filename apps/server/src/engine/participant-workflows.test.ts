@@ -11,12 +11,51 @@ const scenario=scenarioSchema.parse({version:'workflow-test',entryPhaseId:'task'
   admission:{assignment:'self-select',paths:[{groupId:'ki',intro:[{src:'intro.mp3',durationMs:1000}],loop:[{src:'loop.mp3',durationMs:1000}]}]},
   phases:[{kind:'idle',id:'idle'},{kind:'narration',id:'task',text:'Instructions',taskId:'volunteer',waitForGo:true,durationMs:1000,next:'next'},{kind:'narration',id:'next',text:'Continue',durationMs:1000,next:'idle'}]});
 class Socket {readyState=1;sent:any[]=[];send(raw:string){this.sent.push(JSON.parse(raw));}close(){this.readyState=3;}}
-function setup(){let now=100;let seq=0;const registry=new ParticipantRegistry(10);const membership=new Map<string,string>();
- const engine=new PhaseEngine({scenario,registry,installationId:'i',roomId:'r',showId:'show',displayToken:'display',now:()=>now,autoStartOnFirstParticipant:false,sessionIdFactory:()=>`session-${++seq}`,groupSelection:{current:id=>membership.get(id)??null,select:(id,g)=>{membership.set(id,g);}}});
+function setup(config=scenario){let now=100;let seq=0;const registry=new ParticipantRegistry(10);const membership=new Map<string,string>();
+ const engine=new PhaseEngine({scenario:config,registry,installationId:'i',roomId:'r',showId:'show',displayToken:'display',now:()=>now,autoStartOnFirstParticipant:false,sessionIdFactory:()=>`session-${++seq}`,groupSelection:{current:id=>membership.get(id)??null,select:(id,g)=>{membership.set(id,g);}}});
  const phone=(id:string,group='ki',client:'native'|'web'='web')=>{const socket=new Socket();membership.set(id,group);const record=registry.admit({clientId:id,participantLease:`lease-${id}`,name:id,client,leaseExpiresAt:1e9,socket:socket as unknown as WebSocket,now});if(!record.ok)throw new Error('admit');engine.participantJoined(socket as unknown as WebSocket,record.participant);return socket;};
- return {engine,phone,tick:(value:number)=>{now=value;engine.tick(now);},respond:(socket:Socket,id:string,option='yes',sessionId=engine.currentSessionId)=>engine.handleClientMessage({t:'participant_task_response',v:2,sessionId,instanceId:id,optionId:option},socket as unknown as WebSocket)};
+ const replace = (id: string, replacementId: string) => {
+   const former = registry.values().find(p => p.clientId === id)!;
+   const group = membership.get(id)!;
+   engine.socketClosed(former.socket!);
+   registry.removeLease(former.participantLease);
+   const record = registry.admit({ ...former, clientId: replacementId, participantLease: `lease-${replacementId}`, socket: former.socket!, now });
+   if (!record.ok) throw new Error('admit replacement');
+   engine.retireOccupant(id);
+   membership.delete(id);
+   membership.set(replacementId, group);
+   engine.welcomeReplacement(record.participant, group);
+ };
+ return {engine,phone,replace,tick:(value:number)=>{now=value;engine.tick(now);},respond:(socket:Socket,id:string,option='yes',sessionId=engine.currentSessionId)=>engine.handleClientMessage({t:'participant_task_response',v:2,sessionId,instanceId:id,optionId:option},socket as unknown as WebSocket)};
 }
 describe('connected participant workflows',()=>{
+ it.each([
+  { handoverGroup: 'ki', expected: 'handover' },
+  { handoverGroup: 'audience', expected: 'volunteer' },
+  { handoverGroup: undefined, expected: 'volunteer' },
+ ])('offers $expected to a replacement with handover group $handoverGroup', ({ handoverGroup, expected }) => {
+  const h = setup(scenarioSchema.parse({
+   ...scenario,
+   handoverTaskId: handoverGroup ? 'handover' : undefined,
+   participantTasks: [
+    ...scenario.participantTasks!,
+    { id: 'handover', title: 'Handover', question: 'Ready?', notificationBody: 'Please answer', groupIds: handoverGroup ? [handoverGroup] : [], durationMs: 1000, options: [{ id: 'yes', label: 'Yes' }] },
+   ],
+  }));
+  const tablet = h.phone('former', 'ki', 'native');
+  h.engine.adminStart();
+  tablet.sent.length = 0;
+  h.replace('former', 'replacement');
+
+  const taskCards = tablet.sent.filter(message => message.t === 'participant_task' && message.task);
+  expect(taskCards.length).toBeGreaterThan(0);
+  for (const { task } of taskCards) {
+   expect(task).toMatchObject({ template: { id: expected }, recipient: { participantId: 'replacement', status: 'pending' } });
+  }
+  const scene = h.engine.taskStatus.instances.find(task => task.template.id === 'volunteer')!;
+  expect(scene.recipients).toContainEqual(expect.objectContaining({ participantId: 'former', status: 'cancelled' }));
+  expect(scene.recipients.some(recipient => recipient.participantId === 'replacement')).toBe(expected === 'volunteer');
+ });
  it('targets the authored audience, holds for GO after responses expire, and rejects stale commands',()=>{
   const h=setup();const a=h.phone('a','ki','native');const b=h.phone('b','ki','native');const outside=h.phone('outside','audience');h.engine.adminStart();
   const task=h.engine.taskStatus.instances[0]!;expect(task.recipients.map(r=>r.participantId)).toEqual(['a','b']);

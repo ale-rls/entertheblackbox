@@ -384,9 +384,16 @@ export class PhaseEngine {
   }
   welcomeReplacement(participant: ParticipantRecord, groupId: string | null): void {
     if (!participant.socket) return;
+    const taskId = this.lifecycle === 'active' ? this.scenario.handoverTaskId : undefined;
+    if (taskId) {
+      // The replacement already has its assigned group. Open the handover task
+      // before joining and routing can offer the scene's open task.
+      try { this.openTask(taskId, [participant.clientId]); }
+      catch (error) { this.taskError = error instanceof Error ? error.message : 'Handover task failed'; }
+    }
     this.participantJoined(participant.socket, participant);
     if (groupId) this.adminAssignGroup(participant.clientId, groupId);
-    if (this.scenario.handoverTaskId && this.lifecycle === 'active') { try { this.openTask(this.scenario.handoverTaskId, [participant.clientId]); } catch(error) { this.taskError = error instanceof Error ? error.message : 'Handover task failed'; } this.pushTasks(true); }
+    if (taskId) this.pushTasks(true);
   }
   private admissionPrograms = new AdmissionPrograms();
   get admissionStatus() { return { generation: this.admissionPrograms.generation, active: this.lifecycle !== 'active', config: this.scenario.admission ?? null, participants: this.admissionPrograms.status(this.scenario.admission?.paths ?? [], this.now()) }; }
