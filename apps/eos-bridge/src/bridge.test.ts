@@ -144,6 +144,15 @@ describe("LightingBridge", () => {
     expect(lines.slice(-2)).toEqual(["show ended", 'show end → look "aus"']);
   });
 
+  it("lights the field the audience chose on a question with a fixed next scene", () => {
+    const { bridge, lines } = setup();
+    bridge.handle(event(1, { type: "result", phaseId: "T1-wahl", phaseEpoch: 2, payload: { winner: "fixed", leader: "q1" } }));
+    expect(lines.at(-1)).toBe('vote T1-wahl → q1 → look "nurA" (1 s fade)');
+    // A tie or an empty vote on a fixed question has no leader: `none` as before.
+    bridge.handle(event(2, { type: "result", phaseId: "T1-wahl", phaseEpoch: 3, payload: { winner: "fixed", leader: null } }));
+    expect(lines.at(-1)).toBe('vote T1-wahl → fixed → look "rot" (1 s fade)');
+  });
+
   it("does not replay a vote result the snapshot already carried", () => {
     const { bridge, lines } = setup();
     bridge.handle({ ...event(1, {}), type: "snapshot", timelines: [{ timelineId: "main", phaseId: "T1-wahl", phaseEpoch: 2, payload: { result: { winner: "q1" } } }] });

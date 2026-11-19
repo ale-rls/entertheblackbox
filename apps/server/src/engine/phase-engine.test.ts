@@ -1835,6 +1835,23 @@ describe("native clients do not supply phone cursors", () => {
 });
 
 
+describe("vote result cue for lighting", () => {
+  it("names the field the audience chose even when the next scene is fixed", () => {
+    let now = 1000;
+    const cueEvents: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    const authored = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map(phase => phase.id === "question" ? { ...phase, next: { type: "fixed", target: "idle" } } : phase) });
+    const { engine, registry } = setup({ now: () => now, testScenario: authored, cueEvents });
+    engine.startRehearsalAt("question", now);
+    const phone = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p0");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p0"));
+    engine.handleClientMessage({ t: "input", v: 2, sessionId: "session-1", phaseEpoch: engine.currentPhaseEpoch, seq: 1, x: 0.9, y: 0.9 }, phone as unknown as WebSocket);
+    now = 1200; engine.tick(now);
+    const result = cueEvents.find((event) => event.type === "result");
+    expect(result?.payload).toMatchObject({ winner: "fixed", leader: "q4" });
+  });
+});
+
 describe("retained monitor vote results", () => {
   it.each(["winner", "tie", "empty"])("retains %s across scenes and reconnects, and resets on restart", (mode) => {
     let now = 1000;
