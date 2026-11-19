@@ -5,6 +5,7 @@ import { PROTOCOL_VERSION } from "@entertheblackbox/protocol";
 import { PhoneConnection, type EndedPhoneSession } from "./lib/connection.js";
 import { RealtimeCursorPublisher } from "./lib/realtimeWsClient.js";
 import { loadLease } from "./lib/lease.js";
+import { useScreenWakeLock } from "./lib/screen-wake-lock.js";
 import {
   applyDelta,
   InputThrottle,
@@ -72,6 +73,8 @@ export function App() {
   const [configError, setConfigError] = useState("");
   const [consent, setConsent] = useState<ConsentState | null>(null);
   const identity = state.join.kind === "accepted" ? state.join.identity : null;
+  // Only during a running show: not before joining, in the lobby or after the end.
+  useScreenWakeLock(identity !== null && state.sessionId !== null && state.sessionId !== "idle" && state.sessionId !== "lobby");
   const position = useRef<TrackpadState>({ ...TRACKPAD_CENTER });
   const cursorSurfaceSize = useRef(trackpadSurfaceSize(window.innerWidth, window.innerHeight));
   const cursorMarker = useRef<HTMLSpanElement | null>(null);
