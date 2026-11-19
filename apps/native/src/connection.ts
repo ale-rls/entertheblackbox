@@ -16,6 +16,7 @@ export class NativeConnection {
   private occupantId: string | null = null;
   private attempt = 0;
   private lastReceived = 0;
+  private retryNotBefore = 0;
   private heartbeat: ReturnType<typeof setInterval> | undefined;
   private retry: ReturnType<typeof setTimeout> | undefined;
   constructor(private options: Options) {}
@@ -36,6 +37,13 @@ export class NativeConnection {
   }
   private connect() {
     if (this.stopped) return;
+    const remaining = this.retryNotBefore - Date.now();
+    if (remaining > 0) {
+      this.options.status('Rate limited — retrying');
+      this.retry = setTimeout(() => this.connect(), remaining);
+      return;
+    }
+    this.retryNotBefore = 0;
     this.options.status('Connecting');
     const socket = (this.options.factory ?? (url => new WebSocket(url)))(`${this.options.origin.replace(/^http/, 'ws')}/ws`);
     this.socket = socket;
@@ -59,6 +67,12 @@ export class NativeConnection {
       if (!parsed.ok) return;
       this.lastReceived = Date.now();
       const message = parsed.message;
+      if (message.t === 'join_rejected' && message.reason === 'rate_limited') {
+        // Keep temporary admission backoff out of the app's terminal rejection handler.
+        this.retryNotBefore = this.lastReceived + Math.max(1_000, message.retryAfterMs ?? 60_000);
+        this.resume();
+        return;
+      }
       if (message.t === 'pong') this.clock.addSample(message.echoClientTime, Date.now(), message.serverTime);
       if (message.t === 'identity') {
         this.occupantId = message.clientId;
