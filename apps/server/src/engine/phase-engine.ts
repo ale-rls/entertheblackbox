@@ -413,6 +413,8 @@ export class PhaseEngine {
   private monitorVoteResults: NonNullable<PhaseSnapshotMessage["monitorVoteResults"]> = {};
   private lastMonitorVotePhaseId: string | undefined;
   private taskVoteWinners = new Map<string, string | null>();
+  /** The last result sent to the display, replayed to a display that reconnects during the same phase. */
+  private lastQuestionResolved: Extract<ServerToClientMessage, { t: "question_resolved" }> | null = null;
   private lastTaskState = '';
   get taskStatus() {
     const phase = this.currentPhase();
@@ -1528,10 +1530,18 @@ export class PhaseEngine {
     this.clients.add(socket);
     this.send(socket, this.getSnapshotMessage());
     this.send(socket, { t: "presence", v: PROTOCOL_VERSION, count: this.registry.connectedCount });
-    const phase = this.currentPhase();
-    const resolution = this.votes.currentResolution();
-    if (phase.kind === "video-position-question" && resolution !== null) {
-      this.emitQuestionResolved(resolution, phase, this.now());
+    // A display that (re)joins after a vote closed still shows its result. Resend
+    // the frame the other displays got -- same counts, same freeze end -- rather
+    // than resolving again, which would also repeat the cue feed's result event.
+    const resolved = this.lastQuestionResolved;
+    if (resolved !== null && resolved.sessionId === this.sessionId && resolved.phaseEpoch === this.phaseEpoch) {
+      this.send(socket, resolved);
+    } else {
+      const phase = this.currentPhase();
+      const resolution = this.votes.currentResolution();
+      if (phase.kind === "video-position-question" && resolution !== null) {
+        this.emitQuestionResolved(resolution, phase, this.now());
+      }
     }
     if (this.lifecycle === "idle" && (this.registry.connectedCount >= 1 || this.nextLobbyStartAt !== null)) {
       this.startLobby(this.now());
@@ -1977,7 +1987,7 @@ export class PhaseEngine {
         resolvedTarget: resolution.resolvedTarget,
       },
     });
-    this.sendToDisplay({
+    this.lastQuestionResolved = {
       t: "question_resolved",
       v: PROTOCOL_VERSION,
       sessionId: this.sessionId,
@@ -1991,7 +2001,8 @@ export class PhaseEngine {
       quadrantCounts: resolution.quadrantCounts,
       winner: resolution.winner,
       ...(resolution.tieBreak === undefined ? {} : { tieBreak: resolution.tieBreak }),
-    } as Extract<ServerToClientMessage, { t: "question_resolved" }>);
+    } as Extract<ServerToClientMessage, { t: "question_resolved" }>;
+    this.sendToDisplay(this.lastQuestionResolved);
   }
 
   private queueQuestionStatus(now = this.now()): void {

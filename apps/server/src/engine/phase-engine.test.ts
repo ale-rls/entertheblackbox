@@ -73,6 +73,7 @@ function setup(options: {
   autoStartOnFirstParticipant?: boolean;
   scheduledStartTimes?: number[];
   groupSelection?: NonNullable<ConstructorParameters<typeof PhaseEngine>[0]["groupSelection"]>;
+  cueEvents?: Array<{ type: string }>;
 } ) {
   const registry = new ParticipantRegistry(2, 50);
   const checkpoints = options.checkpoints ?? [];
@@ -92,6 +93,7 @@ function setup(options: {
       displayDisconnectTimeoutMs: options.displayDisconnectTimeoutMs ?? 1_000_000,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
+    ...(options.cueEvents === undefined ? {} : { onCueEvent: (event: { type: string }) => { options.cueEvents!.push(event); } }),
     ...(options.groupSelection === undefined ? {} : { groupSelection: options.groupSelection }),
     ...(options.autoStartOnFirstParticipant === undefined ? {} : { autoStartOnFirstParticipant: options.autoStartOnFirstParticipant }),
     ...(options.scheduledStartTimes === undefined ? {} : { scheduledStartTimes: options.scheduledStartTimes }),
@@ -1406,6 +1408,37 @@ describe("PhaseEngine lifecycle", () => {
       { outcome: "tie", target: "idle" },
       { outcome: "empty", target: "idle" },
     ]);
+  });
+
+  it("shows the result again on a display that reconnects during the freeze", () => {
+    let now = 1_000;
+    const cueEvents: Array<{ type: string }> = [];
+    const { engine, registry } = setup({ now: () => now, interactiveIdleTimeoutMs: 1_000, cueEvents });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    now = 1_100;
+    engine.tick(now);
+    expect(engine.adminSkip(1_110)).toEqual({ ok: true });
+    expect(engine.currentPhaseId).toBe("question");
+    expect(engine.adminSkip(1_120)).toEqual({ ok: true });
+    const original = display.sent.find((message) => message.t === "question_resolved");
+    expect(original).toBeDefined();
+    const results = cueEvents.filter((event) => event.type === "result").length;
+
+    // The projector drops off Wi-Fi during the result freeze and joins again.
+    const replacement = new MockSocket();
+    connectDisplay(engine, replacement as unknown as WebSocket);
+    expect(replacement.sent.find((message) => message.t === "question_resolved")).toEqual(original);
+    expect(cueEvents.filter((event) => event.type === "result")).toHaveLength(results);
+
+    // Once the next phase starts the old result is not replayed.
+    expect(engine.adminSkip(1_130)).toEqual({ ok: true });
+    const late = new MockSocket();
+    connectDisplay(engine, late as unknown as WebSocket);
+    expect(late.sent.some((message) => message.t === "question_resolved")).toBe(false);
   });
 
   it("advances immediately when skipping an already-resolved question", () => {
