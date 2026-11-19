@@ -5,12 +5,17 @@ export type Log = (line: string) => void;
 
 type Envelope = {
   type?: unknown; bootId?: unknown; sequence?: unknown; timelineId?: unknown; timelineKey?: unknown; phaseId?: unknown; phaseEpoch?: unknown;
-  payload?: { cue?: unknown; reason?: unknown } | undefined;
+  payload?: { cue?: unknown; reason?: unknown; phase?: { startedAt?: unknown } | undefined } | undefined;
   timelines?: unknown;
   timestamp?: unknown;
   /** The feed sends more (version, sessionId …); the bridge ignores it. */
   [key: string]: unknown;
 };
+
+/** A scene start announced further ahead than this is not a synchronized pre-roll: fire at once. */
+const MAX_LEAD_MS = 60_000;
+/** How long an arrival sample counts towards "how fast events usually arrive". */
+const ARRIVAL_WINDOW_MS = 10 * 60_000;
 
 function timelineKey(event: Envelope): string {
   if (typeof event.timelineKey === "string") return event.timelineKey;
@@ -53,7 +58,7 @@ export class CueBridge {
       this.lastSequence = Math.max(event.type === "snapshot" ? -1 : this.lastSequence, event.sequence);
     }
     const late = this.lateness(event);
-    const timeline = typeof event.timelineId === "string" ? event.timelineId : "main";
+    const timeline = timelineKey(event);
     switch (event.type) {
       case "snapshot": {
         const timelines = Array.isArray(event.timelines) ? event.timelines as Envelope[] : [];
@@ -67,7 +72,6 @@ export class CueBridge {
       }
       case "phase": {
         if (typeof event.phaseId !== "string") return;
-        const timeline = timelineKey(event);
         if (typeof event.phaseEpoch === "number") {
           if (this.firedEpochs.get(timeline) === event.phaseEpoch) return;
           this.firedEpochs.set(timeline, event.phaseEpoch);
@@ -90,8 +94,9 @@ export class CueBridge {
         return;
       }
       case "retire": {
-        const timeline = timelineKey(event);
         if (this.firedEpochs.get(timeline) === event.phaseEpoch) this.firedEpochs.delete(timeline);
+        // A retired timeline's scene never starts: drop music still waiting for its pre-roll.
+        if (this.sceneStarts.get(timeline)?.epoch === event.phaseEpoch) this.sceneStarts.delete(timeline);
         return;
       }
       case "reset": {
