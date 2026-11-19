@@ -87,6 +87,35 @@ function setup(value = scenario) {
 }
 
 describe("independent group paths", () => {
+  it.each(["deadline", "operator command"])("starts an automatic split by %s despite an unassigned late arrival", (start) => {
+    const automatic = scenarioSchema.parse({
+      ...scenario,
+      initialGroupIds: undefined,
+      phases: scenario.phases.map((phase) => phase.kind === "group-branch" ? {
+        ...phase,
+        assignment: { type: "manual", fallbackGroupId: "a" },
+        branches: phase.branches.filter((branch) => branch.groupId !== "c"),
+      } : phase),
+    });
+    const h = setup(automatic);
+    const present = h.phone("present");
+    h.engine.adminStart();
+    h.setNow(50);
+    h.groups.assign("preassigned", "b");
+    const preassigned = h.phone("preassigned");
+    const late = h.phone("late");
+    expect(h.groups.groupFor("late")).toBeNull();
+
+    if (start === "deadline") h.tick(100);
+    else expect(h.engine.adminStartGroupPaths()).toEqual({ ok: true });
+
+    expect(h.engine.groupPathsStarted).toBe(true);
+    expect(present.snapshot.phase.id).toBe("vote");
+    expect(preassigned.snapshot.phase.id).toBe("film");
+    expect(late.snapshot).toMatchObject({ participantState: "unassigned", phase: { id: "split" } });
+    h.engine.stop();
+  });
+
   it("moves a late arrival into the live scene without replaying cues or changing its clock", () => {
     const h = setup(); h.display();
     const b = h.phone("two"); h.engine.adminStart(); h.choose(b, "b"); h.tick(100);

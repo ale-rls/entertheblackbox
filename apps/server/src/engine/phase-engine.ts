@@ -1087,9 +1087,15 @@ export class PhaseEngine {
       return;
     }
     if (_participant && this.pathsStarted) this.options.onParticipantPhase?.([_participant.clientId], { kind: "idle", id: "idle" }, this.now());
-    // Late arrivals may choose while an unrestricted selection is still open.
-    if (_participant && this.currentPhase().kind === "group-branch" &&
-      !(this.currentPhase() as Extract<Phase, { kind: "group-branch" }>).sourceGroupIds) this.selectionCohort.add(_participant.clientId);
+    const phase = this.currentPhase();
+    if (_participant && phase.kind === "group-branch" && !phase.sourceGroupIds) {
+      // Automatic assignment runs when the scene starts. Only admit late
+      // arrivals who can choose or already belong to an output group.
+      const groupId = this.groupSelection?.current(_participant.clientId);
+      if (phase.assignment.type === "self-select" || phase.branches.some((branch) => branch.groupId === groupId)) {
+        this.selectionCohort.add(_participant.clientId);
+      }
+    }
     this.send(socket, this.getSnapshotMessage());
     this.sendGroupSelectionOptions(socket);
     this.sendVotingOptions(socket);
