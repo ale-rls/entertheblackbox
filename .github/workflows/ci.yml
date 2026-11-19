@@ -36,7 +36,7 @@ jobs:
           node-version: 22.17.0
           cache: pnpm
       - name: Validate Coolify Compose
-        run: docker compose --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml config --quiet
+        run: docker compose --project-directory . --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml config --quiet
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r typecheck
       - run: pnpm -r test
@@ -46,4 +46,4 @@ jobs:
       - name: Bundle native iOS and Android app
         run: pnpm --filter @entertheblackbox/native exec expo export --platform ios --platform android
       - name: Build Coolify images
-        run: docker compose --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml build
+        run: docker compose --project-directory . --env-file deploy/coolify/.env.example -f deploy/coolify/docker-compose.yml build

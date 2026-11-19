@@ -50,6 +50,7 @@ import {
 } from "../votes/index.js";
 import { VideoPhaseHandler } from "./video.js";
 import { acceptsVotingInput, pointForOutcome, votingOptions } from "../groups/voting.js";
+import { guardedInterval } from "./guarded-interval.js";
 
 type GroupPath = { engine: PhaseEngine; members: Set<string> };
 
@@ -905,6 +906,7 @@ export class PhaseEngine {
     this.joinMovementRecordingForConnectedParticipants();
     this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "admin-restart");
+    this.cursors.requestSnapshot();
     return { ok: true };
   }
 
@@ -942,7 +944,7 @@ export class PhaseEngine {
 
   start(): void {
     if (this.timer !== null) return;
-    this.timer = setInterval(() => this.tick(), 250);
+    this.timer = guardedInterval("show timer", () => this.tick(), 250);
     this.cursors.start();
     this.movement.start();
     this.ghosts.start();
@@ -1085,10 +1087,17 @@ export class PhaseEngine {
       localPath.participantJoined(socket, _participant);
       return;
     }
+    if (_participant && this.pathsStarted && this.joinDeviceGroupPath(_participant)) return;
     if (_participant && this.pathsStarted) this.options.onParticipantPhase?.([_participant.clientId], { kind: "idle", id: "idle" }, this.now());
-    // Late arrivals may choose while an unrestricted selection is still open.
-    if (_participant && this.currentPhase().kind === "group-branch" &&
-      !(this.currentPhase() as Extract<Phase, { kind: "group-branch" }>).sourceGroupIds) this.selectionCohort.add(_participant.clientId);
+    const phase = this.currentPhase();
+    if (_participant && phase.kind === "group-branch" && !phase.sourceGroupIds) {
+      // Automatic assignment runs when the scene starts. Only admit late
+      // arrivals who can choose or already belong to an output group.
+      const groupId = this.groupSelection?.current(_participant.clientId);
+      if (phase.assignment.type === "self-select" || phase.branches.some((branch) => branch.groupId === groupId)) {
+        this.selectionCohort.add(_participant.clientId);
+      }
+    }
     this.send(socket, this.getSnapshotMessage());
     this.sendGroupSelectionOptions(socket);
     this.sendVotingOptions(socket);
@@ -1099,6 +1108,23 @@ export class PhaseEngine {
     if (this.lifecycle === "idle" && this.registry.connectedCount >= 1) {
       this.startLobby(this.now());
     }
+  }
+
+  /**
+   * A late arrival whose group is fixed by its device (`groupByClient`, e.g.
+   * browsers → theater) joins that group's running timeline at once, as an
+   * operator transfer would. Without this it waits outside every path: its
+   * phone shows the split and its cursor reaches no display. A group that
+   * already finished takes it into its reunion wait. Anyone else
+   * (self-selected or vote-derived groups, a group with running subgroups)
+   * still waits for the operator or the reunion.
+   */
+  private joinDeviceGroupPath(participant: ParticipantRecord): boolean {
+    if (this.path) return false;
+    const groupId = participant.client === undefined ? undefined : this.scenario.groupByClient?.[participant.client];
+    if (groupId === undefined || this.groupSelection?.current(participant.clientId) !== groupId) return false;
+    if (this.pathChainForGroup(groupId).length === 0) return false;
+    return this.assignParticipantGroup(participant.clientId, groupId).ok;
   }
 
   socketClosed(socket: WebSocket): void {
@@ -1573,6 +1599,8 @@ export class PhaseEngine {
     this.joinMovementRecordingForConnectedParticipants();
     this.ghosts.selectForSession(now);
     this.enterPhase(this.scenario.entryPhaseId, now, "session-start");
+    // The display clears its cursor field on the session change.
+    this.cursors.requestSnapshot();
   }
 
   private joinMovementRecordingForConnectedParticipants(): void {
@@ -1728,6 +1756,8 @@ export class PhaseEngine {
       phase: this.getSnapshot(),
       serverTime: this.now(),
     });
+    // Lobby updates use the idle phase kind, which clears the display's cursor field.
+    if (this.lifecycle === "lobby") this.cursors.requestSnapshot();
     for (const socket of this.participantSockets) {
       this.sendGroupSelectionOptions(socket);
       this.sendVotingOptions(socket);
@@ -1899,6 +1929,10 @@ export class PhaseEngine {
     const opensAt = this.phaseStartedAt + phase.openAtMs;
     if (!force && now < opensAt) return;
     this.beginPositionVote(phase, opensAt, this.phaseStartedAt + phase.closeAtMs);
+    // A forced open only prepares a result for an operator skip or video end.
+    if (!force) {
+      for (const socket of this.participantSockets) this.sendVotingOptions(socket);
+    }
     this.questionStatusDirty = true;
     this.broadcastQuestionStatus(now, true);
   }
@@ -2221,13 +2255,17 @@ export class PhaseEngine {
       participantId === undefined ||
       (phase.kind !== "position-question" && phase.kind !== "video-position-question")
     ) return;
+    const method = this.groupSelection?.method?.(participantId) ?? "phone-cursor";
+    const awaitingOpen = method === "phone-buttons" &&
+      phase.kind === "video-position-question" && this.votes.currentQuestion() === null;
+    const closesAt = this.phaseStartedAt + (phase.kind === "position-question" ? phase.durationMs : phase.closeAtMs);
     this.send(socket, {
       t: "voting_options",
       v: PROTOCOL_VERSION,
       sessionId: this.sessionId,
       phaseEpoch: this.phaseEpoch,
-      method: this.groupSelection?.method?.(participantId) ?? "phone-cursor",
-      closed: this.votes.currentResolution() !== null || this.now() >= this.phaseStartedAt + (phase.kind === "position-question" ? phase.durationMs : phase.closeAtMs),
+      method,
+      closed: awaitingOpen || this.votes.currentResolution() !== null || this.now() >= closesAt,
       question: phase.text,
       options: votingOptions(phase),
     });

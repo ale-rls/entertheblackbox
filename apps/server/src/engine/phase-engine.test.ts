@@ -56,6 +56,7 @@ const scenario = scenarioSchema.parse({
 
 function setup(options: {
   now: () => number;
+  sessionIdFactory?: () => string;
   checkpoints?: PhaseCheckpoint[];
   lobbyCountdownMs?: number;
   interactiveIdleTimeoutMs?: number;
@@ -71,6 +72,7 @@ function setup(options: {
   qr?: boolean;
   autoStartOnFirstParticipant?: boolean;
   scheduledStartTimes?: number[];
+  groupSelection?: NonNullable<ConstructorParameters<typeof PhaseEngine>[0]["groupSelection"]>;
 } ) {
   const registry = new ParticipantRegistry(2, 50);
   const checkpoints = options.checkpoints ?? [];
@@ -82,7 +84,7 @@ function setup(options: {
     showId: "show-1",
     displayToken: "display-secret",
     now: options.now,
-    sessionIdFactory: () => "session-1",
+    sessionIdFactory: options.sessionIdFactory ?? (() => "session-1"),
     policy: {
       lobbyCountdownMs: options.lobbyCountdownMs ?? 100,
       interactiveIdleTimeoutMs: options.interactiveIdleTimeoutMs ?? 100,
@@ -90,6 +92,7 @@ function setup(options: {
       displayDisconnectTimeoutMs: options.displayDisconnectTimeoutMs ?? 1_000_000,
     },
     onCheckpoint: (checkpoint) => checkpoints.push(checkpoint),
+    ...(options.groupSelection === undefined ? {} : { groupSelection: options.groupSelection }),
     ...(options.autoStartOnFirstParticipant === undefined ? {} : { autoStartOnFirstParticipant: options.autoStartOnFirstParticipant }),
     ...(options.scheduledStartTimes === undefined ? {} : { scheduledStartTimes: options.scheduledStartTimes }),
     ...(options.sessionEnds === undefined
@@ -566,6 +569,53 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.currentPhaseId).toBe("idle");
   });
 
+  it.each(["open", "skip"] as const)("keeps video vote buttons disabled until the engine opens the vote (%s)", (action) => {
+    let now = 1_000;
+    const { engine, registry } = setup({
+      now: () => now,
+      testScenario: compositeVideoQuestionScenario,
+      groupSelection: { current: () => null, select: () => {}, method: () => "phone-buttons" },
+    });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    const socket = phone as unknown as WebSocket;
+    addParticipant(registry, socket, now, "p1");
+    engine.participantJoined(socket, registry.get("lease-p1"));
+    connectDisplay(engine, display as unknown as WebSocket);
+    const votingOptions = (client: MockSocket) => client.sent.filter((message) => message.t === "voting_options");
+
+    now = 1_100;
+    engine.tick(now);
+    expect(votingOptions(phone).map((message) => message.closed)).toEqual([true]);
+
+    const reconnected = new MockSocket();
+    const replacementSocket = reconnected as unknown as WebSocket;
+    engine.socketClosed(socket);
+    now = action === "open" ? 1_120 : 1_119;
+    addParticipant(registry, replacementSocket, now, "p1");
+    engine.participantJoined(replacementSocket, registry.get("lease-p1"));
+    expect(votingOptions(reconnected).map((message) => message.closed)).toEqual([true]);
+
+    const vote = (outcome: string) => engine.handleClientMessage({
+      t: "button_vote", v: 2, sessionId: "session-1", phaseEpoch: engine.currentPhaseEpoch, outcome,
+    }, replacementSocket);
+    vote("q1");
+    if (action === "skip") {
+      engine.adminSkip(now);
+      expect(votingOptions(reconnected).map((message) => message.closed)).toEqual([true, true]);
+      expect(display.sent.find((message) => message.t === "question_resolved")?.quadrantCounts).toMatchObject({ q1: 0 });
+      return;
+    }
+
+    engine.tick(now);
+    expect(votingOptions(reconnected).map((message) => message.closed)).toEqual([true, false]);
+    vote("q2");
+    now = 1_140;
+    engine.tick(now);
+    expect(votingOptions(reconnected).map((message) => message.closed)).toEqual([true, false, true]);
+    expect(display.sent.find((message) => message.t === "question_resolved")?.quadrantCounts).toMatchObject({ q1: 0, q2: 1 });
+  });
+
   it("ignores display video_ended: only the server clock ends a video", () => {
     let now = 1_000;
     const { engine, registry } = setup({ now: () => now });
@@ -969,6 +1019,67 @@ describe("PhaseEngine lifecycle", () => {
     expect(movementStarted).toEqual([]);
   });
 
+  it("replays stationary cursors after show starts, restarts, and lobby updates", () => {
+    let now = 1_000;
+    let sessionNumber = 0;
+    const { engine, registry } = setup({ now: () => now, sessionIdFactory: () => `session-${++sessionNumber}` });
+    const phone = new MockSocket();
+    const display = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    const participant = registry.get("lease-p1");
+    if (participant === undefined) throw new Error("expected participant record");
+    engine.participantJoined(phone as unknown as WebSocket, participant);
+    connectDisplay(engine, display as unknown as WebSocket);
+
+    const cursors = (engine as unknown as { cursors: { tick(): void } }).cursors;
+    cursors.tick();
+    const roster = [{ clientId: "p1", color: participant.color, x: 0.5, y: 0.5 }];
+    expect(display.sent.filter((message) => message.t === "cursors")).toEqual([
+      expect.objectContaining({ cursors: roster }),
+    ]);
+
+    now = 1_100;
+    engine.tick(now);
+    cursors.tick();
+    cursors.tick();
+
+    expect(display.sent.filter((message) => message.t === "phase" || message.t === "cursors").slice(-2)).toEqual([
+      expect.objectContaining({ t: "phase", sessionId: "session-1", phase: expect.objectContaining({ id: "intro" }) }),
+      expect.objectContaining({ t: "cursors", cursors: roster }),
+    ]);
+
+    now = 1_150;
+    expect(engine.adminRestart(now)).toEqual({ ok: true });
+    cursors.tick();
+    cursors.tick();
+
+    expect(display.sent.filter((message) => message.t === "phase" || message.t === "cursors").slice(-2)).toEqual([
+      expect.objectContaining({ t: "phase", sessionId: "session-2", phase: expect.objectContaining({ id: "intro" }) }),
+      expect.objectContaining({ t: "cursors", cursors: roster }),
+    ]);
+
+    now = 1_175;
+    engine.adminIdle(now);
+    cursors.tick();
+    engine.setLobbyStartTimes([2_000], now);
+    cursors.tick();
+    cursors.tick();
+
+    expect(display.sent.filter((message) => message.t === "phase" || message.t === "cursors").slice(-2)).toEqual([
+      expect.objectContaining({ t: "phase", sessionId: "lobby" }),
+      expect.objectContaining({ t: "cursors", cursors: roster }),
+    ]);
+
+    engine.setLobbyStartTimes([3_000], now);
+    cursors.tick();
+    cursors.tick();
+
+    expect(display.sent.filter((message) => message.t === "phase" || message.t === "cursors").slice(-2)).toEqual([
+      expect.objectContaining({ t: "phase", sessionId: "lobby", phase: expect.objectContaining({ deadlineAt: 3_000 }) }),
+      expect.objectContaining({ t: "cursors", cursors: roster }),
+    ]);
+  });
+
   it("resets the cursor sequence when a replacement socket rejoins before the old socket closes", () => {
     let now = 1_000;
     let snapshot: FinalVoteSnapshot | undefined;
@@ -1049,6 +1160,35 @@ describe("PhaseEngine lifecycle", () => {
     const cursors = display.sent.filter((message) => message.t === "cursors").at(-1)?.cursors;
     expect(cursors).toContainEqual(expect.objectContaining({ clientId: "ghost:rec-a", ghost: true }));
     expect(cursors).toHaveLength(2); // 1 live (default position) + 1 ghost, filling to targetAudienceSize 2
+  });
+
+  it("replays a stationary ghost-only roster to a reconnecting display", () => {
+    const now = 1_000;
+    const { engine } = setup({
+      now: () => now,
+      testScenario: targetAudienceScenario(1),
+      ghostPool: { tracks: [{ recordingId: "rec-a", samples: [{ t: 0, x: 0.25, y: 0.75 }] }] },
+    });
+    const display = new MockSocket();
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    const cursors = (engine as unknown as { cursors: { tick(): void } }).cursors;
+    cursors.tick();
+    const roster = [expect.objectContaining({ clientId: "ghost:rec-a", x: 0.25, y: 0.75, ghost: true })];
+    expect(display.sent.filter((message) => message.t === "cursors")).toEqual([
+      expect.objectContaining({ tick: 0, cursors: roster }),
+    ]);
+
+    engine.socketClosed(display as unknown as WebSocket);
+    const reconnectedDisplay = new MockSocket();
+    connectDisplay(engine, reconnectedDisplay as unknown as WebSocket);
+    cursors.tick();
+    cursors.tick();
+
+    expect(reconnectedDisplay.sent.filter((message) => message.t === "cursors")).toEqual([
+      expect.objectContaining({ tick: 1, cursors: roster }),
+    ]);
   });
 
   it("shows no ghosts once live participants already fill targetAudienceSize", () => {
