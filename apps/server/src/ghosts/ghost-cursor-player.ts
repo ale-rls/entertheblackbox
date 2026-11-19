@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Cursor } from "@entertheblackbox/protocol";
 import { IDENTITY_COLORS } from "../admission/registry.js";
+import { guardedInterval } from "../engine/guarded-interval.js";
 
 export const GHOST_TICK_INTERVAL_MS = 40;
 
@@ -100,7 +101,7 @@ export class GhostCursorPlayer {
 
   start(): void {
     if (this.timer !== null) return;
-    this.timer = setInterval(() => this.emitFrame(this.now()), this.intervalMs);
+    this.timer = guardedInterval("ghost cursors", () => this.emitFrame(this.now()), this.intervalMs);
   }
 
   stop(): void {
