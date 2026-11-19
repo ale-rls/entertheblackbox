@@ -45,6 +45,10 @@ def label_rows(timelines):
     return rows
 
 
+def timeline_key(event):
+    return event.get('timelineKey', event['timelineId'])
+
+
 class State:
     def __init__(self):
         self.boot = None
@@ -57,7 +61,7 @@ class State:
         boot, sequence = event['bootId'], event['sequence']
         if event['type'] == 'snapshot':
             self.boot, self.sequence = boot, sequence
-            self.timelines = {item['timelineId']: item for item in event['timelines']}
+            self.timelines = {timeline_key(item): item for item in event['timelines']}
             return None
         if boot != self.boot:
             raise ValueError('Snapshot required after server restart')
@@ -70,9 +74,14 @@ class State:
         if kind == 'reset':
             self.timelines.clear()
         elif kind == 'phase':
-            self.timelines[event['timelineId']] = event
+            self.timelines[timeline_key(event)] = event
+        elif kind == 'retire':
+            key = timeline_key(event)
+            current = self.timelines.get(key)
+            if current and current.get('phaseEpoch') == event.get('phaseEpoch'):
+                del self.timelines[key]
         elif kind == 'result':
-            current = self.timelines.get(event['timelineId'])
+            current = self.timelines.get(timeline_key(event))
             if current and current.get('phaseEpoch') == event.get('phaseEpoch'):
                 current['payload']['result'] = event['payload']
         elif kind == 'cue':

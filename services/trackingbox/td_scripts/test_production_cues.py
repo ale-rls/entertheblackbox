@@ -63,6 +63,16 @@ class CueTests(unittest.TestCase):
         state.apply(event('snapshot', 0, timelines=[] ) | {'bootId': 'new-boot'})
         self.assertEqual(label_rows(state.timelines), [])
 
+    def test_retiring_a_nested_timeline_preserves_the_same_top_level_group(self):
+        state = State()
+        group = event('phase', 1)
+        nested = event('phase', 2, timelineKey='trade/ki') | {'phaseEpoch': 3}
+        state.apply(event('snapshot', 2, timelines=[group, nested]))
+        state.apply(event('retire', 3, timelineKey='trade/ki'))
+        self.assertEqual(state.timelines, {'ki': group, 'trade/ki': nested})
+        state.apply(event('retire', 4, timelineKey='trade/ki') | {'phaseEpoch': 3})
+        self.assertEqual(state.timelines, {'ki': group})
+
     def test_reset_and_gap(self):
         state = State()
         state.apply(event('snapshot', 0, timelines=[]))
