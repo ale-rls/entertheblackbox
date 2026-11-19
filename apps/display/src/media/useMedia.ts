@@ -50,7 +50,7 @@ export function useMedia(manifestUrl = runtimeApi("/media-manifest.json"), revis
           if (!response.ok) throw new Error(`manifest http ${response.status}`);
           const manifest = mediaManifestSchema.parse(await response.json());
           if (cancelled) return;
-          await store.sync(scope ? selectMedia(manifest, scope.sources) : manifest);
+          await store.sync(scope ? selectMedia(manifest, scope.sources) : manifest, manifest);
           return;
         } catch (error) {
           if (cancelled) return;
