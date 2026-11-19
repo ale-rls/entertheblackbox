@@ -7,7 +7,7 @@ type Envelope = {
   type?: unknown; bootId?: unknown; sequence?: unknown; timelineId?: unknown; phaseId?: unknown; phaseEpoch?: unknown;
   payload?: { cue?: unknown; reason?: unknown; phase?: { startedAt?: unknown } | undefined } | undefined;
   timelines?: unknown;
-    timestamp?: unknown;
+  timestamp?: unknown;
   /** The feed sends more (version, sessionId …); the bridge ignores it. */
   [key: string]: unknown;
 };
