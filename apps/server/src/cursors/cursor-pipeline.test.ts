@@ -124,6 +124,18 @@ describe("CursorPipeline", () => {
 });
 
 describe("curtain-light entry stages", () => {
+  it("clears a previously visible ghost-only roster when a snapshot is requested during curtain entry", () => {
+    const batches: CursorsMessage[] = [];
+    const pipeline = new CursorPipeline({ sendCursors: (message) => batches.push(message), sendPresence: () => {} });
+    pipeline.setGhostCursors([{ clientId: "ghost:1", x: 0.1, y: 0.1, color: "#f0f", ghost: true }]);
+    pipeline.tick();
+
+    pipeline.setEntryStage(true);
+    pipeline.requestSnapshot();
+    pipeline.tick();
+    expect(batches.map((batch) => batch.cursors.length)).toEqual([1, 0]);
+  });
+
   it("hides cursors and ghosts until entry, pulses on touch, and resumes after reconnect", () => {
     const batches: CursorsMessage[] = [];
     const pipeline = new CursorPipeline({ sendCursors: (m) => batches.push(m), sendPresence: () => {} });

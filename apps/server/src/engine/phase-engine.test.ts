@@ -1051,6 +1051,35 @@ describe("PhaseEngine lifecycle", () => {
     expect(cursors).toHaveLength(2); // 1 live (default position) + 1 ghost, filling to targetAudienceSize 2
   });
 
+  it("replays a stationary ghost-only roster to a reconnecting display", () => {
+    const now = 1_000;
+    const { engine } = setup({
+      now: () => now,
+      testScenario: targetAudienceScenario(1),
+      ghostPool: { tracks: [{ recordingId: "rec-a", samples: [{ t: 0, x: 0.25, y: 0.75 }] }] },
+    });
+    const display = new MockSocket();
+    connectDisplay(engine, display as unknown as WebSocket);
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+
+    const cursors = (engine as unknown as { cursors: { tick(): void } }).cursors;
+    cursors.tick();
+    const roster = [expect.objectContaining({ clientId: "ghost:rec-a", x: 0.25, y: 0.75, ghost: true })];
+    expect(display.sent.filter((message) => message.t === "cursors")).toEqual([
+      expect.objectContaining({ tick: 0, cursors: roster }),
+    ]);
+
+    engine.socketClosed(display as unknown as WebSocket);
+    const reconnectedDisplay = new MockSocket();
+    connectDisplay(engine, reconnectedDisplay as unknown as WebSocket);
+    cursors.tick();
+    cursors.tick();
+
+    expect(reconnectedDisplay.sent.filter((message) => message.t === "cursors")).toEqual([
+      expect.objectContaining({ tick: 1, cursors: roster }),
+    ]);
+  });
+
   it("shows no ghosts once live participants already fill targetAudienceSize", () => {
     let now = 1_000;
     const ghostPool: GhostPool = {
