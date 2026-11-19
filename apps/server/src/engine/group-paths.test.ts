@@ -365,6 +365,33 @@ describe("independent group paths", () => {
     h.engine.stop();
   });
 
+  it("plays task audio for the winner of a vote cast inside a group path, after the reunion", () => {
+    const clip = (src: string) => ({ src, durationMs: 1_000 });
+    const withTask = scenarioSchema.parse({
+      ...scenario,
+      participantTasks: [{ id: "chore", title: "Chore", question: "Ready?", notificationBody: "Please answer", groupIds: [], durationMs: 5_000,
+        options: [{ id: "go", label: "Go", audioByVote: { questionId: "vote", clips: { max: clip("max.mp3") }, fallback: clip("fallback.mp3") } }] }],
+    });
+    const h = setup(withTask);
+    const a = h.phone("one");
+    h.engine.adminStart();
+    h.choose(a, "a");
+    h.tick(100);
+    expect(a.snapshot.phase.id).toBe("vote");
+    h.send(a, { t: "input", v: 2, sessionId: "visit", phaseEpoch: a.snapshot.phaseEpoch, seq: 1, x: 0.9, y: 0.5 });
+    h.tick(200);
+    h.tick(1_200);
+    h.tick(1_300);
+    expect(h.engine.currentPhaseId).toBe("together");
+
+    h.engine.taskCommand({ action: "open", templateId: "chore", sessionId: "visit", phaseId: "together", phaseEpoch: h.engine.currentPhaseEpoch });
+    const task = h.engine.taskStatus.instances.at(-1)!;
+    h.send(a, { t: "participant_task_response", v: 2, sessionId: "visit", instanceId: task.id, optionId: "go" });
+    const recipient = h.engine.taskStatus.instances.at(-1)!.recipients.find((r) => r.participantId === "one");
+    expect(recipient?.audio?.src).toBe("max.mp3");
+    h.engine.stop();
+  });
+
   it("rejects unknown group displays and wrong credentials without replacing main", () => {
     const h = setup();
     const main = h.display();

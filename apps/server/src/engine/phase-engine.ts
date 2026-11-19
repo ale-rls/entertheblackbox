@@ -2254,6 +2254,8 @@ export class PhaseEngine {
       child.lifecycle = "active";
       child.sessionId = this.sessionId;
       child.sessionStartedAt = this.sessionStartedAt;
+      // One session-wide record of vote winners: task audio after the reunion follows a vote cast inside a path.
+      child.taskVoteWinners = this.taskVoteWinners;
       child.monitorVoteResults = { ...inheritedMonitorVotes.monitorVoteResults };
       child.lastMonitorVotePhaseId = inheritedMonitorVotes.lastMonitorVotePhaseId;
       // Attach before entering: transition frames and votes go only to this roster.
