@@ -182,4 +182,24 @@ describe("videoQuestionStage", () => {
     );
     expect(closed).not.toContain("arena-region-blink");
   });
+
+  it("blinks only the tied leaders when a video vote ends in a plain tie", () => {
+    const closeAt = phase.startedAt + phase.closeAtMs;
+    const resolution = {
+      t: "question_resolved",
+      v: PROTOCOL_VERSION,
+      sessionId: "session-1",
+      phaseEpoch: 1,
+      field: phase.field,
+      quadrantCounts: { q1: 20, q2: 20, q3: 4, q4: 0 },
+      winner: "tie",
+      resolvedTarget: "idle",
+      freezeUntil: closeAt + 5_000,
+    } satisfies QuestionResolvedMessage;
+    const html = renderToStaticMarkup(
+      <VideoQuestionOverlay phase={phase} clock={clockAt(closeAt + 1)} liveField={null} liveCounts={null} resolution={resolution} />,
+    );
+    const blinking = [...html.matchAll(/class="quadrant [^"]*quadrant-blink[^"]*" data-quadrant="(q\d)"/g)].map((m) => m[1]);
+    expect(blinking.sort()).toEqual(["q1", "q2"]);
+  });
 });
