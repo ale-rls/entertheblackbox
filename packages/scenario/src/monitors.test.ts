@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeMonitorCue, monitorCuesSchema, monitorMediaSources } from "./monitors.js";
+import { activeMonitorCue, MONITOR_TEXT_COLOR_PRESETS, monitorCuesSchema, monitorMediaSources } from "./monitors.js";
 import { scenarioSchema } from "./schema.js";
 import { validateScenario } from "./validate.js";
 
@@ -40,4 +40,18 @@ it("round-trips named vote-result cues without adding media dependencies", () =>
   const cues = monitorCuesSchema.parse({ M1: [{ kind: "vote-result", votePhaseId: "topic", fallbackText: "No topic" }] });
   expect(cues.M1?.[0]).toMatchObject({ kind: "vote-result", votePhaseId: "topic", fallbackText: "No topic" });
   expect(monitorMediaSources(cues)).toEqual([]);
+});
+
+it("accepts a hex text colour on text-bearing cues and offers the show presets", () => {
+  const cues = monitorCuesSchema.parse({ M1: [
+    { kind: "text", text: "A", startMs: 0, color: "#F76B15" },
+    { kind: "placeholder", text: "B", startMs: 1, color: "#30a46c" },
+    { kind: "vote-result", fallbackText: "", startMs: 2, color: "#3e63dd" },
+    { kind: "image", src: "a.png", text: "C", startMs: 3, color: "#e5484d" },
+    { kind: "text", text: "D", startMs: 4 },
+  ] }).M1!;
+  expect(cues.map((cue) => "color" in cue ? cue.color : undefined)).toEqual(["#F76B15", "#30a46c", "#3e63dd", "#e5484d", undefined]);
+  for (const color of ["orange", "#fff", "#12345g"]) expect(monitorCuesSchema.safeParse({ M1: [{ kind: "text", text: "A", color }] }).success).toBe(false);
+  expect(MONITOR_TEXT_COLOR_PRESETS.map((item) => item.name)).toEqual(["White", "Orange", "Green", "Blue", "Red", "Yellow"]);
+  for (const item of MONITOR_TEXT_COLOR_PRESETS) expect(monitorCuesSchema.safeParse({ M1: [{ kind: "text", text: "A", color: item.color }] }).success).toBe(true);
 });

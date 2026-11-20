@@ -1,4 +1,4 @@
-import { MONITOR_IDS, type MonitorId } from "@entertheblackbox/scenario";
+import { MONITOR_IDS, type MonitorCue, type MonitorId } from "@entertheblackbox/scenario";
 import type { PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import { curtainOutcomes } from "@entertheblackbox/shared";
 
@@ -22,4 +22,16 @@ export function monitorAnswerColor(phase: PhaseSnapshotMessage | null, monitorId
   const authored = "answerColors" in phase ? phase.answerColors?.[answerId] : undefined;
   const color = authored ?? phase.voteTreatment?.answerColors[answerId];
   return color !== undefined && HEX.test(color) ? color : null;
+}
+
+/**
+ * The colour a monitor draws its cue text in: the cue's own `color` first,
+ * then the shown vote result's colour, then the phase's answer colour.
+ * `null` means white.
+ */
+export function monitorTextColor(cue: MonitorCue | null, voteResultColor: string | null, phase: PhaseSnapshotMessage | null, monitorId: MonitorId): string | null {
+  const own = cue && "color" in cue ? cue.color : undefined;
+  if (own !== undefined && HEX.test(own)) return own;
+  if (cue?.kind === "vote-result") return voteResultColor;
+  return monitorAnswerColor(phase, monitorId);
 }

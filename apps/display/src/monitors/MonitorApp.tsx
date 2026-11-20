@@ -10,7 +10,7 @@ import { FullscreenControl } from "../components/FullscreenControl.js";
 import { performReload } from "../lib/kiosk.js";
 import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorCueReady, monitorVideoTime } from "./playback.js";
 import { finalMonitorCountdown, monitorCountdown, monitorCueCountdown, monitorCueShowsCountdown } from "./countdown.js";
-import { monitorAnswerColor } from "./answerColor.js";
+import { monitorTextColor } from "./answerColor.js";
 import { monitorVoteResult } from "./voteResult.js";
 import "./monitors.css";
 
@@ -90,7 +90,7 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
     <div className="monitor-countdown" aria-label="Seconds remaining">{countdown}</div>
     {cue?.countdownShowsText && cueText && <div className="monitor-countdown-question">{cueText}</div>}
   </div>;
-  const answerColor = voteResult ? voteResult.color : monitorAnswerColor(phase, monitorId);
+  const answerColor = monitorTextColor(cue, voteResult?.color ?? null, phase, monitorId);
   const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
   return <main className="monitor-root" aria-label={`Monitor ${monitorId}`} style={accent}>
     {countdownText}
