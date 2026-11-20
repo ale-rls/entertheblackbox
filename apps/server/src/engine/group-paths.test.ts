@@ -421,6 +421,32 @@ describe("independent group paths", () => {
     h.engine.stop();
   });
 
+  it("keeps a group path's scene task, even one that persists, off the other path's tablets", () => {
+    const withTask = scenarioSchema.parse({
+      ...scenario,
+      participantTasks: [{ id: "shared", title: "Shared", question: "Ready?", notificationBody: "Please answer", groupIds: [], durationMs: 10_000,
+        persistAcrossPhases: true, options: [{ id: "ok", label: "OK" }] }],
+      phases: [
+        ...scenario.phases.map((phase) => phase.kind === "group-branch"
+          ? { ...phase, branches: [{ groupId: "a", next: "brief" }, { groupId: "b", next: "film" }] }
+          : phase),
+        { kind: "narration", id: "brief", text: "Actors only", durationMs: 1_000, taskId: "shared", next: "together" },
+      ],
+    });
+    const h = setup(withTask);
+    const actor = h.phone("one");
+    const builder = h.phone("two", "native");
+    h.engine.adminStart();
+    h.choose(actor, "a");
+    h.choose(builder, "b");
+    h.tick(100);
+    h.tick(200);
+    h.tick(300);
+    const task = h.engine.taskStatus.instances.find((t) => t.template.id === "shared")!;
+    expect(task.recipients.map((r) => r.participantId)).toEqual(["one"]);
+    h.engine.stop();
+  });
+
   it("rejects unknown group displays and wrong credentials without replacing main", () => {
     const h = setup();
     const main = h.display();
