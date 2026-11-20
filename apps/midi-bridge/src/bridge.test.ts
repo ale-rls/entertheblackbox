@@ -178,6 +178,19 @@ describe("CueBridge", () => {
     expect(sent).toContainEqual([0x90, 61, 90]);
   });
 
+  it("drops held music when the server restarted while the feed was down, even if the new run is on the same scene number", () => {
+    const { bridge, sent, pending, setNow } = setup();
+    setNow(10_000);
+    bridge.handle({ ...event(1, { type: "phase", timelineId: "main", phaseId: "T1-titel", phaseEpoch: 4, payload: { phase: { startedAt: 13_000 } } }), timestamp: 10_000 });
+    bridge.feedLost();
+    setNow(13_000);
+    pending.shift()!.fn();
+    expect(sent).toEqual([]);
+    // The new run reached epoch 4 again and is still in its own pre-roll.
+    bridge.handle({ ...event(2, { type: "snapshot", timelines: [{ timelineId: "main", phaseId: "T1-titel", phaseEpoch: 4, payload: { phase: { startedAt: 20_000 } } }] }), bootId: "boot-2", timestamp: 14_000 });
+    expect(sent).toEqual([]);
+  });
+
   it("waits for the picture with a live cue for a scene that started its pre-roll while the feed was down", () => {
     const { bridge, sent, pending, setNow } = setup();
     setNow(11_000);
