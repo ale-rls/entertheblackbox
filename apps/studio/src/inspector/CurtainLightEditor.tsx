@@ -106,7 +106,8 @@ export function CurtainStageEditor({ phase, scenario, onChange }: {
   };
   const gapField = phase.field.type === "polygon-zones" ? null : phase.field;
   return <fieldset className="curtain-stage"><legend>Curtain light</legend>
-    <CurtainPreview field={field} settings={settings} question={phase.text} />
+    <CurtainPreview field={field} question={phase.text}
+      settings={phase.curtainFieldsStatic === true ? { ...settings, poolGain: 0, cursorFloodCounted: settings.cursorFlood } : settings} />
     <div className="curtain-colors">
       {Object.entries(colors).map(([id, color]) => <label key={id} className="sc-tool-label curtain-color">
         <input type="color" value={color} aria-label={`Colour for ${labels[id] ?? id}`} onChange={(event) => setColor(id, event.target.value)} />

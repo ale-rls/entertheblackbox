@@ -65,6 +65,15 @@ function stageLabels(phase: PositionVotePhase): string[] {
 
 export function curtainLightIssues(scenario: Scenario, mediaManifest?: MediaManifest): ScenarioIssue[] {
   const issues: ScenarioIssue[] = [];
+  const stageIds = curtainStagePhaseIds(scenario);
+  for (const phase of scenario.phases) {
+    if (phase.kind !== "position-question" && phase.kind !== "video-position-question") continue;
+    if (stageIds.has(phase.id) || (phase.curtainKeepCursors !== true && phase.curtainFieldsStatic !== true)) continue;
+    issues.push({
+      severity: "warning", code: "curtain-light", phaseId: phase.id,
+      message: `"${phase.id}": "keep cursors" and "fields don't light up yet" only apply to curtain-light votes and are ignored here`,
+    });
+  }
   const groups = (scenario.groups ?? []).filter((group) => group.voteTreatment === "curtain-light");
   if (groups.length === 0 && !scenario.phases.some(isCurtainLightVote)) return issues;
   const settings = resolveCurtainSettings(scenario.curtainLight);

@@ -413,6 +413,16 @@ const curtainStageFields = {
    * the shared timeline. Votes on a curtain-light group's own path need no flag.
    */
   curtainLightVote: z.boolean().optional(),
+  /**
+   * Curtain stage only: cursors that were visible in the previous curtain
+   * stage stay where they are instead of hiding until the next touch.
+   */
+  curtainKeepCursors: z.boolean().optional(),
+  /**
+   * Curtain stage only: fields keep their base glow and cursor lights do not
+   * brighten inside a field, so nothing lights up yet. Counting is unchanged.
+   */
+  curtainFieldsStatic: z.boolean().optional(),
   /** Answer id → colour. Missing answers use the system defaults. */
   answerColors: z.record(z.string().min(1), hexColorSchema).optional(),
   lightTuning: curtainLightingSchema.optional(),

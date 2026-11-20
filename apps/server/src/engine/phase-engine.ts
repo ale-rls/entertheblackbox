@@ -1743,8 +1743,17 @@ export class PhaseEngine {
     }
     const spotlightDeadline = phase.kind === "position-question" && phase.spotlight ? this.deadlineAt : null;
     this.cursors.setSpotlightClock(spotlightDeadline === null ? null : () => this.now() >= spotlightDeadline);
-    this.cursors.setEntryStage(this.lifecycle === "active" && this.curtainFor(phase) !== null);
-    this.trackpad.reset();
+    const curtainStage = this.lifecycle === "active" && this.curtainFor(phase) !== null;
+    const keepCursors = curtainStage
+      && this.cursors.inEntryStage
+      && (phase.kind === "position-question" || phase.kind === "video-position-question")
+      && phase.curtainKeepCursors === true;
+    // A stage that keeps cursors continues the previous curtain stage: entered
+    // cursors stay where they are and the trackpad keeps its anchors.
+    if (!keepCursors) {
+      this.cursors.setEntryStage(curtainStage);
+      this.trackpad.reset();
+    }
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
     if (spotlightDeadline !== null) this.cursors.tick();
@@ -1903,7 +1912,12 @@ export class PhaseEngine {
       && this.scenario.groups?.find((group) => group.id === groupId)?.voteTreatment === "curtain-light";
     if (!groupCurtain && phase.curtainLightVote !== true) return null;
     if (this.curtainCache?.phase === phase) return this.curtainCache;
-    const curtain = resolveCurtainSettings(this.scenario.curtainLight, phase.lightTuning);
+    const resolved = resolveCurtainSettings(this.scenario.curtainLight, phase.lightTuning);
+    // "Nothing lights up yet": fields hold their base glow and a cursor's
+    // flood looks the same inside and outside a field. Votes still count.
+    const curtain = phase.curtainFieldsStatic === true
+      ? { ...resolved, poolGain: 0, cursorFloodCounted: resolved.cursorFlood }
+      : resolved;
     const field = curtainVoteField(phase.field, curtain.neutralGap);
     this.curtainCache = {
       phase,
