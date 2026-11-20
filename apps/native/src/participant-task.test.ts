@@ -37,6 +37,10 @@ describe('participant task visibility', () => {
     expect(taskVisible(cancelled)).toBe(false);
     expect(taskVisible(state('withdrawn'))).toBe(true);
   });
+  it('lets a withdrawal on a closed task go, instead of bringing its old question back', () => {
+    const withdrawn = state('withdrawn'); withdrawn.task!.status = 'closed';
+    expect(taskVisible(withdrawn)).toBe(false);
+  });
   it('never asks a tablet to act on an automatic task, open or completed', () => {
     const open = state('pending'); open.task!.template.autoComplete = true;
     expect(taskAlert(open, 2000)).toBeNull();
