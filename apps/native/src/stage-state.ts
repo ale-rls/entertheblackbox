@@ -100,3 +100,6 @@ export function showModeGroupLabel(input: { showMode: boolean; wallVisible: bool
   if (!input.showMode || input.wallVisible) return null;
   return input.snapshot?.currentGroup?.label.trim() || null;
 }
+
+/** Leaving show mode releases the native show screen unless the tablet is still in the show and pinned: then the pin stays so Android doesn't ask again when show mode returns. */
+export function releaseShowScreen(input: { connected: boolean; pinned: boolean }): boolean { return !input.connected || !input.pinned; }

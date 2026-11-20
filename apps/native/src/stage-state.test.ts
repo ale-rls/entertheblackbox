@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ClockTiming } from '@entertheblackbox/protocol';
 import type { Snapshot } from './cues';
 import type { Voting, Groups } from './action-prompt';
-import { PlaybackActivity, playbackState, SHOW_TEXT_IDLE_MS, showModeTextVisible, stageState, showModeAction, shouldEnterShowMode, SHOW_MODE_RETURN_MS, parseScreenPinning, showModeGroupLabel, type StageInput } from './stage-state';
+import { PlaybackActivity, playbackState, SHOW_TEXT_IDLE_MS, showModeTextVisible, stageState, showModeAction, shouldEnterShowMode, SHOW_MODE_RETURN_MS, parseScreenPinning, showModeGroupLabel, releaseShowScreen, type StageInput } from './stage-state';
 const snapshot: Snapshot = { t: 'snapshot', v: 2, sessionId: 's', phaseEpoch: 1, serverTime: 100,
   phase: { id: 'n', kind: 'narration', text: 'Listen to the room', durationMs: 1000, next: 'end', scenarioVersion: 'v', startedAt: 100, deadlineAt: 1100 } };
 const vote: Voting = { t: 'voting_options', v: 2, sessionId: 's', phaseEpoch: 1, method: 'phone-buttons', question: 'Choose', options: [{ id: 'a', label: 'A' }] };
@@ -118,5 +118,12 @@ describe('show mode defaults', () => {
     expect(showModeGroupLabel({ showMode: true, wallVisible: true, snapshot: grouped })).toBeNull();
     expect(showModeGroupLabel({ showMode: false, wallVisible: false, snapshot: grouped })).toBeNull();
     expect(showModeGroupLabel({ showMode: true, wallVisible: false, snapshot })).toBeNull();
+  });
+});
+describe('screen pin lifetime', () => {
+  it('keeps a pinned tablet pinned when show mode is exited during the show, releases it on leaving', () => {
+    expect(releaseShowScreen({ connected: true, pinned: true })).toBe(false);
+    expect(releaseShowScreen({ connected: false, pinned: true })).toBe(true);
+    expect(releaseShowScreen({ connected: true, pinned: false })).toBe(true);
   });
 });
