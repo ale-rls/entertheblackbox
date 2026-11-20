@@ -63,7 +63,7 @@ export class TaskEngine {
     this.tick(now);
     const task = this.instances.find(t => t.id === instanceId);
     if (!task || task.status !== 'open' || task.recipients.some(r => r.participantId === participantId)) return false;
-    if (this.busy(participantId, task.sessionId)) return false;
+    if (this.busy(participantId, task.sessionId, now)) return false;
     task.recipients.push({ participantId, optionId: null, sequence: null, status: 'pending', message: '', respondedAt: null, ...(task.template.audio ? { audio: this.audio(task.template, now) } : {}) });
     return true;
   }
@@ -127,6 +127,8 @@ export class TaskEngine {
     if (!task) return false;
     if (cancel && task.template.autoComplete && task.status === 'closed') return true;
     task.status = cancel ? 'cancelled' : 'closed';
+    // A cancelled task's queued follow-ups never open.
+    if (cancel) this.followups = this.followups.filter(f => f.sourceId !== id);
     for (const r of task.recipients) if (cancel || r.status === 'pending' || r.status === 'full') {
       r.status = cancel ? 'cancelled' : 'expired'; r.message = cancel ? 'Task cancelled.' : 'Responses closed.';
     }
@@ -169,10 +171,23 @@ export class TaskEngine {
     }
   }
   cancelAll(): void { for (const t of this.instances) this.close(t.id, true); }
-  /** Waiting on this participant's answer to an open task, or about to open their follow-up task. */
-  busy(participantId: string, sessionId: string): boolean {
-    return this.followups.some(f => f.participantId === participantId && this.instances.find(t => t.id === f.sourceId)?.sessionId === sessionId)
-      || this.instances.some(t => t.sessionId === sessionId && t.status === 'open' && t.recipients.some(r => r.participantId === participantId && (r.status === 'pending' || r.status === 'full')));
+  /**
+   * Waiting on this participant's answer to an open task, still playing the instruction their answer gave them,
+   * or about to open their follow-up task (one that will still open: its source neither cancelled nor withdrawn).
+   */
+  busy(participantId: string, sessionId: string, now: number): boolean {
+    return this.followups.some(f => {
+      if (f.participantId !== participantId) return false;
+      const source = this.instances.find(t => t.id === f.sourceId);
+      const r = source?.recipients.find(r => r.participantId === participantId);
+      return source?.sessionId === sessionId && source.status !== 'cancelled' && !!r && ['accepted', 'answered'].includes(r.status);
+    }) || this.instances.some(t => t.sessionId === sessionId && t.recipients.some(r => r.participantId === participantId && (
+      (t.status === 'open' && (r.status === 'pending' || r.status === 'full'))
+      || (r.audio !== undefined && (r.status === 'accepted' || r.status === 'answered') && now < r.audio.startedAt + r.audio.durationMs))));
+  }
+  /** Live instances (not copies) for these IDs, for read-only scans. */
+  instancesById(ids: ReadonlySet<string>): readonly TaskInstance[] {
+    return this.instances.filter(t => ids.has(t.id));
   }
   /** The task this participant should see: one still waiting on their answer, else the one they last touched (for its feedback). */
   current(participantId: string, sessionId: string): { task: TaskInstance; recipient: TaskRecipient } | null {

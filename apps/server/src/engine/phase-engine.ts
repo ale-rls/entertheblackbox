@@ -426,6 +426,8 @@ export class PhaseEngine {
   private monitorVoteResults: NonNullable<PhaseSnapshotMessage["monitorVoteResults"]> = {};
   private lastMonitorVotePhaseId: string | undefined;
   private lastRecordedMonitorVoteEpoch: number | undefined;
+  /** Tasks this engine opened for a whole scene: the only ones offered to late or newly free participants. */
+  private readonly sceneTaskIds = new Set<string>();
   private taskVoteWinners = new Map<string, string | null>();
   /** The last result sent to the display, replayed to a display that reconnects during the same phase. */
   private spotlightGrow = false;
@@ -465,17 +467,22 @@ export class PhaseEngine {
     const roster = this.registry.values().map(p => p.clientId);
     const ids = [...new Set(roster)].filter(id => (!selected || selected.includes(id)) && (!template.groupIds.length || template.groupIds.includes(this.groupSelection?.current(id) ?? ''))
       // A scene's task opens for everyone free now; a tablet still answering another task gets it once it is free.
-      && (!graph || !this.tasks.busy(id, this.sessionId)));
-    this.tasks.open(template, this.sessionId, ids, this.now(), graph ? { id: this.phaseId, epoch: this.phaseEpoch } : null);
+      && (!graph || !this.tasks.busy(id, this.sessionId, this.now())));
+    const task = this.tasks.open(template, this.sessionId, ids, this.now(), graph ? { id: this.phaseId, epoch: this.phaseEpoch } : null);
+    if (graph) this.sceneTaskIds.add(task.id);
     this.taskError = null;
   }
-  /** Late joiners and newly grouped participants get this scene's task while it is still open. */
+  /**
+   * Late joiners, newly grouped participants and tablets that were busy get this scene's task while it is still open.
+   * Only tasks this engine opened for a whole scene: never a follow-up meant for one tablet, nor another group path's task.
+   */
   private offerOpenPhaseTasks(participantId: string, push = true): boolean {
-    if (this.lifecycle !== 'active') return false;
+    if (this.lifecycle !== 'active' || this.sceneTaskIds.size === 0) return false;
     const group = this.groupSelection?.current(participantId) ?? '';
     let added = false;
-    for (const task of this.tasks.all()) {
-      if (task.sessionId !== this.sessionId || task.status !== 'open' || task.phaseId === null || (!task.template.persistAcrossPhases && (task.phaseId !== this.phaseId || task.phaseEpoch !== this.phaseEpoch))) continue;
+    for (const task of this.tasks.instancesById(this.sceneTaskIds)) {
+      if (task.status !== 'open') { this.sceneTaskIds.delete(task.id); continue; }
+      if (task.sessionId !== this.sessionId || task.phaseId === null || (!task.template.persistAcrossPhases && (task.phaseId !== this.phaseId || task.phaseEpoch !== this.phaseEpoch))) continue;
       if (task.template.groupIds.length && !task.template.groupIds.includes(group)) continue;
       if (this.tasks.addRecipient(task.id, participantId, this.now())) added = true;
     }
@@ -522,12 +529,10 @@ export class PhaseEngine {
   }
   private pushTasks(force = false): void {
     this.tasks.tick(this.now());
-    let key = JSON.stringify(this.tasks.all());
+    // A tablet that has become free (answered, its instruction finished playing, a follow-up dropped) gets the scene task it was too busy for.
+    for (const id of new Set(this.participantIds.values())) this.offerOpenPhaseTasks(id, false);
+    const key = JSON.stringify(this.tasks.all());
     if (!force && key === this.lastTaskState) return;
-    // Someone just answered, timed out or was cancelled: hand them the scene task they were too busy for.
-    let offered = false;
-    for (const id of new Set(this.participantIds.values())) if (this.offerOpenPhaseTasks(id, false)) offered = true;
-    if (offered) key = JSON.stringify(this.tasks.all());
     this.lastTaskState = key;
     const tasks = this.tasks.all();
     const revision = this.tasks.nextExportRevision();

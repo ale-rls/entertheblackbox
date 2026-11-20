@@ -126,6 +126,74 @@ describe('connected participant workflows',()=>{
   expect(lastTask(busy)).toMatchObject({ template: { id: 'volunteer' }, recipient: { participantId: 'busy', status: 'pending' } });
  });
 
+ describe('scene tasks offered to free tablets', () => {
+  const clip = { src: 'go-to-stage.mp3', durationMs: 2000 };
+  const scenes = (tasks: unknown[], taskId = 'volunteer') => scenarioSchema.parse({
+   ...scenario,
+   entryPhaseId: 'pre',
+   participantTasks: [...scenario.participantTasks!.map(t => ({ ...t, durationMs: 10000 })), ...tasks],
+   phases: [{ kind: 'narration', id: 'pre', text: 'Before', durationMs: 1000, next: 'task' },
+    { kind: 'idle', id: 'idle' }, { kind: 'narration', id: 'task', text: 'Instructions', taskId, waitForGo: true, durationMs: 1000, next: 'next' },
+    { kind: 'narration', id: 'next', text: 'Continue', durationMs: 1000, next: 'idle' }],
+  });
+  const lastTask = (socket: Socket) => socket.sent.filter(m => m.t === 'participant_task').at(-1).task;
+  const open = (h: ReturnType<typeof setup>, templateId: string) => {
+   h.engine.taskCommand({ action: 'open', templateId, sessionId: h.engine.currentSessionId, phaseId: h.engine.currentPhaseId, phaseEpoch: h.engine.currentPhaseEpoch });
+   return h.engine.taskStatus.instances.filter(t => t.template.id === templateId).at(-1)!;
+  };
+
+  it('never hands one tablet\'s follow-up task to another tablet', () => {
+   const h = setup(scenarioSchema.parse({
+    ...scenario,
+    participantTasks: [
+     { id: 'volunteer', title: 'Volunteer', question: 'Join?', notificationBody: 'Please answer', groupIds: ['ki'], durationMs: 10000,
+      options: [{ id: 'swap', label: 'Swap', nextTaskId: 'private' }, { id: 'stay', label: 'Stay' }] },
+     { id: 'private', title: 'Private', question: 'Only for you', notificationBody: 'Please answer', groupIds: ['ki'], durationMs: 10000, options: [{ id: 'ok', label: 'OK' }] },
+    ],
+   }));
+   const a = h.phone('a', 'ki', 'native'); const b = h.phone('b', 'ki', 'native');
+   h.engine.adminStart();
+   const scene = h.engine.taskStatus.instances[0]!;
+   h.respond(a, scene.id, 'swap'); h.respond(b, scene.id, 'stay');
+   h.tick(700); h.tick(800);
+   const follow = h.engine.taskStatus.instances.find(t => t.template.id === 'private')!;
+   expect(follow.recipients.map(r => r.participantId)).toEqual(['a']);
+   expect(lastTask(b)).toMatchObject({ template: { id: 'volunteer' } });
+  });
+
+  it('lets an answer\'s spoken instruction finish before handing over the scene task', () => {
+   const h = setup(scenes([{ id: 'brief', title: 'Brief', question: 'Ready?', notificationBody: 'Please answer', groupIds: ['ki'], durationMs: 5000,
+    options: [{ id: 'ok', label: 'OK', audio: clip }] }]));
+   const tablet = h.phone('tablet', 'ki', 'native');
+   h.engine.adminStart();
+   const brief = open(h, 'brief');
+   h.tick(1100);
+   expect(h.engine.currentPhaseId).toBe('task');
+   h.respond(tablet, brief.id, 'ok');
+   // The answer's instruction reaches the tablet; the scene task waits for it to finish.
+   expect(lastTask(tablet)).toMatchObject({ template: { id: 'brief' }, recipient: { status: 'answered', audio: { src: 'go-to-stage.mp3' } } });
+   h.tick(2000);
+   expect(lastTask(tablet)).toMatchObject({ template: { id: 'brief' } });
+   h.tick(3600);
+   expect(lastTask(tablet)).toMatchObject({ template: { id: 'volunteer' }, recipient: { status: 'pending' } });
+  });
+
+  it('gives the scene task to a tablet whose queued follow-up was cancelled', () => {
+   const h = setup(scenes([{ id: 'brief', title: 'Brief', question: 'Ready?', notificationBody: 'Please answer', groupIds: ['ki'], durationMs: 5000,
+    options: [{ id: 'ok', label: 'OK', nextTaskId: 'brief' }] }]));
+   const tablet = h.phone('tablet', 'ki', 'native');
+   h.engine.adminStart();
+   const brief = open(h, 'brief');
+   h.tick(800);
+   h.respond(tablet, brief.id, 'ok');
+   h.engine.taskCommand({ action: 'cancel', instanceId: brief.id, sessionId: h.engine.currentSessionId, phaseId: 'pre', phaseEpoch: h.engine.currentPhaseEpoch });
+   h.tick(1100);
+   expect(h.engine.currentPhaseId).toBe('task');
+   const scene = h.engine.taskStatus.instances.find(t => t.template.id === 'volunteer')!;
+   expect(scene.recipients.map(r => r.participantId)).toEqual(['tablet']);
+  });
+ });
+
  it('rejects a manually opened task with no eligible recipients', () => {
   const h = setup();
   h.phone('outside', 'audience');
