@@ -46,6 +46,7 @@ data class LayerTiming(
   val id: String,
   val state: String,
   val positionMs: Double?,
+  val durationMs: Double?,
   val targetMs: Double?,
   val driftMs: Double?,
   val error: String?
@@ -507,7 +508,8 @@ class SchedulerEngine private constructor(private val context: Context) {
       val end = now?.let { layer.spec.window(it)?.second } ?: layer.spec.endAt
       val target = if (start != null && now != null && now >= start && (end == null || now < end)) now - start else null
       val drift = if (position != null && target != null) position - target else null
-      LayerTiming(layer.id, layer.state, position, target, drift, layer.error)
+      val duration = layer.player.duration.takeIf { layer.prepared && it != C.TIME_UNSET && it >= 0 }?.toDouble()
+      LayerTiming(layer.id, layer.state, position, duration, target, drift, layer.error)
     })
   }
 }

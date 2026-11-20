@@ -1105,3 +1105,15 @@ describe("late arrivals with a device-fixed group", () => {
     h.engine.stop();
   });
 });
+
+it("reports expected phone audio for per-group tracks and excludes unassigned late arrivals", () => {
+  const value = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map(p => p.id === "film" ? { ...p, phoneAudioByGroup: { b: "builders.mp3" } } : p) });
+  const h = setup(value); h.display(); const one = h.phone("one"); const two = h.phone("two");
+  h.engine.adminStart(); h.choose(one, "a"); h.choose(two, "b"); h.tick(100);
+  expect(two.snapshot.phase.id).toBe("film");
+  expect(h.engine.timingMonitors.find(r => r.id === "phone:two")?.mediaExpected).toBe(true);
+  expect(h.engine.timingMonitors.find(r => r.id === "phone:one")?.mediaExpected).toBe(false);
+  h.phone("late");
+  expect(h.engine.timingMonitors.find(r => r.id === "phone:late")?.mediaExpected).toBe(false);
+  h.engine.stop();
+});

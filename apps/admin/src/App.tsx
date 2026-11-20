@@ -5,7 +5,7 @@ import { NativeAudioCoverage } from './NativeAudioCoverage.js';
 import { SurfaceInstrument } from "./SurfaceInstrument.js";
 import { VideoWall } from "./VideoWall.js";
 import { SceneTiming } from "./SceneTiming.js";
-import { AudienceOverview } from "./AudienceOverview.js";
+import { ShowMonitor } from "./ShowMonitor.js";
 import { GroupSelectionStart } from "./GroupSelectionStart.js";
 import type { TimingMonitor } from "@entertheblackbox/protocol";
 import { ServerClock } from "@entertheblackbox/shared";
@@ -762,6 +762,7 @@ export function App() {
         <p className="sc-tool-copy">No operational values are shown until the admin API authenticates this browser session.</p>
       </section> : audioOnly ? <AudioDiagnostics status={status} receivedAt={statusReceivedAt} failed={Boolean(connectionError)} /> : <div className="admin-grid" data-admin-tab={activeTab}>
         <section hidden={activeTab !== "displays"} className="sc-tool-panel admin-display-content"><h2>Displays</h2><p>Open each output on its screen and enter fullscreen there.</p><div className="admin-display-links">{[{ id: "Main projection", url: "/display/", reported: status.displayConnected ? "Connected" : "Disconnected" }, ...["M1", "M2", "M3", "M4"].map(id => ({ id, url: `/display/?monitor=${id}&setup=1`, reported: "Not reported" })), ...(status.groups ?? []).map(group => ({ id: group.label, url: `/display/?group=${encodeURIComponent(group.id)}`, reported: "Not reported" }))].map(output => <div key={output.id}><strong>{output.id}</strong><span>{output.reported}</span><a href={output.url} target="_blank" rel="noreferrer">Open display ↗</a></div>)}</div></section>
+        {activeTab === "show" && <ShowMonitor status={status} clock={clock} sceneTitle={sceneTitle} stale={statusStale} receivedAt={statusReceivedAt} />}
         <section hidden={activeTab !== "show"} className="sc-tool-panel admin-session-panel" aria-labelledby="admin-controls-heading">
           <div className="admin-section-heading"><div><p className="sc-tool-eyebrow">{status.sessionId ? `Session ${status.sessionId}` : "No active session"}</p><h2 ref={controlsHeadingRef} id="admin-controls-heading" tabIndex={-1}>{isActive ? sceneTitle(status.phaseId ?? "idle") : "Ready to start"}</h2></div><StatusLabel status={isActive ? "success" : "info"}>{status.lifecycle ?? "Unavailable"}</StatusLabel></div>
           <div className="admin-session-layout">
@@ -782,7 +783,7 @@ export function App() {
 
           </div>
         </section>
-        {activeTab === "show" && <AudienceOverview status={status} clock={clock} sceneTitle={sceneTitle} stale={statusStale} />}
+
 
         <div hidden={activeTab !== "setup"} className="admin-setup-content">          <section className="admin-session-schedule" aria-labelledby="admin-lobby-heading">
             <div className="admin-section-heading"><h3 id="admin-lobby-heading">Lobby schedule</h3><StatusLabel status={lobbyInfo?.nextStartAt ? "info" : "warning"}>{lobbyInfo?.nextStartAt ? "Scheduled" : "Manual start"}</StatusLabel></div>

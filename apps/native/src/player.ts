@@ -55,6 +55,7 @@ export class ShowPlayer {
   private cue: Cue | null = null;
   private cueUri: string | null = null;
   private cueApplied = false;
+  private installedCue: Cue | null = null;
   /** After a failed install, the earliest time housekeeping tries the same cue again. */
   private cueRetryAt = 0;
   private enabled = true;
@@ -109,7 +110,7 @@ export class ShowPlayer {
     // A different cue replaces the layer: let the outgoing one fade. The same cue with a new end
     // is only retimed by the scheduler, without restarting or fading.
     if (this.cueApplied && this.cue?.key !== cue?.key) this.queue(() => AudioScheduler.fadeOutLayer(CUE, SKIP_FADE_MS));
-    this.cue = null; this.cueUri = null; this.cueApplied = false; this.cueRetryAt = 0;
+    this.cue = null; this.cueUri = null; this.cueApplied = false; this.installedCue = null; this.cueRetryAt = 0;
     if (!cue) { this.clearCue('Waiting for the next cue'); return; }
     if (cue.scenarioVersion !== this.manifest.scenarioVersion) {
       this.clearCue('Show changed — leave and download the matching show'); return;
@@ -134,10 +135,10 @@ export class ShowPlayer {
     this.queue(async () => {
       try {
         await AudioScheduler.setLayer(CUE, { uri, startAt: cue.startedAt, endAt: cue.endsAt });
+        if (this.cue === cue) this.installedCue = cue;
       } catch (error) {
-        // The layer never got installed: while this cue is still current, housekeeping
-        // (or Resume) installs it again instead of leaving the rest of the cue silent.
-        if (this.cue === cue) { this.cueApplied = false; this.cueRetryAt = Date.now() + CUE_RETRY_MS; }
+        // Preserve install recovery without publishing an outgoing layer as the new cue.
+        if (this.cue === cue) { this.installedCue = null; this.cueApplied = false; this.cueRetryAt = Date.now() + CUE_RETRY_MS; }
         throw error;
       }
     });
@@ -164,13 +165,14 @@ export class ShowPlayer {
   timing(): ClockTiming {
     // iOS records omit nil fields; the ping schema requires explicit nulls.
     const media = (role: MediaTiming['role'], layer: LayerTiming | undefined): MediaTiming[] => layer ? [{ role,
+      ...(role === 'main' && this.installedCue ? { src: this.installedCue.src, endsAt: this.installedCue.endsAt, durationMs: layer.durationMs ?? null } : {}),
       positionMs: layer.positionMs ?? null, targetMs: layer.targetMs ?? null, driftMs: layer.driftMs ?? null,
       state: !this.enabled && layer.state !== 'error' ? 'paused' : layer.state }] : [];
     const layers = AudioScheduler.getTiming();
     return { calibrated: this.clock.hasSamples, offsetMs: this.clock.offset,
       roundTripMs: this.clock.roundTripMs, sampleAgeMs: this.clock.sampleAgeMs(),
       elapsedMs: this.cue ? this.clock.now() - this.cue.startedAt : 0, mode: 'synchronized',
-      media: [...media('main', layers.find(l => l.id === CUE)), ...media('extra', layers.find(l => l.id === BED))] };
+      media: [...media('main', this.installedCue ? layers.find(l => l.id === CUE) : undefined), ...media('extra', layers.find(l => l.id === BED))] };
   }
   settled() { return this.audioQueue; }
   dispose() {

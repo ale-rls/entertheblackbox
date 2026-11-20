@@ -580,20 +580,24 @@ export class PhaseEngine {
   }
 
   get timingMonitors(): TimingMonitor[] {
-    const make = (id: string, label: string, kind: "display" | "phone", engine: PhaseEngine, socket?: WebSocket, routingEpoch = 0): TimingMonitor => {
+    const make = (id: string, label: string, kind: "display" | "phone", engine: PhaseEngine, socket?: WebSocket, routingEpoch = 0, participantId?: string): TimingMonitor => {
       const saved = socket ? this.timingReports.get(socket) : undefined;
       const report = saved && engine.matches(saved.sessionId, saved.phaseId, saved.phaseEpoch) && saved.routingEpoch === routingEpoch ? saved : null;
       const phase = engine.currentPhase();
+      const groupId = participantId ? this.groupSelection?.current(participantId) ?? null : null;
+      const phoneAudioExpected = participantId !== undefined && this.participantState(participantId) !== "unassigned" && !engine.pathDone && (phase.kind === "idle" ? false
+        : phase.kind === "group-branch" ? !!phase.branches.find(branch => branch.groupId === groupId)?.phoneAudioSrc
+        : !!((groupId === null ? undefined : phase.phoneAudioByGroup?.[groupId]) ?? phase.phoneAudioSrc));
       return { id, label, kind, phaseId: engine.phaseId, phaseEpoch: engine.phaseEpoch,
         connected: socket?.readyState === 1, mediaExpected: !engine.pathDone && (kind === "phone"
-          ? "phoneAudioSrc" in phase && !!phase.phoneAudioSrc : phase.kind === "video" || phase.kind === "video-position-question"),
+          ? phoneAudioExpected : phase.kind === "video" || phase.kind === "video-position-question"),
         reportAgeMs: report ? Math.max(0, this.now() - report.receivedAt) : null, timing: report?.timing ?? null };
     };
     const displays = this.groupPaths.filter((row) => row.state !== "empty" && row.state !== "finished" && row.state !== "split").map((row) =>
       make(`display:${row.groupId}`, this.scenario.groups?.find((g) => g.id === row.groupId)?.label ?? row.groupId, "display", this.pathForGroup(row.groupId) ?? this, this.groupDisplays.get(row.groupId)));
     const phones = this.registry.values().map((participant) => {
       const socket = [...this.participantIds].find(([candidate, id]) => id === participant.clientId && candidate.readyState === 1)?.[0];
-      return make(`phone:${participant.clientId}`, participant.name, "phone", this.pathForParticipant(participant.clientId) ?? this, socket, this.routingEpochs.get(participant.clientId) ?? 0);
+      return make(`phone:${participant.clientId}`, participant.name, "phone", this.pathForParticipant(participant.clientId) ?? this, socket, this.routingEpochs.get(participant.clientId) ?? 0, participant.clientId);
     });
     return [make("display:main", "Main display", "display", this, this.displaySocket), ...displays, ...phones];
   }

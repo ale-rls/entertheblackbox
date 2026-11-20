@@ -127,14 +127,14 @@ it('mirrors lock-screen and interruption pauses from native code', () => {
   emit(false, 'remote'); expect(p.isPaused()).toBe(false); expect(status).toHaveBeenLastCalledWith('Waiting for playback status');
   status.mockClear(); emit(true, 'api'); expect(status).not.toHaveBeenCalled();
 });
-it('reports native layer timing as main narration and extra music', () => {
-  const { p } = setup({ withMusic: true }); p.setCue(cue);
+it('reports native layer timing as main narration and extra music', async () => {
+  const { p } = setup({ withMusic: true }); p.setCue(cue); await p.settled();
   scheduler.timing = [
     { id: 'bed', state: 'playing', positionMs: 1200, targetMs: null, driftMs: null, error: null },
     { id: 'cue', state: 'playing', positionMs: 4010, targetMs: 4000, driftMs: 10, error: null },
   ];
   expect(p.timing().media).toEqual([
-    { role: 'main', positionMs: 4010, targetMs: 4000, driftMs: 10, state: 'playing' },
+    { role: 'main', src: cue.src, endsAt: cue.endsAt, durationMs: null, positionMs: 4010, targetMs: 4000, driftMs: 10, state: 'playing' },
     { role: 'extra', positionMs: 1200, targetMs: null, driftMs: null, state: 'playing' },
   ]);
 });
@@ -158,4 +158,16 @@ it('waits for a retired player to release admission audio before configuring the
   p.setAdmission({t:'admission_state',v:2,generation:'lobby',scenarioVersion:'one',revision:1,anchor:1000,active:true,choices:[],program:{groupId:'ki',intro:[],loop:[{src:cue.src,durationMs:10000}]}});
   await Promise.resolve();const disposed=p.dispose();const configure=ShowPlayer.configure();expect(scheduler.configure).not.toHaveBeenCalled();release();await disposed;await configure;
   expect(scheduler.reset.mock.invocationCallOrder.at(-1)).toBeLessThan(scheduler.configure.mock.invocationCallOrder.at(-1)!);
+});
+
+it('reports measured file length, and hides the old layer while a new cue is installing', async () => {
+  const { p } = setup(); p.setCue(cue); await p.settled();
+  scheduler.timing = [{ id: 'cue', state: 'playing', positionMs: 4000, targetMs: 4000, driftMs: 0, error: null, durationMs: 7000 } as typeof scheduler.timing[number]];
+  expect(p.timing().media[0]).toMatchObject({ src: cue.src, durationMs: 7000, endsAt: 11000 });
+  p.setCue({ ...cue, key: 'next', startedAt: 5000 });
+  expect(p.timing().media).toEqual([]);
+  await p.settled();
+  expect(p.timing().media[0]?.durationMs).toBe(7000);
+  p.setCue(null);
+  expect(p.timing().media).toEqual([]);
 });

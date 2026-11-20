@@ -95,7 +95,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Shared media-library picker for default, per-group, and per-signage-kiosk lobby/waiting videos (MP4/WebM, sync readiness, muted loop, live updates, black-screen override) — protocol platform settings, display `IdleAttract`, Admin `DisplaySettingsPanel`, PocketBase platform config
 - Display text editor — `DisplaySettingsPanel.tsx`
 - Participant roster + group (re)assignment
-- Audience overview on the Show tab: group head counts (online, no-group warning), App/Web totals, each device's current cue and time in cue, device audio report — `apps/admin/src/AudienceOverview.tsx`, `participantPresence` in `apps/server/src/engine/phase-engine.ts`
+- Show monitor at the top of the Show tab: stable group rows, rolling timeline/table views, online counts, separate scene/audio countdowns, reunion readiness, and expandable device cues, audio reports and freshness. Stale, mismatched and missing reports stay unknown; nested paths use leaf rosters. Audio length comes from native playback (older builds show unknown); music stays separate — `apps/admin/src/ShowMonitor.tsx`, `show-monitor-model.ts`, native `ShowPlayer`, `packages/expo-audio-scheduler`
 - Downloadable high-resolution PNG export of the configured participant join QR code
 - Session export (JSON/CSV) — `apps/server/src/persistence/admin-data.ts`
 - Participant tasks: send published templates, per-path GO gates, role assignment/withdrawal, tablet handover, task results CSV — `apps/admin/src/ParticipantTasks.tsx`, `AdmissionPrograms.tsx`, `/api/admin/tasks`, `/api/admin/handover`

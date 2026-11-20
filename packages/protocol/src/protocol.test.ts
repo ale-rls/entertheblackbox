@@ -372,3 +372,12 @@ describe("participantClientOf", () => {
     expect(participantClientOf({})).toBe("web");
   });
 });
+
+it("accepts optional audio length and source without requiring newer native builds", () => {
+  const timing = { calibrated: true, offsetMs: 0, roundTripMs: 1, sampleAgeMs: 0, elapsedMs: 1000, mode: "synchronized",
+    media: [{ role: "main", positionMs: 1000, targetMs: 1000, driftMs: 0, state: "playing", durationMs: 5000, src: "voice.mp3", endsAt: 9000 }] };
+  const ping = { t: "ping", v: 2, clientTime: 1000, timing: { sessionId: "s", phaseId: "p", phaseEpoch: 1, routingEpoch: 0, timing } };
+  expect(parseClientMessage(JSON.stringify(ping))).toMatchObject({ ok: true, message: { timing: { timing } } });
+  timing.media[0]!.durationMs = -1;
+  expect(parseClientMessage(JSON.stringify(ping)).ok).toBe(false);
+});
