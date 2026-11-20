@@ -176,14 +176,43 @@ export class TaskEngine {
    * or about to open their follow-up task (one that will still open: its source neither cancelled nor withdrawn).
    */
   busy(participantId: string, sessionId: string, now: number): boolean {
-    return this.followups.some(f => {
-      if (f.participantId !== participantId) return false;
-      const source = this.instances.find(t => t.id === f.sourceId);
-      const r = source?.recipients.find(r => r.participantId === participantId);
-      return source?.sessionId === sessionId && source.status !== 'cancelled' && !!r && ['accepted', 'answered'].includes(r.status);
-    }) || this.instances.some(t => t.sessionId === sessionId && t.recipients.some(r => r.participantId === participantId && (
-      (t.status === 'open' && (r.status === 'pending' || r.status === 'full'))
-      || (r.audio !== undefined && (r.status === 'accepted' || r.status === 'answered') && now < r.audio.startedAt + r.audio.durationMs))));
+    return this.busyParticipants(sessionId, now).has(participantId);
+  }
+  /** Everyone `busy()` names, in one pass over the tasks and follow-ups: for checking a whole audience at once. */
+  busyParticipants(sessionId: string, now: number): Set<string> {
+    const busy = new Set<string>();
+    const byId = new Map(this.instances.map(t => [t.id, t]));
+    for (const f of this.followups) {
+      const source = byId.get(f.sourceId);
+      const r = source?.recipients.find(r => r.participantId === f.participantId);
+      if (source?.sessionId === sessionId && source.status !== 'cancelled' && r && (r.status === 'accepted' || r.status === 'answered')) busy.add(f.participantId);
+    }
+    for (const t of this.instances) {
+      if (t.sessionId !== sessionId) continue;
+      for (const r of t.recipients) {
+        if ((t.status === 'open' && (r.status === 'pending' || r.status === 'full'))
+          || (r.audio !== undefined && (r.status === 'accepted' || r.status === 'answered') && now < r.audio.startedAt + r.audio.durationMs)) busy.add(r.participantId);
+      }
+    }
+    return busy;
+  }
+  /**
+   * Adds every participant who is free (in `busy`, which this updates) and not yet a recipient to an open task, without ticking.
+   * Returns how many were added.
+   */
+  enrollFree(instanceId: string, participantIds: Iterable<string>, now: number, busy: Set<string>): number {
+    const task = this.instances.find(t => t.id === instanceId);
+    if (!task || task.status !== 'open' || now >= task.deadlineAt) return 0;
+    const present = new Set(task.recipients.map(r => r.participantId));
+    let added = 0;
+    for (const participantId of participantIds) {
+      if (present.has(participantId) || busy.has(participantId)) continue;
+      task.recipients.push({ participantId, optionId: null, sequence: null, status: 'pending', message: '', respondedAt: null, ...(task.template.audio ? { audio: this.audio(task.template, now) } : {}) });
+      present.add(participantId);
+      busy.add(participantId);
+      added += 1;
+    }
+    return added;
   }
   /** Live instances (not copies) for these IDs, for read-only scans. */
   instancesById(ids: ReadonlySet<string>): readonly TaskInstance[] {
