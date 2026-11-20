@@ -94,6 +94,17 @@ Audio that is removed while still sounding fades out over 3 s (`SKIP_FADE_MS`) i
 
 Before production, use installed builds on each supported iPhone/Android model. Keep devices locked for the full show, including at least ten minutes of music without narration, then exercise repeated operator skips, timed advances, group changes and reconnects. Verify music remains audible and every correct narration starts at the show position. Check lock-screen pause/resume stops/starts both layers, phone calls and headphone removal, and leave/show end cleanup. Record cue-to-ear delay at audience-scale load. These physical checks have not been performed by automated tests.
 
+### Audible monitor countdown
+
+When the M1–M4 monitors show a countdown number, the app ticks once per
+second and plays a distinct tone when the count reaches zero, on its own
+layer (`monitor-countdown`) so narration and music keep playing. It uses the
+monitors' own rules (`anyMonitorCountdown` in `packages/scenario`): authored
+per-cue countdowns at their full length, vote and scene countdowns only for
+their final seconds. Participants in a phone-cursor (theater) group, finished
+or unassigned participants, and paused audio hear nothing. The sounds are
+generated in the app, so no show media is needed.
+
 ## Show content and application software
 
 | Change | Mechanism | New installed binary? |

@@ -90,6 +90,8 @@ export type { SurfaceCue, SurfaceCueEffect } from "./surface-cues.js";
 export type { ScenarioIssue, ValidationResult } from "./validate.js";
 
 export { validateMediaManifest } from "./media.js";
+export { anyMonitorCountdown, finalMonitorCountdown, MONITOR_FINAL_COUNTDOWN_SECONDS, monitorCountdown, monitorCueCountdown, monitorCueShowsCountdown, shownMonitorCountdown } from "./monitor-countdown.js";
+export type { MonitorCountdownPhase } from "./monitor-countdown.js";
 export { sceneCountdownPings, sceneCountdownSchema, sceneCountdownSeconds } from "./scene-countdown.js";
 export type { SceneCountdown } from "./scene-countdown.js";
 export type { MediaIssue, StatSize } from "./media.js";

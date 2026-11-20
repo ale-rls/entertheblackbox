@@ -9,7 +9,7 @@ import { useMedia } from "../media/useMedia.js";
 import { FullscreenControl } from "../components/FullscreenControl.js";
 import { performReload } from "../lib/kiosk.js";
 import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorCueReady, monitorVideoTime } from "./playback.js";
-import { finalMonitorCountdown, monitorCountdown, monitorCueCountdown, monitorCueShowsCountdown } from "./countdown.js";
+import { shownMonitorCountdown } from "./countdown.js";
 import { monitorTextColor } from "./answerColor.js";
 import { monitorVoteResult } from "./voteResult.js";
 import "./monitors.css";
@@ -79,10 +79,8 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   }, [src, state.sessionId, state.phaseEpoch, mediaRevision, sourceKey]);
   // An authored per-cue countdown keeps its own length; vote and scene
   // countdowns only show their final seconds. Either replaces the cue's text.
-  const countdown = cueReady && connection.clock.ready && monitorCueShowsCountdown(cue)
-    ? cue.countdownSeconds !== undefined
-      ? monitorCueCountdown(cues, elapsed)
-      : state.resolution === null ? finalMonitorCountdown(monitorCountdown(phase, now)) : null
+  const countdown = cueReady && connection.clock.ready
+    ? shownMonitorCountdown(cues, phase, now, state.resolution !== null)
     : null;
   const voteResult = cue?.kind === "vote-result" ? monitorVoteResult(cue, phase) : null;
   const cueText = voteResult ? voteResult.text : cue?.kind === "text" || cue?.kind === "placeholder" ? cue.text : "";

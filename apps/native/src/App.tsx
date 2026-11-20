@@ -19,6 +19,8 @@ import { PlaybackActivity, stageState } from './stage-state';
 import { actionPrompt } from './action-prompt';
 import { createActionAlerts, enableActionNotifications } from './notifications';
 import { createForegroundAttention } from './foreground-attention';
+import { CountdownTicker, countdownSeconds } from './countdown-sound';
+import { playCountdownSound } from './countdown-player';
 import { applySurface, expireSurface, initialSurface, surfaceDelay, visibleSurface } from './surface';
 import { wallStatus, type WallPlayback, type WallSliceState } from './wall';
 import { WallVideo } from './WallVideo';
@@ -157,7 +159,15 @@ export default function App() {
       c.send({ t: 'ping', v: PROTOCOL_VERSION, clientTime: Date.now(), timing: {
         sessionId: s.sessionId, phaseId: s.phase.id, phaseEpoch: s.phaseEpoch, routingEpoch: s.routingEpoch ?? 0, timing } });
     }, 1000);
-    return () => { alerts.current?.update(null); listener.remove(); clearInterval(playbackTimer); clearInterval(timer); connection.current?.stop(); player.current?.dispose(); };
+    // Audible monitor countdown: sampled often so ticks land on the monitors' second boundaries.
+    const ticker = new CountdownTicker(sound => { void playCountdownSound(sound).catch(() => { /* A missed tick must not disturb the show. */ }); });
+    const countdownTimer = setInterval(() => {
+      const c = connection.current, p = player.current;
+      if (!c || !c.clock.hasSamples || !p || p.isPaused()) { ticker.reset(); return; }
+      const now = c.clock.now();
+      ticker.sample(now, countdownSeconds(latest.current, now));
+    }, 100);
+    return () => { clearInterval(countdownTimer); alerts.current?.update(null); listener.remove(); clearInterval(playbackTimer); clearInterval(timer); connection.current?.stop(); player.current?.dispose(); };
   }, []);
   async function run(work: () => Promise<void>) {
     if (operation.current) return;
