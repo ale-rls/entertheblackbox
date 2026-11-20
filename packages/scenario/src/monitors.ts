@@ -12,14 +12,26 @@ const timing = {
   countdownShowsText: z.boolean().optional(),
 };
 const text = z.string().max(4000);
+/** Text colour for this cue. Omit to use the vote colour during a question, else white. */
+const color = z.string().regex(/^#[0-9a-f]{6}$/i, "colour must be #rrggbb").optional();
+
+/** The show's monitor text colours, offered as presets in Studio. */
+export const MONITOR_TEXT_COLOR_PRESETS = [
+  { name: "White", color: "#ffffff" },
+  { name: "Orange", color: "#f76b15" },
+  { name: "Green", color: "#30a46c" },
+  { name: "Blue", color: "#3e63dd" },
+  { name: "Red", color: "#e5484d" },
+  { name: "Yellow", color: "#f5d90a" },
+] as const;
 const source = z.string().min(1).refine((value) => !value.startsWith("/") && !value.includes("..") && !/[?#:\\]/.test(value), "Use a relative media manifest path");
 const fit = z.enum(["contain", "cover"]).default("contain");
 export const monitorCueSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("blank"), ...timing }),
-  z.object({ kind: z.literal("placeholder"), text, ...timing }),
-  z.object({ kind: z.literal("text"), text, ...timing }),
-  z.object({ kind: z.literal("vote-result"), votePhaseId: z.string().min(1).optional(), fallbackText: text.default(""), ...timing }),
-  z.object({ kind: z.literal("image"), src: source.refine((value) => /\.(png|jpe?g|webp)$/i.test(value), "Choose a PNG, JPEG or WebP image"), text: text.optional(), fit, ...timing }),
+  z.object({ kind: z.literal("placeholder"), text, color, ...timing }),
+  z.object({ kind: z.literal("text"), text, color, ...timing }),
+  z.object({ kind: z.literal("vote-result"), votePhaseId: z.string().min(1).optional(), fallbackText: text.default(""), color, ...timing }),
+  z.object({ kind: z.literal("image"), src: source.refine((value) => /\.(png|jpe?g|webp)$/i.test(value), "Choose a PNG, JPEG or WebP image"), text: text.optional(), color, fit, ...timing }),
   z.object({ kind: z.literal("video"), src: source.refine((value) => /\.(mp4|webm)$/i.test(value), "Choose an MP4 or WebM video"), loop: z.boolean().default(false), fit, ...timing }),
 ]);
 export const monitorCuesSchema = z.record(monitorIdSchema, z.array(monitorCueSchema).max(64).superRefine((cues, ctx) => {

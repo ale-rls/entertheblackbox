@@ -39,6 +39,8 @@ Video sound is always muted. Use native audio for participant narration.
 
 **Colour coding.** Text and captions are set in Optik Bold. During a position question, monitor N draws them in the colour of the phase's Nth answer (M1 = first zone in outcome order, M2 = second, …; with fewer answers than monitors they repeat, so a two-answer question colours M1/M3 with the first answer and M2/M4 with the second), taken from the phase's `answerColors` (Studio: per-stage answer colours) or, for a curtain-light vote, its resolved colours. Author the monitor cues in the same order as the zones. Phases without authored colours stay white on black.
 
+**Cue colour.** Text, placeholder, vote-result and image-caption cues can set their own text colour (`color`, `#rrggbb`), in any scene. It wins over the answer colour and the vote-result colour, and the countdown uses it too. Studio offers the show's colours as presets: white `#ffffff`, orange `#f76b15`, green `#30a46c`, blue `#3e63dd`, red `#e5484d`, yellow `#f5d90a`, plus a custom colour. **Automatic** (no `color`) keeps the behaviour above.
+
 Question-first/answers-second can be authored as two cues at different offsets.
 Labels are authored explicitly; floor axes are not guessed from question text.
 In the last 5 seconds of an open positioning vote (server deadline or video

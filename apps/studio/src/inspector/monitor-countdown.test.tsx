@@ -14,3 +14,14 @@ it("renders the monitor cue controls and preserves the authored cue through Stud
   expect(html).toContain("Final countdown");
   expect(html).toContain("Keep text small under the countdown");
 });
+
+it("offers the show colour presets per text cue and keeps the colour through Studio", () => {
+  const cue = { kind: "text", text: "Question", startMs: 0, color: "#f76b15" };
+  const project = parseRuntimeScenario({ ...scenario, phases: scenario.phases.map(p => p.id === "intro-video" ? { ...p, monitorCues: { M1: [cue] } } : p) }, manifest);
+  const phase = compileStudioGraph(project).scenario.phases.find(p => p.id === "intro-video")!;
+  expect(phase.monitorCues?.M1?.[0]).toMatchObject(cue);
+  const html = renderToStaticMarkup(<MonitorEditor phase={phase} onChange={vi.fn()} onChooseMedia={vi.fn()} />);
+  expect(html).toContain("Text colour");
+  for (const name of ["Automatic (vote colour, else white)", "White", "Orange", "Green", "Blue", "Red", "Yellow", "Custom…"]) expect(html).toContain(name);
+  expect(html).toMatch(/<option value="#f76b15" selected="">Orange<\/option>/);
+});

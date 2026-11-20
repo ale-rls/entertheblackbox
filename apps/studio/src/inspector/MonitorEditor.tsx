@@ -1,4 +1,4 @@
-import { MONITOR_IDS, monitorCuesSchema, type MonitorCue, type MonitorId } from "../../../../packages/scenario/src/monitors.js";
+import { MONITOR_IDS, MONITOR_TEXT_COLOR_PRESETS, monitorCuesSchema, type MonitorCue, type MonitorId } from "../../../../packages/scenario/src/monitors.js";
 import type { Phase } from "./model.js";
 
 export type MonitorMediaTarget = { monitorId: MonitorId; cueIndex: number };
@@ -23,10 +23,11 @@ export function MonitorEditor({ phase, onChange, onChooseMedia }: {
           <label className="sc-tool-label">Content<select className="sc-tool-select" value={cue.kind} onChange={(event) => {
             const kind = event.target.value as MonitorCue["kind"];
             const timing = { startMs: cue.startMs, countdownSeconds: cue.countdownSeconds, countdownShowsText: cue.countdownShowsText, ...(cue.durationMs === undefined ? {} : { durationMs: cue.durationMs }) };
+            const colored = { ...timing, ...("color" in cue && cue.color !== undefined ? { color: cue.color } : {}) };
             update(index, kind === "video" ? { kind, src: "choose-video.mp4", loop: false, fit: "contain", ...timing }
-              : kind === "image" ? { kind, src: "choose-image.png", fit: "contain", ...timing }
-              : kind === "vote-result" ? { kind, fallbackText: "", ...timing }
-              : kind === "blank" ? { kind, ...timing } : { kind, text: "text" in cue ? cue.text ?? "" : "Content to come", ...timing });
+              : kind === "image" ? { kind, src: "choose-image.png", fit: "contain", ...colored }
+              : kind === "vote-result" ? { kind, fallbackText: "", ...colored }
+              : kind === "blank" ? { kind, ...timing } : { kind, text: "text" in cue ? cue.text ?? "" : "Content to come", ...colored });
           }}>{["placeholder", "text", "vote-result", "image", "video", "blank"].map((kind) => <option key={kind}>{kind}</option>)}</select></label>
           <label className="sc-tool-label">Start (ms)<input className="sc-tool-field" type="number" min="0" step="1" value={cue.startMs} onChange={(event) => update(index, { ...cue, startMs: Math.max(0, Math.floor(Number(event.target.value) || 0)) })} /></label>
           <label className="sc-tool-label">Duration (ms, empty = hold)<input className="sc-tool-field" type="number" min="1" step="1" value={cue.durationMs ?? ""} onChange={(event) => update(index, { ...cue, durationMs: event.target.value === "" ? undefined : Math.max(1, Math.floor(Number(event.target.value) || 1)) })} /></label>
@@ -37,6 +38,8 @@ export function MonitorEditor({ phase, onChange, onChooseMedia }: {
             <label className="sc-tool-label">Fallback (tie, empty or unresolved vote)<textarea className="sc-tool-field" value={cue.fallbackText} onChange={(event) => update(index, { ...cue, fallbackText: event.target.value })} /></label>
           </>}
           {(cue.kind === "text" || cue.kind === "placeholder" || cue.kind === "image") && <label className="sc-tool-label">{cue.kind === "image" ? "Caption (optional)" : "Text"}<textarea className="sc-tool-field" value={cue.text ?? ""} onChange={(event) => update(index, { ...cue, text: event.target.value })} /></label>}
+          {(cue.kind === "text" || cue.kind === "placeholder" || cue.kind === "vote-result" || cue.kind === "image") &&
+            <MonitorColorField value={cue.color} onChange={(color) => update(index, { ...cue, color })} />}
           {(cue.kind === "video" || cue.kind === "image") && <>
             <button className="sc-tool-button" type="button" onClick={(event) => onChooseMedia(phase.id, { monitorId: id, cueIndex: index }, cue.kind, event.currentTarget)}>Browse {cue.kind} library… {cue.src}</button>
             <label className="sc-tool-label">Fit<select className="sc-tool-select" value={cue.fit} onChange={(event) => update(index, { ...cue, fit: event.target.value as "contain" | "cover" })}><option value="contain">Fit whole frame</option><option value="cover">Fill screen (crop)</option></select></label>
@@ -48,4 +51,21 @@ export function MonitorEditor({ phase, onChange, onChooseMedia }: {
       </details>;
     })}
   </fieldset>;
+}
+
+/** Text colour for one cue: automatic (vote colour, else white), a show preset, or a custom hex. */
+export function MonitorColorField({ value, onChange }: { value: string | undefined; onChange: (color: string | undefined) => void }) {
+  const preset = MONITOR_TEXT_COLOR_PRESETS.find((item) => item.color === value?.toLowerCase());
+  const choice = value === undefined ? "auto" : preset ? preset.color : "custom";
+  return <div className="monitor-color-field">
+    <label className="sc-tool-label">Text colour<select className="sc-tool-select" value={choice} onChange={(event) => {
+      const next = event.target.value;
+      onChange(next === "auto" ? undefined : next === "custom" ? value ?? "#ffffff" : next);
+    }}>
+      <option value="auto">Automatic (vote colour, else white)</option>
+      {MONITOR_TEXT_COLOR_PRESETS.map((item) => <option key={item.color} value={item.color}>{item.name}</option>)}
+      <option value="custom">Custom…</option>
+    </select></label>
+    {value !== undefined && <input type="color" aria-label="Custom text colour" value={value.toLowerCase()} onChange={(event) => onChange(event.target.value)} />}
+  </div>;
 }
