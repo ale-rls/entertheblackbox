@@ -33,6 +33,12 @@ Use only the read tools (`get_file_metadata`, `read_file_content`,
 share, copy or trash the doc. (Uploading generated voice cues to the VOX
 folder happens later, in `/update-show`, never to the script doc.)
 
+The show's recordings live in the Drive **VOX folder**
+`1tUTMifql-T_wOdTxuTP8T2NrEuyGc6Rx`
+(https://drive.google.com/drive/folders/1tUTMifql-T_wOdTxuTP8T2NrEuyGc6Rx).
+Use it as the default media folder: list files newer than the baseline draft
+(`search_files` with `parentId` and `modifiedTime`) instead of asking for one.
+
 ## 2. Fetch and parse the script
 
 1. `get_file_metadata` → record title, last modified time and modifier. This
@@ -168,7 +174,14 @@ notes, open comments). For each, decide which of these it is, with evidence:
 - **Outside the software**: sound desk, staff, props, and light the Eos bridge
   can't do (see below). Note it, but don't propose code.
 
-**Light cues.** The Eos bridge plays light looks on the venue desk from scene
+**Light cues — paused for now (director decision 2026-11-20).** Don't
+classify the yellow `Licht` cues or `lightCues`, don't read `lighting.json`, and
+leave lights out of the features table and the next steps. Say in one line
+that light cues were not checked. Field grids are still checked for monitor
+texts and answer order (below). The rules that follow stay for when lights are
+switched back on.
+
+**Light cues (when active).** The Eos bridge plays light looks on the venue desk from scene
 starts, scene cue names and vote results (docs/eos-lighting.md). The script
 writes them in the yellow highlight, listed in `lightCues`
 ([docs/script-light-cues.md](../../../docs/script-light-cues.md)):
@@ -258,16 +271,15 @@ the user its absolute path. In chat, give a short summary:
 
 Then decide what happens next, and **ask before acting**:
 
-- **Light cues** that need setting up → part of the `/update-show` run (its
-  step 3b). Pass on the parsed JSON and which answer lights which field.
+- **Light cues** → paused; not part of the next steps for now.
 - **Only text/content changes, no missing features** → offer to run
   `/update-show` now. Pass on the baseline from step 3 (the newest draft if it
   already holds wanted unpublished edits; otherwise the live draft; ask if
   unclear), the script revision (the
   HTML export in the scratchpad, plus the doc ID and `modifiedTime` so
-  `/update-show` can re-check the doc right before delivering), and ask for
-  the media folder holding any new
-  recordings. Voice cues still missing after that are **always generated**
+  `/update-show` can re-check the doc right before delivering), and the VOX
+  folder as the media folder (ask only if the user has new recordings
+  elsewhere). Voice cues still missing after that are **always generated**
   with ElevenLabs and uploaded to the library and the Drive VOX folder, as
   described in `/update-show` step 3a; never make a text-only swap. Don't apply
   red text.

@@ -25,13 +25,16 @@ editing anything:
   change list. If both a script and notes are given, ask which wins on conflict
   (default: the user's notes).
 - **Media** — the folder holding new or re-recorded videos, images and MP3s,
-  whenever wording or media changes. Ask explicitly. Voice cues that are still
+  whenever wording or media changes. The default is the show's Drive **VOX
+  folder** (`1tUTMifql-T_wOdTxuTP8T2NrEuyGc6Rx`,
+  https://drive.google.com/drive/folders/1tUTMifql-T_wOdTxuTP8T2NrEuyGc6Rx):
+  look there first (files newer than the baseline draft) and only ask when the
+  user names another folder. Voice cues that are still
   missing are generated, not left as gaps (step 3a); never make a silent
   text-only swap.
 - **Delivery** — a new backup file, a new Studio draft in PocketBase, or both.
-- **Lighting** — only when the script has light cues (`lightCues` in the parsed
-  script): the current `lighting.json` of the Eos bridge (on the show laptop, in
-  the repo folder), and where the new one should go.
+- **Lighting** — **paused** (director decision 2026-11-20): don't ask for
+  `lighting.json`; see step 3b.
 
 Done when the baseline is pinned to an exact revision (`draftId` + `updatedAt`, or
 file path + SHA-256) and every requested change has a source.
@@ -100,6 +103,13 @@ browser media element). Create the `media` record directly with `src`,
 `bytes`, `hash`, `durationMs` (from `ffprobe`) and `file`.
 
 ## 3b. Light cues
+
+> **Paused for now (director decision 2026-11-20).** Skip this step: don't ask
+> for `lighting.json`, don't write `light-mapping.json` or run `light_plan.py`,
+> and don't add or remove `licht-…` outgoing cues. Still lay out vote zones and
+> monitor order as the script's field grids say (Mn shows answer N), so lights
+> can be added later. In the report, say that light cues were not applied. The
+> procedure below stays for when lights are switched back on.
 
 When the parsed script has `lightCues` or `lightColours` (the notation is in
 [docs/script-light-cues.md](../../../docs/script-light-cues.md)):
@@ -174,7 +184,7 @@ from `apps/studio/src/media/pocketbase-media.ts` after the same confirmation.
 Generated voice cues are uploaded there and to the Drive VOX folder (step 3a).
 Studio refreshes durations from that library when the draft opens.
 
-**Light file:** the bridge reads `lighting.json` from the repo folder on the
+**Light file** (only when step 3b is active again): the bridge reads `lighting.json` from the repo folder on the
 show laptop and reloads it on save. If you run on that laptop, show the diff
 against the current file and copy it there after the user confirms. Otherwise,
 give the user the path of the generated file. It is show content: never commit
@@ -192,8 +202,7 @@ Diagnostics and use **Publish** (operator sign-in; see docs/publishing.md).
 - Generated voice cues (file, scene, length, verification result, Drive and
   library upload), recordings still missing, text-only substitutes,
   disconnected scenes.
-- Light: `light-plan.md` (what fires automatically, the operator's cue list,
-  problems) and where the new `lighting.json` went.
+- Light: paused (step 3b); say that light cues were not applied.
 - Each validation step and its result, kept apart from what still needs venue
   rehearsal.
 - Operator next steps: media to upload, draft to open, publish.
