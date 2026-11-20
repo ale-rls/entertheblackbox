@@ -34,6 +34,10 @@ describe('Stage companion state boundaries', () => {
   });
   it('keeps the group and rating actions in their server-owned windows', () => {
     expect(stageState({ ...input, groups }).title).toBe('Choose your group');
+    // After the choice is confirmed the prompt and its buttons disappear.
+    const chosen = stageState({ ...input, snapshot: { ...snapshot, phase: { ...snapshot.phase, kind: 'group-branch' } } as Snapshot, groups: { ...groups, selectedGroupId: 'a' } });
+    expect(chosen.groups).toBeNull();
+    expect(chosen.title).toBe('Follow your group');
     const rated = { ...snapshot, phase: { ...snapshot.phase, rating: { candidateLabel: 'A', windows: [{ startAtMs: 100, endAtMs: 200 }] } } } as Snapshot;
     expect(stageState({ ...input, snapshot: rated, now: 199 }).ratingOpen).toBe(false);
     expect(stageState({ ...input, snapshot: rated, now: 200 }).ratingOpen).toBe(true);
