@@ -250,6 +250,18 @@ Compare text after normalising whitespace and quotes. Strip the ElevenLabs
 delivery tags (`[pause]`, `[calm]`, …) for the text comparison, but report
 changed tags as a recording change.
 
+**Sample rate (director requirement, 2026-11-20 — very important).** All
+audio on the **theater side** must be **48 kHz**. List every file the
+baseline plays in the room (each phase's `audioSrc` and `extraAudioSrc`, and
+main-display videos with a soundtrack) and probe it straight from its
+library `previewUrl`:
+`ffprobe -v error -select_streams a -show_entries stream=codec_name,sample_rate -of csv=p=0 <url>`.
+Report every file that isn't `48000` (scene, file, rate) as **needs
+re-encoding**, separately from the text changes; `/update-show` resamples
+the ones it touches and makes all new cues at 48 kHz. Videos without an
+audio stream don't count. Tested 2026-11-20: every theater MP3 and three
+videos were still 44.1 kHz.
+
 ## 6. Report and propose next steps
 
 Write the full report to `<scratchpad>/script-check <doc title>.md` and give
