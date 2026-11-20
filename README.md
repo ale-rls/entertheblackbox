@@ -6,12 +6,12 @@ Shows are server-authoritative scenario graphs. M1–M4 each open a dedicated di
 
 ## Show status, 19 November 2026
 
-Bug hunts before the performances, then a review of everything merged on the day. Each fix has its own PR.
+Bug hunts before the performances, then two reviews of what was merged, including the fixes themselves. Each fix has its own PR.
 
 **Lighting and sound**
 - The winning field's lamp now lights after a vote, also when the next scene is fixed ([#461](https://github.com/ale-rls/entertheblackbox/pull/461)).
 - The first phone joining, or moving the lobby start time, no longer triggers the show-end look and music stop ([#467](https://github.com/ale-rls/entertheblackbox/pull/467), [#486](https://github.com/ale-rls/entertheblackbox/pull/486)).
-- The Ableton (MIDI) bridge reconnects after a server restart ([#463](https://github.com/ale-rls/entertheblackbox/pull/463)), and starts music with synchronized videos instead of 3 s early ([#465](https://github.com/ale-rls/entertheblackbox/pull/465)). After a dropped connection it no longer starts a group's music once that group has rejoined ([#500](https://github.com/ale-rls/entertheblackbox/pull/500)).
+- The Ableton (MIDI) bridge reconnects after a server restart ([#463](https://github.com/ale-rls/entertheblackbox/pull/463)), and starts music with synchronized videos instead of 3 s early ([#465](https://github.com/ale-rls/entertheblackbox/pull/465)). After a dropped connection it no longer starts a group's music once that group has rejoined ([#500](https://github.com/ale-rls/entertheblackbox/pull/500), [#509](https://github.com/ale-rls/entertheblackbox/pull/509)).
 
 **Audience**
 - The entrance signage keeps its join QR during the show while late joining is on ([#469](https://github.com/ale-rls/entertheblackbox/pull/469)).
@@ -27,12 +27,13 @@ Bug hunts before the performances, then a review of everything merged on the day
 **Tablets**
 - Light effects run across the tablets only, not audience phones ([#471](https://github.com/ale-rls/entertheblackbox/pull/471)).
 - A withdrawn role frees its place for the next volunteer ([#455](https://github.com/ale-rls/entertheblackbox/pull/455)).
-- A tablet still answering a task gets the next scene's task once it answers; before, no tablet got it ([#488](https://github.com/ale-rls/entertheblackbox/pull/488)). A tablet always shows the task still waiting for its answer ([#492](https://github.com/ale-rls/entertheblackbox/pull/492)).
-- No "YOUR TURN" or alert sound for automatic tasks, and finished or missed tasks clear from the screen ([#490](https://github.com/ale-rls/entertheblackbox/pull/490)).
+- A tablet still answering a task gets the next scene's task once it answers; before, no tablet got it ([#488](https://github.com/ale-rls/entertheblackbox/pull/488)).
+- A tablet always shows the task still waiting for its answer ([#492](https://github.com/ale-rls/entertheblackbox/pull/492)). It only gets tasks meant for everyone in its scene, never another tablet's follow-up or the other group's task, and only after its last answer's spoken instruction has played ([#507](https://github.com/ale-rls/entertheblackbox/pull/507)).
+- No "YOUR TURN" or alert sound for automatic tasks, and finished, missed or withdrawn tasks clear from the screen ([#490](https://github.com/ale-rls/entertheblackbox/pull/490), [#511](https://github.com/ale-rls/entertheblackbox/pull/511)).
 
 **Group splits**
 - An empty group waiting for GO no longer holds the reunion ([#494](https://github.com/ale-rls/entertheblackbox/pull/494)).
-- Task audio and later group splits follow votes cast inside a group, as they were counted ([#496](https://github.com/ale-rls/entertheblackbox/pull/496), [#498](https://github.com/ale-rls/entertheblackbox/pull/498)).
+- Task audio and later group splits follow votes cast inside a group, as they were counted, and the latest answer to a question counts ([#496](https://github.com/ale-rls/entertheblackbox/pull/496), [#498](https://github.com/ale-rls/entertheblackbox/pull/498), [#513](https://github.com/ale-rls/entertheblackbox/pull/513)).
 
 **Still open**
 - Two questions for the coder: a finished group path replays the split scene's lighting ([#450](https://github.com/ale-rls/entertheblackbox/issues/450)); parked cursors don't count when a video vote opens ([#451](https://github.com/ale-rls/entertheblackbox/issues/451)).
