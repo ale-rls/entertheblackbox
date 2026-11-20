@@ -36,6 +36,25 @@ without a group, gets the curtain entry and relative steering. Custom zones
 that tile the whole screen leave no neutral entry point and are rejected:
 leave an unlit gap between them.
 
+### Positioning before the choice
+
+Some cues ask people to move onto fields that should **not** light up yet: the
+choice comes in a later vote ("Cursor und Felder bleiben sichtbar, lösen aber
+noch kein Feld aus"). Two settings on a curtain vote cover this:
+
+- **Fields don't light up yet** (`curtainFieldsStatic: true`): every field
+  keeps its base glow and a cursor's flood looks the same inside and outside a
+  field. Votes are still counted and recorded as usual.
+- **Keep cursors from the previous curtain vote** (`curtainKeepCursors: true`):
+  when the scene before was also a curtain vote, cursors that were showing stay
+  where they are instead of hiding until the next touch. People who had not
+  touched yet still enter at the neutral point. After a scene without curtain
+  light the setting has no effect.
+
+Both only apply to curtain votes; validation warns when they are set elsewhere.
+As with every video vote, a cursor that is carried over counts once its
+participant moves it while the window is open.
+
 ## What the audience sees
 
 | Layout | Treatment |
@@ -72,7 +91,7 @@ over both lit pools and unlit fabric.
 - From there the phone control steers the cursor relatively; each new touch
   briefly pulses that participant's centre (the native app flags touch
   starts; older app builds still steer, with pulses only on entry).
-- Entry state resets between stages. Reconnecting mid-stage resumes the
+- Entry state resets between stages, unless the next stage keeps cursors. Reconnecting mid-stage resumes the
   cursor where it was; the server stays authoritative for position and votes.
 
 ## Timing

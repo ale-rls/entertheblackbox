@@ -52,6 +52,19 @@ describe("curtain-light stages", () => {
     expect(validateScenario({ ...shared, curtainLight: { src: "curtain.mp4" } }, manifest).errors).toEqual([]);
   });
 
+  it("warns when keep-cursors or still fields are set on a vote that is not a curtain stage", () => {
+    const base = scenario();
+    const flagged = scenarioSchema.parse({
+      ...base,
+      phases: base.phases.map((phase) => phase.id === "ki-vote" || phase.id === "theater-vote"
+        ? { ...phase, curtainKeepCursors: true, curtainFieldsStatic: true }
+        : phase),
+    });
+    const warnings = validateScenario(flagged, manifest).warnings
+      .filter((issue) => issue.code === "curtain-light" && issue.message.includes("keep cursors"));
+    expect(warnings.map((issue) => issue.phaseId)).toEqual(["ki-vote"]);
+  });
+
   it("accepts a two-way vote once the default gap is applied", () => {
     const result = validateScenario(scenario(), manifest);
     expect(result.errors).toEqual([]);

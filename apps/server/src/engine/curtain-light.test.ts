@@ -62,6 +62,15 @@ const sharedScenario = scenarioSchema.parse({
   ],
 });
 
+/** Two curtain votes in a row; the second one optionally keeps cursors and holds its fields still. */
+const chainedScenario = (second: { curtainKeepCursors?: boolean; curtainFieldsStatic?: boolean }) => scenarioSchema.parse({
+  ...sharedScenario,
+  version: "curtain-chained-test",
+  phases: sharedScenario.phases.map((phase) => phase.id === "plain-vote"
+    ? { ...phase, curtainLightVote: true, ...second }
+    : phase),
+});
+
 function setup(value = scenario) {
   let now = 0;
   const registry = new ParticipantRegistry(10);
@@ -170,6 +179,52 @@ describe("curtain-light votes", () => {
 
     expect(main.snapshot.phase.id).toBe("plain-vote");
     expect(main.snapshot.phase.voteTreatment).toBeUndefined();
+    h.engine.stop();
+  });
+
+  it("keeps cursors from the previous curtain vote when the next vote asks for it", () => {
+    for (const keep of [true, false]) {
+      const h = setup(chainedScenario(keep ? { curtainKeepCursors: true } : {}));
+      const one = h.phone("one");
+      h.engine.adminStart(); h.tick(10);
+      // Enter on the first vote, then steer into the top-left field (x < 0.47).
+      h.setNow(100); h.touch(one, 0.5, 0.5, true);
+      h.setNow(200); h.touch(one, 0.5, 0.5, true);
+      h.setNow(220); h.touch(one, 0.2, 0.2);
+      h.tick(1_100);
+      expect(h.votes.at(-1)!.questionId).toBe("shared-vote");
+      // On the second vote one touch-and-drag: a kept cursor moves on from where
+      // it was and votes; a reset cursor only appears at the neutral entry point.
+      h.setNow(1_300); h.touch(one, 0.5, 0.5, true);
+      h.setNow(1_320); h.touch(one, 0.5, 0.49);
+      h.tick(2_200);
+      const second = h.votes.find((snapshot) => snapshot.questionId === "plain-vote")!;
+      const vote = second.votes[0]!;
+      if (keep) {
+        // Still in the top-left field it was steered into on the first vote.
+        expect(vote.x).toBeCloseTo(0.2);
+        expect(vote.y).toBeCloseTo(0.19);
+      } else {
+        // Back at the neutral entry point, in the unlit gap between fields.
+        expect(vote.x).toBeCloseTo(0.5);
+        expect(vote.y).toBeCloseTo(0.49);
+      }
+      h.engine.stop();
+    }
+  });
+
+  it("holds the fields at their base glow when they should not light up yet", () => {
+    const h = setup(chainedScenario({ curtainFieldsStatic: true }));
+    const main = h.display();
+    h.engine.adminStart(); h.tick(10);
+    const reacting = main.snapshot.phase.voteTreatment.curtain;
+    expect(reacting.poolGain).toBeGreaterThan(0);
+    h.tick(1_100);
+    const still = main.snapshot.phase.voteTreatment.curtain;
+    expect(main.snapshot.phase.id).toBe("plain-vote");
+    expect(still.poolGain).toBe(0);
+    expect(still.cursorFloodCounted).toBe(still.cursorFlood);
+    expect(still.poolBase).toBe(reacting.poolBase);
     h.engine.stop();
   });
 

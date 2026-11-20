@@ -428,8 +428,11 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
         </fieldset>;
       })()}
       <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.curtainLightVote === true} onChange={(event) => onChange({ ...phase, curtainLightVote: event.target.checked ? true : undefined })} />{label("Draw this vote as curtain light", "curtainLightVote")}</label>
-      {curtainStagePhaseIds(project.scenario).has(phase.id) &&
-        <CurtainStageEditor phase={phase} scenario={project.scenario} onChange={onChange} />}
+      {curtainStagePhaseIds(project.scenario).has(phase.id) && <>
+        <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.curtainKeepCursors === true} onChange={(event) => onChange({ ...phase, curtainKeepCursors: event.target.checked ? true : undefined })} />{label("Keep cursors from the previous curtain vote", "curtainKeepCursors")}</label>
+        <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.curtainFieldsStatic === true} onChange={(event) => onChange({ ...phase, curtainFieldsStatic: event.target.checked ? true : undefined })} />{label("Fields don't light up yet", "curtainFieldsStatic")}</label>
+        <CurtainStageEditor phase={phase} scenario={project.scenario} onChange={onChange} />
+      </>}
       {phase.field.type === "two-quadrant" && phase.field.variant !== "split" &&
         <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.spectrumGlow ?? true} onChange={(event) => onChange({ ...phase, spectrumGlow: event.target.checked })} />{label("Show spectrum density glow", "spectrumGlow")}</label>}
       {phase.field.type !== "polygon-zones" && (() => {

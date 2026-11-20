@@ -36,7 +36,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Visual graph editor — `apps/studio/src/canvas/nodes.tsx`, `App.tsx`
 - Typed inspector per phase kind (arena ellipse/quad editors, polygon zones, timing timeline) — `apps/studio/src/inspector/*`
-- Curtain-light authoring: per-group switch, per-vote switch for shared-timeline votes (`curtainLightVote`), shared curtain (video + fabric/light tuning), per-stage answer colours with reset (monitors and phones; the curtain stays neutral), light preview with simulated votes, neutral-gap/lighting rehearsal tuning, validation — `apps/studio/src/inspector/CurtainLightEditor.tsx`, `packages/scenario/src/curtain.ts`
+- Curtain-light authoring: per-group switch, per-vote switch for shared-timeline votes (`curtainLightVote`), per-stage "Keep cursors from the previous curtain vote" (`curtainKeepCursors`) and "Fields don't light up yet" (`curtainFieldsStatic`), shared curtain (video + fabric/light tuning), per-stage answer colours with reset (monitors and phones; the curtain stays neutral), light preview with simulated votes, neutral-gap/lighting rehearsal tuning, validation — `apps/studio/src/inspector/CurtainLightEditor.tsx`, `packages/scenario/src/curtain.ts`
 - Media library (PocketBase-backed) with usage-reference tracking — `apps/studio/src/media/MediaLibraryDialog.tsx`, `pocketbase-media.ts` → **PocketBase**
 - Local media fallback/import reconciliation — `apps/studio/src/media/local.ts`
 - Device preview (isolated runtime with main/group/monitor display links) — **no longer reachable from the Studio editor**; module and server route remain — `apps/studio/src/preview/DevicePreview.tsx`, `apps/server/src/rehearsal/rehearsal.ts`
@@ -119,7 +119,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Reaction rating engine (applause/boo) — `votes/rating-engine.ts`
 - Group-membership voting — `groups/voting.ts`
 - Neutral gaps in two-way/four-quadrant fields (uncounted bands; shared by counting and rendering) — `packages/shared/src/index.ts` (`quadrantOfField`, `fieldSplitOffsets`)
-- Curtain-light entry: cursors hidden until first touch per stage, enter at a neutral point, relative steering, touch pulses — `apps/server/src/cursors/cursor-pipeline.ts`, `cursors/relative-trackpad.ts`, `engine/phase-engine.ts` (`curtainFor`, `curtainInput`); browser `touch: "start"` flag in `apps/phone/src/App.tsx`
+- Curtain-light entry: cursors hidden until first touch per stage (a stage with `curtainKeepCursors` continues the previous curtain stage's cursors instead), enter at a neutral point, relative steering, touch pulses — `apps/server/src/cursors/cursor-pipeline.ts`, `cursors/relative-trackpad.ts`, `engine/phase-engine.ts` (`curtainFor`, `curtainInput`); browser `touch: "start"` flag in `apps/phone/src/App.tsx`
 - Final vote snapshot persistence — `persistence/admin-data.ts`
 
 ## Group branching
