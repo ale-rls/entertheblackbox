@@ -78,9 +78,9 @@ export class GroupManager {
       ? curtainVoteField(authoredField, resolveCurtainSettings(this.scenario.curtainLight).neutralGap)
       : authoredField);
     for (const vote of snapshot.votes) {
-      if (vote.x === null || vote.y === null) continue;
-      const outcome = quadrantOfField(field, vote.x, vote.y);
-      if (outcome === null) continue;
+      const outcome = vote.x === null || vote.y === null ? null : quadrantOfField(field, vote.x, vote.y);
+      // The latest run of a question counts: no position or a neutral one now clears an answer from an earlier run.
+      if (outcome === null) { this.answers.get(vote.participantId)?.delete(questionId); continue; }
       const history = this.answers.get(vote.participantId) ?? new Map<string, string>();
       history.set(questionId, outcome);
       this.answers.set(vote.participantId, history);
