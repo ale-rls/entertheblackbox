@@ -1,6 +1,6 @@
 import type { ServerToClientMessage } from '@entertheblackbox/protocol';
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, AppState, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, BackHandler, Easing, Platform, Animated, AppState, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { Text, TextInput } from './Text';
 import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
 import type { ShowManifest } from '@entertheblackbox/show-content';
@@ -58,8 +58,11 @@ function Action({ label, onPress, disabled = false, primary = false, selected = 
     <Text style={[styles.buttonText, primary && styles.primaryText]}>{label}</Text>
   </Pressable>;
 }
-/** Playback activity, not an amplitude meter. Stops offscreen, when paused, and for reduced motion. */
-function AudioField({ playing, compact }: { playing: boolean; compact: boolean }) {
+/** Whole-screen breathing while audio plays: a slow fade towards light grey and back, drawn behind the content so it never
+ * moves the layout. Fades out smoothly when playback stops; no motion offscreen or when the system asks to reduce motion. */
+const PULSE_HALF_MS = 3_200;
+const PULSE_PEAK_OPACITY = .16;
+function AudioPulse({ playing }: { playing: boolean }) {
   const pulse = useRef(new Animated.Value(0)).current;
   const [reduceMotion, setReduceMotion] = useState(true);
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
@@ -70,22 +73,20 @@ function AudioField({ playing, compact }: { playing: boolean; compact: boolean }
     const app = AppState.addEventListener('change', value => setForeground(value === 'active'));
     return () => { mounted = false; motion.remove(); app.remove(); };
   }, []);
+  const active = playing && !reduceMotion && foreground;
   useEffect(() => {
-    if (!playing || reduceMotion || !foreground) { pulse.setValue(0); return; }
-    const animation = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 0, duration: 1300, useNativeDriver: true }),
-    ]));
+    const easing = Easing.inOut(Easing.sin);
+    const animation = active
+      ? Animated.loop(Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: PULSE_HALF_MS, easing, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: PULSE_HALF_MS, easing, useNativeDriver: true }),
+      ]))
+      // Stopping eases back to the plain background instead of jumping.
+      : Animated.timing(pulse, { toValue: 0, duration: 900, easing, useNativeDriver: true });
     animation.start(); return () => animation.stop();
-  }, [playing, reduceMotion, foreground, pulse]);
-  if (!playing) return null;
-  return <View accessible accessibilityLabel="Audio playback active" pointerEvents="none" style={[styles.audio, compact && styles.audioCompact]}>
-    <View style={styles.bars}>{Array.from({ length: 48 }, (_, i) => <Animated.View key={i} style={[styles.bar, {
-      height: 12 + Math.abs(Math.sin(i * .71) * Math.cos(i * .19)) * (compact ? 42 : 130),
-      transform: [{ scaleY: pulse.interpolate({ inputRange: [0, 1], outputRange: i % 2 ? [.5, 1] : [1, .45] }) }],
-    }]} />)}</View>
-    {!compact && <Text style={styles.audioLabel}>AUDIO PLAYING</Text>}
-  </View>;
+  }, [active, pulse]);
+  return <Animated.View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants"
+    style={[StyleSheet.absoluteFill, styles.pulse, { opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, PULSE_PEAK_OPACITY] }) }]} />;
 }
 export function StageCompanion(props: Props) {
   const scroll = useRef<ScrollView>(null);
@@ -140,7 +141,6 @@ export function StageCompanion(props: Props) {
   useEffect(() => { if (props.connected) setSettings(false); }, [props.connected]);
   const normal = props.connected && props.status === 'Connected' && !props.paused && !screen.title.includes('attention');
   const rejected = props.status.startsWith('Join rejected');
-  const hasChoices = !!(screen.groups?.groups.length || screen.voting || screen.ratingOpen);
   const needsAction = !!props.admission?.active && !props.admission.program || !!props.taskVisible || showModeAction(props, props.answered);
   const problem = !normal || !!props.error || !!modeError;
   const reveal = !showMode || needsAction || problem;
@@ -185,6 +185,7 @@ export function StageCompanion(props: Props) {
     {showMode && props.wall}
     <SafeAreaView style={[styles.screen, showMode && { backgroundColor: props.wallVisible ? 'transparent' : props.surface.color }]}
     onStartShouldSetResponderCapture={() => { setLastTouch(Date.now()); return false; }}>
+    {!settings && !(showMode && props.wallVisible) && <AudioPulse playing={props.playing && !props.paused && !rejected} />}
     <StatusBar hidden={showMode} barStyle="light-content" backgroundColor="#090a0b" />
     {props.actionPrompt && <ActionAttention key={props.actionPrompt.key} prompt={props.actionPrompt} />}
     <ScrollView ref={scroll} key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
@@ -248,7 +249,6 @@ export function StageCompanion(props: Props) {
           </>}
         </View>
       </>}</Animated.View>}
-      {!settings && <Animated.View style={showMode ? { opacity: textOpacity } : undefined}><AudioField playing={props.playing && !props.paused && !rejected} compact={showMode || hasChoices} /></Animated.View>}
       {!!modeError && <Text accessibilityRole="alert" style={styles.error}>{modeError}</Text>}
       {showMode && <Animated.View style={[styles.exitWrap, { opacity: textOpacity }]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Exit show mode" accessibilityHint="Hold for two seconds" delayLongPress={2000} onLongPress={() => { setModeError(''); setExitedAt(Date.now()); setShowMode(false); }} style={styles.exitMode}>
@@ -294,7 +294,5 @@ const styles = StyleSheet.create({
   buttonText: { color: '#e1e6ed', fontSize: 15, textAlign: 'center' }, primary: { backgroundColor: '#dce2ea', borderColor: '#dce2ea' }, primaryText: { color: '#11151b' },
   selected: { borderColor: '#dce2ea', backgroundColor: '#29323e' }, disabled: { opacity: .45 }, pressed: { opacity: .7 }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   footer: { paddingHorizontal: 24, paddingTop: 18, marginTop: 'auto', flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  audio: { height: 240, backgroundColor: '#10151c', justifyContent: 'center', overflow: 'hidden' }, audioCompact: { height: 80, backgroundColor: 'transparent' },
-  bars: { flexDirection: 'row', alignItems: 'center', gap: 3 }, bar: { flex: 1, backgroundColor: '#8f9fb3', opacity: .65, borderRadius: 2 },
-  audioLabel: { position: 'absolute', left: 24, bottom: 18, fontSize: 11, color: '#afbdcf', letterSpacing: 1.4 },
+  pulse: { backgroundColor: '#9aa0a8' },
 });

@@ -20,7 +20,7 @@ The native UI uses a dark stage-focused layout without header artwork or footer 
 
 Live scenes show participant guidance and group, server-provided voting/group choices and reaction windows. Cursor votes show "Move to your answer in the room" and no input. Closed or expired votes and disconnected sessions cannot submit answers. Native lock-screen pauses are reflected in the resume control.
 
-The full-width audio field is a playback activity animation driven by the native scheduler's playing foreground cue, excluding the music bed. It is not a measured waveform or a guarantee of audible output. Animation stops when paused/backgrounded and stays static with Reduce Motion enabled. Existing videos/images remain on the shared display; the current protocol has no participant-phone media source.
+While the native scheduler plays a foreground cue (the music bed excluded), the whole screen pulses slowly towards light grey and back, drawn behind the content so the layout never moves. It is not a measured waveform or a guarantee of audible output. The pulse eases out when playback stops, stops when backgrounded, is off while the video wall plays, and stays static with Reduce Motion enabled. Existing videos/images remain on the shared display; the current protocol has no participant-phone media source.
 
 ### Tablet text
 
@@ -252,6 +252,6 @@ While playing, each tablet compares its position with the shared clock four time
 
 Not yet measured: start accuracy and drift on the venue tablets and network, and how long 40 tablets take to download a slice. Try 2–4 tablets first.
 
-Admin → Devices → Phone audio coverage checks every scene/group against the immutable phone download with SHA-256 and byte counts. No audio assigned is distinct from a missing or corrupt file. The foreground activity visualization requires a moving native playhead and updates every 250 ms; it does not measure speaker volume or headphones.
+Admin → Devices → Phone audio coverage checks every scene/group against the immutable phone download with SHA-256 and byte counts. No audio assigned is distinct from a missing or corrupt file. The foreground playback pulse requires a moving native playhead and updates every 250 ms; it does not measure speaker volume or headphones.
 
 Browser voting supports ordinary name/lease admission and group selection. Participant tasks are supported in the browser, including response windows and outcome messages. Shows configured with admission programs still require the native app; the browser displays that requirement instead of joining. Do not enable admission programs for a mixed browser/native audience.
