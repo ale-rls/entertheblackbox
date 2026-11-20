@@ -46,7 +46,9 @@ voting window) or a scene countdown, the text of a text, vote-result or
 placeholder cue is replaced by a large centred countdown in the text's colour.
 There is no corner countdown. Image and video cues never count down: when a
 scale image runs on M1/M3, the question text on M2/M4 carries the countdown.
-A per-cue final countdown keeps its authored length. The countdown disappears
+A per-cue final countdown keeps its authored length. Tick **Keep text small under
+the countdown** on a cue (`countdownShowsText`) to keep its text, smaller and
+centred, beneath the number. The countdown disappears
 when the vote closes or resolves; untimed votes and blank screens have none. Axis routing remains authored. Ensure the main phase lasts long enough
 for its monitor cues. A phase transition always cancels its remaining cues.
 

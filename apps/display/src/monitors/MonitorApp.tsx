@@ -84,9 +84,12 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
       ? monitorCueCountdown(cues, elapsed)
       : state.resolution === null ? finalMonitorCountdown(monitorCountdown(phase, now)) : null
     : null;
-  const countdownText = countdown !== null
-    && <div className="monitor-text monitor-countdown" aria-label="Seconds remaining">{countdown}</div>;
   const voteResult = cue?.kind === "vote-result" ? monitorVoteResult(cue, phase) : null;
+  const cueText = voteResult ? voteResult.text : cue?.kind === "text" || cue?.kind === "placeholder" ? cue.text : "";
+  const countdownText = countdown !== null && <div className="monitor-text monitor-countdown-frame">
+    <div className="monitor-countdown" aria-label="Seconds remaining">{countdown}</div>
+    {cue?.countdownShowsText && cueText && <div className="monitor-countdown-question">{cueText}</div>}
+  </div>;
   const answerColor = voteResult ? voteResult.color : monitorAnswerColor(phase, monitorId);
   const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
   return <main className="monitor-root" aria-label={`Monitor ${monitorId}`} style={accent}>
