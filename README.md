@@ -4,6 +4,52 @@ Enter the Blackbox is the runtime and visual authoring toolkit for the piece of 
 
 Shows are server-authoritative scenario graphs. M1–M4 each open a dedicated display page, cache verified media before the show, and follow authored cues on the main server clock. See [Monitor displays](docs/monitor-displays.md) and [Native participant setup](docs/native-player.md). TouchDesigner is no longer used to render the four monitors.
 
+## Show status, 19 November 2026
+
+Bug hunts before the performances, then two reviews of what was merged, including the fixes themselves. Each fix has its own PR.
+
+**Lighting and sound**
+- The winning field's lamp now lights after a vote, also when the next scene is fixed ([#461](https://github.com/ale-rls/entertheblackbox/pull/461)).
+- The first phone joining, or moving the lobby start time, no longer triggers the show-end look and music stop ([#467](https://github.com/ale-rls/entertheblackbox/pull/467), [#486](https://github.com/ale-rls/entertheblackbox/pull/486)).
+- The Ableton (MIDI) bridge reconnects after a server restart ([#463](https://github.com/ale-rls/entertheblackbox/pull/463)), and starts music with synchronized videos instead of 3 s early ([#465](https://github.com/ale-rls/entertheblackbox/pull/465)). After a dropped connection it no longer starts a group's music once that group has rejoined ([#500](https://github.com/ale-rls/entertheblackbox/pull/500), [#509](https://github.com/ale-rls/entertheblackbox/pull/509)).
+
+**Audience**
+- The entrance signage keeps its join QR during the show while late joining is on ([#469](https://github.com/ale-rls/entertheblackbox/pull/469)).
+- Phones keep retrying when the join page can't load at first ([#443](https://github.com/ale-rls/entertheblackbox/pull/443)).
+- A vote or group choice tapped while a phone or tablet is reconnecting waits instead of getting lost ([#445](https://github.com/ale-rls/entertheblackbox/pull/445)).
+
+**Projector and monitors**
+- A projector that reconnects shows the vote result again ([#447](https://github.com/ale-rls/entertheblackbox/pull/447)) and no longer drops its new connection ([#441](https://github.com/ale-rls/entertheblackbox/pull/441)).
+- On a tie, only the tied answers blink ([#449](https://github.com/ale-rls/entertheblackbox/pull/449)).
+- Monitors keep downloaded clips across scenes, and show texts on time while a video is still loading ([#473](https://github.com/ale-rls/entertheblackbox/pull/473)).
+- Monitors show a vote result as soon as it is decided, also later in the same scene ([#502](https://github.com/ale-rls/entertheblackbox/pull/502)).
+
+**Tablets**
+- Light effects run across the tablets only, not audience phones ([#471](https://github.com/ale-rls/entertheblackbox/pull/471)).
+- A withdrawn role frees its place for the next volunteer ([#455](https://github.com/ale-rls/entertheblackbox/pull/455)).
+- A tablet still answering a task gets the next scene's task once it answers; before, no tablet got it ([#488](https://github.com/ale-rls/entertheblackbox/pull/488)).
+- A tablet always shows the task still waiting for its answer ([#492](https://github.com/ale-rls/entertheblackbox/pull/492)). It only gets tasks meant for everyone in its scene, never another tablet's follow-up or the other group's task, and only after its last answer's spoken instruction has played ([#507](https://github.com/ale-rls/entertheblackbox/pull/507)).
+- No "YOUR TURN" or alert sound for automatic tasks, and finished, missed or withdrawn tasks clear from the screen ([#490](https://github.com/ale-rls/entertheblackbox/pull/490), [#511](https://github.com/ale-rls/entertheblackbox/pull/511)).
+
+**Group splits**
+- An empty group waiting for GO no longer holds the reunion ([#494](https://github.com/ale-rls/entertheblackbox/pull/494)).
+- Task audio and later group splits follow votes cast inside a group, as they were counted, and the latest answer to a question counts ([#496](https://github.com/ale-rls/entertheblackbox/pull/496), [#498](https://github.com/ale-rls/entertheblackbox/pull/498), [#513](https://github.com/ale-rls/entertheblackbox/pull/513)).
+
+**Still open**
+- Two questions for the coder: a finished group path replays the split scene's lighting ([#450](https://github.com/ale-rls/entertheblackbox/issues/450)); parked cursors don't count when a video vote opens ([#451](https://github.com/ale-rls/entertheblackbox/issues/451)).
+- Polygon votes end without a sound, left as is ([#474](https://github.com/ale-rls/entertheblackbox/issues/474)).
+- At most 30 new joins per minute per IP (`JOIN_RATE_LIMIT_MAX_ATTEMPTS`). If the venue Wi-Fi puts every phone behind one public IP, raise it before doors.
+
+**Known, minor, not fixed**
+- Ghost cursors recorded from late joiners replay out of time.
+- Pressing "−10 sec" in the last seconds before a scheduled start can drop that start.
+- Eos fires timed light steps early when a scene announcement arrives later than its pre-roll.
+- With nested group splits, one reunion cancels the other groups' pending lights.
+- The curtain trackpad loses movement on laggy Wi-Fi.
+- On arbeit_6 and mensch_maschine_4 the three ring labels sit on top of each other on the projector (curtain overlay off).
+- Studio: renaming a vote scene doesn't update monitors that show its result; a newly added answer zone sits exactly on top of the previous one.
+- The server's start check compares media file sizes only, not their content.
+
 ## Applications
 
 - `apps/server` — Fastify HTTP and WebSocket server, phase engine, admission, and admin API.
@@ -116,7 +162,7 @@ Open the installation display:
 
 <http://127.0.0.1:3000/display/>
 
-No query parameters are needed: the display authenticates with its build-time token and resolves its installation/room live from the server's own `/api/status`, so the venue's one kiosk never needs to remember or type a full URL. Two query parameters open other display kiosks instead of the main one: `?group=<group-id>` opens that group's own dedicated kiosk (see [docs/group-branching.md](docs/group-branching.md)), and `?signage=<id>` opens a signage kiosk that always shows a looping video and the live join QR code, independent of the show's state (e.g. a lobby entrance screen) — configured in `/admin/` next to the other waiting videos. On a screen that is not 16:9, add `?fit=height` to fill the height and crop the sides (e.g. a 4:3 projector) or `?fit=width` to fill the width and crop top and bottom; the default letterboxes the whole 16:9 frame. It combines with the other parameters, e.g. `?group=<id>&fit=height`. The server allows only one authenticated main display connection, plus one per active group and one per signage kiosk. The root and legacy `/phone/` routes show native-app joining instructions.
+No query parameters are needed: the display authenticates with its build-time token and resolves its installation/room live from the server's own `/api/status`, so the venue's one kiosk never needs to remember or type a full URL. Two query parameters open other display kiosks instead of the main one: `?group=<group-id>` opens that group's own dedicated kiosk (see [docs/group-branching.md](docs/group-branching.md)), and `?signage=<id>` opens a signage kiosk that always shows a looping video and the live join QR code, independent of the show's state (e.g. a lobby entrance screen; during the show only while `ALLOW_LATE_JOIN` is on) — configured in `/admin/` next to the other waiting videos. On a screen that is not 16:9, add `?fit=height` to fill the height and crop the sides (e.g. a 4:3 projector) or `?fit=width` to fill the width and crop top and bottom; the default letterboxes the whole 16:9 frame. It combines with the other parameters, e.g. `?group=<id>&fit=height`. The server allows only one authenticated main display connection, plus one per active group and one per signage kiosk. The root and legacy `/phone/` routes show native-app joining instructions.
 
 Participants install the native app, select the venue server and tap **Update show & join**. See [native player setup](docs/native-player.md). For browser voting, open the printed QR URL or `/phone/`, enter a name, and choose a group when prompted. Keep the page open and the phone awake. Joining never starts a show by headcount; operators start it manually or schedule it in Admin.
 

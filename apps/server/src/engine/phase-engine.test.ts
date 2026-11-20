@@ -69,7 +69,7 @@ function setup(options: {
   movementBatches?: MovementBatchFlushed[];
   movementFinalized?: MovementRecordingFinalized[];
   ghostPool?: GhostPool;
-  qr?: boolean;
+  qr?: boolean | { allowLateJoin: boolean };
   autoStartOnFirstParticipant?: boolean;
   scheduledStartTimes?: number[];
   groupSelection?: NonNullable<ConstructorParameters<typeof PhaseEngine>[0]["groupSelection"]>;
@@ -124,6 +124,7 @@ function setup(options: {
               token: `grant-${issuedAt}`,
               claims: { installationId: "inst-1", roomId: "room-1", expiresAt: issuedAt + 120_000 },
             }),
+            ...(typeof options.qr === "object" ? options.qr : {}),
           },
         }
       : {}),
@@ -364,6 +365,25 @@ describe("PhaseEngine lifecycle", () => {
     expect(lobby.closes.length).toBeGreaterThan(0);
     expect(entrance.closes).toEqual([]);
     expect(display.closes).toEqual([]);
+  });
+
+  it.each([true, false])("keeps the join QR on signage during the show only while late joining is allowed (%s)", (allowLateJoin) => {
+    const { engine } = setup({ now: () => 1_000, qr: { allowLateJoin } });
+    const display = new MockSocket();
+    const entrance = new MockSocket();
+    connectDisplay(engine, display as unknown as WebSocket);
+    connectSignage(engine, entrance as unknown as WebSocket, "entrance");
+    display.sent.length = 0;
+    entrance.sent.length = 0;
+    expect(engine.adminStart(1_000)).toEqual({ ok: true });
+    // Never over the projection while the show runs.
+    expect(display.sent.filter((message) => message.t === "qr_grant")).toEqual([]);
+    expect(display.sent.some((message) => message.t === "qr_hidden")).toBe(true);
+    const lastQr = () => entrance.sent.filter((message) => message.t === "qr_grant" || message.t === "qr_hidden").at(-1)?.t;
+    expect(lastQr()).toBe(allowLateJoin ? "qr_grant" : "qr_hidden");
+    entrance.sent.length = 0;
+    engine.handleClientMessage({ t: "qr_grant_request", v: 2 }, entrance as unknown as WebSocket);
+    expect(lastQr()).toBe(allowLateJoin ? "qr_grant" : "qr_hidden");
   });
 
   it("starts the lobby and show without a display", () => {
@@ -1410,6 +1430,32 @@ describe("PhaseEngine lifecycle", () => {
     ]);
   });
 
+  it("does not tell the lighting and sound bridges the show ended when the lobby opens or is rescheduled", () => {
+    let now = 1_000;
+    const cueEvents: Array<{ type: string; phaseId?: string }> = [];
+    const { engine, registry } = setup({ now: () => now, interactiveIdleTimeoutMs: 1_000, cueEvents });
+    const phone = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p1");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p1"));
+    expect(engine.lifecycleState).toBe("lobby");
+    expect(cueEvents.filter((event) => event.type === "reset")).toEqual([]);
+
+    // Front of house moves the start while the audience waits in the lobby.
+    const later = now + 600_000;
+    expect(engine.setLobbyStartTimes([later], now)).toEqual({ ok: true });
+    expect(engine.adjustLobbyStart(60_000, now)).toEqual({ ok: true });
+    expect(engine.lifecycleState).toBe("lobby");
+    expect(cueEvents.filter((event) => event.type === "reset")).toEqual([]);
+    expect(engine.setLobbyStartTimes([], now)).toEqual({ ok: true });
+
+    // Ending a running show still does.
+    now = 1_100;
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    expect(engine.lifecycleState).toBe("active");
+    expect(engine.adminIdle(now + 10)).toEqual({ ok: true });
+    expect(cueEvents.filter((event) => event.type === "reset").map((event) => event.phaseId)).toEqual(["idle"]);
+  });
+
   it("shows the result again on a display that reconnects during the freeze", () => {
     let now = 1_000;
     const cueEvents: Array<{ type: string }> = [];
@@ -1795,6 +1841,22 @@ describe("authored stage monitor connections", () => {
     engine.tick(1100);
     expect(replacement.sent.filter(message => message.t === "phase").at(-1)?.phase.id).toBe("question");
   });
+  it("hands a monitor the vote result in the same scene, without a new phase", () => {
+    let now = 1000;
+    const { engine } = setup({ now: () => now });
+    const screen = new MockSocket();
+    join(engine, screen, "M1");
+    expect(engine.adminStart(now).ok).toBe(true);
+    engine.tick(1100);
+    expect(engine.currentPhaseId).toBe("question");
+    const epoch = engine.currentPhaseEpoch;
+    expect(engine.adminSkip(1_110)).toEqual({ ok: true });
+    expect(engine.currentPhaseEpoch).toBe(epoch);
+    const last = screen.sent.filter(message => message.t === "phase").at(-1);
+    expect(last).toMatchObject({ phaseEpoch: epoch, phase: { id: "question", lastMonitorVotePhaseId: "question" } });
+    expect(last.phase.monitorVoteResults).toHaveProperty("question");
+    engine.stop();
+  });
   it("rejects invalid credentials and mixed display roles", () => {
     const { engine } = setup({ now: () => 0 });
     const socket = new MockSocket();
@@ -1835,6 +1897,23 @@ describe("native clients do not supply phone cursors", () => {
 });
 
 
+describe("vote result cue for lighting", () => {
+  it("names the field the audience chose even when the next scene is fixed", () => {
+    let now = 1000;
+    const cueEvents: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    const authored = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map(phase => phase.id === "question" ? { ...phase, next: { type: "fixed", target: "idle" } } : phase) });
+    const { engine, registry } = setup({ now: () => now, testScenario: authored, cueEvents });
+    engine.startRehearsalAt("question", now);
+    const phone = new MockSocket();
+    addParticipant(registry, phone as unknown as WebSocket, now, "p0");
+    engine.participantJoined(phone as unknown as WebSocket, registry.get("lease-p0"));
+    engine.handleClientMessage({ t: "input", v: 2, sessionId: "session-1", phaseEpoch: engine.currentPhaseEpoch, seq: 1, x: 0.9, y: 0.9 }, phone as unknown as WebSocket);
+    now = 1200; engine.tick(now);
+    const result = cueEvents.find((event) => event.type === "result");
+    expect(result?.payload).toMatchObject({ winner: "fixed", leader: "q4" });
+  });
+});
+
 describe("retained monitor vote results", () => {
   it.each(["winner", "tie", "empty"])("retains %s across scenes and reconnects, and resets on restart", (mode) => {
     let now = 1000;
@@ -1865,4 +1944,56 @@ describe("retained monitor vote results", () => {
     expect(engine.getSnapshot().monitorVoteResults).toEqual({});
     expect(engine.getSnapshot().lastMonitorVotePhaseId).toBeUndefined();
   });
+});
+
+it("holds live spotlights through display reconnect without publishing a casting result", () => {
+  let now = 1000;
+  const votes: FinalVoteSnapshot[] = [];
+  const cueEvents: Array<{ type: string }> = [];
+  const question = scenario.phases.find(phase => phase.kind === "position-question")!;
+  const spotlightScenario = scenarioSchema.parse({
+    ...scenario,
+    phases: [
+      ...scenario.phases.map(phase => phase.id === "question" ? { ...phase, next: { type: "fixed", target: "spotlights" } } : phase),
+      { ...question, id: "spotlights", spotlight: { diameterPercent: 24 }, durationMs: 1000, freezeMs: 2000 },
+    ],
+  });
+  const { engine, registry } = setup({
+    now: () => now, testScenario: spotlightScenario, interactiveIdleTimeoutMs: 10_000,
+    onVoteSnapshotEnqueued: vote => votes.push(vote), cueEvents,
+  });
+  const phone = new MockSocket() as unknown as WebSocket;
+  addParticipant(registry, phone, now, "p1");
+  engine.participantJoined(phone, registry.get("lease-p1"));
+  engine.startRehearsalAt("question", now);
+  expect(engine.adminJump("spotlights", now)).toMatchObject({ ok: true });
+  const display = new MockSocket();
+  connectDisplay(engine, display as unknown as WebSocket);
+  expect(display.sent.find(message => message.t === "snapshot")?.phase).toMatchObject({
+    spotlight: { diameterPercent: 24 }, spotlightGrow: true, deadlineAt: 2000,
+  });
+  const move = (seq: number, x: number) => engine.handleClientMessage({
+    t: "input", v: 2, sessionId: engine.currentSessionId, phaseEpoch: engine.currentPhaseEpoch, seq, x, y: 0.35,
+  }, phone);
+  now = 1999;
+  move(1, 0.72);
+  now = 2000;
+  move(2, 0.9);
+  engine.tick(now);
+  engine.socketClosed(phone);
+  now = 3000;
+  const replacement = new MockSocket();
+  connectDisplay(engine, replacement as unknown as WebSocket);
+  expect(replacement.sent.find(message => message.t === "cursors")?.cursors).toMatchObject([
+    { clientId: "p1", x: 0.72, y: 0.35 },
+  ]);
+  expect([...display.sent, ...replacement.sent].some(message => message.t === "question_resolved")).toBe(false);
+  expect(votes).toEqual([]);
+  expect(cueEvents.some(event => event.type === "result")).toBe(false);
+  now = 3999;
+  engine.tick(now);
+  expect(engine.currentPhaseId).toBe("spotlights");
+  now = 4000;
+  engine.tick(now);
+  expect(engine.currentPhaseId).toBe("idle");
 });

@@ -70,4 +70,13 @@ describe("surface cue scheduler", () => {
   it("orders devices by natural label", () => {
     expect(surfaceDeviceOrder([{ clientId: "x", name: "T10" }, { clientId: "y", name: "T2" }, { clientId: "z", name: "T1" }])).toEqual(["z", "y", "x"]);
   });
+
+  it("leaves audience browsers out of the tablets' light order", () => {
+    expect(surfaceDeviceOrder([
+      { clientId: "phone-1", name: "Anna", client: "web" },
+      { clientId: "t2", name: "T2", client: "native" },
+      { clientId: "phone-2", name: "Ben", client: "web" },
+      { clientId: "t1", name: "T1", client: "native" },
+    ])).toEqual(["t1", "t2"]);
+  });
 });

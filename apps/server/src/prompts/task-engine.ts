@@ -20,30 +20,39 @@ export class TaskEngine {
   configureRoles(roles: ParticipantRole[]) { this.roles = roles; }
   roleAssignments() { return structuredClone(this.assignments); }
   assignRole(participantId: string, roleId: string, source: string, now: number): void {
+    this.prepareRoleAssignment(participantId, roleId, source, now)();
+  }
+  prepareRoleAssignment(participantId: string, roleId: string, source: string, now: number, replaceExclusive = false): () => void {
     const role = this.roles.find(r => r.id === roleId);
     if (!role) throw new Error('Unknown role');
-    if (this.assignments.some(a => a.participantId === participantId && a.roleId === roleId)) return;
+    if (this.assignments.some(a => a.participantId === participantId && a.roleId === roleId)) return () => {};
     if (role.capacity !== undefined && this.assignments.filter(a => a.roleId === roleId).length >= role.capacity) throw new Error('Role is full');
-    if (role.exclusiveSet && this.assignments.some(a => a.participantId === participantId && this.roles.find(r => r.id === a.roleId)?.exclusiveSet === role.exclusiveSet)) throw new Error('Withdraw the existing role in this exclusive set first');
-    this.assignments.push({participantId,roleId,source,assignedAt:now});
+    const conflicts = role.exclusiveSet ? this.assignments.filter(a => a.participantId === participantId && this.roles.find(r => r.id === a.roleId)?.exclusiveSet === role.exclusiveSet) : [];
+    if (conflicts.length && !replaceExclusive) throw new Error('Withdraw the existing role in this exclusive set first');
+    // Staff picks commit this synchronously after validating the group move.
+    return () => {
+      for (const conflict of conflicts) this.withdraw(participantId, conflict.roleId);
+      this.assignments.push({ participantId, roleId, source, assignedAt: now });
+    };
   }
   withdraw(participantId: string, roleId: string): void {
     // A role can come from the option itself or from one of its rank/overflow outcomes; the
     // assignment's source names the task that gave it, so that response gives its place back too.
     const sources = new Set(this.assignments.filter(a => a.participantId === participantId && a.roleId === roleId).map(a => a.source));
     this.assignments = this.assignments.filter(a => a.participantId !== participantId || a.roleId !== roleId);
-    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId && (sources.has(t.id) || t.template.options.find(o => o.id === r.optionId)?.roleId === roleId) && (r.status === 'accepted' || r.status === 'answered')) { r.status = 'withdrawn'; r.message = 'Assignment withdrawn by the operator.'; }
+    // An answer that went to the overflow outcome never took the option's own role: only its assignment's source can match it.
+    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId && (sources.has(t.id) || (r.outcome !== 'overflow' && t.template.options.find(o => o.id === r.optionId)?.roleId === roleId)) && (r.status === 'accepted' || r.status === 'answered')) { r.status = 'withdrawn'; r.message = 'Assignment withdrawn by the operator.'; }
   }
   endOccupant(participantId: string): void {
     for (const a of [...this.assignments]) if (a.participantId === participantId) this.withdraw(participantId,a.roleId);
-    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId) { r.status = 'cancelled'; r.message = 'Participation ended.'; }
+    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId && !(t.template.autoComplete && r.status === 'answered')) { r.status = 'cancelled'; r.message = 'Participation ended.'; }
   }
   clearRoles(): void { this.assignments = []; }
 
   all(): TaskInstance[] { return structuredClone(this.instances); }
   open(template: ParticipantTask, sessionId: string, ids: string[], now: number, phase: { id: string; epoch: number } | null = null): TaskInstance {
     this.tick(now);
-    if (!ids.length) throw new Error('No eligible participants');
+    if (!ids.length && phase === null) throw new Error('No eligible participants');
     if (this.instances.some(t => t.sessionId === sessionId && t.status === 'open' && t.recipients.some(r => ids.includes(r.participantId) && (r.status === 'pending' || r.status === 'full')))) throw new Error('Recipients already have an open task. Close or cancel it first.');
     const task: TaskInstance = { id: randomUUID(), sessionId, template: structuredClone(template),
       phaseId: phase?.id ?? null, phaseEpoch: phase?.epoch ?? null, createdAt: now, deadlineAt: now + template.durationMs, status: 'open',
@@ -55,7 +64,7 @@ export class TaskEngine {
     this.tick(now);
     const task = this.instances.find(t => t.id === instanceId);
     if (!task || task.status !== 'open' || task.recipients.some(r => r.participantId === participantId)) return false;
-    if (this.instances.some(t => t.sessionId === task.sessionId && t.status === 'open' && t.recipients.some(r => r.participantId === participantId && (r.status === 'pending' || r.status === 'full')))) return false;
+    if (this.busy(participantId, task.sessionId, now)) return false;
     task.recipients.push({ participantId, optionId: null, sequence: null, status: 'pending', message: '', respondedAt: null, ...(task.template.audio ? { audio: this.audio(task.template, now) } : {}) });
     return true;
   }
@@ -64,7 +73,7 @@ export class TaskEngine {
     const task = this.instances.find(t => t.id === instanceId && t.sessionId === sessionId);
     const r = task?.recipients.find(r => r.participantId === participantId);
     const option = task?.template.options.find(o => o.id === optionId);
-    if (!task || !r || !option || task.status !== 'open' || this.current(participantId, sessionId)?.task.id !== task.id) return false;
+    if (!task || task.template.autoComplete || !r || !option || task.status !== 'open' || this.current(participantId, sessionId)?.task.id !== task.id) return false;
     if (r.status === 'accepted' || r.status === 'answered') return r.optionId === optionId;
     if (r.status !== 'pending' && r.status !== 'full') return false;
     const winner = option.audioByVote ? this.workflow?.winner(option.audioByVote.questionId) : null;
@@ -117,14 +126,31 @@ export class TaskEngine {
   close(id: string, cancel = false): boolean {
     const task = this.instances.find(t => t.id === id);
     if (!task) return false;
+    if (cancel && task.template.autoComplete && task.status === 'closed') return true;
     task.status = cancel ? 'cancelled' : 'closed';
+    // A cancelled task's queued follow-ups never open.
+    if (cancel) this.followups = this.followups.filter(f => f.sourceId !== id);
     for (const r of task.recipients) if (cancel || r.status === 'pending' || r.status === 'full') {
       r.status = cancel ? 'cancelled' : 'expired'; r.message = cancel ? 'Task cancelled.' : 'Responses closed.';
     }
     return true;
   }
+  private complete(task: TaskInstance, at: number): void {
+    const option = task.template.options[0]!;
+    for (const recipient of task.recipients) {
+      if (recipient.status !== 'pending') continue;
+      delete recipient.audio;
+      Object.assign(recipient, { status: 'answered', optionId: option.id, sequence: ++this.sequence,
+        respondedAt: at, message: option.message });
+    }
+    task.status = 'closed';
+  }
   tick(now: number): void {
-    for (const t of this.instances) if (t.status === 'open' && now >= t.deadlineAt) this.close(t.id);
+    for (const task of this.instances) {
+      if (task.status !== 'open' || now < task.deadlineAt) continue;
+      if (task.template.autoComplete) this.complete(task, task.deadlineAt);
+      else this.close(task.id);
+    }
     const due = this.followups.filter(f => f.at <= now);
     this.followups = this.followups.filter(f => f.at > now);
     for (const f of due) {
@@ -136,10 +162,71 @@ export class TaskEngine {
       this.open(template, source.sessionId, [f.participantId], now, source.phaseId === null || source.template.persistAcrossPhases ? null : { id: source.phaseId, epoch: source.phaseEpoch! });
     }
   }
-  cancelPhase(phaseId: string, phaseEpoch: number): void { for (const t of this.instances) if (!t.template.persistAcrossPhases && t.phaseId === phaseId && t.phaseEpoch === phaseEpoch && t.status !== 'cancelled') this.close(t.id, true); }
+  endPhase(phaseId: string, phaseEpoch: number, endedAt?: number): void {
+    for (const task of this.instances) {
+      if (task.template.persistAcrossPhases || task.phaseId !== phaseId || task.phaseEpoch !== phaseEpoch || task.status === 'cancelled') continue;
+      if (endedAt !== undefined && task.template.autoComplete && task.status === 'open') {
+        this.complete(task, Math.min(endedAt, task.deadlineAt));
+      }
+      else this.close(task.id, true);
+    }
+  }
   cancelAll(): void { for (const t of this.instances) this.close(t.id, true); }
+  /**
+   * Waiting on this participant's answer to an open task, still playing the instruction their answer gave them,
+   * or about to open their follow-up task (one that will still open: its source neither cancelled nor withdrawn).
+   */
+  busy(participantId: string, sessionId: string, now: number): boolean {
+    return this.busyParticipants(sessionId, now).has(participantId);
+  }
+  /** Everyone `busy()` names, in one pass over the tasks and follow-ups: for checking a whole audience at once. */
+  busyParticipants(sessionId: string, now: number): Set<string> {
+    const busy = new Set<string>();
+    const byId = new Map(this.instances.map(t => [t.id, t]));
+    for (const f of this.followups) {
+      const source = byId.get(f.sourceId);
+      const r = source?.recipients.find(r => r.participantId === f.participantId);
+      if (source?.sessionId === sessionId && source.status !== 'cancelled' && r && (r.status === 'accepted' || r.status === 'answered')) busy.add(f.participantId);
+    }
+    for (const t of this.instances) {
+      if (t.sessionId !== sessionId) continue;
+      for (const r of t.recipients) {
+        if ((t.status === 'open' && (r.status === 'pending' || r.status === 'full'))
+          || (r.audio !== undefined && (r.status === 'accepted' || r.status === 'answered') && now < r.audio.startedAt + r.audio.durationMs)) busy.add(r.participantId);
+      }
+    }
+    return busy;
+  }
+  /**
+   * Adds every participant who is free (in `busy`, which this updates) and not yet a recipient to an open task, without ticking.
+   * Returns how many were added.
+   */
+  enrollFree(instanceId: string, participantIds: Iterable<string>, now: number, busy: Set<string>): number {
+    const task = this.instances.find(t => t.id === instanceId);
+    if (!task || task.status !== 'open' || now >= task.deadlineAt) return 0;
+    const present = new Set(task.recipients.map(r => r.participantId));
+    let added = 0;
+    for (const participantId of participantIds) {
+      if (present.has(participantId) || busy.has(participantId)) continue;
+      task.recipients.push({ participantId, optionId: null, sequence: null, status: 'pending', message: '', respondedAt: null, ...(task.template.audio ? { audio: this.audio(task.template, now) } : {}) });
+      present.add(participantId);
+      busy.add(participantId);
+      added += 1;
+    }
+    return added;
+  }
+  /** Live instances (not copies) for these IDs, for read-only scans. */
+  instancesById(ids: ReadonlySet<string>): readonly TaskInstance[] {
+    return this.instances.filter(t => ids.has(t.id));
+  }
+  /** The task this participant should see: one still waiting on their answer, else the one they last touched (for its feedback). */
   current(participantId: string, sessionId: string): { task: TaskInstance; recipient: TaskRecipient } | null {
-    const task = [...this.instances].reverse().find(t => t.sessionId === sessionId && t.recipients.some(r => r.participantId === participantId));
+    const mine = [...this.instances].reverse().filter(t => t.sessionId === sessionId && t.recipients.some(r => r.participantId === participantId));
+    const own = (t: TaskInstance) => t.recipients.find(r => r.participantId === participantId)!;
+    // A late recipient added to an older open task must not be hidden behind a newer, finished one.
+    const waiting = mine.find(t => t.status === 'open' && ['pending', 'full'].includes(own(t).status));
+    const touched = (t: TaskInstance) => Math.max(t.createdAt, own(t).respondedAt ?? -Infinity);
+    const task = waiting ?? mine.reduce<TaskInstance | undefined>((best, t) => !best || touched(t) > touched(best) ? t : best, undefined);
     const recipient = task?.recipients.find(r => r.participantId === participantId);
     return task && recipient ? { task, recipient } : null;
   }

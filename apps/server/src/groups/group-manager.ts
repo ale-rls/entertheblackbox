@@ -68,15 +68,19 @@ export class GroupManager {
     this.membership.set(participantId, groupId);
   }
 
-  recordAnswers(questionId: string, authoredField: PositionField, snapshot: FinalVoteSnapshot): void {
+  /**
+   * `countedField` is the field the engine that ran this vote counted it on. Pass it: the same question can run
+   * as a curtain stage in one group path and as a plain vote in another, so its ID alone cannot tell.
+   */
+  recordAnswers(questionId: string, authoredField: PositionField, snapshot: FinalVoteSnapshot, countedField?: PositionField): void {
     // Curtain-light votes count with a neutral gap; a position in the gap is no answer here either.
-    const field = this.curtainStages.has(questionId)
+    const field = countedField ?? (this.curtainStages.has(questionId)
       ? curtainVoteField(authoredField, resolveCurtainSettings(this.scenario.curtainLight).neutralGap)
-      : authoredField;
+      : authoredField);
     for (const vote of snapshot.votes) {
-      if (vote.x === null || vote.y === null) continue;
-      const outcome = quadrantOfField(field, vote.x, vote.y);
-      if (outcome === null) continue;
+      const outcome = vote.x === null || vote.y === null ? null : quadrantOfField(field, vote.x, vote.y);
+      // The latest run of a question counts: no position or a neutral one now clears an answer from an earlier run.
+      if (outcome === null) { this.answers.get(vote.participantId)?.delete(questionId); continue; }
       const history = this.answers.get(vote.participantId) ?? new Map<string, string>();
       history.set(questionId, outcome);
       this.answers.set(vote.participantId, history);

@@ -53,6 +53,49 @@ describe("GroupManager", () => {
     expect(groups.groupFor("missing")).toBe("a");
   });
 
+  it("records a tablet's answer on the field its own path counted, when another path runs the same question on the curtain", () => {
+    const field = { type: "two-quadrant", axis: "x", variant: "spectrum", labels: { minLabel: "L", maxLabel: "R" } } as const;
+    const shared = scenarioSchema.parse({
+      version: "shared-question", entryPhaseId: "idle", cyclesAllowed: false,
+      groups: [{ id: "theater", label: "Theater", voteTreatment: "curtain-light" }, { id: "ki", label: "KI" }],
+      curtainLight: { src: "curtain.mp4" },
+      phases: [
+        { kind: "idle", id: "idle" },
+        { kind: "group-branch", id: "split", durationMs: 1_000, assignment: { type: "manual", fallbackGroupId: "ki" },
+          branches: [{ groupId: "theater", next: "question" }, { groupId: "ki", next: "question" }], next: "idle" },
+        { kind: "position-question", id: "question", text: "Choose", durationMs: 1_000, freezeMs: 0, connectionStaleAfterMs: 1_000,
+          showLiveCounts: false, field, next: { type: "fixed", target: "idle" } },
+      ],
+    });
+    const groups = new GroupManager(shared);
+    groups.beginSession(["tablet"]);
+    // The KI path counted this right-hand press on the plain field; the curtain's neutral gap does not apply to it.
+    groups.recordAnswers("question", field, {
+      sessionId: "s", questionId: "question", phaseEpoch: 1, recordedAt: 1,
+      votes: [{ sessionId: "s", questionId: "question", participantId: "tablet", x: 0.5, y: 0.5, status: "valid", lastInputAt: 1, lastHeartbeatAt: 1, currentPhaseStartedAt: 0, currentPhaseDeadline: 2, recordedAt: 1 }],
+    }, field);
+    groups.applyBranch(branch({ type: "vote", questionId: "question", map: { min: "a", max: "b" }, fallbackGroupId: "c" }), ["tablet"]);
+    expect(groups.groupFor("tablet")).toBe("b");
+  });
+
+  it("routes by the latest run of a question: no answer or a neutral one there clears an earlier answer", () => {
+    const field = { type: "two-quadrant", axis: "x", variant: "spectrum", labels: { minLabel: "L", maxLabel: "R" } } as const;
+    const vote = (participantId: string, x: number | null) => ({ sessionId: "s", questionId: "question", participantId, x, y: x === null ? null : 0.5,
+      status: "valid" as const, lastInputAt: 1, lastHeartbeatAt: 1, currentPhaseStartedAt: 0, currentPhaseDeadline: 2, recordedAt: 1 });
+    const groups = new GroupManager(scenario);
+    groups.beginSession(["moved", "silent", "kept"]);
+    groups.recordAnswers("question", field, { sessionId: "s", questionId: "question", phaseEpoch: 1, recordedAt: 1,
+      votes: [vote("moved", 0.1), vote("silent", 0.1), vote("kept", 0.9)] });
+    // The same question runs again on a curtain path: one lands in the neutral gap, one doesn't vote, one isn't there.
+    const gap = { type: "polygon-zones", zones: [{ id: "min", label: "L", points: [{ x: 0, y: 0 }, { x: 0.3, y: 0 }, { x: 0.3, y: 1 }, { x: 0, y: 1 }] }] } as const;
+    groups.recordAnswers("question", field, { sessionId: "s", questionId: "question", phaseEpoch: 2, recordedAt: 2,
+      votes: [vote("moved", 0.5), vote("silent", null)] }, gap as never);
+    groups.applyBranch(branch({ type: "vote", questionId: "question", map: { min: "a", max: "b" }, fallbackGroupId: "c" }), ["moved", "silent", "kept"]);
+    expect(groups.groupFor("moved")).toBe("c");
+    expect(groups.groupFor("silent")).toBe("c");
+    expect(groups.groupFor("kept")).toBe("b");
+  });
+
   it("preserves valid operator choices for manual branching", () => {
     const groups = new GroupManager(scenario);
     groups.beginSession(["one", "two"]);

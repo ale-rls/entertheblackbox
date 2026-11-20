@@ -7,6 +7,7 @@ import { useDisplaySettings } from "./lib/useDisplaySettings.js";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { DisplayToServerMessage } from "@entertheblackbox/protocol";
 import { CursorField } from "./cursors/cursorField.js";
+import { SpotlightCurtain } from "./curtain/SpotlightCurtain.js";
 import { CursorCanvas } from "./cursors/CursorCanvas.js";
 import { SpectrumGlowCanvas } from "./cursors/SpectrumGlowCanvas.js";
 import { RealtimeWsClient } from "./cursors/realtimeWsClient.js";
@@ -94,6 +95,7 @@ export function App() {
   const activeExtraAudioRef = useRef<HTMLAudioElement | null>(null);
   stateRef.current = state;
 
+  const spotlightFeed = useRef(false);
   const cursorField = useMemo(() => new CursorField(), []);
 
   const connection = useMemo(
@@ -106,6 +108,10 @@ export function App() {
           if (message.t === "cursors") {
             cursorField.ingest(message, Date.now());
             return;
+          }
+          if (message.t === "snapshot" || message.t === "phase") {
+            spotlightFeed.current = message.phase.kind === "position-question" && !!message.phase.spotlight;
+            if (spotlightFeed.current) cursorField.setFrozen(false);
           }
           if (
             (message.t === "snapshot" || message.t === "phase") &&
@@ -130,15 +136,17 @@ export function App() {
         url: config.realtimeWsUrl,
         room: `${config.installationId}:${config.roomId}`,
         onSnapshot: (cursors) => {
+          if (spotlightFeed.current) return;
           const at = Date.now();
           for (const cursor of cursors) {
             cursorField.upsertOne(cursor.clientId, cursor.color, cursor.x, cursor.y, at);
           }
         },
         onUpdate: (cursor) => {
+          if (spotlightFeed.current) return;
           cursorField.upsertOne(cursor.clientId, cursor.color, cursor.x, cursor.y, Date.now());
         },
-        onLeave: (clientId) => cursorField.removeOne(clientId),
+        onLeave: (clientId) => { if (!spotlightFeed.current) cursorField.removeOne(clientId); },
       }),
     [cursorField],
   );
@@ -269,6 +277,7 @@ export function App() {
     : null;
   // Curtain-light votes (a curtain-light group's own display): the lit
   // curtain replaces the field overlay, spectrum glow and cursor dots.
+  const spotlightPhase = phase?.kind === "position-question" && phase.spotlight ? phase : null;
   const curtainPhase = spectrumPhase?.voteTreatment !== undefined ? spectrumPhase : null;
   const curtainKey = curtainPhase === null ? null : `${state.sessionId ?? "pending"}:${state.phaseEpoch}`;
   const [curtainHold, setCurtainHold] = useState<CurtainHold | null>(null);
@@ -298,7 +307,7 @@ export function App() {
     const timer = setTimeout(() => setCurtainHold(null), CURTAIN_LEAVE_MS + 100);
     return () => clearTimeout(timer);
   }, [curtainHold?.leavingSince]);
-  const curtainSrc = curtainHold?.treatment.curtain.src ?? null;
+  const curtainSrc = spotlightPhase?.spotlightCurtainSrc ?? curtainHold?.treatment.curtain.src ?? null;
   useEffect(() => {
     if (curtainSrc === null) return;
     let cancelled = false;
@@ -405,6 +414,18 @@ export function App() {
   if (displayInactive) return <main className="display-root" aria-label="Display inactive" style={{ background: "#000" }}>
     {clockOverlay}
     {waitingVideoUrl && <IdleAttract key={waitingVideoUrl} grant={null} qrHidden clock={connection.clock} videoUrls={[waitingVideoUrl]} />}
+  </main>;
+
+  if (spotlightPhase !== null) return <main className="display-root" aria-label="Spotlight cue" style={{ background: "#000" }}>
+    {config.groupId === undefined && spotlightPhase.deadlineAt !== null && <>
+      <SpotlightCurtain key={`${state.sessionId}:${state.phaseEpoch}`} field={cursorField} clock={connection.clock}
+        size={spotlightPhase.spotlight!.diameterPercent} startedAt={spotlightPhase.startedAt}
+        deadlineAt={spotlightPhase.deadlineAt} grow={spotlightPhase.spotlightGrow === true}
+        videoUrl={curtainUrl?.src === spotlightPhase.spotlightCurtainSrc ? curtainUrl?.url ?? null : null} />
+      <section className="layer layer-ui">
+        <Countdown clock={connection.clock} deadlineAt={spotlightPhase.deadlineAt} className="curtain-countdown" hideAtZero />
+      </section>
+    </>}
   </main>;
 
   return (

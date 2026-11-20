@@ -8,6 +8,14 @@ export function monitorVideoTime(elapsedMs: number, durationSeconds: number, loo
     : { time: Math.min(seconds, Math.max(0, durationSeconds - 0.001)), playing: seconds < durationSeconds };
 }
 
+/**
+ * Whether a cue can be shown now. Text, placeholders and vote results need no file: they appear on their
+ * server-clock time even while the scene's videos or images are still downloading.
+ */
+export function monitorCueReady(cue: MonitorCue | null, mediaReady: boolean): boolean {
+  return cue !== null && (mediaReady || !("src" in cue));
+}
+
 /** Bound the outgoing hold if the incoming decoder stalls. */
 export const MONITOR_CUT_HOLD_MS = 500;
 

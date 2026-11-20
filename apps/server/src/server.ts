@@ -137,7 +137,7 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
   const surface = new SurfaceController({ recipients: () => admission.registry.values().map((participant) => ({ ...participant, name: participant.deviceLabel ?? participant.name })) });
   const surfaceEffects = new SurfaceEffectRunner(surface);
   const surfaceCues = new SurfaceCueScheduler(surfaceEffects, () => surfaceDeviceOrder(
-    admission.registry.values().map((participant) => ({ clientId: participant.clientId, name: participant.deviceLabel ?? participant.name }))));
+    admission.registry.values().map((participant) => ({ clientId: participant.clientId, name: participant.deviceLabel ?? participant.name, client: participant.client }))));
   // Admin's Instrument takes over from scene cues whenever the operator starts or stops an effect.
   const operatorSurfaceEffects = {
     get state() { return surfaceEffects.state; },
@@ -239,11 +239,11 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
         }
       },
       onTasksChanged: (sessionId, tasks, revision) => adminData?.audit({ action: 'participant-task-state', at: new Date().toISOString(), detail: { sessionId, tasks, revision } }),
-      onVoteSnapshotEnqueued: (snapshot) => {
+      onVoteSnapshotEnqueued: (snapshot, countedField) => {
         adminData?.recordVoteSnapshot?.(snapshot);
         const question = readiness.scenario.phases.find((phase) => phase.id === snapshot.questionId);
         if (question?.kind === "position-question" || question?.kind === "video-position-question") {
-          groups?.recordAnswers(question.id, question.field, snapshot);
+          groups?.recordAnswers(question.id, question.field, snapshot, countedField);
         }
       },
       onMovementRecordingStarted: (event) => {

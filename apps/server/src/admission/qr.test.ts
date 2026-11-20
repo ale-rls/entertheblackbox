@@ -77,6 +77,18 @@ describe("QR grant push loop", () => {
     expect(sent).toEqual([{ t: "qr_hidden", v: 2 }]);
   });
 
+  it("keeps the join QR on signage kiosks during the show while late joining is allowed", () => {
+    for (const allowLateJoin of [true, false]) {
+      const signage: QrPushMessage[] = [];
+      const { loop, sent, setLifecycle } = setup({ allowLateJoin, sendSignage: (message) => signage.push(message) });
+      loop.push();
+      setLifecycle("active");
+      loop.push();
+      expect(sent.map((message) => message.t)).toEqual(["qr_grant", "qr_hidden"]);
+      expect(signage.map((message) => message.t)).toEqual(["qr_grant", allowLateJoin ? "qr_grant" : "qr_hidden"]);
+    }
+  });
+
   it("rotates every configured interval only while a display is connected", () => {
     vi.useFakeTimers();
     let connected = true;

@@ -18,8 +18,8 @@ const envSchema = z.object({
   ROOM_ID: z.string().min(1).default("main"),
   SHOW_ID: z.string().min(1).default("local-dev"),
   DISPLAY_TOKEN: z.string().min(1).default(DEVELOPMENT_DISPLAY_TOKEN),
-  /** Unlocks the staff menu on native tablets. Unset disables the menu. */
-  STAFF_PIN: z.string().regex(/^[0-9]{4,12}$/, "STAFF_PIN must be 4-12 digits").optional(),
+  /** Unlocks the staff menu on native tablets. Unset or empty disables the menu. */
+  STAFF_PIN: z.preprocess((input) => input === "" ? undefined : input, z.string().regex(/^[0-9]{4,12}$/, "STAFF_PIN must be 4-12 digits").optional()),
   ADMIN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(600),
   ADMIN_RATE_LIMIT_MAX_AUTH_FAILURES: z.coerce.number().int().positive().default(30),
   ADMIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),

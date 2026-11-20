@@ -306,6 +306,21 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
     {(phase.kind === "position-question" || phase.kind === "video-position-question") && <>
       {phase.kind === "position-question" && text("Title (optional)", "title", phase.title ?? "", (value) => onChange({ ...phase, title: value.trim() ? value : undefined }))}
       {text("Question", "text", phase.text, (value) => onChange({ ...phase, text: value }))}
+      {phase.kind === "position-question" && <fieldset><legend>Spotlights</legend>
+        <label className="sc-tool-checkbox check"><input type="checkbox" checked={!!phase.spotlight} disabled={phase.next.type !== "fixed"}
+          onChange={event => onChange({ ...phase, spotlight: event.target.checked ? { diameterPercent: 25 } : undefined,
+            ...(event.target.checked ? { freezeMs: phase.freezeMs || 3000, showCursors: true, curtainLightVote: undefined } : {}) })} />Use spotlights on the main display</label>
+        {phase.next.type !== "fixed" && <p className="sc-tool-copy">Select a fixed target to use spotlights.</p>}
+        {phase.spotlight && <>
+          {number("Spotlight diameter (% of screen height)", "spotlight.diameterPercent", phase.spotlight.diameterPercent, value =>
+            onChange({ ...phase, spotlight: { diameterPercent: Math.round(Math.max(5, Math.min(100, value))) } }))}
+          {number("Countdown (seconds)", "durationMs", phase.durationMs / 1000, value =>
+            onChange({ ...phase, durationMs: Math.max(1, Math.round(value * 1000)) }))}
+          {number("Frozen hold (seconds)", "freezeMs", phase.freezeMs / 1000, value =>
+            onChange({ ...phase, freezeMs: Math.max(1, Math.round(value * 1000)) }))}
+        </>}
+      </fieldset>}
+      {!(phase.kind === "position-question" && phase.spotlight) && <>
       <label className="sc-tool-label">{label("Position layout", "field.type + field.variant")}<select className="sc-tool-select" value={phase.field.type === "four-quadrant" ? "four-quadrant" : phase.field.type === "two-quadrant" ? `two-quadrant-${phase.field.axis}-${phase.field.variant ?? "spectrum"}` : "three-candidate-zones"} onChange={(event) => onQuestionLayoutChange(event.target.value as "four-quadrant" | "two-quadrant-x-split" | "two-quadrant-x-spectrum" | "two-quadrant-y-split" | "two-quadrant-y-spectrum" | "three-candidate-zones", event.currentTarget)}><option value="four-quadrant">Four quadrants · X + Y axes</option><option value="two-quadrant-x-split">Horizontal vote · hard left / right split</option><option value="two-quadrant-x-spectrum">Horizontal spectrum · left ↔ right</option><option value="two-quadrant-y-split">Vertical vote · hard top / bottom split</option><option value="two-quadrant-y-spectrum">Vertical spectrum · top ↕ bottom</option><option value="three-candidate-zones">Polygon zones · custom</option></select></label>
       {phase.field.type === "two-quadrant" && phase.field.axis === "x" && phase.field.arena === undefined && (() => {
         const field = phase.field;
@@ -509,6 +524,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
       <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showLiveCounts} onChange={(event) => onChange({ ...phase, showLiveCounts: event.target.checked })} />{label("Show live quadrant counts", "showLiveCounts")}</label>
       <label className="sc-tool-label">{label("Transition rule", "next.type")}<select className="sc-tool-select" value={phase.next.type} onChange={(event) => onTransitionChange(event.target.value as "fixed" | "quadrant-plurality", event.currentTarget)}><option value="fixed">Fixed target</option><option value="quadrant-plurality">Quadrant plurality</option></select></label>
       {phase.next.type === "quadrant-plurality" && <CountedStatuses phase={phase} onChange={onChange} />}
+      </>}
     </>}
     {(phase.kind === "video" || phase.kind === "narration") && (() => {
       const sceneMs = phase.kind === "video" ? phase.expectedDurationMs : phase.durationMs;
@@ -561,7 +577,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
     <ScriptCueEditor phase={phase} script={project.scenario.actorScript} onChange={onChange} />
     <TabletScriptEditor phase={phase} script={project.scenario.actorScript} groups={project.scenario.groups ?? []} onChange={onChange} />
     <details><summary>Advanced settings</summary>
-    {phase.kind !== "idle" && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
+    {phase.kind !== "idle" && !(phase.kind === "position-question" && phase.spotlight) && <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.showCursors ?? true} onChange={(event) => onChange({ ...phase, showCursors: event.target.checked })} />{label("Show cursors", "showCursors")}</label>}
       {(phase.kind === "position-question" || phase.kind === "video-position-question") && number("Connection stale after (ms)", "connectionStaleAfterMs", phase.connectionStaleAfterMs, (connectionStaleAfterMs) => onChange({ ...phase, connectionStaleAfterMs }))}
     {phase.kind !== "idle" && <fieldset><legend>External show cues</legend>
       {text("Cue names (comma separated)", "outgoingCues", (phase.outgoingCues ?? []).join(", "), (value) => onChange({ ...phase, outgoingCues: value.split(",").map((cue) => cue.trim()).filter(Boolean) }))}

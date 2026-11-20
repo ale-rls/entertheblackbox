@@ -8,7 +8,7 @@ import { displayReducer, initialDisplayState } from "../state/store.js";
 import { useMedia } from "../media/useMedia.js";
 import { FullscreenControl } from "../components/FullscreenControl.js";
 import { performReload } from "../lib/kiosk.js";
-import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorVideoTime } from "./playback.js";
+import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorCueReady, monitorVideoTime } from "./playback.js";
 import { monitorCountdown, monitorCueCountdown } from "./countdown.js";
 import { monitorAnswerColor } from "./answerColor.js";
 import { monitorVoteResult } from "./voteResult.js";
@@ -57,6 +57,7 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   const src = cue && "src" in cue ? cue.src : null;
   const url = media.visualSrc === src ? media.videoUrl : null;
   const ready = media.status.state === "ready";
+  const cueReady = monitorCueReady(cue, ready);
   const scene = JSON.stringify([monitorId, state.sessionId, state.phaseEpoch, phase?.startedAt, mediaRevision, sourceKey]);
   const key = JSON.stringify([scene, cue?.startMs, src]);
   const current: MonitorVideoCue | null = ready && cue?.kind === "video" && url && phase
@@ -76,7 +77,7 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
     setError("");
     void media.showMedia(src).catch((cause) => setError(String(cause)));
   }, [src, state.sessionId, state.phaseEpoch, mediaRevision, sourceKey]);
-  const countdown = ready && connection.clock.ready && cue && cue.kind !== "blank"
+  const countdown = cueReady && connection.clock.ready && cue && cue.kind !== "blank"
     ? cue.countdownSeconds !== undefined
       ? monitorCueCountdown(phase?.monitorCues?.[monitorId] ?? [], now - (phase?.startedAt ?? 0))
       : state.resolution === null ? monitorCountdown(phase, now) : null
@@ -86,8 +87,8 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
   return <main className="monitor-root" aria-label={`Monitor ${monitorId}`} style={accent}>
     {voteResult && <div className="monitor-text">{voteResult.text}</div>}
-    {ready && cue?.kind === "text" && <div className="monitor-text">{cue.text}</div>}
-    {ready && cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
+    {cueReady && cue?.kind === "text" && <div className="monitor-text">{cue.text}</div>}
+    {cueReady && cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
     {ready && cue?.kind === "image" && url && <figure className="monitor-image"><img src={url} alt={cue.text ?? ""} style={{ objectFit: cue.fit }} onError={() => setError("Image could not be decoded")} />{cue.text && <figcaption>{cue.text}</figcaption>}</figure>}
     {[outgoing, current].map((video) => video && <MonitorVideo key={video.key} src={video.url} startedAt={video.startedAt}
       loop={video.cue.loop} fit={video.cue.fit} clock={connection.clock} active={video === current}

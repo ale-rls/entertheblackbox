@@ -14,6 +14,7 @@ import { contrastText } from './surface';
 import { musicVolumeLabel, stepMusicVolume } from './music-volume';
 
 type Props = StageInput & {
+  staffCorner?: React.ReactNode;
   actionPrompt?: ActionPrompt | null;
   admission?: Extract<ServerToClientMessage, { t: 'admission_state' }> | null; onAdmissionGroup?: (id: string) => void;
   participantTask?: React.ReactNode; taskVisible?: boolean;
@@ -270,6 +271,7 @@ export function StageCompanion(props: Props) {
     {showMode && !!props.surface.label && <View pointerEvents="none" style={styles.identify} accessibilityLiveRegion="polite">
       <Text adjustsFontSizeToFit numberOfLines={1} style={[styles.identifyText, { color: surfaceText }]}>{props.surface.label}</Text>
     </View>}
+    {props.staffCorner}
   </SafeAreaView>
   </View>;
 }
