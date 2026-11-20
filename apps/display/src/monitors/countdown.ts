@@ -1,6 +1,23 @@
 import type { PhaseSnapshotMessage } from "@entertheblackbox/protocol";
 import { activeMonitorCue, type MonitorCue, sceneCountdownSeconds } from "@entertheblackbox/scenario";
 
+/** Automatic vote and scene countdowns appear on the monitors only for their final seconds. */
+export const MONITOR_FINAL_COUNTDOWN_SECONDS = 5;
+
+/**
+ * Only text-bearing cues count down: the number replaces the text, centred and
+ * in its colour. Image and video cues (for example a scale) never show one, so
+ * on split screens the opposing question monitors carry the countdown.
+ */
+export function monitorCueShowsCountdown(cue: MonitorCue | null): cue is Extract<MonitorCue, { kind: "text" | "vote-result" | "placeholder" }> {
+  return cue?.kind === "text" || cue?.kind === "vote-result" || cue?.kind === "placeholder";
+}
+
+/** Clamps an automatic countdown to its final seconds; earlier seconds keep the text. */
+export function finalMonitorCountdown(seconds: number | null): number | null {
+  return seconds !== null && seconds <= MONITOR_FINAL_COUNTDOWN_SECONDS ? seconds : null;
+}
+
 /** Remaining vote or scene-countdown time on the server clock; closed and untimed votes stay quiet. */
 export function monitorCountdown(phase: PhaseSnapshotMessage | null, now: number): number | null {
   if (!phase) return null;

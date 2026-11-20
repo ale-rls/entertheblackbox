@@ -9,7 +9,7 @@ import { useMedia } from "../media/useMedia.js";
 import { FullscreenControl } from "../components/FullscreenControl.js";
 import { performReload } from "../lib/kiosk.js";
 import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorCueReady, monitorVideoTime } from "./playback.js";
-import { monitorCountdown, monitorCueCountdown } from "./countdown.js";
+import { finalMonitorCountdown, monitorCountdown, monitorCueCountdown, monitorCueShowsCountdown } from "./countdown.js";
 import { monitorAnswerColor } from "./answerColor.js";
 import { monitorVoteResult } from "./voteResult.js";
 import "./monitors.css";
@@ -77,24 +77,31 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
     setError("");
     void media.showMedia(src).catch((cause) => setError(String(cause)));
   }, [src, state.sessionId, state.phaseEpoch, mediaRevision, sourceKey]);
-  const countdown = cueReady && connection.clock.ready && cue && cue.kind !== "blank"
+  // An authored per-cue countdown keeps its own length; vote and scene
+  // countdowns only show their final seconds. Either replaces the cue's text.
+  const countdown = cueReady && connection.clock.ready && monitorCueShowsCountdown(cue)
     ? cue.countdownSeconds !== undefined
-      ? monitorCueCountdown(phase?.monitorCues?.[monitorId] ?? [], now - (phase?.startedAt ?? 0))
-      : state.resolution === null ? monitorCountdown(phase, now) : null
+      ? monitorCueCountdown(cues, elapsed)
+      : state.resolution === null ? finalMonitorCountdown(monitorCountdown(phase, now)) : null
     : null;
   const voteResult = cue?.kind === "vote-result" ? monitorVoteResult(cue, phase) : null;
+  const cueText = voteResult ? voteResult.text : cue?.kind === "text" || cue?.kind === "placeholder" ? cue.text : "";
+  const countdownText = countdown !== null && <div className="monitor-text monitor-countdown-frame">
+    <div className="monitor-countdown" aria-label="Seconds remaining">{countdown}</div>
+    {cue?.countdownShowsText && cueText && <div className="monitor-countdown-question">{cueText}</div>}
+  </div>;
   const answerColor = voteResult ? voteResult.color : monitorAnswerColor(phase, monitorId);
   const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
   return <main className="monitor-root" aria-label={`Monitor ${monitorId}`} style={accent}>
-    {voteResult && <div className="monitor-text">{voteResult.text}</div>}
-    {cueReady && cue?.kind === "text" && <div className="monitor-text">{cue.text}</div>}
-    {cueReady && cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
+    {countdownText}
+    {countdown === null && voteResult && <div className="monitor-text">{voteResult.text}</div>}
+    {countdown === null && cueReady && cue?.kind === "text" && <div className="monitor-text">{cue.text}</div>}
+    {countdown === null && cueReady && cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
     {ready && cue?.kind === "image" && url && <figure className="monitor-image"><img src={url} alt={cue.text ?? ""} style={{ objectFit: cue.fit }} onError={() => setError("Image could not be decoded")} />{cue.text && <figcaption>{cue.text}</figcaption>}</figure>}
     {[outgoing, current].map((video) => video && <MonitorVideo key={video.key} src={video.url} startedAt={video.startedAt}
       loop={video.cue.loop} fit={video.cue.fit} clock={connection.clock} active={video === current}
       hidden={video === current && outgoing !== null} onError={setError}
       onFrame={() => { if (activeVideo.current === video.key) setPresented(video); }} />)}
-    {countdown !== null && <div className="monitor-countdown" aria-label="Seconds remaining">{countdown}</div>}
     {(!ready || setup || state.connection !== "open" || error || state.notice) && <aside className="monitor-status" role="status">
       <strong>{monitorId}</strong> · {state.connection} · {media.status.state}{ready ? " — media verified" : " — preparing media"}
       <p>Server clock: {connection.clock.ready ? "synchronized" : "synchronizing"} · scene media: {sources.length} files</p>

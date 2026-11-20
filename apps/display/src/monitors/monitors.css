@@ -10,4 +10,7 @@
 .monitor-status { position: absolute; left: 1rem; bottom: 1rem; max-width: 90%; padding: .8rem 1rem; background: #111e; border: 1px solid #666; font-size: 16px; }
 .monitor-status p { margin: .3rem 0; }
 
-.monitor-countdown { position: absolute; right: 4vw; top: 3vh; color: #fff; font-size: clamp(40px, 8vw, 160px); font-variant-numeric: tabular-nums; line-height: 1; text-shadow: 0 2px 12px #000; }
+/* Replaces the cue text in its place and colour (see countdown.ts). */
+.monitor-countdown { font-size: clamp(80px, 24vw, 480px); font-variant-numeric: tabular-nums; line-height: 1; }
+/* Optional (countdownShowsText): the original text, smaller, centred beneath the number. */
+.monitor-countdown-question { margin-top: .6em; font-size: clamp(20px, 3.5vw, 64px); line-height: 1.15; max-width: 100%; }

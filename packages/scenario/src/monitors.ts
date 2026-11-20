@@ -8,6 +8,8 @@ const timing = {
   durationMs: z.number().int().positive().optional(),
   /** Show only the final seconds of this cue; overrides the scene/vote countdown. */
   countdownSeconds: z.number().int().positive().optional(),
+  /** Keep the cue's text, smaller and centred, beneath the countdown. Text cues only. */
+  countdownShowsText: z.boolean().optional(),
 };
 const text = z.string().max(4000);
 const source = z.string().min(1).refine((value) => !value.startsWith("/") && !value.includes("..") && !/[?#:\\]/.test(value), "Use a relative media manifest path");
