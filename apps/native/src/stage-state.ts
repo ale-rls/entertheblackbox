@@ -31,7 +31,9 @@ export function stageState(s: StageInput) {
   const active = !!p && s.now >= p.startedAt && (p.deadlineAt === null || s.now < p.deadlineAt) &&
     s.snapshot?.participantState !== 'finished' && s.snapshot?.participantState !== 'unassigned';
   const voting = s.voting?.sessionId === s.snapshot?.sessionId && s.voting?.phaseEpoch === s.snapshot?.phaseEpoch ? s.voting : null;
-  const groups = s.groups?.sessionId === s.snapshot?.sessionId && s.groups?.phaseEpoch === s.snapshot?.phaseEpoch ? s.groups : null;
+  // Once the server confirms a choice the prompt and its buttons go: the selection
+  // window waits for every phone and must not keep asking people who already chose.
+  const groups = s.groups?.sessionId === s.snapshot?.sessionId && s.groups?.phaseEpoch === s.snapshot?.phaseEpoch && !s.groups?.selectedGroupId ? s.groups : null;
   const admitted = s.connected && s.status === 'Connected';
   const canAct = admitted && active;
   const rating = p && 'rating' in p ? p.rating : null;
