@@ -94,7 +94,7 @@ class AudioSchedulerModule : Module() {
     Function("getTiming") {
       engine.snapshot().layers.map {
         mapOf("id" to it.id, "state" to it.state, "positionMs" to it.positionMs,
-          "targetMs" to it.targetMs, "driftMs" to it.driftMs, "error" to it.error)
+          "durationMs" to it.durationMs, "targetMs" to it.targetMs, "driftMs" to it.driftMs, "error" to it.error)
       }
     }
 

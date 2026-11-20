@@ -31,6 +31,8 @@ export type LayerTiming = {
   id: string;
   state: LayerState;
   positionMs: number | null;
+  /** Actual file length; absent on older native builds. */
+  durationMs?: number | null;
   /** Where an anchored layer should be right now; null for free-running layers. */
   targetMs: number | null;
   driftMs: number | null;

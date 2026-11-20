@@ -52,6 +52,7 @@ export class ShowPlayer {
   private cue: Cue | null = null;
   private cueUri: string | null = null;
   private cueApplied = false;
+  private installedCue: Cue | null = null;
   private enabled = true;
   private disposed = false;
   private status = 'Ready';
@@ -104,7 +105,7 @@ export class ShowPlayer {
     // A different cue replaces the layer: let the outgoing one fade. The same cue with a new end
     // is only retimed by the scheduler, without restarting or fading.
     if (this.cueApplied && this.cue?.key !== cue?.key) this.queue(() => AudioScheduler.fadeOutLayer(CUE, SKIP_FADE_MS));
-    this.cue = null; this.cueUri = null; this.cueApplied = false;
+    this.cue = null; this.cueUri = null; this.cueApplied = false; this.installedCue = null;
     if (!cue) { this.clearCue('Waiting for the next cue'); return; }
     if (cue.scenarioVersion !== this.manifest.scenarioVersion) {
       this.clearCue('Show changed — leave and download the matching show'); return;
@@ -126,7 +127,10 @@ export class ShowPlayer {
     this.cueApplied = true;
     AudioScheduler.setClock(this.clock.now());
     const uri = this.cueUri;
-    this.queue(() => AudioScheduler.setLayer(CUE, { uri, startAt: cue.startedAt, endAt: cue.endsAt }));
+    this.queue(async () => {
+      await AudioScheduler.setLayer(CUE, { uri, startAt: cue.startedAt, endAt: cue.endsAt });
+      if (this.cue === cue) this.installedCue = cue;
+    });
     this.report(this.enabled ? 'Scheduled' : 'Paused on this device');
   }
   setEnabled(enabled: boolean) {
@@ -148,13 +152,14 @@ export class ShowPlayer {
   timing(): ClockTiming {
     // iOS records omit nil fields; the ping schema requires explicit nulls.
     const media = (role: MediaTiming['role'], layer: LayerTiming | undefined): MediaTiming[] => layer ? [{ role,
+      ...(role === 'main' && this.installedCue ? { src: this.installedCue.src, endsAt: this.installedCue.endsAt, durationMs: layer.durationMs ?? null } : {}),
       positionMs: layer.positionMs ?? null, targetMs: layer.targetMs ?? null, driftMs: layer.driftMs ?? null,
       state: !this.enabled && layer.state !== 'error' ? 'paused' : layer.state }] : [];
     const layers = AudioScheduler.getTiming();
     return { calibrated: this.clock.hasSamples, offsetMs: this.clock.offset,
       roundTripMs: this.clock.roundTripMs, sampleAgeMs: this.clock.sampleAgeMs(),
       elapsedMs: this.cue ? this.clock.now() - this.cue.startedAt : 0, mode: 'synchronized',
-      media: [...media('main', layers.find(l => l.id === CUE)), ...media('extra', layers.find(l => l.id === BED))] };
+      media: [...media('main', this.installedCue ? layers.find(l => l.id === CUE) : undefined), ...media('extra', layers.find(l => l.id === BED))] };
   }
   settled() { return this.audioQueue; }
   dispose() {

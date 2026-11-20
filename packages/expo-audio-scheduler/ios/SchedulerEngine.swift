@@ -22,6 +22,7 @@ struct LayerSpec {
 struct LayerTiming {
   let id: String
   let state: String
+  let durationMs: Double?
   let positionMs: Double?
   let targetMs: Double?
   let driftMs: Double?
@@ -419,7 +420,8 @@ final class SchedulerEngine {
       if let now, let start = layer.spec.window(now)?.start ?? layer.spec.startAt, now >= start,
          (layer.spec.window(now)?.end ?? layer.spec.endAt).map({ now < $0 }) ?? true { target = now - start }
       let drift = position.flatMap { p in target.map { p - $0 } }
-      return LayerTiming(id: layer.id, state: layer.state, positionMs: position, targetMs: target, driftMs: drift, error: layer.error)
+      let duration = layer.item.duration.seconds * 1000
+      return LayerTiming(id: layer.id, state: layer.state, durationMs: duration.isFinite && duration >= 0 ? duration : nil, positionMs: position, targetMs: target, driftMs: drift, error: layer.error)
     }
     snapshotLock.lock()
     latest = (paused, timings)

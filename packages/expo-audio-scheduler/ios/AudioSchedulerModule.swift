@@ -18,6 +18,7 @@ struct NowPlayingConfig: Record {
 struct LayerTimingRecord: Record {
   @Field var id: String = ""
   @Field var state: String = "loading"
+  @Field var durationMs: Double? = nil
   @Field var positionMs: Double? = nil
   @Field var targetMs: Double? = nil
   @Field var driftMs: Double? = nil
@@ -90,6 +91,7 @@ public class AudioSchedulerModule: Module {
         var record = LayerTimingRecord()
         record.id = timing.id
         record.state = timing.state
+        record.durationMs = timing.durationMs
         record.positionMs = timing.positionMs
         record.targetMs = timing.targetMs
         record.driftMs = timing.driftMs

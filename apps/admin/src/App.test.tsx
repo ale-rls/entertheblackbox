@@ -299,7 +299,7 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).toContain("Jumped to “Opening film”.");
   });
 
-  it("adds a show start five minutes from now and keeps session controls first", async () => {
+  it("adds a show start five minutes from now and puts monitoring before session controls", async () => {
     localStorage.setItem("admin-token", "operator-secret");
     vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     const { requests } = createAdminFetch();
@@ -316,7 +316,8 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).toContain("Show added in 5 minutes.");
 
     const panels = Array.from(document.querySelectorAll(".admin-grid > section:not([hidden])"));
-    expect(panels[0]?.querySelector("#admin-controls-heading")).not.toBeNull();
+    expect(panels[0]?.querySelector("#show-monitor-heading")).not.toBeNull();
+    expect(panels[1]?.querySelector("#admin-controls-heading")).not.toBeNull();
   });
 
   it("keeps server-refused actions visible as inline failure feedback", async () => {

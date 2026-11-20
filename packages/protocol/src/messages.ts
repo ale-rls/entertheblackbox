@@ -166,6 +166,9 @@ export const clockTimingSchema = z.object({
   media: z.array(z.object({
     role: z.enum(["main", "extra"]),
     positionMs: z.number().finite().nonnegative().nullable(),
+    durationMs: z.number().finite().nonnegative().nullable().optional(),
+    src: z.string().max(512).optional(),
+    endsAt: z.number().finite().nullable().optional(),
     targetMs: z.number().finite().nonnegative().nullable(),
     driftMs: z.number().finite().nullable(),
     state: z.enum(["playing", "paused", "seeking", "loading", "ended", "error", "disabled", "waiting", "ready"]),
