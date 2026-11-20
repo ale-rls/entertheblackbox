@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ClockTiming } from '@entertheblackbox/protocol';
 import type { Snapshot } from './cues';
 import type { Voting, Groups } from './action-prompt';
-import { PlaybackActivity, playbackState, SHOW_TEXT_IDLE_MS, showModeTextVisible, stageState, showModeAction, shouldEnterShowMode, SHOW_MODE_RETURN_MS, type StageInput } from './stage-state';
+import { PlaybackActivity, playbackState, SHOW_TEXT_IDLE_MS, showModeTextVisible, stageState, showModeAction, shouldEnterShowMode, SHOW_MODE_RETURN_MS, parseScreenPinning, showModeGroupLabel, type StageInput } from './stage-state';
 const snapshot: Snapshot = { t: 'snapshot', v: 2, sessionId: 's', phaseEpoch: 1, serverTime: 100,
   phase: { id: 'n', kind: 'narration', text: 'Listen to the room', durationMs: 1000, next: 'end', scenarioVersion: 'v', startedAt: 100, deadlineAt: 1100 } };
 const vote: Voting = { t: 'voting_options', v: 2, sessionId: 's', phaseEpoch: 1, method: 'phone-buttons', question: 'Choose', options: [{ id: 'a', label: 'A' }] };
@@ -104,5 +104,19 @@ describe('show mode by default', () => {
     expect(shouldEnterShowMode({ ...base, exitedAt: 50_000, lastTouchAt: 50_000 })).toBe(false);
     expect(shouldEnterShowMode({ ...base, exitedAt: 50_000 - SHOW_MODE_RETURN_MS, lastTouchAt: 50_000 })).toBe(false);
     expect(shouldEnterShowMode({ ...base, exitedAt: 30_000, lastTouchAt: 100_000 - SHOW_MODE_RETURN_MS })).toBe(true);
+  });
+});
+describe('show mode defaults', () => {
+  it('pins the screen unless the device saved "off"', () => {
+    expect(parseScreenPinning(null)).toBe(true);
+    expect(parseScreenPinning('on')).toBe(true);
+    expect(parseScreenPinning('off')).toBe(false);
+  });
+  it('shows the current group in show mode, not during the wall or outside show mode', () => {
+    const grouped = { ...snapshot, currentGroup: { id: 'vector', label: 'VECTOR · Hauptrolle' } } as Snapshot;
+    expect(showModeGroupLabel({ showMode: true, wallVisible: false, snapshot: grouped })).toBe('VECTOR · Hauptrolle');
+    expect(showModeGroupLabel({ showMode: true, wallVisible: true, snapshot: grouped })).toBeNull();
+    expect(showModeGroupLabel({ showMode: false, wallVisible: false, snapshot: grouped })).toBeNull();
+    expect(showModeGroupLabel({ showMode: true, wallVisible: false, snapshot })).toBeNull();
   });
 });
