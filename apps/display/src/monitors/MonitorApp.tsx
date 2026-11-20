@@ -11,6 +11,7 @@ import { performReload } from "../lib/kiosk.js";
 import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorCueReady, monitorVideoTime } from "./playback.js";
 import { shownMonitorCountdown } from "./countdown.js";
 import { monitorTextColor } from "./answerColor.js";
+import { withoutWidows } from "./typography.js";
 import { monitorVoteResult } from "./voteResult.js";
 import "./monitors.css";
 
@@ -86,16 +87,16 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   const cueText = voteResult ? voteResult.text : cue?.kind === "text" || cue?.kind === "placeholder" ? cue.text : "";
   const countdownText = countdown !== null && <div className="monitor-text monitor-countdown-frame">
     <div className="monitor-countdown" aria-label="Seconds remaining">{countdown}</div>
-    {cue?.countdownShowsText && cueText && <div className="monitor-countdown-question">{cueText}</div>}
+    {cue?.countdownShowsText && cueText && <div className="monitor-countdown-question">{withoutWidows(cueText)}</div>}
   </div>;
   const answerColor = monitorTextColor(cue, voteResult?.color ?? null, phase, monitorId);
   const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
   return <main className="monitor-root" aria-label={`Monitor ${monitorId}`} style={accent}>
     {countdownText}
-    {countdown === null && voteResult && <div className="monitor-text">{voteResult.text}</div>}
-    {countdown === null && cueReady && cue?.kind === "text" && <div className="monitor-text">{cue.text}</div>}
-    {countdown === null && cueReady && cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{cue.text}</div></div>}
-    {ready && cue?.kind === "image" && url && <figure className="monitor-image"><img src={url} alt={cue.text ?? ""} style={{ objectFit: cue.fit }} onError={() => setError("Image could not be decoded")} />{cue.text && <figcaption>{cue.text}</figcaption>}</figure>}
+    {countdown === null && voteResult && <div className="monitor-text">{withoutWidows(voteResult.text)}</div>}
+    {countdown === null && cueReady && cue?.kind === "text" && <div className="monitor-text">{withoutWidows(cue.text)}</div>}
+    {countdown === null && cueReady && cue?.kind === "placeholder" && <div className="monitor-placeholder"><small>{monitorId} · PLACEHOLDER</small><div>{withoutWidows(cue.text)}</div></div>}
+    {ready && cue?.kind === "image" && url && <figure className="monitor-image"><img src={url} alt={cue.text ?? ""} style={{ objectFit: cue.fit }} onError={() => setError("Image could not be decoded")} />{cue.text && <figcaption>{withoutWidows(cue.text)}</figcaption>}</figure>}
     {[outgoing, current].map((video) => video && <MonitorVideo key={video.key} src={video.url} startedAt={video.startedAt}
       loop={video.cue.loop} fit={video.cue.fit} clock={connection.clock} active={video === current}
       hidden={video === current && outgoing !== null} onError={setError}

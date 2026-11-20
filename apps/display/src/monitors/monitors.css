@@ -4,6 +4,8 @@
 .monitor-text, .monitor-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6vw; text-align: center; white-space: pre-wrap; overflow-wrap: anywhere; font-size: clamp(32px, 6vw, 120px); line-height: 1.15; font-weight: 700; }
 /* The cue's own colour, else answer colour coding from the phase (see answerColor.ts); white otherwise. */
 .monitor-text, .monitor-placeholder > div, .monitor-image figcaption { color: var(--monitor-accent, #fff); }
+/* No single word alone on the last line: withoutWidows() binds the last two words; `pretty` refines it where supported. */
+.monitor-text, .monitor-placeholder > div, .monitor-image figcaption, .monitor-countdown-question { text-wrap: pretty; }
 .monitor-placeholder { background: repeating-linear-gradient(135deg, #191919, #191919 30px, #242424 30px, #242424 60px); }
 .monitor-placeholder small { font-size: .25em; letter-spacing: .15em; margin-bottom: 2em; }
 .monitor-image figcaption { position: absolute; bottom: 5%; width: 90%; left: 5%; text-align: center; font-size: 4vw; font-weight: 700; white-space: pre-wrap; text-shadow: 0 2px 8px #000; }

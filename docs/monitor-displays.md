@@ -41,6 +41,8 @@ Video sound is always muted. Use native audio for participant narration.
 
 **Cue colour.** Text, placeholder, vote-result and image-caption cues can set their own text colour (`color`, `#rrggbb`), in any scene. It wins over the answer colour and the vote-result colour, and the countdown uses it too. Studio offers the show's colours as presets: white `#ffffff`, orange `#f76b15`, green `#30a46c`, blue `#3e63dd`, red `#e5484d`, yellow `#f5d90a`, plus a custom colour. **Automatic** (no `color`) keeps the behaviour above.
 
+**No widows.** Monitor text never ends with one word alone on its last line: in each authored line of three or more words, the display binds the last two words with a non-breaking space (unless that pair is longer than 20 characters and would no longer fit), and uses CSS `text-wrap: pretty` where the browser supports it. Applies to text, placeholder, vote-result, image captions and the small text under a countdown. Authored line breaks stay as written.
+
 Question-first/answers-second can be authored as two cues at different offsets.
 Labels are authored explicitly; floor axes are not guessed from question text.
 In the last 5 seconds of an open positioning vote (server deadline or video
