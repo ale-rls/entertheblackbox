@@ -10,8 +10,9 @@ export function taskAlert(state: ParticipantTaskState | null, now: number) {
  * Whether the task holds show-mode attention: a choice still to make, or an operator's withdrawal while its task is open.
  * Automatic tasks, completed choices, closed responses, and anything on a closed task never do; their card stays in the controls.
  */
-export function taskVisible(state: ParticipantTaskState | null) {
+export function taskVisible(state: ParticipantTaskState | null, now: number) {
   const task = state?.task;
-  if (!task || task.template.autoComplete || task.status !== 'open') return false;
+  // Past the deadline the card's buttons are already off: let go then, even if the closing update is late on bad Wi-Fi.
+  if (!task || task.template.autoComplete || task.status !== 'open' || now >= task.deadlineAt) return false;
   return task.recipient.status === 'pending' || task.recipient.status === 'full' || task.recipient.status === 'withdrawn';
 }
