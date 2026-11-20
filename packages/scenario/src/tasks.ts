@@ -53,6 +53,8 @@ export const taskRecipientSchema = z.object({
   participantId: id, optionId: id.nullable(), sequence: z.number().int().nullable(),
   /** Which outcome an answered option gave: `rank-N` or `overflow`. Absent for the option's own. */
   outcome: z.string().max(40).optional(),
+  /** The role the applied outcome named, whether it was granted now or already held: a withdrawal of that role reaches this answer. */
+  grantedRoleId: id.optional(),
   status: z.enum(['pending', 'answered', 'accepted', 'full', 'expired', 'cancelled', 'withdrawn']),
   message: z.string(), respondedAt: z.number().nullable(),
   audio: taskAudioSchema.extend({ startedAt: z.number() }).optional(),

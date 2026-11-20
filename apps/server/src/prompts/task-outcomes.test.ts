@@ -81,6 +81,39 @@ describe('task outcomes', () => {
     e.tick(2000);
     expect(e.current('a', 's')).toMatchObject({ task: { template: { id: 'next' } }, recipient: { status: 'pending' } });
   });
+  it('keeps a rank answer when staff withdraw the option\'s base role, which that answer never took', () => {
+    const roles = ['usher', 'caller'].map(id => ({ id, label: id }));
+    const call = participantTaskSchema.parse({ id: 'call', title: 'Call', question: 'Call?', notificationBody: 'Choose', durationMs: 60_000,
+      options: [{ id: 'go', label: 'Go', roleId: 'usher', capacity: 1, rankOutcomes: [{ roleId: 'caller', nextTaskId: 'next' }] }] });
+    const next = participantTaskSchema.parse({ id: 'next', title: 'Next', question: 'Next?', notificationBody: 'Next', durationMs: 60_000, options: [{ id: 'ok', label: 'OK' }] });
+    const e = new TaskEngine();
+    e.configureRoles(roles);
+    e.configureWorkflow([call, next], { assignGroup: () => true, winner: () => null });
+    e.assignRole('a', 'usher', 'staff', 0);
+    const t = e.open(call, 's', ['a'], 1);
+    e.respond(t.id, 's', 'a', 'go', 2);
+    e.withdraw('a', 'usher');
+    expect(e.all()[0]!.recipients[0]).toMatchObject({ status: 'accepted', outcome: 'rank-1' });
+    e.tick(1000);
+    expect(e.current('a', 's')).toMatchObject({ task: { template: { id: 'next' } }, recipient: { status: 'pending' } });
+  });
+  it('withdraws an overflow answer, and drops its next instruction, when staff withdraw the role that overflow named', () => {
+    const join = participantTaskSchema.parse({ id: 'join', title: 'Join', question: 'Join?', notificationBody: 'Choose', durationMs: 60_000,
+      options: [{ id: 'lead', label: 'Lead', capacity: 1, overflow: { roleId: 'guide', nextTaskId: 'next' } }] });
+    const next = participantTaskSchema.parse({ id: 'next', title: 'Next', question: 'Next?', notificationBody: 'Next', durationMs: 60_000, options: [{ id: 'ok', label: 'OK' }] });
+    const e = new TaskEngine();
+    e.configureRoles([{ id: 'guide', label: 'Guide' }]);
+    e.configureWorkflow([join, next], { assignGroup: () => true, winner: () => null });
+    e.assignRole('a', 'guide', 'staff', 0);
+    const t = e.open(join, 's', ['first', 'a'], 1);
+    e.respond(t.id, 's', 'first', 'lead', 2);
+    e.respond(t.id, 's', 'a', 'lead', 3);
+    expect(e.all()[0]!.recipients.find(r => r.participantId === 'a')).toMatchObject({ status: 'answered', outcome: 'overflow' });
+    e.withdraw('a', 'guide');
+    expect(e.all()[0]!.recipients.find(r => r.participantId === 'a')).toMatchObject({ status: 'withdrawn' });
+    e.tick(1000);
+    expect(e.current('a', 's')?.task.template.id).not.toBe('next');
+  });
   it('rolls back a rank role when its group cannot be assigned', () => {
     const { e } = engine(['vector', 'chorus']); const t = e.open(casting, 's', ['a'], 0);
     e.respond(t.id, 's', 'a', 'lead', 1);
