@@ -78,6 +78,9 @@ async function main(): Promise<void> {
     },
     log,
     () => { output.close(); process.exit(1); },
+    undefined,
+    undefined,
+    () => bridge.feedLost(),
   );
   feed.start();
   const stop = () => { feed.stop(); output.close(); process.exit(0); };

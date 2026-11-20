@@ -36,6 +36,9 @@ export class CueBridge {
   private arrivals: Array<{ at: number; offset: number }> = [];
   /** Bumped by a show end, so actions still waiting for a scene's start are dropped. */
   private resets = 0;
+  /** The feed dropped: retires and reunions may be missed, so music due now waits for the reconnect to confirm its scene. */
+  private feedDown = false;
+  private held: Array<{ timeline: string; epoch: unknown; resets: number; fn: () => void }> = [];
 
   constructor(
     private config: BridgeConfig,
@@ -76,6 +79,14 @@ export class CueBridge {
         // Events (a retire, a reunion) may have been missed while disconnected: music still waiting for its
         // scene's pre-roll only survives if that scene is still the current one on its timeline.
         for (const [waiting, { epoch }] of [...this.sceneStarts]) if (current.get(waiting) !== epoch) this.sceneStarts.delete(waiting);
+        // Music that came due while the feed was down starts now, late, only if its scene is still the current one.
+        this.feedDown = false;
+        const held = this.held.splice(0);
+        for (const item of held) {
+          if (this.resets !== item.resets || this.sceneStarts.get(item.timeline)?.epoch !== item.epoch) continue;
+          this.log("connection back · starting music that came due while it was down");
+          item.fn();
+        }
         return;
       }
       case "phase": {
@@ -122,6 +133,11 @@ export class CueBridge {
     }
   }
 
+  /** The cue feed dropped. Until the next snapshot, music that comes due is held rather than sent. */
+  feedLost(): void {
+    this.feedDown = true;
+  }
+
   /** Send a mapping entry by name (cue first, then scene), for testing in Ableton. */
   test(name: string): boolean {
     const actions = this.config.cues[name] ?? this.config.scenes[name] ?? (name === "showEnd" ? this.config.showEnd : undefined);
@@ -141,6 +157,7 @@ export class CueBridge {
     const resets = this.resets;
     this.schedule(() => {
       if (this.resets !== resets || this.sceneStarts.get(timeline)?.epoch !== epoch) return;
+      if (this.feedDown) { this.held.push({ timeline, epoch, resets, fn }); return; }
       fn();
     }, delayMs);
   }

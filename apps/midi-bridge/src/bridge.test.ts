@@ -153,6 +153,31 @@ describe("CueBridge", () => {
     expect(sent).toContainEqual([0x90, 61, 90]);
   });
 
+  it("holds music that comes due while the feed is down, and drops it if the reconnect shows its scene ended", () => {
+    const { bridge, sent, pending, setNow } = setup();
+    setNow(10_000);
+    bridge.handle({ ...event(1, { type: "phase", timelineId: "a", timelineKey: "a/a", phaseId: "T1-titel", phaseEpoch: 7, payload: { phase: { startedAt: 13_000 } } }), timestamp: 10_000 });
+    bridge.feedLost();
+    // The pre-roll ends before the reconnect: the reunion it missed is not known yet.
+    setNow(13_000);
+    pending.shift()!.fn();
+    expect(sent).toEqual([]);
+    bridge.handle({ ...event(9, { type: "snapshot", timelines: [{ timelineId: "main", phaseId: "reunion", phaseEpoch: 9 }] }), timestamp: 14_000 });
+    expect(sent).toEqual([]);
+  });
+
+  it("starts held music on reconnect when its scene is still running", () => {
+    const { bridge, sent, pending, setNow } = setup();
+    setNow(10_000);
+    bridge.handle({ ...event(1, { type: "phase", timelineId: "main", phaseId: "T1-titel", phaseEpoch: 4, payload: { phase: { startedAt: 13_000 } } }), timestamp: 10_000 });
+    bridge.feedLost();
+    setNow(13_000);
+    pending.shift()!.fn();
+    expect(sent).toEqual([]);
+    bridge.handle({ ...event(2, { type: "snapshot", timelines: [{ timelineId: "main", phaseId: "T1-titel", phaseEpoch: 4 }] }), timestamp: 14_000 });
+    expect(sent).toContainEqual([0x90, 61, 90]);
+  });
+
   it("sends a single entry for testing in Ableton, and picks up an edited mapping", () => {
     const { bridge, sent } = setup();
     expect(bridge.test("musik-T1-start")).toBe(true);

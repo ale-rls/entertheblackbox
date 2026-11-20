@@ -54,6 +54,8 @@ export class CueFeed {
     private readonly onUnauthorized: () => void,
     private readonly now: () => number = Date.now,
     private readonly schedule: (fn: () => void, ms: number) => ReturnType<typeof setTimeout> = (fn, ms) => setTimeout(fn, ms),
+    /** Called once each time a working connection drops, before any reconnect. */
+    private readonly onLost: () => void = () => {},
   ) {}
 
   start(): void {
@@ -87,7 +89,7 @@ export class CueFeed {
         return;
       }
       const now = this.now();
-      if (this.connected) this.log("connection lost · reconnecting…");
+      if (this.connected) { this.log("connection lost · reconnecting…"); this.onLost(); }
       else if (now - this.lastWarning > 10_000) {
         // Say so while it keeps failing, so whoever watches the MacBook sees cues are not arriving.
         this.log(`cannot reach ${this.url.origin}${status ? ` (HTTP ${status})` : ""}${this.failingSince ? ` for ${Math.round((now - this.failingSince) / 1000)} s` : ""} · retrying`);
