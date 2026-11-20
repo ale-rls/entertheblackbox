@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PhaseSnapshotMessage } from "@entertheblackbox/protocol";
-import { monitorCountdown, monitorCueCountdown } from "./countdown.js";
+import { finalMonitorCountdown, monitorCountdown, monitorCueCountdown, monitorCueShowsCountdown } from "./countdown.js";
 
 const position = (extra: object = {}) => ({
   kind: "position-question", startedAt: 10_000, deadlineAt: 30_000, ...extra,
@@ -60,5 +60,23 @@ describe("monitor cue countdown", () => {
   it("has no deadline for indefinite holds or before the cue starts", () => {
     expect(monitorCueCountdown([question], 10000)).toBeNull();
     expect(monitorCueCountdown([question, next], 1000)).toBeNull();
+  });
+});
+
+describe("monitor countdown placement", () => {
+  it("replaces only text-bearing cues; scale images and videos never count down", () => {
+    expect(monitorCueShowsCountdown({ kind: "text", text: "KI?", startMs: 0 })).toBe(true);
+    expect(monitorCueShowsCountdown({ kind: "vote-result", fallbackText: "", startMs: 0 })).toBe(true);
+    expect(monitorCueShowsCountdown({ kind: "placeholder", text: "Q", startMs: 0 })).toBe(true);
+    expect(monitorCueShowsCountdown({ kind: "image", src: "scale.png", fit: "contain", startMs: 0 })).toBe(false);
+    expect(monitorCueShowsCountdown({ kind: "video", src: "scale.mp4", loop: false, fit: "contain", startMs: 0 })).toBe(false);
+    expect(monitorCueShowsCountdown({ kind: "blank", startMs: 0 })).toBe(false);
+    expect(monitorCueShowsCountdown(null)).toBe(false);
+  });
+  it("shows automatic vote and scene countdowns only in the final five seconds", () => {
+    expect(finalMonitorCountdown(monitorCountdown(position(), 24_000))).toBeNull();
+    expect(finalMonitorCountdown(monitorCountdown(position(), 25_000))).toBe(5);
+    expect(finalMonitorCountdown(monitorCountdown(position(), 29_999))).toBe(1);
+    expect(finalMonitorCountdown(null)).toBeNull();
   });
 });

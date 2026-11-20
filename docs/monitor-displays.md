@@ -41,10 +41,13 @@ Video sound is always muted. Use native audio for participant narration.
 
 Question-first/answers-second can be authored as two cues at different offsets.
 Labels are authored explicitly; floor axes are not guessed from question text.
-A white countdown appears automatically over nonblank monitor cues while a
-positioning vote is open, using its server deadline (or video voting window).
-It disappears when the vote closes or resolves; untimed votes and blank screens
-have no countdown. Axis routing remains authored. Ensure the main phase lasts long enough
+In the last 5 seconds of an open positioning vote (server deadline or video
+voting window) or a scene countdown, the text of a text, vote-result or
+placeholder cue is replaced by a large centred countdown in the text's colour.
+There is no corner countdown. Image and video cues never count down: when a
+scale image runs on M1/M3, the question text on M2/M4 carries the countdown.
+A per-cue final countdown keeps its authored length. The countdown disappears
+when the vote closes or resolves; untimed votes and blank screens have none. Axis routing remains authored. Ensure the main phase lasts long enough
 for its monitor cues. A phase transition always cancels its remaining cues.
 
 **Timing owner:** monitors follow the main server timeline by default. Set scenario `monitorGroupId` to a declared audience group to follow its independent scene clock instead, including reconnects and operator jumps. While that path waits for reunion, screens clear; at reunion they follow the shared scene again. This requires a server build supporting `monitorGroupId`.
