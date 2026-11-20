@@ -465,9 +465,10 @@ export class PhaseEngine {
     const template = this.scenario.participantTasks?.find(t => t.id === templateId);
     if (!template) throw new Error('Unknown published task template');
     const roster = this.registry.values().map(p => p.clientId);
+    // A scene's task opens for everyone free now; a tablet still answering another task gets it once it is free.
+    const busy = graph ? this.tasks.busyParticipants(this.sessionId, this.now()) : null;
     const ids = [...new Set(roster)].filter(id => (!selected || selected.includes(id)) && (!template.groupIds.length || template.groupIds.includes(this.groupSelection?.current(id) ?? ''))
-      // A scene's task opens for everyone free now; a tablet still answering another task gets it once it is free.
-      && (!graph || !this.tasks.busy(id, this.sessionId, this.now())));
+      && !busy?.has(id));
     const task = this.tasks.open(template, this.sessionId, ids, this.now(), graph ? { id: this.phaseId, epoch: this.phaseEpoch } : null);
     if (graph) this.sceneTaskIds.add(task.id);
     this.taskError = null;
@@ -476,15 +477,21 @@ export class PhaseEngine {
    * Late joiners, newly grouped participants and tablets that were busy get this scene's task while it is still open.
    * Only tasks this engine opened for a whole scene: never a follow-up meant for one tablet, nor another group path's task.
    */
-  private offerOpenPhaseTasks(participantId: string, push = true): boolean {
+  private offerOpenPhaseTasks(participantIds: Iterable<string>, push = true): boolean {
     if (this.lifecycle !== 'active' || this.sceneTaskIds.size === 0) return false;
-    const group = this.groupSelection?.current(participantId) ?? '';
+    const live = this.tasks.instancesById(this.sceneTaskIds).filter(task => {
+      if (task.status !== 'open') { this.sceneTaskIds.delete(task.id); return false; }
+      return task.sessionId === this.sessionId && task.phaseId !== null && (task.template.persistAcrossPhases || (task.phaseId === this.phaseId && task.phaseEpoch === this.phaseEpoch));
+    });
+    if (live.length === 0) return false;
+    // Runs every tick: one pass to find who is busy, not one per participant.
+    const now = this.now();
+    const ids = [...participantIds];
+    const busy = this.tasks.busyParticipants(this.sessionId, now);
     let added = false;
-    for (const task of this.tasks.instancesById(this.sceneTaskIds)) {
-      if (task.status !== 'open') { this.sceneTaskIds.delete(task.id); continue; }
-      if (task.sessionId !== this.sessionId || task.phaseId === null || (!task.template.persistAcrossPhases && (task.phaseId !== this.phaseId || task.phaseEpoch !== this.phaseEpoch))) continue;
-      if (task.template.groupIds.length && !task.template.groupIds.includes(group)) continue;
-      if (this.tasks.addRecipient(task.id, participantId, this.now())) added = true;
+    for (const task of live) {
+      const eligible = task.template.groupIds.length ? ids.filter(id => task.template.groupIds.includes(this.groupSelection?.current(id) ?? '')) : ids;
+      if (this.tasks.enrollFree(task.id, eligible, now, busy) > 0) added = true;
     }
     if (added && push) this.pushTasks(true);
     return added;
@@ -530,7 +537,7 @@ export class PhaseEngine {
   private pushTasks(force = false): void {
     this.tasks.tick(this.now());
     // A tablet that has become free (answered, its instruction finished playing, a follow-up dropped) gets the scene task it was too busy for.
-    for (const id of new Set(this.participantIds.values())) this.offerOpenPhaseTasks(id, false);
+    this.offerOpenPhaseTasks(new Set(this.participantIds.values()), false);
     const key = JSON.stringify(this.tasks.all());
     if (!force && key === this.lastTaskState) return;
     this.lastTaskState = key;
@@ -827,7 +834,8 @@ export class PhaseEngine {
         this.sendVotingOptions(socket);
         this.sendAdmission(socket);
       }
-      this.offerOpenPhaseTasks(participantId);
+      this.tasks.tick(this.now());
+      this.offerOpenPhaseTasks([participantId]);
       return { ok: true };
     }
     const leaving = sourceChain.filter((source) => !destinationChain.includes(source));
@@ -1138,7 +1146,7 @@ export class PhaseEngine {
     this.send(socket, this.getSnapshotMessage());
     this.sendGroupSelectionOptions(socket);
     this.sendVotingOptions(socket);
-    if (_participant) this.offerOpenPhaseTasks(_participant.clientId);
+    if (_participant) { this.tasks.tick(this.now()); this.offerOpenPhaseTasks([_participant.clientId]); }
     this.sendTask(socket);
     this.sendAdmission(socket);
     this.queueQuestionStatus();
