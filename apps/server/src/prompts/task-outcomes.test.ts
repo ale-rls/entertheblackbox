@@ -64,6 +64,23 @@ describe('task outcomes', () => {
     e.respond(t.id, 's', 'a', 'lead', 2);
     expect([groups.get('a'), recipient(e, 'a').outcome, e.roleAssignments().length]).toEqual(['chorus', 'overflow', 1]);
   });
+  it('keeps an overflow answer, and its next instruction, when staff withdraw a role that answer never took', () => {
+    const join = participantTaskSchema.parse({ id: 'join', title: 'Join', question: 'Join?', notificationBody: 'Choose', durationMs: 60_000,
+      options: [{ id: 'join', label: 'Join', roleId: 'helper', capacity: 1, overflow: { message: 'Chorus instead.', audio: audio('chorus.mp3'), nextTaskId: 'next' } }] });
+    const next = participantTaskSchema.parse({ id: 'next', title: 'Next', question: 'Next?', notificationBody: 'Next', durationMs: 60_000, options: [{ id: 'ok', label: 'OK' }] });
+    const e = new TaskEngine();
+    e.configureRoles([{ id: 'helper', label: 'Helper', capacity: 2 }]);
+    e.configureWorkflow([join, next], { assignGroup: () => true, winner: () => null });
+    e.assignRole('a', 'helper', 'staff', 0);
+    const t = e.open(join, 's', ['first', 'a'], 1);
+    e.respond(t.id, 's', 'first', 'join', 2);
+    e.respond(t.id, 's', 'a', 'join', 3);
+    expect(recipient(e, 'a')).toMatchObject({ status: 'answered', outcome: 'overflow' });
+    e.withdraw('a', 'helper');
+    expect(e.all()[0]!.recipients.find(r => r.participantId === 'a')).toMatchObject({ status: 'answered', outcome: 'overflow' });
+    e.tick(2000);
+    expect(e.current('a', 's')).toMatchObject({ task: { template: { id: 'next' } }, recipient: { status: 'pending' } });
+  });
   it('rolls back a rank role when its group cannot be assigned', () => {
     const { e } = engine(['vector', 'chorus']); const t = e.open(casting, 's', ['a'], 0);
     e.respond(t.id, 's', 'a', 'lead', 1);
