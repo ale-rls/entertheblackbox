@@ -76,8 +76,12 @@ matching recording. Never generate red or dark-red ("VORSCHLAG") text.
    (`gelernt.Wer` → `gelernt. Wer`) and lowercase stray tags (`[Pause]`).
 3. **Generate** with the ElevenLabs API (`ELEVENLABS_API_KEY` in the
    environment): voice **Enniah** `baebHbhnJ9ASPPp11oEY`, `model_id:
-   "eleven_v3"`, `language_code: "de"`, `output_format=mp3_44100_128`, default
+   "eleven_v3"`, `language_code: "de"`, `output_format=pcm_48000`, default
    voice settings. v3 follows the delivery tags; it does not speak them.
+   **Every cue must be 48 kHz** (see "Audio: 48 kHz" below). ElevenLabs has no
+   48 kHz MP3 format (`mp3_48000_*` is rejected; tested 2026-11-20), so take
+   the raw 16-bit mono PCM and encode it yourself:
+   `ffmpeg -f s16le -ar 48000 -ac 1 -i take.pcm -c:a libmp3lame -b:a 192k -ar 48000 -ac 1 <name>.mp3`.
 4. **Verify every take** with speech-to-text (`/v1/speech-to-text`,
    `model_id: "scribe_v1"`, `language_code: "deu"`). Compare the words with
    the script after stripping tags. Regenerate takes with real slips; a
@@ -94,9 +98,31 @@ matching recording. Never generate red or dark-red ("VORSCHLAG") text.
    **Drive VOX folder** (`1tUTMifql-T_wOdTxuTP8T2NrEuyGc6Rx`) with the Drive
    connector's `create_file` (`disableConversionToGoogleType: true`). The
    connector refuses payloads over 10 MB (base64), so re-encode files over
-   ~7 MB as VBR (`-c:a libmp3lame -q:a 2`; long pauses shrink to almost
-   nothing) **before** uploading anywhere. The library, the draft manifest
+   ~7 MB as VBR (`-c:a libmp3lame -q:a 2 -ar 48000`; long pauses shrink to
+   almost nothing) **before** uploading anywhere. The library, the draft manifest
    and Drive must hold the same bytes (same hash).
+
+**Audio: 48 kHz (director requirement, 2026-11-20 — very important).** **All
+audio** in the show must be encoded at **48 kHz**, never 44.1 kHz: the theater
+side (a phase's `audioSrc` and `extraAudioSrc`, main-display video
+soundtracks) and the headphone side (`phoneAudioSrc`, `phoneAudioByGroup`,
+task outcome audio, background music). The native app plays any rate
+(iOS `AVPlayer`, Android ExoPlayer; no sample rate in
+`packages/expo-audio-scheduler`), and the tablets already play the 48 kHz
+KI sync files.
+
+- Generated cues: `pcm_48000` → MP3 at 48 kHz (step 3). Joined files
+  (step 5) and silence (`anullsrc=r=48000`) at 48 kHz as well.
+- Existing 44.1 kHz files that a change touches (a new version, a
+  cut, a stitch): resample once from the best source you have
+  (`-af aresample=resampler=soxr -ar 48000`), give the result a new file
+  name, and list it in the report. Don't rename a resampled file to an old
+  name: the library keys files by name.
+- Videos with a 44.1 kHz soundtrack: report them; re-encode the audio track
+  only (`-c:v copy -c:a aac -b:a 192k -ar 48000`) when the user asks.
+- **Check before uploading**: `ffprobe -v error -select_streams a
+  -show_entries stream=sample_rate -of csv=p=0 <file>` must print `48000`
+  for every new file. Re-check after any re-encode (e.g. the VBR step 7).
 
 From Node, `PocketbaseMediaLibrary.upload()` can't measure durations (it uses a
 browser media element). Create the `media` record directly with `src`,
