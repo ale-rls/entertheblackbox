@@ -216,6 +216,50 @@ the colours of the grid at `coloursFrom`. Report text or colour that differs
 as **Exists, needs setting up**. Grids inside a longer scene (a question
 round) are the monitor cues that `/update-show` times the light to.
 
+**Monitors (every cue).** The script also writes monitor cues outside grids:
+`[Monitore M1–M4]: …` lines, `Farben Monitore` notes with one colour per
+monitor or pair (e.g. "M1-3 <colour>"), a section-wide colour rule ("all
+monitor colours in this part are …"), "then:" steps, `Countdown` /
+"Countdown: N Sekunden" / "Countdown mit kleiner Text", and "Monitore … auf
+weiß". The parser does not turn these into colours (`colour` stays `null`),
+so read them in `paragraphs`. List every monitor cue up to the end of the
+scope with phase, start time, kind, text, `color` and countdown fields, and
+compare with the script. What the software can do (confirm in
+`packages/scenario/src/monitors.ts` and `apps/display/src/monitors/`):
+
+- **Colour.** Text, placeholder, vote-result and image-caption cues take
+  `color` (`#rrggbb`); it wins over everything else. Without it: the
+  vote-result's winner colour, else the phase's Nth answer colour during a
+  vote, else white. A colour note on a non-vote scene is **Exists, needs
+  setting up** (per-cue `color`), not a missing feature. Presets
+  (`MONITOR_TEXT_COLOR_PRESETS`): white `#ffffff`, orange `#f76b15`, green
+  `#30a46c`, blue `#3e63dd`, red `#e5484d`, yellow `#f5d90a`. In a vote scene,
+  "white" needs an explicit `#ffffff`, or the answer colours apply.
+- **Countdown.** Vote and scene countdowns show only their **last 5 s** on
+  the monitors. A longer one ("Countdown: 30 Sekunden") needs
+  `countdownSeconds` on the cue plus an end: the next cue's start or
+  `durationMs` (a cue with neither never counts down; `durationMs` leaves the
+  screen black after it, so prefer a following cue). "mit kleiner Text" is
+  `countdownShowsText`. **Image and video cues never count down**: a question
+  shown as a PNG loses its countdown, so report it.
+- **Text instead of images.** Pre-rendered PNGs of text were the old way to
+  get colour. Report them as **Exists, needs setting up**: replace them with
+  text cues (open the images to read the text and colour).
+- **"then:" steps.** First the question on all four monitors, then the split
+  (labels on one pair, the question on the other). Check that the live cues
+  have both steps.
+- **Timing.** Cue times are milliseconds on the phase clock. To check when a
+  question or scale is spoken, transcribe the phase's headphone audio
+  (`phoneAudioByGroup` / `phoneAudioSrc`) with ElevenLabs STT
+  (`scribe_v1`, `timestamps_granularity=word`) and compare. A cue sequence
+  can run across several consecutive phases; follow it through `next`. Also
+  report black gaps (a blank cue, or a phase with no cues) between cues that
+  belong together, and a countdown that runs out too fast (e.g. at the
+  start of an operator-paced phase).
+- **Things monitors can't follow:** cues tied to manual, unscheduled actions
+  (e.g. one countdown per field the operator lights by hand). Report them as
+  **Missing** or as needing fixed times, and ask.
+
 Where to check, in order: [FEATURES.md](../../../FEATURES.md); the
 "Authoring a show" gotchas in [CLAUDE.md](../../../CLAUDE.md) (late joiners,
 black main display during group paths, self-select waits for everyone,
@@ -273,7 +317,9 @@ Then decide what happens next, and **ask before acting**:
 
 - **Light cues** → paused; not part of the next steps for now.
 - **Only text/content changes, no missing features** → offer to run
-  `/update-show` now. Pass on the baseline from step 3 (the newest draft if it
+  `/update-show` now. Monitor fixes (text, colours, timing, countdowns) count
+  as content: pass the monitor findings with phase IDs and cue times; it
+  applies them in its step 3c. Pass on the baseline from step 3 (the newest draft if it
   already holds wanted unpublished edits; otherwise the live draft; ask if
   unclear), the script revision (the
   HTML export in the scratchpad, plus the doc ID and `modifiedTime` so
