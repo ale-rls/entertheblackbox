@@ -56,7 +56,10 @@ export class CueBridge {
   handle(event: Envelope): void {
     if (typeof event.bootId === "string" && typeof event.sequence === "number") {
       if (event.bootId === this.bootId && event.sequence <= this.lastSequence && event.type !== "snapshot") return;
-      if (event.bootId !== this.bootId) { this.firedEpochs.clear(); this.sceneStarts.clear(); }
+      if (event.bootId !== this.bootId) {
+        // A restarted server numbers its scenes afresh: nothing scheduled or held for the old run may start in the new one.
+        this.firedEpochs.clear(); this.sceneStarts.clear(); this.held = []; this.resets += 1;
+      }
       this.bootId = event.bootId;
       this.lastSequence = Math.max(event.type === "snapshot" ? -1 : this.lastSequence, event.sequence);
     }
