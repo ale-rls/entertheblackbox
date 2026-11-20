@@ -6,8 +6,12 @@ export function taskAlert(state: ParticipantTaskState | null, now: number) {
   return task && !task.template.autoComplete && task.status === 'open' && task.deadlineAt > now && (task.recipient.status === 'pending' || task.recipient.status === 'full')
     ? { key: `task:${state.sessionId}:${task.id}`, body: task.template.notificationBody } : null;
 }
-/** Keep automatic tasks, completed choices and closed responses out of both the card and show-mode attention state. */
+/**
+ * Whether the task holds show-mode attention: a choice still to make, or an operator's withdrawal while its task is open.
+ * Automatic tasks, completed choices, closed responses, and anything on a closed task never do; their card stays in the controls.
+ */
 export function taskVisible(state: ParticipantTaskState | null) {
   const task = state?.task;
-  return !!task && !task.template.autoComplete && task.status !== 'cancelled' && !['cancelled', 'accepted', 'answered', 'expired'].includes(task.recipient.status);
+  if (!task || task.template.autoComplete || task.status !== 'open') return false;
+  return task.recipient.status === 'pending' || task.recipient.status === 'full' || task.recipient.status === 'withdrawn';
 }
