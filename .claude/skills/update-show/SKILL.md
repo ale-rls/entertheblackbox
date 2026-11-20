@@ -148,6 +148,52 @@ When the parsed script has `lightCues` or `lightColours` (the notation is in
 4. **Check the light file** with the bridge itself:
    `pnpm eos-bridge --config <scratchpad>/light/lighting.json --list`.
 
+## 3c. Monitor cues (M1–M4)
+
+Monitor cues live on each phase as `monitorCues: { M1: [...], …, M4: [...] }`
+in `draft.project.scenario.phases`; editing them needs no canvas change. The
+schema is `packages/scenario/src/monitors.ts`, the rendering
+`apps/display/src/monitors/` (`answerColor.ts`, `countdown.ts`), the rules
+[docs/monitor-displays.md](../../../docs/monitor-displays.md).
+
+- **Text, not images.** Use `text` cues. Don't render text to PNGs: image cues
+  can't count down and drift from the script. Replace existing text PNGs
+  (open them to read the text) with text cues at the same times.
+- **Colour.** Set `color` (`#rrggbb`) on text, placeholder, vote-result and
+  image-caption cues whenever the script names a colour. Use the presets
+  (`MONITOR_TEXT_COLOR_PRESETS`): white `#ffffff`, orange `#f76b15`, green
+  `#30a46c`, blue `#3e63dd`, red `#e5484d`, yellow `#f5d90a`. In a vote scene,
+  set white explicitly (`#ffffff`), or the answer colours apply. Also set the
+  colour on vote scenes' cues when the script gives a section-wide rule, so
+  it doesn't depend on the vote's settings. Leave vote-result cues without
+  `color`, so they show the winner's colour, unless the script says otherwise.
+- **Field order.** Write each field's text as the script's field grid gives
+  it (M1–M4), never derived from "low/high" ends of a scale; the grids don't
+  always put the same end on the same monitor.
+- **"then:" steps.** Question on all four first (each monitor in its own
+  colour), then the split at the moment the headphones name the scale.
+- **Times.** `startMs` on the phase clock, strictly increasing per monitor.
+  Take question/scale moments from the headphone audio with STT word
+  timestamps (`scribe_v1`, `timestamps_granularity=word`). Keep a cue
+  sequence continuous across consecutive phases: repeat the current screen at
+  `@0` of the next phase rather than leaving it black.
+- **Countdowns.** `countdownSeconds: N` counts the last N s before the cue
+  ends; the end is the next cue's `startMs` or the cue's `durationMs`. Only
+  text, vote-result and placeholder cues count down. For a full vote
+  countdown (e.g. 30 s), add a cue at `closeAtMs − N·1000` with
+  `countdownSeconds: N` and a following cue at `closeAtMs` with the same text
+  (better than `durationMs`, which leaves the screen black). "With small
+  text" is `countdownShowsText: true`. Without a cue countdown, the monitors
+  show only the last 5 s of vote and scene countdowns.
+- **Verify by simulation.** Besides step 4, run the display's own functions
+  under `tsx` on the compiled scenario: `activeMonitorCue`
+  (`packages/scenario`), `monitorTextColor` (`answerColor.ts`) and
+  `monitorCueCountdown` (`countdown.ts`). Print M1–M4 text, colour and
+  countdown at key moments (each question, each split, the end of each
+  countdown) and check them against the script's grids. Also check that
+  every `color` survives the compile: an older checkout's schema silently
+  drops unknown fields, so validate with code that has the feature.
+
 ## 4. Validate
 
 Run every step of "Validate the saved output" in docs/updating-shows.md against the
@@ -173,7 +219,11 @@ baseline. The original stays untouched.
 URL and the new draft name with the user. Then save the result the way Studio's
 **Duplicate** does: a fresh `crypto.randomUUID()` id, a distinct name,
 `updatedAt: Date.now()`, via `PocketbaseDraftDatabase.put()`. The baseline draft
-keeps its id and content. Read the new draft back with `list()`, round-trip it
+keeps its id and content. Right before `put()`, list the drafts again: if the
+baseline's `updatedAt` changed or a newer draft appeared, stop and diff them.
+Viewport-only edits are harmless. Otherwise ask whether to rebuild on the
+newer draft (re-run the edit, then step 4 again). Tested 2026-11-20: a
+teammate saved a newer draft while the update was being built. Read the new draft back with `list()`, round-trip it
 through `exportBackup()` → `importBackup()` (which runs
 `compileStudioGraph(draft.project)`), and diff it
 against the local result.
