@@ -90,3 +90,16 @@ export function shouldEnterShowMode(input: { admitted: boolean; showMode: boolea
   if (input.exitedAt === null) return true;
   return input.now - Math.max(input.exitedAt, input.lastTouchAt) >= SHOW_MODE_RETURN_MS;
 }
+
+/** SecureStore key for the screen-pinning preference. Unset means on: tablets pin by default. */
+export const SCREEN_PINNING_KEY = 'show-screen-pinning';
+export function parseScreenPinning(stored: string | null): boolean { return stored !== 'off'; }
+
+/** Group label shown in show mode so people can tell each other's roles; hidden while the video wall plays. */
+export function showModeGroupLabel(input: { showMode: boolean; wallVisible: boolean; snapshot: Snapshot | null }): string | null {
+  if (!input.showMode || input.wallVisible) return null;
+  return input.snapshot?.currentGroup?.label.trim() || null;
+}
+
+/** Leaving show mode releases the native show screen unless the tablet is still in the show and pinned: then the pin stays so Android doesn't ask again when show mode returns. */
+export function releaseShowScreen(input: { connected: boolean; pinned: boolean }): boolean { return !input.connected || !input.pinned; }

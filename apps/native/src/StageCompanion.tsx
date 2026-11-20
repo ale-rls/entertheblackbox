@@ -3,11 +3,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, BackHandler, Platform, Animated, AppState, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, View } from 'react-native';
 import { Text, TextInput } from './Text';
 import { ShowScreen } from '@entertheblackbox/expo-audio-scheduler';
+import * as SecureStore from 'expo-secure-store';
 import type { ShowManifest } from '@entertheblackbox/show-content';
 import type { StageInput } from './stage-state';
 import { tabletTextFromSnapshot } from './tablet-text';
 import { TabletScript } from './TabletScript';
-import { stageState, showModeAction, showModeTextVisible, shouldEnterShowMode, SHOW_TEXT_IDLE_MS } from './stage-state';
+import { stageState, showModeAction, showModeTextVisible, shouldEnterShowMode, SHOW_TEXT_IDLE_MS, SCREEN_PINNING_KEY, parseScreenPinning, showModeGroupLabel, releaseShowScreen } from './stage-state';
 import type { ActionPrompt } from './action-prompt';
 import { ActionAttention } from './ActionAttention';
 import { contrastText } from './surface';
@@ -94,14 +95,29 @@ export function StageCompanion(props: Props) {
   const [modeError, setModeError] = useState('');
   /** When someone last left show mode by hand (or entering failed); null re-enters as soon as admitted. */
   const [exitedAt, setExitedAt] = useState<number | null>(null);
-  const [pinScreen, setPinScreen] = useState(false);
+  // Pinning is on by default so a tablet handed to the audience is already locked to the show; operators can switch it off per device.
+  const [pinScreen, setPinScreen] = useState(true);
+  useEffect(() => {
+    void SecureStore.getItemAsync(SCREEN_PINNING_KEY).then(value => setPinScreen(parseScreenPinning(value))).catch(() => { /* Default stays on. */ });
+  }, []);
+  /** True while Android lock task (screen pinning) is on; it outlives show mode until the tablet leaves the show. */
+  const pinned = useRef(false);
+  function releaseScreen() {
+    pinned.current = false;
+    void ShowScreen?.setActive(false).catch(() => setModeError('Could not release screen pinning. Use Android’s unpin gesture.'));
+  }
+  function savePinScreen(value: boolean) {
+    setPinScreen(value);
+    if (!value && pinned.current && !showMode) releaseScreen();
+    void SecureStore.setItemAsync(SCREEN_PINNING_KEY, value ? 'on' : 'off').catch(() => setModeError('Could not save the screen pinning setting'));
+  }
   const modeBusy = useRef(false);
   const mounted = useRef(true);
   const connected = useRef(props.connected);
   connected.current = props.connected;
   useEffect(() => {
     mounted.current = true;
-    return () => { mounted.current = false; };
+    return () => { mounted.current = false; void ShowScreen?.setActive(false).catch(() => {}); };
   }, []);
   async function enterShowMode() {
     if (modeBusy.current || !ShowScreen) return;
@@ -114,8 +130,8 @@ export function StageCompanion(props: Props) {
         return;
       }
       setShowMode(true);
-      if (pinScreen && Platform.OS === 'android') {
-        try { await ShowScreen.pin(); }
+      if (pinScreen && Platform.OS === 'android' && !pinned.current) {
+        try { await ShowScreen.pin(); pinned.current = true; }
         catch { setModeError('Screen pinning unavailable. Hold Exit show mode to return to device controls.'); }
       }
     } catch { setModeError('Could not keep the screen awake. Try entering show mode again.'); setExitedAt(Date.now()); }
@@ -126,10 +142,18 @@ export function StageCompanion(props: Props) {
     const back = BackHandler.addEventListener('hardwareBackPress', () => true);
     return () => {
       back.remove();
-      void ShowScreen?.setActive(false).catch(() => setModeError('Could not release screen pinning. Use Android’s unpin gesture.'));
+      // Holding the exit control keeps a pinned tablet pinned (no new Android prompt when show mode returns); leaving the show releases it.
+      if (releaseShowScreen({ connected: connected.current, pinned: pinned.current })) releaseScreen();
     };
   }, [showMode]);
-  useEffect(() => { if (!props.connected) { setShowMode(false); setExitedAt(null); } }, [props.connected]);
+  useEffect(() => {
+    if (props.connected) return;
+    setShowMode(false); setExitedAt(null);
+    // Covers leaving after show mode was already exited: the pin kept through that exit is released here.
+    if (pinned.current) releaseScreen();
+  // releaseScreen only touches refs and setters.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.connected]);
   const { onShowMode } = props;
   useEffect(() => { onShowMode?.(showMode); }, [showMode, onShowMode]);
   const [settings, setSettings] = useState(false);
@@ -181,6 +205,7 @@ export function StageCompanion(props: Props) {
   }, [textVisible, reduceMotion, textOpacity]);
   const surfaceText = contrastText(props.surface.color);
   const tabletText = tabletTextFromSnapshot(props.snapshot);
+  const groupLabel = showModeGroupLabel({ showMode, wallVisible: !!props.wallVisible, snapshot: props.snapshot });
   return <View style={styles.wallRoot}>
     {showMode && props.wall}
     <SafeAreaView style={[styles.screen, showMode && { backgroundColor: props.wallVisible ? 'transparent' : props.surface.color }]}
@@ -189,6 +214,10 @@ export function StageCompanion(props: Props) {
     {props.actionPrompt && <ActionAttention key={props.actionPrompt.key} prompt={props.actionPrompt} />}
     <ScrollView ref={scroll} key={showMode ? 'show' : 'controls'} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.page}>
       {props.admission?.active && <View style={styles.page}><Text style={styles.buttonText}>{props.admission.program ? 'Welcome. Waiting for the show to start.' : 'Choose your audience'}</Text>{props.admission.choices.map(g => <Action key={g.id} label={g.label} selected={props.admission?.program?.groupId === g.id} disabled={!normal} onPress={() => props.onAdmissionGroup?.(g.id)} />)}</View>}
+      {/* The group name stays visible in show mode (no idle fade) so people can read each other's roles. */}
+      {!settings && groupLabel && <View style={styles.groupBand} accessibilityRole="header">
+        <Text numberOfLines={2} adjustsFontSizeToFit style={[styles.groupText, { color: surfaceText }]}>{groupLabel}</Text>
+      </View>}
       {props.participantTask}
       {/* Scene text stays readable for the whole scene: it never fades with the idle show-mode text. */}
       {!settings && tabletText && <View style={styles.tabletText} accessibilityLiveRegion="polite">
@@ -259,8 +288,8 @@ export function StageCompanion(props: Props) {
         {props.connected ? <>
           {ShowScreen && !rejected && <>
             <Action label="Enter show mode" onPress={() => void enterShowMode()} />
-            {Platform.OS === 'android' && <Action label={pinScreen ? 'Screen pinning: on' : 'Screen pinning: off'} selected={pinScreen} onPress={() => setPinScreen(!pinScreen)} />}
-            <Text style={styles.muted}>Show mode is on by default and returns after a minute without touches. It keeps the screen awake between actions; the operator can set its color. Hold the exit control for two seconds. Android asks you to confirm screen pinning to restrict Home and app switching.</Text>
+            {Platform.OS === 'android' && <Action label={pinScreen ? 'Screen pinning: on' : 'Screen pinning: off'} selected={pinScreen} onPress={() => savePinScreen(!pinScreen)} />}
+            <Text style={styles.muted}>Show mode is on by default and returns after a minute without touches. It keeps the screen awake between actions; the operator can set its color. Hold the exit control for two seconds. Screen pinning is on by default and saved on this device; Android asks once to confirm it, which restricts Home and app switching. The pin stays on when you exit show mode and is released when the tablet leaves the show (or turn pinning off here).</Text>
           </>}
           {!props.paused && !rejected && <Action label="Pause audio" onPress={props.onPause} />}
           <Action label={rejected ? 'Back to setup' : 'Leave show'} onPress={props.onLeave} />
@@ -277,6 +306,8 @@ export function StageCompanion(props: Props) {
 }
 const styles = StyleSheet.create({
   tabletText: { paddingHorizontal: 24, paddingTop: 32, paddingBottom: 16 },
+  groupBand: { paddingHorizontal: 24, paddingTop: 28, paddingBottom: 8, alignItems: 'center' },
+  groupText: { fontSize: 40, lineHeight: 48, fontWeight: '700', letterSpacing: -.5, textAlign: 'center' },
   tabletTextBody: { color: '#eef0f3', fontSize: 28, lineHeight: 38, fontWeight: '500' },
   exitWrap: { marginTop: 'auto' }, exitMode: { padding: 24, alignItems: 'center', minHeight: 64, backgroundColor: 'transparent' },
   exitText: { fontSize: 13, lineHeight: 20, opacity: .55 },
