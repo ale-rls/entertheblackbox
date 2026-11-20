@@ -178,6 +178,18 @@ describe("CueBridge", () => {
     expect(sent).toContainEqual([0x90, 61, 90]);
   });
 
+  it("waits for the picture with a live cue for a scene that started its pre-roll while the feed was down", () => {
+    const { bridge, sent, pending, setNow } = setup();
+    setNow(11_000);
+    bridge.handle({ ...event(5, { type: "snapshot", timelines: [{ timelineId: "main", phaseId: "T1-titel", phaseEpoch: 4, payload: { phase: { startedAt: 13_000 } } }] }), timestamp: 11_000 });
+    expect(sent).toEqual([]);
+    bridge.handle({ ...event(6, { type: "cue", phaseId: "T1-titel", phaseEpoch: 4, payload: { cue: "musik-T1-start" } }), timestamp: 11_000 });
+    expect(sent).toEqual([]);
+    expect(pending.map((item) => item.ms)).toEqual([2_000]);
+    pending.shift()!.fn();
+    expect(sent).toContainEqual([0x90, 60, 127]);
+  });
+
   it("sends a single entry for testing in Ableton, and picks up an edited mapping", () => {
     const { bridge, sent } = setup();
     expect(bridge.test("musik-T1-start")).toBe(true);

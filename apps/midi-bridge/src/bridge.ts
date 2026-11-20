@@ -79,6 +79,15 @@ export class CueBridge {
         // Events (a retire, a reunion) may have been missed while disconnected: music still waiting for its
         // scene's pre-roll only survives if that scene is still the current one on its timeline.
         for (const [waiting, { epoch }] of [...this.sceneStarts]) if (current.get(waiting) !== epoch) this.sceneStarts.delete(waiting);
+        // A scene announced while the feed was down may still be in its pre-roll: remember when it starts, so a live cue
+        // for it waits for the picture. Nothing is replayed.
+        for (const timeline of timelines) {
+          const key = timelineKey(timeline);
+          const startedAt = timeline.payload?.phase?.startedAt;
+          if (current.get(key) === timeline.phaseEpoch && typeof startedAt === "number" && !this.sceneStarts.has(key)) {
+            this.sceneStarts.set(key, { epoch: timeline.phaseEpoch as number, startedAt });
+          }
+        }
         // Music that came due while the feed was down starts now, late, only if its scene is still the current one.
         this.feedDown = false;
         const held = this.held.splice(0);
