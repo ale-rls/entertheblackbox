@@ -36,12 +36,9 @@ export class TaskEngine {
     };
   }
   withdraw(participantId: string, roleId: string): void {
-    // A role can come from the option itself or from one of its rank/overflow outcomes; the
-    // assignment's source names the task that gave it, so that response gives its place back too.
-    const sources = new Set(this.assignments.filter(a => a.participantId === participantId && a.roleId === roleId).map(a => a.source));
     this.assignments = this.assignments.filter(a => a.participantId !== participantId || a.roleId !== roleId);
-    // An answer that went to the overflow outcome never took the option's own role: only its assignment's source can match it.
-    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId && (sources.has(t.id) || (r.outcome !== 'overflow' && t.template.options.find(o => o.id === r.optionId)?.roleId === roleId)) && (r.status === 'accepted' || r.status === 'answered')) { r.status = 'withdrawn'; r.message = 'Assignment withdrawn by the operator.'; }
+    // An answer is withdrawn with the role its applied outcome named (the option's own, a rank's or the overflow's), never by the option's base role.
+    for (const t of this.instances) for (const r of t.recipients) if (r.participantId === participantId && r.grantedRoleId === roleId && (r.status === 'accepted' || r.status === 'answered')) { r.status = 'withdrawn'; r.message = 'Assignment withdrawn by the operator.'; }
   }
   endOccupant(participantId: string): void {
     for (const a of [...this.assignments]) if (a.participantId === participantId) this.withdraw(participantId,a.roleId);
@@ -117,6 +114,7 @@ export class TaskEngine {
       if (outcome.roleId) this.assignments = this.assignments.filter(a => !(a.participantId === participantId && a.roleId === outcome.roleId && a.source === task.id));
       return 'This route is unavailable. Please ask the operator.';
     }
+    if (outcome.roleId) r.grantedRoleId = outcome.roleId; else delete r.grantedRoleId;
     delete r.audio;
     if (outcome.audio) r.audio = { ...outcome.audio, startedAt: now + 400 };
     r.message = outcome.message ?? '';
