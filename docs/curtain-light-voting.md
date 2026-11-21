@@ -48,6 +48,17 @@ cursors are drawn over the scene's own `loopVideoSrc` (for example the open
 curtain loop), so the stage stays visible. That video is used as a plain
 picture (no folds or relief); the scene needs a loop video, or validation fails.
 
+The same works on the closed curtain, and keeps it one continuous bed: give the
+titles and votes of a closed-curtain stretch the same loop video as the scenes
+around them and tick the box on the votes. The loop then never restarts (the
+server keeps its clock across scenes that share it), and the lit curtain draws
+the frames of the loop already on screen rather than playing its own copy. A
+plain loop is read as the picture the loop layer shows: at the curtain's
+starting level it looks exactly like the loop, and lower levels match the title
+dim. Chrome composites a `<video>` a few percent differently from WebGL, so the
+lit curtain fades in over the loop across the dim-in second instead of
+replacing it on one frame.
+
 ### Positioning before the choice
 
 Some cues ask people to move onto fields that should **not** light up yet: the

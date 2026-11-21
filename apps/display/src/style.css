@@ -68,6 +68,8 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .layer-video video.phase-loop-video { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 /* An incoming loop plays hidden until it can replace the current one. */
 .layer-video video.phase-loop-video:not(.phase-loop-video-active) { opacity: 0; }
+/* A loop arriving after a curtain closing dissolves in over the closing's last frame. */
+@keyframes phase-loop-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .layer-spectrum-glow { z-index: 1; pointer-events: none; }
 /* Curtain-light votes: the lit curtain sits over phase media, under timing UI. */
 .layer-curtain { z-index: 1; pointer-events: none; }
