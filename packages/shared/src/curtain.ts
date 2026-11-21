@@ -382,11 +382,15 @@ export type PoolOutlineSegment = readonly [x1: number, y1: number, x2: number, y
  * field divisions on a neutral curtain instead of filling fields with colour.
  */
 export function poolOutlines(pools: PoolMasks): PoolOutlineSegment[][] {
-  const { columns, rows, counted } = pools;
+  return outlines(pools.counted, pools.columns, pools.rows, pools.outcomes.length);
+}
+
+/** Smooth outline of each label's area in a row-major label grid (-1 = no label). */
+function outlines(labels: Int8Array, columns: number, rows: number, count: number): PoolOutlineSegment[][] {
   const radius = Math.max(1, Math.round(columns / 192));
-  return pools.outcomes.map((_, i) => {
+  return Array.from({ length: count }, (_, i) => {
     const raw = new Float32Array(columns * rows);
-    for (let cell = 0; cell < counted.length; cell += 1) if (counted[cell] === i) raw[cell] = 1;
+    for (let cell = 0; cell < labels.length; cell += 1) if (labels[cell] === i) raw[cell] = 1;
     const v = blur(raw, columns, rows, radius);
     const at = (column: number, row: number) => v[row * columns + column]!;
     const px = (column: number) => (column + 0.5) / columns;
@@ -421,12 +425,47 @@ export function poolOutlines(pools: PoolMasks): PoolOutlineSegment[][] {
 }
 
 /**
+ * Every cell handed to its nearest answer: neutral cells take the answer they
+ * reach first, so the border between two answers runs down the middle of the
+ * neutral gap between them.
+ */
+function nearestAnswer(pools: PoolMasks): Int8Array {
+  const { columns, rows } = pools;
+  const owner = Int8Array.from(pools.counted);
+  let frontier: number[] = [];
+  for (let cell = 0; cell < owner.length; cell += 1) if (owner[cell]! >= 0) frontier.push(cell);
+  while (frontier.length > 0) {
+    const next: number[] = [];
+    for (const cell of frontier) {
+      const column = cell % columns;
+      const row = (cell - column) / columns;
+      const neighbours = [
+        column > 0 ? cell - 1 : -1,
+        column < columns - 1 ? cell + 1 : -1,
+        row > 0 ? cell - columns : -1,
+        row < rows - 1 ? cell + columns : -1,
+      ];
+      for (const n of neighbours) {
+        if (n < 0 || owner[n]! >= 0) continue;
+        owner[n] = owner[cell]!;
+        next.push(n);
+      }
+    }
+    frontier = next;
+  }
+  return owner;
+}
+
+/**
  * The curtain's field divisions: a cross through the field's centre along
  * its split lines (one line for a two-way vote), ending where the field
- * ends. Custom zones have no natural cross, so they use their outlines.
+ * ends. Custom zones have no natural cross: they are divided by one line down
+ * the middle of each neutral gap (outlining each zone would draw every gap
+ * as two parallel lines). Each border comes back once per neighbouring zone
+ * at the same place; the caller strokes them as one path.
  */
 export function curtainDivisionLines(field: PositionField, pools: PoolMasks): PoolOutlineSegment[] {
-  if (field.type === "polygon-zones") return poolOutlines(pools).flat();
+  if (field.type === "polygon-zones") return outlines(nearestAnswer(pools), pools.columns, pools.rows, pools.outcomes.length).flat();
   // A split vote is divided across its axis; a spectrum is drawn as the axis itself,
   // a line the cursors position along (as QuadrantOverlay does off the curtain).
   const spectrum = field.type === "two-quadrant" && field.variant !== "split";

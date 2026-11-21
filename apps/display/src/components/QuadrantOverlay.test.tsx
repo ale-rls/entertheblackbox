@@ -6,6 +6,7 @@ import {
 } from "@entertheblackbox/protocol";
 import {
   QuadrantOverlay,
+  zoneLabelPositions,
   type QuestionField,
 } from "./QuadrantOverlay.js";
 
@@ -337,6 +338,28 @@ describe("QuadrantOverlay", () => {
     expect(html).toContain("Kassandra");
     expect(html).not.toContain("zone-count");
     expect(html).not.toContain(">2</span>");
+  });
+
+  it("keeps side-by-side zone labels on one bottom row", () => {
+    if (zonesField.type !== "polygon-zones") throw new Error("fixture");
+    const positions = zoneLabelPositions(zonesField.zones);
+    expect(new Set(Object.values(positions).map((p) => p.y)).size).toBe(1);
+    expect(positions.dionysos!.x).toBeCloseTo(50);
+  });
+
+  it("puts each label of a 2x2 zone grid in its own zone so stacked labels never overlap", () => {
+    const quad = (x0: number, y0: number, x1: number, y1: number) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+    const positions = zoneLabelPositions([
+      { id: "gelb", label: "Mehr Energie", points: quad(0, 0, 0.47, 0.47) },
+      { id: "blau", label: "Mehr Liebe", points: quad(0.53, 0, 1, 0.47) },
+      { id: "gruen", label: "Mehr Mut", points: quad(0, 0.53, 0.47, 1) },
+      { id: "rot", label: "Mehr Geduld", points: quad(0.53, 0.53, 1, 1) },
+    ]);
+    expect(positions.gelb!.x).toBeCloseTo(positions.gruen!.x);
+    expect(positions.gelb!.y).toBeLessThan(50);
+    expect(positions.gruen!.y).toBeGreaterThan(50);
+    expect(positions.blau!.y).toBeLessThan(50);
+    expect(positions.rot!.y).toBeGreaterThan(50);
   });
 
   it("renders only the winning zone as a borderless blinking shape", () => {

@@ -103,12 +103,29 @@ const svgPoints = (points: readonly { x: number; y: number }[]): string =>
   points.map((p) => `${p.x * 100},${p.y * 100}`).join(" ");
 
 const ZONE_LABEL_BOTTOM_PERCENT = 86;
+/** Zones whose centres are closer than this horizontally are stacked in one column. */
+const STACKED_ZONE_GAP = 0.15;
 
 /**
- * Arbitrary-polygon zones (e.g. a 3-way statue vote). The highlighted shape
- * renders in an SVG stretched to the arena's aspect ratio; option labels render
- * as plain HTML along a common bottom row (horizontally at each zone's
- * centroid) so text never gets skewed by a non-uniform SVG scale.
+ * Where each zone's label sits, in percent of the overlay. Side-by-side zones
+ * (e.g. a 3-way statue vote) share one row near the bottom, horizontally at
+ * each zone's centroid. When zones are stacked in a column (a 2x2 grid), one
+ * bottom row would put two labels on top of each other, so every label goes
+ * to its own zone's centroid instead.
+ */
+export function zoneLabelPositions(zones: PolygonZonesField["zones"]): Record<string, { x: number; y: number }> {
+  const centres = zones.map((zone) => ({ id: zone.id, c: centroid(zone.points) }));
+  const stacked = centres.some((a, i) => centres.some((b, j) => j > i && Math.abs(a.c.x - b.c.x) < STACKED_ZONE_GAP));
+  return Object.fromEntries(centres.map(({ id, c }) => [id, {
+    x: clampPercent(c.x * 100),
+    y: stacked ? clampPercent(c.y * 100) : ZONE_LABEL_BOTTOM_PERCENT,
+  }]));
+}
+
+/**
+ * Arbitrary-polygon zones. The highlighted shape renders in an SVG stretched
+ * to the arena's aspect ratio; option labels render as plain HTML (placed by
+ * zoneLabelPositions) so text never gets skewed by a non-uniform SVG scale.
  */
 function PolygonZoneOverlay({
   field,
@@ -122,6 +139,7 @@ function PolygonZoneOverlay({
   highlightRegionIds: readonly string[];
 }) {
   const highlightedZones = field.zones.filter((zone) => highlightRegionIds.includes(zone.id));
+  const labelPositions = zoneLabelPositions(field.zones);
 
   return (
     <div className="quadrant-overlay quadrant-overlay-polygon-zones">
@@ -143,7 +161,7 @@ function PolygonZoneOverlay({
         </svg>
       )}
       {field.zones.map((zone) => {
-        const c = centroid(zone.points);
+        const at = labelPositions[zone.id]!;
         return (
           <div
             key={zone.id}
@@ -154,7 +172,7 @@ function PolygonZoneOverlay({
             ]
               .filter(Boolean)
               .join(" ")}
-            style={{ left: `${clampPercent(c.x * 100)}%`, top: `${ZONE_LABEL_BOTTOM_PERCENT}%` }}
+            style={{ left: `${at.x}%`, top: `${at.y}%` }}
           >
             <span className="zone-name">{zone.label}</span>
           </div>
