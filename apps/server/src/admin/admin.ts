@@ -349,6 +349,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         lifecycle: engine?.lifecycleState ?? null,
         phaseId: engine?.currentPhaseId ?? null,
         phaseEpoch: engine?.currentPhaseEpoch ?? null,
+        operatorField: engine?.operatorFieldState ?? null,
         // Authoritative per-group progress while a group-branch phase runs --
         // the top-level phaseId/phaseEpoch above stay pinned to that shared
         // scene the whole time, so this is the only source of "who is where."
@@ -598,6 +599,17 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
           : engine.adminJump(phaseId, undefined, expectedPhaseId);
       options.data?.audit({ action: "jump", at: new Date().toISOString(), detail: { phaseId, groupId, ...result } });
       return result.ok ? result : reply.code(409).send(result);
+    });
+    admin.post<{ Body: { target?: unknown; countDelta?: unknown; expectedPhaseId?: unknown } }>("/operator-field", async (request, reply) => {
+      const { target, countDelta, expectedPhaseId } = request.body ?? {};
+      if (target !== undefined && target !== null && (typeof target !== "string" || target === "")) return reply.code(400).send({ error: "invalid_request" });
+      if (countDelta !== undefined && (typeof countDelta !== "number" || !Number.isInteger(countDelta) || Math.abs(countDelta) > 99)) return reply.code(400).send({ error: "invalid_request" });
+      if (expectedPhaseId !== undefined && (typeof expectedPhaseId !== "string" || expectedPhaseId === "")) return reply.code(400).send({ error: "invalid_request" });
+      const engine = options.engine();
+      const result: TransitionResult = engine === null ? { ok: false, reason: "wrong-phase" }
+        : engine.adminOperatorField({ ...(target === undefined ? {} : { target: target as string | null }), ...(countDelta === undefined ? {} : { countDelta: countDelta as number }) }, expectedPhaseId as string | undefined);
+      options.data?.audit({ action: "operator-field", at: new Date().toISOString(), detail: { target, countDelta, ...result } });
+      return result.ok ? { ...result, operatorField: engine!.operatorFieldState } : reply.code(409).send(result);
     });
     admin.post<{ Body: { groupId?: unknown; expectedPhaseId?: unknown } }>("/skip", async (request, reply) => {
       const { groupId, expectedPhaseId } = request.body ?? {};

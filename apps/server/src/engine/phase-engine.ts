@@ -185,6 +185,8 @@ export type AdminFlowScene = {
   title: string;
   /** Operator-only name from the script, when the scene has one. */
   cueName?: string;
+  /** Fields the operator lights one at a time in this scene, and the counter's total. */
+  operatorFields?: { zones: Array<{ id: string; label: string; color?: string }>; total?: number };
   routes: AdminFlowRoute[];
 };
 
@@ -278,6 +280,8 @@ export class PhaseEngine {
   private phaseId = "idle";
   private sessionId = "idle";
   private phaseEpoch = 0;
+  /** Operator fields of the current scene: which field is lit and the counter. Belongs to one phase epoch. */
+  private operatorField: { epoch: number; target: string | null; count: number } = { epoch: -1, target: null, count: 0 };
   // Closing group selection advances the routing epoch without emitting a cue phase.
   private cuePhaseEpoch: number | null = null;
   private phaseStartedAt: number;
@@ -568,6 +572,7 @@ export class PhaseEngine {
           kind: phase.kind,
           title: phase.title ?? (phase.kind === "video" || phase.kind === "group-branch" ? phase.id : phase.text),
           ...(phase.cueName ? { cueName: phase.cueName } : {}),
+          ...(phase.kind === "video" && phase.operatorFields ? { operatorFields: { zones: phase.operatorFields.zones.map(({ id, label, color }) => ({ id, label, ...(color ? { color } : {}) })), ...(phase.operatorFields.total ? { total: phase.operatorFields.total } : {}) } } : {}),
           routes: adminRoutesForPhase(phase),
         })),
     };
@@ -706,6 +711,32 @@ export class PhaseEngine {
     if (!rule) return phase.next;
     const occupied = this.registry.values().some((participant) => this.groupSelection?.current(participant.clientId) === rule.groupId);
     return occupied ? phase.next : rule.target;
+  }
+
+  /** The lit operator field and counter of the current scene (fresh for every phase epoch). */
+  get operatorFieldState(): { target: string | null; count: number } {
+    return this.operatorField.epoch === this.phaseEpoch ? { target: this.operatorField.target, count: this.operatorField.count } : { target: null, count: 0 };
+  }
+
+  /**
+   * Operator lights one of the scene's operator fields (null = none) and/or steps its counter.
+   * Displays get a fresh phase frame; nothing else about the scene changes.
+   */
+  adminOperatorField(change: { target?: string | null; countDelta?: number }, expectedPhaseId?: string, now = this.now()): TransitionResult {
+    if (this.lifecycle !== "active") return { ok: false, reason: "wrong-phase" };
+    if (expectedPhaseId !== undefined && expectedPhaseId !== this.phaseId) return { ok: false, reason: "stale" };
+    const phase = this.currentPhase();
+    if (phase.kind !== "video" || !phase.operatorFields) return { ok: false, reason: "wrong-phase" };
+    if (change.target !== undefined && change.target !== null && !phase.operatorFields.zones.some((zone) => zone.id === change.target)) return { ok: false, reason: "invalid-target" };
+    const state = this.operatorFieldState;
+    const max = phase.operatorFields.total ?? 99;
+    this.operatorField = {
+      epoch: this.phaseEpoch,
+      target: change.target === undefined ? state.target : change.target,
+      count: Math.max(0, Math.min(max, state.count + Math.round(change.countDelta ?? 0))),
+    };
+    this.broadcast({ ...this.getSnapshotMessage(now), t: "phase" });
+    return { ok: true };
   }
 
   adminSkip(now = this.now(), expectedPhaseId?: string): TransitionResult {
@@ -985,6 +1016,7 @@ export class PhaseEngine {
         spotlightCurtainSrc: this.scenario.curtainLight?.src,
       } : {}),
       ...(this.nextIsTitleBackdrop(phase) ? { nextTitleBackdrop: true as const } : {}),
+      ...(phase.kind === "video" && phase.operatorFields ? { operatorField: this.operatorFieldState } : {}),
       scenarioVersion: this.scenario.version,
       startedAt: this.phaseStartedAt,
       deadlineAt: this.deadlineAt,

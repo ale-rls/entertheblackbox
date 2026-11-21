@@ -5,6 +5,8 @@ import { allRows, buildCueList, optionsAt, primaryTarget, type CueRow } from "./
 type Props = {
   flow: SceneFlow; status: Status; busy: boolean;
   onJump: (scene: FlowScene, trigger: HTMLButtonElement, groupId?: string) => void;
+  /** Light one of the current scene's operator fields (null = none) or step its counter. */
+  onOperatorField?: (change: { target?: string | null; countDelta?: number }) => void;
 };
 
 const KIND_LABEL: Record<FlowScene["kind"], string> = {
@@ -15,7 +17,7 @@ const KIND_LABEL: Record<FlowScene["kind"], string> = {
 export const cueTitle = (scene: FlowScene) => scene.cueName ?? scene.title;
 
 /** Operator view: what plays now, what comes next, where to act, and the whole show as a cue list. */
-export function CueList({ flow, status, busy, onJump }: Props) {
+export function CueList({ flow, status, busy, onJump, onOperatorField }: Props) {
   const list = useMemo(() => buildCueList(flow), [flow]);
   const scenes = useMemo(() => new Map(flow.scenes.map((scene) => [scene.id, scene])), [flow]);
   const [scope, setScope] = useState("");
@@ -92,6 +94,20 @@ export function CueList({ flow, status, busy, onJump }: Props) {
         <p className="sc-tool-eyebrow">Next</p>
         <h3>{nextLabel ?? "—"}</h3>
       </div>
+      {!grouped && now?.operatorFields && onOperatorField && status.lifecycle === "active" && <div className="cue-operator-fields" aria-label="Light a field">
+        <p className="sc-tool-eyebrow">Light a field on the projection</p>
+        <div className="cue-operator-buttons">
+          {now.operatorFields.zones.map((zone) => <button key={zone.id} type="button" className="sc-tool-button" disabled={busy}
+            aria-pressed={status.operatorField?.target === zone.id} style={zone.color ? { borderInlineStart: `6px solid ${zone.color}` } : undefined}
+            onClick={() => onOperatorField({ target: zone.id })}>{zone.label}</button>)}
+          <button type="button" className="sc-tool-button" data-sc-tool-variant="secondary" disabled={busy || !status.operatorField?.target} onClick={() => onOperatorField({ target: null })}>None</button>
+        </div>
+        {now.operatorFields.total !== undefined && <div className="cue-operator-buttons">
+          <strong>{status.operatorField?.count ?? 0} / {now.operatorFields.total}</strong>
+          <button type="button" className="sc-tool-button" data-sc-tool-variant="primary" disabled={busy} onClick={() => onOperatorField({ countDelta: 1 })}>+1</button>
+          <button type="button" className="sc-tool-button" data-sc-tool-variant="secondary" disabled={busy || !status.operatorField?.count} onClick={() => onOperatorField({ countDelta: -1 })}>−1</button>
+        </div>}
+      </div>}
       {options.length > 0 && <div className="cue-options">
         <p className="sc-tool-eyebrow">Your options now</p>
         <ul>{options.map((option) => <li key={`${option.reason}:${option.scene.id}`}><span>{option.reason}</span><strong>{cueTitle(option.scene)}</strong>{goButton(option.scene, "Go", true)}</li>)}</ul>

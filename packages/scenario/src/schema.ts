@@ -162,6 +162,18 @@ export const polygonZoneSchema = z.object({
   points: z.array(polygonPointSchema).min(3, "a zone polygon needs at least 3 points"),
 });
 
+/**
+ * Fields the operator lights one at a time on the main display during a scene (e.g. the hack's
+ * target field), with an optional counter the operator steps (nodes confirmed out of `total`).
+ */
+export const operatorFieldsSchema = z.object({
+  zones: z.array(polygonZoneSchema.extend({ color: z.string().regex(/^#[0-9a-f]{6}$/i, "colour must be #rrggbb").optional() }))
+    .min(2, "operator fields need at least two zones").max(8)
+    .refine((zones) => new Set(zones.map((zone) => zone.id)).size === zones.length, { message: "zone ids must be unique" }),
+  total: z.number().int().positive().max(99).optional(),
+});
+export type OperatorFields = z.infer<typeof operatorFieldsSchema>;
+
 export const polygonZonesFieldSchema = z.object({
   type: z.literal("polygon-zones"),
   zones: z
@@ -342,6 +354,7 @@ export const videoPhaseSchema = z.object({
   rating: ratingConfigSchema.optional(),
   subtitles: z.array(subtitleSchema).optional(),
   countdown: sceneCountdownSchema.optional(),
+  operatorFields: operatorFieldsSchema.optional(),
 }).superRefine((phase, ctx) => {
   if (phase.countdown && phase.countdown.endAtMs > phase.expectedDurationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "countdown must end within the scene", path: ["countdown", "endAtMs"] });
   if (phase.phoneAudioMode === "synchronized") {
