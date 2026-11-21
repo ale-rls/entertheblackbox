@@ -1026,6 +1026,31 @@ it("sends the tablet script excerpt only to the groups a scene names, with their
   h.engine.stop();
 });
 
+it("sends another group its own script range in the same scene, with its lines as its speaker", () => {
+  const configured = scenarioSchema.parse({ ...scenario,
+    actorScript: { title: "Act 1", text: "Prologue\n\nBUILDER: First line\n\nACTOR: Reply\n\nCHOR:\nWir sehen euch!", speakersByGroup: { b: "BUILDER", c: "CHOR" } },
+    phases: scenario.phases.map((phase) => phase.id === "film" ? { ...phase,
+      tabletScript: { fromParagraph: 1, toParagraph: 2, groupIds: ["b"] },
+      moreTabletScripts: [{ fromParagraph: 3, toParagraph: 3, groupIds: ["c"] }] } : phase) });
+  expect(validateScenario(configured).errors).toEqual([]);
+  const h = setup(configured);
+  const a = h.phone("one"), b = h.phone("two"), c = h.phone("three"); h.engine.adminStart();
+  h.choose(a, "a"); h.choose(b, "b"); h.choose(c, "c");
+  h.tick(100);
+  expect(b.snapshot.tabletScript).toEqual({ title: "Act 1", paragraphs: ["BUILDER: First line", "ACTOR: Reply"], speaker: "BUILDER" });
+  expect(c.snapshot.tabletScript).toEqual({ title: "Act 1", paragraphs: ["CHOR:\nWir sehen euch!"], speaker: "CHOR" });
+  expect(JSON.stringify(c.sent)).not.toContain("First line");
+  expect(JSON.stringify(b.sent)).not.toContain("Wir sehen euch");
+  h.engine.stop();
+});
+
+it("rejects a further tablet script range past the end of the script", () => {
+  const configured = scenarioSchema.parse({ ...scenario,
+    actorScript: { title: "Act 1", text: "Prologue\n\nCHOR: Line" },
+    phases: scenario.phases.map((phase) => phase.id === "film" ? { ...phase, moreTabletScripts: [{ fromParagraph: 1, toParagraph: 5, groupIds: ["c"] }] } : phase) });
+  expect(validateScenario(configured).errors.some((error) => error.phaseId === "film" && error.message.includes("paragraph 6"))).toBe(true);
+});
+
 it("counts a phone button vote in the curtain-light field", () => {
   const value = scenarioSchema.parse({
     ...scenario,

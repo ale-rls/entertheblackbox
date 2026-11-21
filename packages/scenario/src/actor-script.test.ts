@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actorScriptSchema, firedScriptCueIndex, scriptCuesSchema, scriptLines, scriptParagraphs, tabletScriptExcerpt, tabletScriptSchema } from "./actor-script.js";
+import { actorScriptSchema, firedScriptCueIndex, scriptCuesSchema, scriptLines, scriptParagraphs, tabletScriptExcerpt, tabletScriptFor, tabletScriptSchema } from "./actor-script.js";
 import { scenarioSchema } from "./schema.js";
 import { validateScenario } from "./validate.js";
 
@@ -60,3 +60,17 @@ describe("tablet script", () => {
       'Actor script speaker is set for unknown group "ghost"', "Tablet script ends at paragraph 6, but the script has 2", 'Tablet script shows to unknown group "nobody"']));
   });
 });
+
+describe("tabletScriptFor", () => {
+  const main = { fromParagraph: 0, toParagraph: 4, groupIds: ["vector"] };
+  const chorus = { fromParagraph: 5, toParagraph: 6, groupIds: ["chor"] };
+  const everyone = { fromParagraph: 7, toParagraph: 7, groupIds: [] };
+  it("gives each group the range that names it, else an open range", () => {
+    expect(tabletScriptFor([chorus, main], "vector")).toBe(main);
+    expect(tabletScriptFor([chorus, main], "chor")).toBe(chorus);
+    expect(tabletScriptFor([chorus, main], "other")).toBeUndefined();
+    expect(tabletScriptFor([chorus, main, everyone], "other")).toBe(everyone);
+    expect(tabletScriptFor([undefined, everyone], null)).toBe(everyone);
+  });
+});
+

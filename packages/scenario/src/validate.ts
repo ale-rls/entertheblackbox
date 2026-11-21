@@ -103,7 +103,8 @@ export function validateScenario(
     severity: "error", code: "unknown-group", message: `Actor script speaker is set for unknown group "${groupId}"`,
   });
   for (const phase of scenario.phases) {
-    const tablet = phase.kind === "idle" || phase.kind === "group-branch" ? undefined : phase.tabletScript;
+    const tablets = phase.kind === "idle" || phase.kind === "group-branch" ? [] : [phase.tabletScript, ...(phase.moreTabletScripts ?? [])];
+    for (const tablet of tablets) {
     if (!tablet) continue;
     if (tablet.toParagraph >= scriptLength) errors.push({
       severity: "error", code: "script-cue", phaseId: phase.id,
@@ -113,6 +114,7 @@ export function validateScenario(
     for (const groupId of tablet.groupIds) if (!groupIds.has(groupId)) errors.push({
       severity: "error", code: "unknown-group", phaseId: phase.id, message: `Tablet script shows to unknown group "${groupId}"`,
     });
+    }
   }
   if (scenario.monitorGroupId !== undefined && !groupIds.has(scenario.monitorGroupId)) errors.push({
     severity: "error", code: "unknown-group", message: `monitorGroupId references unknown group "${scenario.monitorGroupId}"`,

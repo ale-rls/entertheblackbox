@@ -57,6 +57,13 @@ export type TabletScript = z.infer<typeof tabletScriptSchema>;
 /** What one tablet receives: only the excerpt, and the speaker whose lines it highlights. */
 export type TabletScriptExcerpt = { title: string; paragraphs: string[]; speaker?: string };
 
+/** The range a participant in `groupId` gets: the first naming their group, else the first open to everyone. */
+export function tabletScriptFor(ranges: readonly (TabletScript | undefined)[], groupId: string | null): TabletScript | undefined {
+  const present = ranges.filter((range): range is TabletScript => range !== undefined);
+  return (groupId === null ? undefined : present.find((range) => range.groupIds.includes(groupId)))
+    ?? present.find((range) => range.groupIds.length === 0);
+}
+
 /** The excerpt a participant in `groupId` sees in a scene, or null when the scene shows them none. */
 export function tabletScriptExcerpt(script: ActorScript | undefined, paragraphs: readonly string[], config: TabletScript | undefined, groupId: string | null): TabletScriptExcerpt | null {
   if (!script || !config) return null;
