@@ -434,6 +434,68 @@ describe("App media-readiness gate", () => {
     }
   });
 
+  it("dims into a title before the cut, stays dimmed between titles, and holds it through a closing", async () => {
+    harness.mediaStatus = { state: "ready" };
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance", "setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(0);
+    try {
+      await act(async () => root?.render(<App />));
+      const send = async (phaseEpoch: number, phase: Record<string, unknown>) => act(async () => {
+        harness.connectionOptions?.onMessage({
+          t: "snapshot", v: PROTOCOL_VERSION, sessionId: "session-1", phaseEpoch, serverTime: Date.now(),
+          phase: { scenarioVersion: "show-1", startedAt: Date.now(), deadlineAt: null, ...phase },
+        } as ServerToClientMessage);
+      });
+      const dimmed = () => document.querySelector<HTMLElement>(".layer-video")!.style.filter === "url(#title-dim)";
+      // Two steps: a timer that fires in the first one starts the fade, which runs in the second.
+      const advance = async (ms: number) => {
+        await act(async () => { vi.advanceTimersByTime(ms - 300); });
+        await act(async () => { vi.advanceTimersByTime(300); });
+      };
+      const title = { kind: "narration", text: "THEATERARBEIT", loopVideoSrc: "curtain-loop.mp4", durationMs: 6_000 };
+
+      // A scene before a title dims during its last second.
+      await send(1, { kind: "video", id: "before", src: "a.webp", audioSrc: "a.mp3", loopVideoSrc: "curtain-loop.mp4", expectedDurationMs: 10_000, next: "title", nextTitleBackdrop: true });
+      await advance(8_500);
+      expect(dimmed()).toBe(false);
+      await advance(1_000);
+      expect(dimmed()).toBe(true);
+
+      await send(2, { ...title, id: "title", next: "between" });
+      await advance(1_100);
+      expect(dimmed()).toBe(true);
+
+      // A scene between two titles stays dimmed.
+      await send(3, { kind: "video", id: "between", src: "a.webp", audioSrc: "b.mp3", loopVideoSrc: "curtain-loop.mp4", expectedDurationMs: 10_000, next: "last-title", nextTitleBackdrop: true });
+      await advance(1_100);
+      expect(dimmed()).toBe(true);
+
+      await send(4, { ...title, id: "last-title", next: "closing" });
+      await advance(1_100);
+
+      // A curtain closing after a title keeps the dim and lifts it in its last second.
+      await send(5, { kind: "video", id: "closing", src: "curtain-close.mp4", expectedDurationMs: 12_000, next: "after" });
+      await advance(1_100);
+      expect(dimmed()).toBe(true);
+      await advance(9_000);
+      expect(dimmed()).toBe(true);
+      await advance(1_200);
+      await advance(1_100);
+      expect(dimmed()).toBe(false);
+
+      // A scene with sound after a title brightens from its start.
+      await send(6, { ...title, id: "title-2", next: "talk" });
+      await advance(1_100);
+      await send(7, { kind: "video", id: "talk", src: "a.webp", audioSrc: "c.mp3", loopVideoSrc: "curtain-loop.mp4", expectedDurationMs: 30_000, next: "idle" });
+      await advance(1_100);
+      expect(dimmed()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("ignores a loop video on a scene whose own video would cover it", async () => {
     harness.mediaStatus = { state: "ready" };
     document.body.innerHTML = '<div id="root"></div>';

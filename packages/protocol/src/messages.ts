@@ -85,6 +85,8 @@ export const phaseSnapshotSchema = z.intersection(
     /** Resolved vote labels retained for later monitor cues and reconnects. */
     monitorVoteResults: z.record(z.string(), z.object({ label: z.string().nullable(), color: z.string().optional() })).optional(),
     lastMonitorVotePhaseId: nonEmpty.optional(),
+    /** The scene after this one is a title over a background loop, so the display dims into it before the cut. */
+    nextTitleBackdrop: z.literal(true).optional(),
   }),
 );
 

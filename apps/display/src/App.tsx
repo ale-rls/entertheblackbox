@@ -34,8 +34,9 @@ import { FullscreenControl } from "./components/FullscreenControl.js";
 import { VoteDecisionSound } from "./components/VoteDecisionSound.js";
 import { CURTAIN_LEAVE_MS, CurtainStage } from "./curtain/CurtainStage.js";
 import { useTitleDim } from "./curtain/titleDim.js";
+import { DIM_IN_MS } from "./curtain/visibility.js";
 import type { CurtainTreatment } from "@entertheblackbox/protocol";
-import type { PositionField } from "@entertheblackbox/shared";
+import { backdropDimPlan, type BackdropDimPlan, type PositionField } from "@entertheblackbox/shared";
 
 type CurtainHold = {
   key: string;
@@ -287,16 +288,38 @@ export function App() {
   const curtainKey = curtainPhase === null ? null : `${state.sessionId ?? "pending"}:${state.phaseEpoch}`;
   const [curtainHold, setCurtainHold] = useState<CurtainHold | null>(null);
   const [curtainUnavailable, setCurtainUnavailable] = useState(false);
-  // A title over a background loop dims that loop to the vote's level. A curtain vote straight
-  // after a title keeps it dimmed while the lit curtain comes up, and starts from that level.
-  const titleBackdrop = phase?.kind === "narration" && phase.loopVideoSrc !== undefined
-    && ((phase.text ?? "").trim() !== "" || (phase.title ?? "").trim() !== "");
+  // A title over a background loop dims that loop to the vote's level (backdropDim.ts has the
+  // rules around it). A curtain vote straight after a dimmed scene keeps it dimmed while the lit
+  // curtain comes up, and starts from that level.
+  const dimPlans = useRef<{ epoch: number; previousEnd: boolean; plan: BackdropDimPlan | null } | null>(null);
+  if (dimPlans.current?.epoch !== state.phaseEpoch) {
+    const previousEnd = dimPlans.current?.plan?.end ?? false;
+    dimPlans.current = { epoch: state.phaseEpoch, previousEnd, plan: null };
+  }
+  const dimPlan = phase === null || curtainPhase !== null
+    ? null
+    : backdropDimPlan(phase, dimPlans.current.previousEnd, phase.nextTitleBackdrop === true);
+  dimPlans.current.plan = dimPlan;
+  const dimEndsAt = phase === null ? null
+    : phase.kind === "video" ? phase.startedAt + phase.expectedDurationMs
+    : phase.kind === "narration" && !phase.waitForGo ? phase.startedAt + phase.durationMs
+    : null;
+  const [dimEndingEpoch, setDimEndingEpoch] = useState<number | null>(null);
+  const dimChangesAtEnd = dimPlan !== null && dimPlan.end !== dimPlan.start && dimEndsAt !== null;
+  useEffect(() => {
+    if (!dimChangesAtEnd || dimEndsAt === null) return;
+    const epoch = state.phaseEpoch;
+    // The dim eases over DIM_IN_MS, so it starts that long before the cut.
+    const timer = setTimeout(() => setDimEndingEpoch(epoch), Math.max(0, dimEndsAt - DIM_IN_MS - connection.clock.now()));
+    return () => clearTimeout(timer);
+  }, [dimChangesAtEnd, dimEndsAt, state.phaseEpoch, connection.clock]);
+  const backdropDimmed = dimPlan !== null && (dimEndingEpoch === state.phaseEpoch ? dimPlan.end : dimPlan.start);
   const titleBeforeCurtain = useRef(false);
-  if (curtainPhase === null) titleBeforeCurtain.current = titleBackdrop;
+  if (curtainPhase === null) titleBeforeCurtain.current = backdropDimmed;
   // Only while the lit curtain covers the layer: a video vote whose curtain hides early shows its video at full level.
   const curtainCovers = curtainPhase !== null && !curtainUnavailable
     && !(curtainPhase.kind === "video-position-question" && curtainPhase.hideAtMs < curtainPhase.expectedDurationMs);
-  const titleDim = useTitleDim(titleBackdrop || (curtainCovers && titleBeforeCurtain.current));
+  const titleDim = useTitleDim(backdropDimmed || (curtainCovers && titleBeforeCurtain.current));
   // The hold whose lit curtain has put its fabric on screen. Until then the previous scene's
   // background loop stays up, so a fresh curtain still loading its video never shows a black frame.
   const [curtainShownKey, setCurtainShownKey] = useState<string | null>(null);

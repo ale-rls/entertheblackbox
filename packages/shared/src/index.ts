@@ -378,6 +378,7 @@ export function quadrantsOfField(field: PositionField): typeof FOUR_QUADRANTS | 
 
 export * from "./resolution.js";
 export * from "./curtain.js";
+export * from "./backdropDim.js";
 
 export { ServerClock } from "./serverClock.js";
 export { followMediaClock } from "./mediaClock.js";
