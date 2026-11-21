@@ -6,11 +6,9 @@ import type { CursorField } from "../cursors/cursorField.js";
 import { CurtainRenderer } from "./curtainRenderer.js";
 import { CurtainScene } from "./curtainScene.js";
 import { stepTextSwap, type TextSwap } from "./textSwap.js";
+import { curtainVisibility } from "./visibility.js";
 
-const FADE_IN_MS = 700;
-const FADE_OUT_MS = 900;
-/** How long a finished curtain stays on screen, fading into the next scene. */
-export const CURTAIN_LEAVE_MS = 1_200;
+export { CURTAIN_LEAVE_MS } from "./visibility.js";
 const MAX_RENDER_WIDTH = 1920;
 const FONT = '"Optik", system-ui, sans-serif';
 
@@ -24,9 +22,10 @@ export type CurtainStageProps = {
   /** The vote is resolved: lights calm down and cursor lights fade. */
   closed: boolean;
   /**
-   * Server time the curtain fades in, and the time it must be gone by when the
-   * question hides before its scene ends. Consecutive curtain votes keep one
-   * stage: the fabric stays and only the question text changes.
+   * Server time the question appears (the fabric is up before, from its first
+   * video frame), and the time it must be gone by when the question hides
+   * before its scene ends. Consecutive curtain votes keep one stage: the
+   * fabric stays and only the question text changes.
    */
   visibleFrom?: number;
   visibleUntil?: number;
@@ -146,16 +145,18 @@ export function CurtainStage(props: CurtainStageProps) {
       const scene = sceneRef.current;
       const local = Date.now();
       const now = p.clock.now();
-      const from = p.visibleFrom ?? Number.NEGATIVE_INFINITY;
-      const until = p.visibleUntil ?? Number.POSITIVE_INFINITY;
-      const fadeIn = Number.isFinite(from) ? Math.min(1, Math.max(0, (now - from) / FADE_IN_MS)) : 1;
-      const fadeOut = Number.isFinite(until) ? Math.min(1, Math.max(0, (until - now) / FADE_OUT_MS)) : 1;
       const leaving = p.leavingSince ?? null;
-      const leave = leaving === null ? 1 : Math.max(0, 1 - (local - leaving) / CURTAIN_LEAVE_MS);
-      const opacity = fadeIn * fadeOut * leave;
+      const { fabric: opacity, content } = curtainVisibility({
+        now,
+        visibleFrom: p.visibleFrom,
+        visibleUntil: p.visibleUntil,
+        leavingForMs: leaving === null ? null : local - leaving,
+        videoReady: renderer.videoReady,
+      });
 
       if (target.scene !== scene || target.question !== p.question) target = { scene, question: p.question };
-      const step = stepTextSwap(swap, target, opacity > 0.01, local);
+      // Before the question is due there is no old text on screen to fade out.
+      const step = stepTextSwap(swap, target, opacity > 0.01 && content, local);
       swap = step.swap;
       if (step.redraw) textDirty = true;
       const shown = swap.shown;
@@ -183,13 +184,15 @@ export function CurtainStage(props: CurtainStageProps) {
       // their base glow (the live counts belong to the new question) until its labels are gone.
       const lit = shown.scene;
       lit.step(elapsed, swapping ? null : p.liveCounts, closed, local);
-      renderer.uploadPools(lit.lightMap(), lit.pools.columns, lit.pools.rows);
+      const light = lit.lightMap();
+      if (!content) light.fill(0);
+      renderer.uploadPools(light, lit.pools.columns, lit.pools.rows);
       renderer.uploadVideo(video);
 
       renderer.render({
         opacity,
-        textOpacity: step.textOpacity,
-        cursorOpacity: lit.cursorOpacity(local),
+        textOpacity: content ? step.textOpacity : 0,
+        cursorOpacity: content ? lit.cursorOpacity(local) : 0,
         fabric: p.treatment.curtain,
         cursors: lit.cursorLights(p.cursorField.renderAt(local), local),
       });

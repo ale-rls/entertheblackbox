@@ -296,6 +296,11 @@ export class CurtainRenderer {
     this.hasVideo = true;
   }
 
+  /** A curtain video frame has been uploaded (false while the clip loads, or with no clip). */
+  get videoReady(): boolean {
+    return this.hasVideo;
+  }
+
   /** No curtain clip: fall back to the plain fabric instead of keeping the last uploaded frame. */
   clearVideo(): void {
     this.hasVideo = false;

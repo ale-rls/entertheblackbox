@@ -100,8 +100,10 @@ over both lit pools and unlit fabric.
 ## Timing
 
 Ordinary position questions and video-timed position questions keep their
-authored timing. Video-timed questions fade the curtain in at `showAtMs` and
-out by `hideAtMs`. When a vote closes the server stops accepting votes, the
+authored timing. The curtain is up from the scene's first video frame, so a
+vote after a closed-curtain scene never dips to black. On video-timed
+questions the question, labels, lit areas and cursors appear at once at
+`showAtMs`, and the curtain fades out by `hideAtMs`. When a vote closes the server stops accepting votes, the
 pools settle back to their base glow (no winner spotlight), cursor lights
 fade, and the lit curtain fades into the next scene.
 
