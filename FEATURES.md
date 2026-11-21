@@ -215,7 +215,7 @@ Group membership, nested selections, transfer/reconnect routing and native per-g
 
 ## Authored stage monitors — M1–M4
 
-- Four independent authenticated `/display/?monitor=M1` … `M4` pages; replacement affects only that monitor, never the main projection — `apps/server/src/engine/phase-engine.ts`, `apps/display/src/monitors/MonitorApp.tsx`.
+- Four independent authenticated `/display/?monitor=M1` … `M4` pages; replacement affects only that monitor, never the main projection. The pages hide the mouse pointer (`cursor: none` in `monitors.css`) — `apps/server/src/engine/phase-engine.ts`, `apps/display/src/monitors/MonitorApp.tsx`.
 - Vote-result monitor cues show the unique winning answer label and colour from the latest or a named resolved vote in the current timeline; authored fallback for ties, empty or unresolved votes. Results survive scene transitions and monitor reconnects, and reset on a new session. Studio provides vote scene and fallback controls.
 - Per-phase video, image/caption, text, placeholder and blank sequences with offsets, optional durations, fit and looping; missing screens and gaps are black — `packages/scenario/src/monitors.ts`.
 - Countdowns replace the cue text with a large centred number in the text's colour (no corner countdown); only text, vote-result and placeholder cues count down, so image/video monitors (e.g. a scale) stay clean while the opposing question monitors count. Optional per cue (`countdownShowsText`, Studio checkbox): keep the text, smaller and centred, beneath the number.
