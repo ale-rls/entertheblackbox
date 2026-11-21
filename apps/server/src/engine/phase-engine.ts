@@ -373,6 +373,13 @@ export class PhaseEngine {
     this.requirePhase("idle");
   }
 
+  /**
+   * When the current run of scenes sharing one background loop began. The loop plays from its
+   * first frame there (a closed-curtain loop picks up exactly where a closing ends) and runs on
+   * without a jump through the following scenes that share it.
+   */
+  private loopStartedAt: number | null = null;
+
   get lifecycleState(): EngineLifecycle {
     return this.lifecycle;
   }
@@ -1017,6 +1024,7 @@ export class PhaseEngine {
       } : {}),
       ...(this.nextIsTitleBackdrop(phase) ? { nextTitleBackdrop: true as const } : {}),
       ...(phase.kind === "video" && phase.operatorFields ? { operatorField: this.operatorFieldState } : {}),
+      ...(this.loopStartedAt !== null && loopVideoSrcOf(phase) !== undefined ? { loopStartedAt: this.loopStartedAt } : {}),
       scenarioVersion: this.scenario.version,
       startedAt: this.phaseStartedAt,
       deadlineAt: this.deadlineAt,
@@ -1770,6 +1778,9 @@ export class PhaseEngine {
     this.displayPlaybackIssue = null;
     this.phaseId = target;
     this.phaseStartedAt = now + (phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? phase.syncLeadMs ?? 3000 : 0);
+    const loopSrc = loopVideoSrcOf(phase);
+    this.loopStartedAt = loopSrc === undefined ? null
+      : loopSrc === loopVideoSrcOf(previous) && this.loopStartedAt !== null ? this.loopStartedAt : this.phaseStartedAt;
     this.phaseEpoch = this.nextEpoch();
     this.video.cancel();
     this.deadlineAt = phase.kind === "video" || phase.kind === "video-position-question"
@@ -2551,4 +2562,9 @@ export class PhaseEngine {
   private close(socket: WebSocket, code: number, reason: string): void {
     if (isOpen(socket)) socket.close(code, reason);
   }
+}
+
+/** A scene's background loop, for the kinds that have one. */
+function loopVideoSrcOf(phase: Phase): string | undefined {
+  return "loopVideoSrc" in phase ? phase.loopVideoSrc : undefined;
 }

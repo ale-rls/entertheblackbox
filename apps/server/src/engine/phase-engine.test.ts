@@ -407,6 +407,32 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.getSnapshot().nextTitleBackdrop).toBeUndefined();
   });
 
+  it("starts a background loop where its run of scenes begins and keeps it through the run", () => {
+    let now = 1_000;
+    const loopScenario = scenarioSchema.parse({
+      ...scenario,
+      phases: [
+        { kind: "idle", id: "idle" },
+        { kind: "video", id: "intro", src: "close.mp4", expectedDurationMs: 100, next: "after" },
+        { kind: "narration", id: "after", text: " ", loopVideoSrc: "closed.mp4", durationMs: 100, next: "title" },
+        { kind: "narration", id: "title", text: "TITEL", loopVideoSrc: "closed.mp4", durationMs: 100, next: "open" },
+        { kind: "narration", id: "open", text: " ", loopVideoSrc: "open.mp4", durationMs: 100, next: "idle" },
+      ],
+    });
+    const { engine } = setup({ now: () => now, testScenario: loopScenario });
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    expect(engine.getSnapshot().loopStartedAt).toBeUndefined();
+    now = 1_200;
+    engine.adminSkip(now);
+    expect(engine.getSnapshot()).toMatchObject({ id: "after", startedAt: 1_200, loopStartedAt: 1_200 });
+    now = 1_500;
+    engine.adminSkip(now);
+    expect(engine.getSnapshot()).toMatchObject({ id: "title", startedAt: 1_500, loopStartedAt: 1_200 });
+    now = 1_900;
+    engine.adminSkip(now);
+    expect(engine.getSnapshot()).toMatchObject({ id: "open", loopStartedAt: 1_900 });
+  });
+
   it("starts the lobby and show without a display", () => {
     let now = 1_000;
     const { engine, registry } = setup({ now: () => now });
