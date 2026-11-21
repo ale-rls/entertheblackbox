@@ -91,6 +91,8 @@ export const phaseSnapshotSchema = z.intersection(
     nextTitleBackdrop: z.literal(true).optional(),
     /** Operator fields (operatorFields): the field lit now and the counter, set from Admin. */
     operatorField: z.object({ target: nonEmpty.nullable(), count: z.number().int().nonnegative() }).optional(),
+    /** Server time the current run of scenes sharing this background loop began: the loop's frame 0. */
+    loopStartedAt: timestamp.optional(),
   }),
 );
 

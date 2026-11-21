@@ -147,6 +147,9 @@ describe("projection loop handoffs", () => {
     await phase(2, film("qr-close.mp4"));
     const qrClose = video("qr-close.mp4");
     await present(qrClose);
+    // A picture-only clip takes over with a short dissolve: the loop fades out on top, then leaves.
+    expect((activeLoop() as HTMLVideoElement | null)?.style.opacity).toBe("0");
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 550)); });
     expect(activeLoop()).toBeNull();
 
     // Same loop, same slot as before: the earlier element's frame must not count for the new one.
