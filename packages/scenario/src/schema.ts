@@ -48,6 +48,8 @@ const outgoingCueSchema = z.string().trim().min(1).max(120);
 const cueNameSchema = z.string().trim().min(1).max(160).optional();
 const phoneAudioFields = {
   cueName: cueNameSchema,
+  /** With showCursors: the main display shows cursors only from this time into the scene (e.g. after a 20 s hold). */
+  cursorsFromMs: z.number().int().nonnegative().optional(),
   /**
    * Muted video the main display loops behind this scene on the server clock (e.g. an idle
    * curtain). Replaces the still of a still + MP3 scene; consecutive scenes sharing it run on
