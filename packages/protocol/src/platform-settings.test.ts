@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, resolveSignageVideoUrl, resolveWaitingVideoUrl, waitingVideoUrlSchema } from "./platform-settings.js";
+import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, resolveCursorSize, resolveSignageVideoUrl, resolveWaitingVideoUrl, waitingVideoUrlSchema } from "./platform-settings.js";
 
 describe("waiting display settings", () => {
   it("loads existing saved text without requiring a migration", () => {
@@ -22,5 +22,19 @@ describe("waiting display settings", () => {
   it("accepts hosted videos but rejects unsafe or malformed URL schemes", () => {
     for (const url of ["", "/media/lobby.mp4", "https://example.org/lobby.webm"]) expect(waitingVideoUrlSchema.safeParse(url).success).toBe(true);
     for (const url of ["javascript:alert(1)", "file:///secret.mp4", "//example.org/video", "/\\example.org/video", " https://example.org/video", "relative.mp4"]) expect(waitingVideoUrlSchema.safeParse(url).success).toBe(false);
+  });
+});
+
+describe("cursor size settings", () => {
+  it("defaults older stored settings to normal size and resolves per scene", () => {
+    const { cursorSize: _size, cursorSizeByScene: _byScene, ...older } = DEFAULT_DISPLAY_SETTINGS;
+    const settings = displaySettingsSchema.parse(older);
+    expect(settings.cursorSize).toBe(1);
+    expect(resolveCursorSize(settings, "any")).toBe(1);
+    const sized = displaySettingsSchema.parse({ ...older, cursorSize: 1.25, cursorSizeByScene: { "T5-5-2": 3 } });
+    expect(resolveCursorSize(sized, "T5-5-2")).toBe(3);
+    expect(resolveCursorSize(sized, "other")).toBe(1.25);
+    expect(resolveCursorSize(sized, null)).toBe(1.25);
+    expect(displaySettingsSchema.safeParse({ ...older, cursorSize: 10 }).success).toBe(false);
   });
 });
