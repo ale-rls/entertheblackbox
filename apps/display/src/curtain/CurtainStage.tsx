@@ -8,6 +8,8 @@ import { CurtainScene } from "./curtainScene.js";
 
 const FADE_IN_MS = 700;
 const FADE_OUT_MS = 900;
+/** A question change on a curtain that stays: the old text fades out, then the new one fades in. */
+const TEXT_SWAP_MS = 300;
 /** How long a finished curtain stays on screen, fading into the next scene. */
 export const CURTAIN_LEAVE_MS = 1_200;
 const MAX_RENDER_WIDTH = 1920;
@@ -22,7 +24,11 @@ export type CurtainStageProps = {
   liveCounts: Readonly<Record<string, number>> | null;
   /** The vote is resolved: lights calm down and cursor lights fade. */
   closed: boolean;
-  /** Server time the lighting scene starts / must be gone by (video-timed questions). */
+  /**
+   * Server time the curtain fades in, and the time it must be gone by when the
+   * question hides before its scene ends. Consecutive curtain votes keep one
+   * stage: the fabric stays and only the question text changes.
+   */
   visibleFrom?: number;
   visibleUntil?: number;
   /** Local time the phase moved on; the curtain fades into the next scene. */
@@ -84,8 +90,10 @@ function drawText(canvas: HTMLCanvasElement, question: string, scene: CurtainSce
 }
 
 /**
- * The lit curtain for one curtain-light vote: packed fabric video, answer
+ * The lit curtain for a run of curtain-light votes: packed fabric video, answer
  * pools driven by the authoritative live counts, and one light per cursor.
+ * A new question swaps the text and pools without rebuilding the renderer or
+ * restarting the fabric video.
  * Everything time-dependent is read through refs so a 60 fps loop never
  * re-renders React.
  */
@@ -94,6 +102,8 @@ export function CurtainStage(props: CurtainStageProps) {
   const live = useRef(props);
   live.current = props;
   const scene = useMemo(() => new CurtainScene(props.field, props.treatment), [props.field, props.treatment]);
+  const sceneRef = useRef(scene);
+  sceneRef.current = scene;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -125,10 +135,27 @@ export function CurtainStage(props: CurtainStageProps) {
       void video.play().catch((error: unknown) => console.warn("curtain: video did not start", error));
     };
 
+    // The text on screen and the question it belongs to; a new scene swaps them halfway through a text fade.
+    let shown = { scene: sceneRef.current, question: live.current.question };
+    let swapStartedAt: number | null = null;
+
     let raf = 0;
     let last = performance.now();
     const frame = (frameTime: number) => {
       const p = live.current;
+      const scene = sceneRef.current;
+      const local = Date.now();
+      if (swapStartedAt === null && (scene !== shown.scene || p.question !== shown.question)) swapStartedAt = local;
+      let textOpacity = 1;
+      if (swapStartedAt !== null) {
+        const t = local - swapStartedAt;
+        if (t < TEXT_SWAP_MS) textOpacity = 1 - t / TEXT_SWAP_MS;
+        else {
+          if (shown.scene !== scene || shown.question !== p.question) { shown = { scene, question: p.question }; textDirty = true; }
+          textOpacity = Math.min(1, (t - TEXT_SWAP_MS) / TEXT_SWAP_MS);
+          if (t >= 2 * TEXT_SWAP_MS) swapStartedAt = null;
+        }
+      }
       syncVideo();
       const scale = Math.min(window.devicePixelRatio || 1, 1.5);
       const width = Math.min(MAX_RENDER_WIDTH, Math.max(1, Math.round(canvas.clientWidth * scale)));
@@ -140,14 +167,13 @@ export function CurtainStage(props: CurtainStageProps) {
       }
       renderer.resize(width, height);
       if (textDirty) {
-        drawText(text, p.question, scene);
+        drawText(text, shown.question, shown.scene);
         renderer.uploadText(text);
         textDirty = false;
       }
 
       const elapsed = Math.min(100, Math.max(0, frameTime - last));
       last = frameTime;
-      const local = Date.now();
       const leaving = p.leavingSince ?? null;
       const closed = p.closed || leaving !== null;
       scene.step(elapsed, p.liveCounts, closed, local);
@@ -162,6 +188,7 @@ export function CurtainStage(props: CurtainStageProps) {
       const leave = leaving === null ? 1 : Math.max(0, 1 - (local - leaving) / CURTAIN_LEAVE_MS);
       renderer.render({
         opacity: fadeIn * fadeOut * leave,
+        textOpacity,
         cursorOpacity: scene.cursorOpacity(local),
         fabric: p.treatment.curtain,
         cursors: scene.cursorLights(p.cursorField.renderAt(local), local),
@@ -178,8 +205,8 @@ export function CurtainStage(props: CurtainStageProps) {
       video.load();
       renderer.dispose();
     };
-  }, [scene]);
+  }, []);
 
-  // Question changes rebuild the text on the next frame via a new scene.
+  // Question changes swap the text through a short fade on the next frames.
   return <canvas ref={canvasRef} className="curtain-canvas" aria-label={props.question} />;
 }

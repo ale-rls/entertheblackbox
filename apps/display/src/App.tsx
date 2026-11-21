@@ -289,16 +289,20 @@ export function App() {
       setCurtainHold((previous) => previous === null || previous.leavingSince !== null ? previous : { ...previous, leavingSince: Date.now() });
       return;
     }
-    setCurtainHold({
+    const shownFrom = curtainPhase.kind === "video-position-question" ? curtainPhase.startedAt + curtainPhase.showAtMs : curtainPhase.startedAt;
+    // The curtain only fades out on its own when the question hides before its scene ends;
+    // otherwise it stays until the next scene, which is either another curtain vote or the leave fade.
+    const hidesEarly = curtainPhase.kind === "video-position-question" && curtainPhase.hideAtMs < curtainPhase.expectedDurationMs;
+    setCurtainHold((previous) => ({
       key: curtainKey,
       treatment: curtainPhase.voteTreatment!,
       field: curtainPhase.field,
       question: curtainPhase.text,
-      ...(curtainPhase.kind === "video-position-question"
-        ? { visibleFrom: curtainPhase.startedAt + curtainPhase.showAtMs, visibleUntil: curtainPhase.startedAt + curtainPhase.hideAtMs }
-        : { visibleFrom: curtainPhase.startedAt }),
+      // A vote straight after another keeps the curtain up: no new fade-in, only the text changes.
+      visibleFrom: previous !== null && previous.leavingSince === null && previous.visibleUntil === undefined ? previous.visibleFrom ?? shownFrom : shownFrom,
+      ...(hidesEarly ? { visibleUntil: curtainPhase.startedAt + curtainPhase.hideAtMs } : {}),
       leavingSince: null,
-    });
+    }));
     // Only a new phase epoch starts a new lighting scene; repeated snapshots must not reset it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curtainKey]);
@@ -467,7 +471,6 @@ export function App() {
 
       {curtainHold !== null && !curtainUnavailable && <section className="layer layer-curtain">
         <CurtainStage
-          key={curtainHold.key}
           treatment={curtainHold.treatment}
           field={curtainHold.field}
           question={curtainHold.question}

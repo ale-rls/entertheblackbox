@@ -34,7 +34,7 @@ uniform sampler2D cursorLight; // accumulated cursor floods, linear RGB
 uniform sampler2D txt;      // text at output size: RGBA lettering and shadow
 uniform bool hasTex, spotlight;
 uniform vec4 crop;          // clip-space crop: xy offset, zw size (cover fit)
-uniform float baked, folds, shine, shadow, opacity, cursorScale;
+uniform float baked, folds, shine, shadow, opacity, cursorScale, textOpacity;
 const float ASPECT = 1280. / 704.;
 const float RELIEF = .22;
 const vec2 HALF = vec2(.5 / 2560., .5 / 1408.);
@@ -89,7 +89,7 @@ void main(){
   vec3 shown = pow(c, vec3(1. / 2.2));
   vec4 t = texture(txt, uv);
   // Preserve white lettering and its dark halo from the CPU text canvas.
-  o = vec4(mix(shown, t.rgb, t.a), opacity);
+  o = vec4(mix(shown, t.rgb, t.a * textOpacity), opacity);
 }`;
 
 /** Instanced Gaussian sprite: used for both cursor floods (into a buffer) and cores (on screen). */
@@ -137,6 +137,8 @@ export type CursorLight = {
 
 export type CurtainFrame = {
   opacity: number;
+  /** Fades only the lettering and field lines (a question change on a curtain that stays). Defaults to 1. */
+  textOpacity?: number;
   /** Fades cursor floods and cores together (e.g. after the vote closes). */
   cursorOpacity: number;
   fabric: CurtainFabricParams;
@@ -383,6 +385,7 @@ export class CurtainRenderer {
     gl.uniform1f(u("shine"), frame.fabric.shine);
     gl.uniform1f(u("shadow"), frame.fabric.shadow);
     gl.uniform1f(u("opacity"), frame.opacity);
+    gl.uniform1f(u("textOpacity"), frame.textOpacity ?? 1);
     gl.uniform1f(u("cursorScale"), 1 / storeScale);
     gl.bindVertexArray(this.quad);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
