@@ -296,6 +296,11 @@ export class CurtainRenderer {
     this.hasVideo = true;
   }
 
+  /** No curtain clip: fall back to the plain fabric instead of keeping the last uploaded frame. */
+  clearVideo(): void {
+    this.hasVideo = false;
+  }
+
   /** Upload the composed pool light map (linear RGB, columns x rows). */
   uploadPools(light: Float32Array, columns: number, rows: number): void {
     const gl = this.gl;

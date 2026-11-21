@@ -5,15 +5,10 @@ import type { ServerClock } from "../lib/serverClock.js";
 import type { CursorField } from "../cursors/cursorField.js";
 import { CurtainRenderer } from "./curtainRenderer.js";
 import { CurtainScene } from "./curtainScene.js";
+import { stepTextSwap, type TextSwap } from "./textSwap.js";
 
 const FADE_IN_MS = 700;
 const FADE_OUT_MS = 900;
-/**
- * A question change on a curtain that stays: the old text fades out exponentially
- * (down to 1% at the end) and the new text appears at once.
- */
-const TEXT_OUT_MS = 900;
-const TEXT_OUT_RATE = Math.log(100) / TEXT_OUT_MS;
 /** How long a finished curtain stays on screen, fading into the next scene. */
 export const CURTAIN_LEAVE_MS = 1_200;
 const MAX_RENDER_WIDTH = 1920;
@@ -134,14 +129,15 @@ export function CurtainStage(props: CurtainStageProps) {
       const url = live.current.videoUrl;
       if (url === videoUrl) return;
       videoUrl = url;
-      if (url === null) { video.removeAttribute("src"); video.load(); return; }
+      if (url === null) { video.removeAttribute("src"); video.load(); renderer.clearVideo(); return; }
       video.src = url;
       void video.play().catch((error: unknown) => console.warn("curtain: video did not start", error));
     };
 
-    // The text on screen and the question it belongs to; a new scene swaps them halfway through a text fade.
-    let shown = { scene: sceneRef.current, question: live.current.question };
-    let swapStartedAt: number | null = null;
+    // What the curtain shows (labels, divisions, lit areas) and the question it belongs to.
+    // A new question replaces it after the old text has faded out (see stepTextSwap).
+    let target = { scene: sceneRef.current, question: live.current.question };
+    let swap: TextSwap<typeof target> = { shown: target, startedAt: null };
 
     let raf = 0;
     let last = performance.now();
@@ -149,17 +145,21 @@ export function CurtainStage(props: CurtainStageProps) {
       const p = live.current;
       const scene = sceneRef.current;
       const local = Date.now();
-      if (swapStartedAt === null && (scene !== shown.scene || p.question !== shown.question)) swapStartedAt = local;
-      let textOpacity = 1;
-      if (swapStartedAt !== null) {
-        const t = local - swapStartedAt;
-        if (t < TEXT_OUT_MS) textOpacity = Math.exp(-TEXT_OUT_RATE * t);
-        else {
-          shown = { scene, question: p.question };
-          textDirty = true;
-          swapStartedAt = null;
-        }
-      }
+      const now = p.clock.now();
+      const from = p.visibleFrom ?? Number.NEGATIVE_INFINITY;
+      const until = p.visibleUntil ?? Number.POSITIVE_INFINITY;
+      const fadeIn = Number.isFinite(from) ? Math.min(1, Math.max(0, (now - from) / FADE_IN_MS)) : 1;
+      const fadeOut = Number.isFinite(until) ? Math.min(1, Math.max(0, (until - now) / FADE_OUT_MS)) : 1;
+      const leaving = p.leavingSince ?? null;
+      const leave = leaving === null ? 1 : Math.max(0, 1 - (local - leaving) / CURTAIN_LEAVE_MS);
+      const opacity = fadeIn * fadeOut * leave;
+
+      if (target.scene !== scene || target.question !== p.question) target = { scene, question: p.question };
+      const step = stepTextSwap(swap, target, opacity > 0.01, local);
+      swap = step.swap;
+      if (step.redraw) textDirty = true;
+      const shown = swap.shown;
+      const swapping = swap.startedAt !== null;
       syncVideo();
       const scale = Math.min(window.devicePixelRatio || 1, 1.5);
       const width = Math.min(MAX_RENDER_WIDTH, Math.max(1, Math.round(canvas.clientWidth * scale)));
@@ -178,24 +178,20 @@ export function CurtainStage(props: CurtainStageProps) {
 
       const elapsed = Math.min(100, Math.max(0, frameTime - last));
       last = frameTime;
-      const leaving = p.leavingSince ?? null;
       const closed = p.closed || leaving !== null;
-      scene.step(elapsed, p.liveCounts, closed, local);
-      renderer.uploadPools(scene.lightMap(), scene.pools.columns, scene.pools.rows);
+      // Lit areas follow the content on screen: during a swap the old question's areas settle to
+      // their base glow (the live counts belong to the new question) until its labels are gone.
+      const lit = shown.scene;
+      lit.step(elapsed, swapping ? null : p.liveCounts, closed, local);
+      renderer.uploadPools(lit.lightMap(), lit.pools.columns, lit.pools.rows);
       renderer.uploadVideo(video);
 
-      const now = p.clock.now();
-      const from = p.visibleFrom ?? Number.NEGATIVE_INFINITY;
-      const until = p.visibleUntil ?? Number.POSITIVE_INFINITY;
-      const fadeIn = Number.isFinite(from) ? Math.min(1, Math.max(0, (now - from) / FADE_IN_MS)) : 1;
-      const fadeOut = Number.isFinite(until) ? Math.min(1, Math.max(0, (until - now) / FADE_OUT_MS)) : 1;
-      const leave = leaving === null ? 1 : Math.max(0, 1 - (local - leaving) / CURTAIN_LEAVE_MS);
       renderer.render({
-        opacity: fadeIn * fadeOut * leave,
-        textOpacity,
-        cursorOpacity: scene.cursorOpacity(local),
+        opacity,
+        textOpacity: step.textOpacity,
+        cursorOpacity: lit.cursorOpacity(local),
         fabric: p.treatment.curtain,
-        cursors: scene.cursorLights(p.cursorField.renderAt(local), local),
+        cursors: lit.cursorLights(p.cursorField.renderAt(local), local),
       });
       raf = requestAnimationFrame(frame);
     };
