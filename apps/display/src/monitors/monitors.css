@@ -1,4 +1,5 @@
-.monitor-root { position: fixed; inset: 0; background: #000; color: #fff; overflow: hidden; font-family: "Optik", system-ui, sans-serif; }
+/* No mouse pointer over the stage monitors: the page has no controls, and a resting pointer sits on top of the cue text. */
+.monitor-root { position: fixed; inset: 0; background: #000; color: #fff; overflow: hidden; font-family: "Optik", system-ui, sans-serif; cursor: none; }
 .monitor-root > video, .monitor-image, .monitor-image img { width: 100%; height: 100%; margin: 0; }
 .monitor-root > video { position: absolute; inset: 0; }
 .monitor-text, .monitor-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6vw; text-align: center; white-space: pre-wrap; overflow-wrap: anywhere; font-size: clamp(32px, 6vw, 120px); line-height: 1.15; font-weight: 700; }
