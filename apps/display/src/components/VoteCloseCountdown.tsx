@@ -6,11 +6,14 @@ export const DEFAULT_VOTE_CLOSE_COUNTDOWN_SECONDS = 5;
 
 export const VOTE_COUNTDOWN_SOUND_SRC = "/display/sfx/Ping4.mp3";
 
+/** A long countdown stays silent until its last seconds; only these ping. */
+export const VOTE_COUNTDOWN_PING_SECONDS = 5;
+
 /**
  * Dramatic centered countdown for the final seconds before a vote closes.
  * Stays hidden until inside the countdown window (parent should stop
  * rendering the small corner Countdown at that point) and beeps once per
- * whole second while sound is enabled.
+ * whole second of its last VOTE_COUNTDOWN_PING_SECONDS while sound is enabled.
  */
 export function VoteCloseCountdown({
   clock,
@@ -42,7 +45,7 @@ export function VoteCloseCountdown({
   const inFinalCountdown = remainingMs > 0 && secondsLeft <= durationSeconds;
 
   useEffect(() => {
-    if (!inFinalCountdown || !soundEnabled) return;
+    if (!inFinalCountdown || !soundEnabled || secondsLeft > VOTE_COUNTDOWN_PING_SECONDS) return;
     if (lastBeepSecond.current === secondsLeft) return;
     lastBeepSecond.current = secondsLeft;
     const audio = ping.current ?? new Audio(VOTE_COUNTDOWN_SOUND_SRC);
