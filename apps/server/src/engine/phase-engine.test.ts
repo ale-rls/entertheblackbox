@@ -407,6 +407,31 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.getSnapshot().nextTitleBackdrop).toBeUndefined();
   });
 
+  it("tells the display when the next scene is a vote over the open curtain, not a curtain-light one", () => {
+    let now = 1_000;
+    const base = scenario.phases.find((phase) => phase.kind === "position-question")!;
+    const vote = (id: string, next: string, extra: object = {}) => ({
+      ...base, id, loopVideoSrc: "open-loop.mp4", next: { type: "fixed", target: next }, ...extra,
+    });
+    const voteScenario = scenarioSchema.parse({
+      ...scenario,
+      phases: [
+        { kind: "idle", id: "idle" },
+        { kind: "video", id: "intro", src: "a.mp4", expectedDurationMs: 100, next: "open-vote" },
+        vote("open-vote", "before-lit"),
+        { kind: "video", id: "before-lit", src: "b.mp4", expectedDurationMs: 100, next: "lit-vote" },
+        vote("lit-vote", "idle", { curtainLightVote: true }),
+      ],
+    });
+    const { engine } = setup({ now: () => now, testScenario: voteScenario });
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    expect(engine.getSnapshot()).toMatchObject({ id: "intro", nextTitleBackdrop: true });
+    now += 50;
+    expect(engine.adminJump("before-lit", now)).toEqual({ ok: true });
+    expect(engine.getSnapshot().id).toBe("before-lit");
+    expect(engine.getSnapshot().nextTitleBackdrop).toBeUndefined();
+  });
+
   it("starts a background loop where its run of scenes begins and keeps it through the run", () => {
     let now = 1_000;
     const loopScenario = scenarioSchema.parse({

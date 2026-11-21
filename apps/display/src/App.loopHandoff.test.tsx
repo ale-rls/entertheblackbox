@@ -198,6 +198,25 @@ describe("projection loop handoffs", () => {
     expect(activeForeground()).toBeNull();
   });
 
+  it("keeps a closing over a still + MP3 scene while its loop dissolves in", async () => {
+    await phase(1, film("qr-close.mp4"));
+    const qrClose = video("qr-close.mp4");
+    await present(qrClose);
+    await phase(2, still("black.jpg", "curtain.mp4"));
+    const curtain = video("curtain.mp4");
+    await present(curtain);
+    const incoming = image("black.jpg");
+    await act(async () => incoming.dispatchEvent(new Event("load")));
+    // The sound starts now; the still waits under the closing's last frame.
+    expect(activeForeground()).toBe(incoming);
+    expect(activeLoop()).toBe(curtain);
+    expect(curtain.style.animation).toContain("phase-loop-fade-in 500ms");
+    expect(document.querySelector(".phase-video-slot-held video")).toBe(qrClose);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 550)); });
+    expect(video("qr-close.mp4")).toBeNull();
+    expect(activeForeground()).toBe(incoming);
+  });
+
   it("keeps a shared loop mounted across cues with a new still under it", async () => {
     await phase(1, loop("alpha.webm"));
     const overlay = video("alpha.webm");

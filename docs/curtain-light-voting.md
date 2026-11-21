@@ -136,8 +136,11 @@ own level over one second; a vote straight after another keeps it as it is.
 A title (a narration scene with text over a loop video) dims its loop to the
 vote's level the same way: it redraws each pixel with the lit curtain's own
 curve at `baked` 0.31, easing in over one second and back out into the next
-scene (`apps/display/src/curtain/titleDim.tsx`). A vote right after a title
-starts at the title's level, with no dim-in. On video-timed
+scene (`apps/display/src/curtain/titleDim.tsx`). A vote that is not drawn as
+curtain light but runs over a loop (the open-curtain votes) dims that loop the
+same way under its labels; the scene before it dims in during its last second
+and consecutive ones stay dimmed (`packages/shared/src/backdropDim.ts`). A vote
+right after a title starts at the title's level, with no dim-in. On video-timed
 questions the question, labels, lit areas and cursors appear at once at
 `showAtMs`, and the curtain fades out by `hideAtMs`. When a vote closes the server stops accepting votes, the
 pools settle back to their base glow (no winner spotlight), cursor lights
