@@ -6,7 +6,7 @@ import type { CursorField } from "../cursors/cursorField.js";
 import { CurtainRenderer } from "./curtainRenderer.js";
 import { CurtainScene } from "./curtainScene.js";
 import { stepTextSwap, type TextSwap } from "./textSwap.js";
-import { curtainVisibility } from "./visibility.js";
+import { curtainVisibility, dimmedBaked } from "./visibility.js";
 
 export { CURTAIN_LEAVE_MS } from "./visibility.js";
 const MAX_RENDER_WIDTH = 1920;
@@ -140,6 +140,8 @@ export function CurtainStage(props: CurtainStageProps) {
 
     let raf = 0;
     let last = performance.now();
+    // Local time this stage's fabric first showed; the lit curtain dims in from there.
+    let upAt: number | null = null;
     const frame = (frameTime: number) => {
       const p = live.current;
       const scene = sceneRef.current;
@@ -154,6 +156,7 @@ export function CurtainStage(props: CurtainStageProps) {
         videoReady: renderer.videoReady,
       });
 
+      if (opacity > 0 && upAt === null) upAt = local;
       if (target.scene !== scene || target.question !== p.question) target = { scene, question: p.question };
       // Before the question is due there is no old text on screen to fade out.
       const step = stepTextSwap(swap, target, opacity > 0.01 && content, local);
@@ -193,7 +196,8 @@ export function CurtainStage(props: CurtainStageProps) {
         opacity,
         textOpacity: content ? step.textOpacity : 0,
         cursorOpacity: content ? lit.cursorOpacity(local) : 0,
-        fabric: p.treatment.curtain,
+        // A vote right after another keeps this stage, so only a fresh curtain dims in.
+        fabric: { ...p.treatment.curtain, baked: dimmedBaked(p.treatment.curtain.baked, upAt === null ? null : local - upAt) },
         cursors: lit.cursorLights(p.cursorField.renderAt(local), local),
       });
       raf = requestAnimationFrame(frame);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CURTAIN_LEAVE_MS, FADE_OUT_MS, curtainVisibility } from "./visibility.js";
+import { CURTAIN_LEAVE_MS, DIM_IN_MS, DIM_START_BAKED, FADE_OUT_MS, curtainVisibility, dimmedBaked } from "./visibility.js";
 
 describe("curtainVisibility", () => {
   it("shows the fabric from the first video frame, before the question is due", () => {
@@ -24,5 +24,21 @@ describe("curtainVisibility", () => {
     expect(curtainVisibility({ now: 2_000, visibleUntil: 1_000, leavingForMs: null, videoReady: true }).fabric).toBe(0);
     expect(curtainVisibility({ now: 0, leavingForMs: CURTAIN_LEAVE_MS / 2, videoReady: true }).fabric).toBeCloseTo(0.5);
     expect(curtainVisibility({ now: 0, leavingForMs: CURTAIN_LEAVE_MS, videoReady: true }).fabric).toBe(0);
+  });
+});
+
+describe("dimmedBaked", () => {
+  it("starts at the plain curtain's brightness and eases down to the show's level", () => {
+    expect(dimmedBaked(0.31, null)).toBe(DIM_START_BAKED);
+    expect(dimmedBaked(0.31, 0)).toBe(DIM_START_BAKED);
+    const mid = dimmedBaked(0.31, DIM_IN_MS / 2);
+    expect(mid).toBeLessThan(DIM_START_BAKED);
+    expect(mid).toBeGreaterThan(0.31);
+    expect(dimmedBaked(0.31, DIM_IN_MS)).toBeCloseTo(0.31);
+    expect(dimmedBaked(0.31, DIM_IN_MS * 5)).toBeCloseTo(0.31);
+  });
+
+  it("never brightens a curtain set brighter than the start level", () => {
+    expect(dimmedBaked(1.5, 0)).toBe(1.5);
   });
 });
