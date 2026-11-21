@@ -13,6 +13,13 @@ export interface ClockMedia {
   removeEventListener(event: string, listener: () => void): void;
 }
 
+/**
+ * How long past its duration on the clock a playing cue may run to reach its own end.
+ * The follower only re-seeks beyond 0.25 s of drift, so playback can trail the clock;
+ * stopping it the moment the clock reaches the duration clipped the last word.
+ */
+export const MEDIA_END_GRACE_S = 1.5;
+
 /** Align finite cue media to the authoritative phase start, including late loads. */
 export function followMediaClock(media: ClockMedia, clock: ServerClock, startedAt: number, options: {
   ended: () => void;
@@ -36,6 +43,9 @@ export function followMediaClock(media: ClockMedia, clock: ServerClock, startedA
     if (target < 0) { media.pause(); return; }
     if (media.readyState < 1) return;
     if (Number.isFinite(media.duration) && target >= media.duration) {
+      // A cue still playing towards its end plays out (it fires "ended"); no more seeking or rate nudges.
+      const playingOut = !media.paused && media.currentTime < media.duration && target < media.duration + MEDIA_END_GRACE_S;
+      if (playingOut) { media.playbackRate = 1; return; }
       if (!media.seeking) media.currentTime = Math.max(0, media.duration - 0.001);
       finish();
       return;
