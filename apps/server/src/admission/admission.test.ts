@@ -375,6 +375,24 @@ describe("participant admission", () => {
     expect(messages).toContain("display_join");
   });
 
+  it("does not send a build reload to native apps, which update through EAS", () => {
+    const admission = controller({ buildVersion: "image-2" });
+    const grant = admission.issueJoinGrant(1_000).token;
+    const native = socket();
+    admission.handleConnection(native, request("198.51.100.5"));
+    native.emit("message", Buffer.from(JSON.stringify({
+      t: "join",
+      v: 2,
+      client: "native",
+      clientVersion: "dev",
+      installationId: "inst-1",
+      roomId: "room-1",
+      name: "Tablet",
+      joinGrant: grant,
+    })));
+    expect((native as unknown as MockSocket).sent).not.toContainEqual(expect.objectContaining({ t: "reload" }));
+  });
+
   it("JSON-parses a valid non-join socket frame only once", () => {
     const messages: string[] = [];
     const admission = controller({

@@ -63,8 +63,14 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 
 type JoinMetadata = { clientVersion: string | null; protocolVersion: number };
 
+/**
+ * Browser clients (displays, monitors, /phone/) reload when their bundle is
+ * older than the server's build. Native apps update through EAS, not by
+ * reloading, so a server deploy must not show them a reload notice.
+ */
 function joinMetadata(message: ClientToServerMessage): JoinMetadata | undefined {
   if (message.t !== "join" && message.t !== "display_join") return undefined;
+  if (message.t === "join" && participantClientOf(message) === "native") return undefined;
   return { clientVersion: message.clientVersion, protocolVersion: message.v };
 }
 

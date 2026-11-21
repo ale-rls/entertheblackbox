@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ConfigError, loadConfig } from "./config.js";
 
 const productionSecrets = {
@@ -72,5 +75,25 @@ describe("production secret configuration", () => {
         PHONE_JOIN_BASE_URL: url,
       })).toThrow(new ConfigError("PHONE_JOIN_BASE_URL must use HTTPS and end in /phone/ or /phone-janus/ in production"));
     }
+  });
+});
+
+describe("build version", () => {
+  const root = () => mkdtempSync(join(tmpdir(), "bb-config-"));
+
+  it("uses the version the image build wrote, so open displays reload after a deploy", () => {
+    const dir = root();
+    writeFileSync(join(dir, ".build-version"), "image-20261121-ab12cd34\n");
+    expect(loadConfig({}, dir).buildVersion).toBe("image-20261121-ab12cd34");
+  });
+
+  it("prefers an explicit BUILD_VERSION", () => {
+    const dir = root();
+    writeFileSync(join(dir, ".build-version"), "image-1");
+    expect(loadConfig({ BUILD_VERSION: "abc123" }, dir).buildVersion).toBe("abc123");
+  });
+
+  it("falls back to dev without either", () => {
+    expect(loadConfig({ BUILD_VERSION: "" }, root()).buildVersion).toBe("dev");
   });
 });
