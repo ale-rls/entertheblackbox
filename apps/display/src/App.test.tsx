@@ -94,6 +94,11 @@ vi.mock("./components/IdleAttract.js", () => ({
   IdleAttract: ({ videoUrls, mediaVisible, qrHidden }: { videoUrls?: string[]; mediaVisible?: boolean; qrHidden: boolean }) => <div data-testid="idle-attract" data-url={videoUrls?.[0]} data-visible={mediaVisible} data-qr-hidden={qrHidden}>idle attract</div>,
 }));
 vi.mock("./components/LobbyCountdown.js", () => ({ LobbyCountdown: () => null }));
+const curtainStageProps: { dimFrom?: number }[] = [];
+vi.mock("./curtain/CurtainStage.js", () => ({
+  CURTAIN_LEAVE_MS: 1_200,
+  CurtainStage: (props: { dimFrom?: number }) => { curtainStageProps.push(props); return null; },
+}));
 vi.mock("./cursors/CursorCanvas.js", () => ({
   CursorCanvas: ({ field }: { field: { size: number } }) => {
     harness.cursorField = field;
@@ -412,7 +417,16 @@ describe("App media-readiness gate", () => {
       expect(table?.[0]).toBe(0);
       expect(table?.at(-1)).toBeLessThan(0.9);
 
-      await send(3, { kind: "video", id: "film", src: "film.mp4", expectedDurationMs: 10_000, next: "idle" });
+      // A curtain vote straight after the title keeps the loop dimmed under the lit curtain.
+      await send(3, { kind: "position-question", id: "vote", text: "Wie?", field: { type: "two-quadrant", axis: "x", variant: "split", labels: { minLabel: "a", maxLabel: "b" } },
+        voteTreatment: { type: "curtain-light", curtain: { src: "curtain.mp4", baked: 0.31, folds: 0, shine: 0, shadow: 0, poolBase: 0, poolGain: 0, cursorFlood: 0, cursorFloodCounted: 0, neutralGap: 0 }, answerColors: {} },
+        next: "film" });
+      await settle();
+      expect(layer().style.filter).toBe("url(#title-dim)");
+      // The lit curtain starts at the title's level instead of dimming in from the plain curtain.
+      expect(curtainStageProps.at(-1)?.dimFrom).toBeCloseTo(0.31);
+
+      await send(4, { kind: "video", id: "film", src: "film.mp4", expectedDurationMs: 10_000, next: "idle" });
       await settle();
       expect(layer().style.filter).toBe("");
     } finally {

@@ -293,7 +293,10 @@ export function App() {
     && ((phase.text ?? "").trim() !== "" || (phase.title ?? "").trim() !== "");
   const titleBeforeCurtain = useRef(false);
   if (curtainPhase === null) titleBeforeCurtain.current = titleBackdrop;
-  const titleDim = useTitleDim(titleBackdrop || (curtainPhase !== null && !curtainUnavailable && titleBeforeCurtain.current));
+  // Only while the lit curtain covers the layer: a video vote whose curtain hides early shows its video at full level.
+  const curtainCovers = curtainPhase !== null && !curtainUnavailable
+    && !(curtainPhase.kind === "video-position-question" && curtainPhase.hideAtMs < curtainPhase.expectedDurationMs);
+  const titleDim = useTitleDim(titleBackdrop || (curtainCovers && titleBeforeCurtain.current));
   // The hold whose lit curtain has put its fabric on screen. Until then the previous scene's
   // background loop stays up, so a fresh curtain still loading its video never shows a black frame.
   const [curtainShownKey, setCurtainShownKey] = useState<string | null>(null);
@@ -318,7 +321,7 @@ export function App() {
       visibleFrom: previous !== null && previous.leavingSince === null && previous.visibleUntil === undefined ? previous.visibleFrom ?? shownFrom : shownFrom,
       ...(hidesEarly ? { visibleUntil: curtainPhase.startedAt + curtainPhase.hideAtMs } : {}),
       leavingSince: null,
-      dimFrom: previous?.dimFrom ?? titleDim.levelRef.current,
+      dimFrom: previous !== null && previous.leavingSince === null ? previous.dimFrom : titleDim.levelRef.current,
     }));
     // Only a new phase epoch starts a new lighting scene; repeated snapshots must not reset it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
