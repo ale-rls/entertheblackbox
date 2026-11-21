@@ -170,7 +170,7 @@
 .admin-grid[data-admin-tab="show"] > .admin-display-content,
 .admin-grid[data-admin-tab="show"] > .admin-setup-content,
 .admin-grid:not([data-admin-tab="show"]) > .admin-session-panel,
-.admin-grid:not([data-admin-tab="show"]) > .admin-flow-panel,
+.admin-grid:not([data-admin-tab="cues"]) > .admin-flow-panel,
 .admin-grid:not([data-admin-tab="devices"]) > .admin-device-content,
 .admin-grid:not([data-admin-tab="displays"]) > .admin-display-content,
 .admin-grid:not([data-admin-tab="setup"]) > .admin-setup-content { display:none; }
