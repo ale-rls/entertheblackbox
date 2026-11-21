@@ -384,7 +384,11 @@ export const narrationPhaseSchema = z.object({
   if (phase.countdown && phase.countdown.endAtMs > phase.durationMs) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "countdown must end within the scene", path: ["countdown", "endAtMs"] });
 });
 
-/** Rehearsal light tuning; each value overrides the shared curtain default. */
+/**
+ * Old light tuning values. Fabric and light are now set in code
+ * (CURTAIN_DEFAULTS); these keys are still accepted so shows published before
+ * keep loading, and are ignored.
+ */
 export const curtainLightingSchema = z.object({
   poolBase: z.number().min(0).max(3).optional(),
   poolGain: z.number().min(0).max(4).optional(),
@@ -396,6 +400,8 @@ export const curtainLightingSchema = z.object({
  * The shared curtain for curtain-light votes, configured once per show.
  * `src` is a packed curtain video (colour | normal X / normal Y | depth)
  * published through the normal media library, never committed to git.
+ * `neutralGap` is the default gap between answer areas. The fabric and light
+ * keys are ignored (see curtainLightingSchema).
  */
 export const curtainLightSchema = curtainLightingSchema.extend({
   src: z.string().min(1).regex(/\.mp4$/i, "curtain video must be an MP4").optional(),
@@ -425,6 +431,7 @@ const curtainStageFields = {
   curtainFieldsStatic: z.boolean().optional(),
   /** Answer id → colour. Missing answers use the system defaults. */
   answerColors: z.record(z.string().min(1), hexColorSchema).optional(),
+  /** Ignored; kept so shows published before keep loading. */
   lightTuning: curtainLightingSchema.optional(),
 };
 

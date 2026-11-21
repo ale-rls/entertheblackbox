@@ -10,7 +10,7 @@ relighting shader). Other groups' votes are unchanged.
 1. **Groups** (toolbar) → tick *Curtain-light cursor votes* on the theater
    group. The group should vote with phone cursors.
 2. Under **Shared curtain**, choose the packed curtain video from the media
-   library. The default fabric is *Silver D · satin*. Upload the clip through
+   library. The default video is the *Silver B · lamé* curtain. Upload the clip through
    the media library like any other show media; it is published with the show
    (Studio → Publish show) and must never be committed to git.
 3. Every position question on that group's own path (from its group-branch
@@ -18,11 +18,14 @@ relighting shader). Other groups' votes are unchanged.
    **Curtain light** section with:
    - a light preview with sample cursors and a simulated vote;
    - answer colours, with *Reset colours to system defaults*;
-   - *Rehearsal tuning* (closed by default): neutral gap and light levels for
-     this stage only. *Use shared curtain settings* removes the overrides.
+   - *Neutral gap* (closed by default): the gap between answer areas for
+     this stage only. *Use the shared neutral gap* removes the override.
 
-Fabric and default light levels live under *Shared curtain → Fabric and
-light tuning*.
+Fabric and light levels are not set in Studio. They are fixed in code
+(`CURTAIN_DEFAULTS` in `packages/shared/src/curtain.ts`), tuned for Silver B ·
+lamé on the projector: original picture 0.31, folds, sheen and shadows 0,
+answer-area glow and cursor floods 0. Light values saved in older shows, in
+`curtainLight` or a stage's `lightTuning`, still load but are ignored.
 
 ### A single vote on the shared timeline
 

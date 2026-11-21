@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { scenarioSchema } from "@entertheblackbox/scenario";
+import { CURTAIN_DEFAULTS } from "@entertheblackbox/shared";
 import { parseServerMessage, type ClientToServerMessage } from "@entertheblackbox/protocol";
 import type { WebSocket } from "ws";
 import { ParticipantRegistry } from "../admission/registry.js";
@@ -218,7 +219,7 @@ describe("curtain-light votes", () => {
     const main = h.display();
     h.engine.adminStart(); h.tick(10);
     const reacting = main.snapshot.phase.voteTreatment.curtain;
-    expect(reacting.poolGain).toBeGreaterThan(0);
+    expect(reacting.poolGain).toBe(CURTAIN_DEFAULTS.poolGain);
     h.tick(1_100);
     const still = main.snapshot.phase.voteTreatment.curtain;
     expect(main.snapshot.phase.id).toBe("plain-vote");
