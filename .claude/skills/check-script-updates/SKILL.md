@@ -174,6 +174,24 @@ notes, open comments). For each, decide which of these it is, with evidence:
 - **Outside the software**: sound desk, staff, props, and light the Eos bridge
   can't do (see below). Note it, but don't propose code.
 
+**Cursor votes are always curtain light (director decision 2026-11-21).**
+Whenever the script uses cursor voting (theater phones steering cursors onto
+fields), the vote is drawn as **curtain light**: the glowing cursors on the
+curtain video, never the plain white-dot field overlay. This applies on the
+closed **and** the open curtain (Teil 2, Act 2 votes). See
+[curtain-light-voting.md](../../../docs/curtain-light-voting.md).
+
+- On a group's own path, the group has *Curtain-light cursor votes* ticked; on
+  the shared timeline, the phase has `curtainLightVote: true`. A cursor vote
+  without either is **Exists, needs setting up**: list its phase ID.
+- A curtain-light vote needs the shared curtain video and an unlit gap
+  between its zones (zones that tile the screen fail validation).
+- Curtain light replaces the scene's picture with the curtain while the vote
+  runs. On the open curtain this hides the stage (e.g. the KI side on the
+  coloured fields); report it as a consequence, but don't untick it.
+- Spotlights can't be combined with curtain light (schema rule). A script cue
+  asking for both is a conflict: report it and ask.
+
 **Light cues — paused for now (director decision 2026-11-20).** Don't
 classify the yellow `Licht` cues or `lightCues`, don't read `lighting.json`, and
 leave lights out of the features table and the next steps. Say in one line
