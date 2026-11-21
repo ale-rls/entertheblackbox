@@ -236,7 +236,11 @@ export function App() {
   const isIdle = phase === null || phase.kind === "idle";
   const waitingVideoUrl = resolveWaitingVideoUrl(displaySettings, config.groupId);
   const signageVideoUrl = config.signageId !== undefined ? resolveSignageVideoUrl(displaySettings, config.signageId) : null;
-  const displayInactive = phase?.kind === "group-branch" || (config.groupId !== undefined && isIdle);
+  // While group paths own the show, displays step aside: a group's display goes dark, and the main
+  // projection shows the waiting video. With no waiting video set, the main projection keeps its last
+  // background loop (e.g. the curtain) up through the group scene instead of going black.
+  const holdThroughGroupScene = phase?.kind === "group-branch" && config.groupId === undefined && waitingVideoUrl === "";
+  const displayInactive = (phase?.kind === "group-branch" && !holdThroughGroupScene) || (config.groupId !== undefined && isIdle);
   const mediaReady = media.status.state === "ready";
 
   // Do not authenticate the installation display until every manifest
@@ -422,7 +426,7 @@ export function App() {
   const curtainWaiting = curtainHold !== null && !curtainUnavailable && curtainHold.leavingSince === null
     && curtainShownKey !== curtainHold.stage;
   const loopHeldForHandoff = phaseLoopSrc === null
-    && ((phaseMediaKey !== null && presentedVideoKey !== phaseMediaKey) || curtainWaiting);
+    && ((phaseMediaKey !== null && presentedVideoKey !== phaseMediaKey) || curtainWaiting || holdThroughGroupScene);
   const loopPending = phaseLoopSrc !== null && loopUrl?.src !== phaseLoopSrc;
   const loopAnchorAt = phase?.loopStartedAt;
   const loopTarget = useMemo(
