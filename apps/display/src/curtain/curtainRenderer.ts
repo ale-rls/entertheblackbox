@@ -145,6 +145,8 @@ export type CurtainFrame = {
   cursorOpacity: number;
   fabric: CurtainFabricParams;
   spotlightRadius?: number;
+  /** Scales every cursor's core and flood (Admin cursor size; 1 = normal). */
+  cursorSize?: number;
   cursors: readonly CursorLight[];
 };
 
@@ -325,7 +327,7 @@ export class CurtainRenderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, text);
   }
 
-  private writeInstances(cursors: readonly CursorLight[], core: boolean, fade: number, floodRadius = FLOOD_RADIUS): number {
+  private writeInstances(cursors: readonly CursorLight[], core: boolean, fade: number, floodRadius = FLOOD_RADIUS, size = 1): number {
     const needed = cursors.length * 7;
     if (this.instances.length < needed) this.instances = new Float32Array(Math.max(needed, 64 * 7));
     let n = 0;
@@ -339,7 +341,7 @@ export class CurtainRenderer {
       this.instances[o + 3] = core ? 0.35 + 0.65 * cursor.rgb[1] : cursor.floodRgb[1];
       this.instances[o + 4] = core ? 0.35 + 0.65 * cursor.rgb[2] : cursor.floodRgb[2];
       this.instances[o + 5] = amount;
-      this.instances[o + 6] = core ? CORE_RADIUS * (1 + 1.2 * cursor.pulse) : floodRadius;
+      this.instances[o + 6] = (core ? CORE_RADIUS * (1 + 1.2 * cursor.pulse) : floodRadius) * size;
       n += 1;
     }
     const gl = this.gl;
@@ -367,7 +369,7 @@ export class CurtainRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT);
     // RGBA8 cannot hold values above 1, so floods are stored scaled down.
     const storeScale = this.floatLight ? 1 : 0.25;
-    const floods = this.writeInstances(frame.cursors, false, frame.cursorOpacity * storeScale, frame.spotlightRadius);
+    const floods = this.writeInstances(frame.cursors, false, frame.cursorOpacity * storeScale, frame.spotlightRadius ?? FLOOD_RADIUS, frame.cursorSize ?? 1);
     if (floods > 0) {
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
@@ -405,7 +407,7 @@ export class CurtainRenderer {
     gl.bindVertexArray(null);
 
     // Pass 3: bright cursor centres on top, so every participant stays identifiable.
-    const cores = this.writeInstances(frame.cursors, true, frame.cursorOpacity * frame.opacity);
+    const cores = this.writeInstances(frame.cursors, true, frame.cursorOpacity * frame.opacity, FLOOD_RADIUS, frame.cursorSize ?? 1);
     if (cores > 0) {
       gl.enable(gl.BLEND);
       gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE);
