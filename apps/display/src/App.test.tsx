@@ -401,7 +401,7 @@ describe("App media-readiness gate", () => {
       const settle = async () => act(async () => { vi.advanceTimersByTime(1_100); });
 
       // A blank scene over the loop (only there to hold the curtain) stays bright.
-      await send(1, { kind: "narration", id: "hold", text: " ", loopVideoSrc: "curtain-loop.mp4", durationMs: 10_000, next: "title" });
+      await send(1, { kind: "narration", showCursors: false, id: "hold", text: " ", loopVideoSrc: "curtain-loop.mp4", durationMs: 10_000, next: "title" });
       const loop = document.querySelector<HTMLVideoElement>("video.phase-loop-video")!;
       Object.defineProperties(loop, {
         readyState: { configurable: true, value: 2 },
@@ -459,7 +459,7 @@ describe("App media-readiness gate", () => {
       const title = { kind: "narration", text: "THEATERARBEIT", loopVideoSrc: "curtain-loop.mp4", durationMs: 6_000 };
 
       // A scene before a title dims during its last second.
-      await send(1, { kind: "video", id: "before", src: "a.webp", audioSrc: "a.mp3", loopVideoSrc: "curtain-loop.mp4", expectedDurationMs: 10_000, next: "title", nextTitleBackdrop: true });
+      await send(1, { kind: "video", showCursors: false, id: "before", src: "a.webp", audioSrc: "a.mp3", loopVideoSrc: "curtain-loop.mp4", expectedDurationMs: 10_000, next: "title", nextTitleBackdrop: true });
       await advance(8_500);
       expect(dimmed()).toBe(false);
       await advance(1_000);
@@ -470,7 +470,7 @@ describe("App media-readiness gate", () => {
       expect(dimmed()).toBe(true);
 
       // A scene between two titles stays dimmed.
-      await send(3, { kind: "video", id: "between", src: "a.webp", audioSrc: "b.mp3", loopVideoSrc: "curtain-loop.mp4", expectedDurationMs: 10_000, next: "last-title", nextTitleBackdrop: true });
+      await send(3, { kind: "video", showCursors: false, id: "between", src: "a.webp", audioSrc: "b.mp3", loopVideoSrc: "curtain-loop.mp4", expectedDurationMs: 10_000, next: "last-title", nextTitleBackdrop: true });
       await advance(1_100);
       expect(dimmed()).toBe(true);
 
@@ -490,7 +490,7 @@ describe("App media-readiness gate", () => {
       // A scene with sound after a title brightens from its start.
       await send(6, { ...title, id: "title-2", next: "talk" });
       await advance(1_100);
-      await send(7, { kind: "video", id: "talk", src: "a.webp", audioSrc: "c.mp3", loopVideoSrc: "curtain-loop.mp4", expectedDurationMs: 30_000, next: "idle" });
+      await send(7, { kind: "video", showCursors: false, id: "talk", src: "a.webp", audioSrc: "c.mp3", loopVideoSrc: "curtain-loop.mp4", expectedDurationMs: 30_000, next: "idle" });
       await advance(1_100);
       expect(dimmed()).toBe(false);
     } finally {
@@ -525,7 +525,7 @@ describe("App media-readiness gate", () => {
         showLiveCounts: false, curtainLightVote: false,
       };
 
-      await send(1, { kind: "video", id: "before", audioSrc: "a.mp3", ...open, expectedDurationMs: 10_000, next: "vote", nextTitleBackdrop: true });
+      await send(1, { kind: "video", showCursors: false, id: "before", audioSrc: "a.mp3", ...open, expectedDurationMs: 10_000, next: "vote", nextTitleBackdrop: true });
       await advance(8_500);
       expect(dimmed()).toBe(false);
       await advance(1_000);
@@ -535,7 +535,7 @@ describe("App media-readiness gate", () => {
       await advance(15_000);
       expect(dimmed()).toBe(true);
 
-      await send(3, { kind: "video", id: "after", audioSrc: "b.mp3", ...open, expectedDurationMs: 10_000, next: "idle" });
+      await send(3, { kind: "video", showCursors: false, id: "after", audioSrc: "b.mp3", ...open, expectedDurationMs: 10_000, next: "idle" });
       await advance(1_100);
       expect(dimmed()).toBe(false);
     } finally {
