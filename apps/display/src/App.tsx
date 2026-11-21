@@ -9,6 +9,7 @@ import type { DisplayToServerMessage } from "@entertheblackbox/protocol";
 import { CursorField } from "./cursors/cursorField.js";
 import { SpotlightCurtain } from "./curtain/SpotlightCurtain.js";
 import { CursorCanvas } from "./cursors/CursorCanvas.js";
+import { cursorsVisibleFrom } from "./cursors/cursorVisibility.js";
 import { SpectrumGlowCanvas } from "./cursors/SpectrumGlowCanvas.js";
 import { RealtimeWsClient } from "./cursors/realtimeWsClient.js";
 import { DisplayConnection } from "./lib/connection.js";
@@ -366,6 +367,9 @@ export function App() {
     return () => { cancelled = true; };
   }, [curtainSrc, media.store, mediaReady]);
   const curtainActive = curtainPhase !== null && !curtainUnavailable;
+  // A scene can hold its cursors back for its first seconds (cursorsFromMs), checked every frame.
+  const cursorsFromAt = cursorsVisibleFrom(phase);
+  const cursorsHidden = useMemo(() => cursorsFromAt === null ? undefined : () => connection.clock.now() < cursorsFromAt, [cursorsFromAt, connection.clock]);
 
   const phaseMediaKey = (phase?.kind === "video" || phase?.kind === "video-position-question")
     ? `${state.sessionId ?? "pending"}:${state.phaseEpoch}`
@@ -656,7 +660,7 @@ export function App() {
 
       {/* Layer 3: cursor canvas */}
       <section className="layer layer-cursors">
-        <CursorCanvas field={cursorField} showCursors={!curtainActive && (phase !== null && phase.kind !== "idle" ? (phase.showCursors ?? true) : true)} blinkActiveVoters={state.resolution !== null} />
+        <CursorCanvas field={cursorField} showCursors={!curtainActive && (phase !== null && phase.kind !== "idle" ? (phase.showCursors ?? true) : true)} blinkActiveVoters={state.resolution !== null} hiddenUntil={cursorsHidden} />
       </section>
     </main>
   );

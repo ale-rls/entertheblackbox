@@ -21,10 +21,13 @@ export function CursorCanvas({
   field,
   showCursors = true,
   blinkActiveVoters = false,
+  hiddenUntil,
 }: {
   field: CursorField;
   showCursors?: boolean;
   blinkActiveVoters?: boolean;
+  /** Cursors stay hidden while this returns true (e.g. the first seconds of a scene). */
+  hiddenUntil?: (() => boolean) | undefined;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -47,7 +50,7 @@ export function CursorCanvas({
       const { width, height } = canvas;
       ctx.clearRect(0, 0, width, height);
 
-      if (showCursors) {
+      if (showCursors && !hiddenUntil?.()) {
         const renderAt = performance.timeOrigin + performance.now();
         const frozen = field.isFrozen;
         const glows = glowSprites(field.renderAt(renderAt), width, height, renderAt,
@@ -68,7 +71,7 @@ export function CursorCanvas({
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
     };
-  }, [blinkActiveVoters, field, showCursors]);
+  }, [blinkActiveVoters, field, showCursors, hiddenUntil]);
 
   return <canvas ref={canvasRef} className="cursor-canvas" />;
 }
