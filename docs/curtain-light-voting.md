@@ -101,7 +101,9 @@ over both lit pools and unlit fabric.
 
 Ordinary position questions and video-timed position questions keep their
 authored timing. The curtain is up from the scene's first video frame, so a
-vote after a closed-curtain scene never dips to black. On video-timed
+vote after a closed-curtain scene never dips to black. A freshly shown lit
+curtain starts at about the plain curtain video's brightness and dims to its
+own level over one second; a vote straight after another keeps it as it is. On video-timed
 questions the question, labels, lit areas and cursors appear at once at
 `showAtMs`, and the curtain fades out by `hideAtMs`. When a vote closes the server stops accepting votes, the
 pools settle back to their base glow (no winner spotlight), cursor lights
