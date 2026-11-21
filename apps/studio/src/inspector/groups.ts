@@ -39,6 +39,8 @@ export function updateGroupCatalogue(scenario: Scenario, groups: Group[], initia
       tabletTextByGroup: Object.fromEntries(Object.entries(phase.tabletTextByGroup).filter(([id]) => ids.has(remap(id))).map(([id, text]) => [remap(id), text])),
     } : {}), ...(phase.tabletScript ? {
       tabletScript: { ...phase.tabletScript, groupIds: phase.tabletScript.groupIds.map(remap).filter((id) => ids.has(id)) },
+    } : {}), ...(phase.moreTabletScripts ? {
+      moreTabletScripts: phase.moreTabletScripts.map((range) => ({ ...range, groupIds: range.groupIds.map(remap).filter((id) => ids.has(id)) })),
     } : {}) };
     const branches = phase.branches.map((branch) => ({ ...branch, groupId: remap(branch.groupId) })).filter((branch) => ids.has(branch.groupId));
     if (branches.length < 2) throw new Error(`“${phase.title ?? phase.id}” would have fewer than two options. Add a replacement group to that scene first.`);

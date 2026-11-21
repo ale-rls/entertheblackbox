@@ -57,6 +57,12 @@ const phoneAudioFields = {
   scriptCues: scriptCuesSchema.optional(),
   /** Shows part of the actor script on participants' tablets for this scene. */
   tabletScript: tabletScriptSchema.optional(),
+  /**
+   * Further script ranges for other groups in the same scene (e.g. the chorus's own lines while the
+   * main roles read theirs). A participant gets the first range that names their group, else a range
+   * without groups. Installed apps never see this field: the server sends them only the excerpt.
+   */
+  moreTabletScripts: z.array(tabletScriptSchema).max(8).optional(),
   /** Fallback/broadcast MP3. Used for every participant without a group-specific override. */
   phoneAudioSrc: phoneAudioSrcSchema,
   /** Per-group MP3 overrides, keyed by stable authored group id. */

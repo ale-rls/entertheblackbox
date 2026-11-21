@@ -69,28 +69,45 @@ export function ScriptCueEditor({ phase, script, onChange }: { phase: Phase; scr
   </fieldset>;
 }
 
+/** One range of script paragraphs and the groups whose tablets show it. */
+function TabletRangeFields({ value, paragraphs, groups, set }: { value: TabletScript; paragraphs: string[]; groups: { id: string; label: string }[]; set: (next: TabletScript) => void }) {
+  const select = (label: string, key: "fromParagraph" | "toParagraph") => <label className="sc-tool-label">{label}<select className="sc-tool-select" value={value[key]}
+    onChange={(event) => { const n = Number(event.target.value); set(key === "fromParagraph" ? { ...value, fromParagraph: n, toParagraph: Math.max(n, value.toParagraph) } : { ...value, toParagraph: n, fromParagraph: Math.min(n, value.fromParagraph) }); }}>
+    {value[key] >= paragraphs.length && <option value={value[key]}>{value[key] + 1} — missing from script</option>}
+    {paragraphs.map((paragraph, i) => <option key={i} value={i}>{i + 1} — {preview(paragraph)}</option>)}
+  </select></label>;
+  return <>
+    {select("From paragraph", "fromParagraph")}
+    {select("To paragraph", "toParagraph")}
+    {value.toParagraph >= paragraphs.length && <p className="field-error" role="alert">Paragraph {value.toParagraph + 1} is not in the actor script.</p>}
+    <p className="sc-tool-copy field-hint">{value.groupIds.length ? "Only these groups see it:" : "No group selected: every participant sees it."}</p>
+    {groups.map((group) => <label key={group.id} className="sc-tool-checkbox"><input type="checkbox" checked={value.groupIds.includes(group.id)}
+      onChange={(event) => set({ ...value, groupIds: event.target.checked ? [...value.groupIds, group.id] : value.groupIds.filter((id) => id !== group.id) })} /><span>{group.label}</span></label>)}
+  </>;
+}
+
 /** Shows part of the actor script on participants' tablets for one scene. */
 export function TabletScriptEditor({ phase, script, groups, onChange }: { phase: Phase; script: ActorScript | undefined; groups: { id: string; label: string }[]; onChange: (phase: Phase) => void }) {
   if (phase.kind === "idle" || phase.kind === "group-branch") return null;
   const value = phase.tabletScript;
+  const more = phase.moreTabletScripts ?? [];
   const paragraphs = script ? scriptParagraphs(script.text) : [];
   const set = (next: TabletScript | undefined) => { const { tabletScript: _, ...rest } = phase; onChange((next ? { ...rest, tabletScript: next } : rest) as Phase); };
-  if (!script && !value) return <fieldset><legend>Tablet script</legend><p className="sc-tool-copy">Add an actor script in Show properties (click empty canvas) to show it on tablets.</p></fieldset>;
-  const select = (label: string, key: "fromParagraph" | "toParagraph") => <label className="sc-tool-label">{label}<select className="sc-tool-select" value={value![key]}
-    onChange={(event) => { const n = Number(event.target.value); set(key === "fromParagraph" ? { ...value!, fromParagraph: n, toParagraph: Math.max(n, value!.toParagraph) } : { ...value!, toParagraph: n, fromParagraph: Math.min(n, value!.fromParagraph) }); }}>
-    {value![key] >= paragraphs.length && <option value={value![key]}>{value![key] + 1} — missing from script</option>}
-    {paragraphs.map((paragraph, i) => <option key={i} value={i}>{i + 1} — {preview(paragraph)}</option>)}
-  </select></label>;
+  const setMore = (next: TabletScript[]) => { const { moreTabletScripts: _, ...rest } = phase; onChange((next.length ? { ...rest, moreTabletScripts: next } : rest) as Phase); };
+  if (!script && !value && !more.length) return <fieldset><legend>Tablet script</legend><p className="sc-tool-copy">Add an actor script in Show properties (click empty canvas) to show it on tablets.</p></fieldset>;
   return <fieldset><legend>Tablet script <small>tabletScript</small></legend>
     <p className="sc-tool-copy">Shows these script paragraphs on the tablets of the chosen groups for the whole scene, with each group's speaker lines highlighted. Only those tablets receive the text.</p>
     {!value ? <button className="sc-tool-button" type="button" disabled={!paragraphs.length} onClick={() => set({ fromParagraph: 0, toParagraph: paragraphs.length - 1, groupIds: [] })}>Show script on tablets</button> : <>
-      {select("From paragraph", "fromParagraph")}
-      {select("To paragraph", "toParagraph")}
-      {value.toParagraph >= paragraphs.length && <p className="field-error" role="alert">Paragraph {value.toParagraph + 1} is not in the actor script.</p>}
-      <p className="sc-tool-copy field-hint">{value.groupIds.length ? "Only these groups see it:" : "No group selected: every participant sees it."}</p>
-      {groups.map((group) => <label key={group.id} className="sc-tool-checkbox"><input type="checkbox" checked={value.groupIds.includes(group.id)}
-        onChange={(event) => set({ ...value, groupIds: event.target.checked ? [...value.groupIds, group.id] : value.groupIds.filter((id) => id !== group.id) })} /><span>{group.label}</span></label>)}
+      <TabletRangeFields value={value} paragraphs={paragraphs} groups={groups} set={set} />
       <button className="sc-tool-button" type="button" onClick={() => set(undefined)}>Remove tablet script</button>
+    </>}
+    {more.map((range, index) => <fieldset key={index}><legend>Range for other groups {index + 1} <small>moreTabletScripts</small></legend>
+      <TabletRangeFields value={range} paragraphs={paragraphs} groups={groups} set={(next) => setMore(more.map((old, i) => i === index ? next : old))} />
+      <button className="sc-tool-button" type="button" onClick={() => setMore(more.filter((_, i) => i !== index))}>Remove this range</button>
+    </fieldset>)}
+    {value && <>
+      <p className="sc-tool-copy field-hint">Another group needs different lines in this scene (e.g. the chorus)? Add a range for it; a tablet gets the first range that names its group.</p>
+      <button className="sc-tool-button" type="button" disabled={!paragraphs.length || more.length >= 8} onClick={() => setMore([...more, { fromParagraph: 0, toParagraph: 0, groupIds: [] }])}>Add a range for other groups</button>
     </>}
   </fieldset>;
 }

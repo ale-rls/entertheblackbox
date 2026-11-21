@@ -14,7 +14,7 @@ import {
   type ServerToClientMessage,
 } from "@entertheblackbox/protocol";
 import type { Scenario, Phase, VotingMethod } from "@entertheblackbox/scenario";
-import { scriptParagraphs, tabletScriptExcerpt } from "@entertheblackbox/scenario";
+import { scriptParagraphs, tabletScriptExcerpt, tabletScriptFor, type TabletScript } from "@entertheblackbox/scenario";
 import {
   curtainFieldCenter,
   curtainVoteField,
@@ -605,6 +605,13 @@ export class PhaseEngine {
 
   get currentDisplayPlaybackIssue(): DisplayPlaybackIssue | null {
     return this.displayPlaybackIssue;
+  }
+
+  /** The scene's script excerpt for one group: its own range (moreTabletScripts) before the main one. */
+  private tabletScriptFor(phaseId: string, primary: TabletScript | undefined, groupId: string | null) {
+    const authored = this.scenario.phases.find((item) => item.id === phaseId);
+    const more = authored && authored.kind !== "idle" && authored.kind !== "group-branch" ? authored.moreTabletScripts ?? [] : [];
+    return tabletScriptExcerpt(this.scenario.actorScript, this.actorScriptParagraphs, tabletScriptFor([...more, primary], groupId), groupId);
   }
 
   participantState(id: string): "choosing" | "unassigned" | "active" | "finished" {
@@ -2495,7 +2502,7 @@ export class PhaseEngine {
         : !!((groupId === null ? undefined : phase.phoneAudioByGroup?.[groupId]) ?? phase.phoneAudioSrc));
       // The script is private to the cast: only participants the scene names receive its excerpt.
       const tabletScript = participantState === "unassigned" || participantState === "finished" || phase.kind === "idle" || phase.kind === "group-branch"
-        ? null : tabletScriptExcerpt(this.scenario.actorScript, this.actorScriptParagraphs, phase.tabletScript, currentGroup?.id ?? null);
+        ? null : this.tabletScriptFor(phase.id, phase.tabletScript, currentGroup?.id ?? null);
       socket.send(encodeMessage({ ...message, currentGroup, participantState, phoneAudioActive,
         ...(tabletScript ? { tabletScript } : {}),
         routingEpoch: this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0 }));
