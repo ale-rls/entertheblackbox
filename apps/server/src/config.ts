@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { z } from "zod";
 
@@ -13,7 +14,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   HOST: z.string().min(1).default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65_535).default(3_000),
-  BUILD_VERSION: z.string().min(1).default("dev"),
+  BUILD_VERSION: z.preprocess((input) => input === "" ? undefined : input, z.string().min(1).optional()),
   INSTALLATION_ID: z.string().min(1).default("dev-installation"),
   ROOM_ID: z.string().min(1).default("main"),
   SHOW_ID: z.string().min(1).default("local-dev"),
@@ -98,6 +99,20 @@ export class ConfigError extends Error {
   }
 }
 
+/**
+ * The version the Docker build baked into the client bundles
+ * (apps/server/Dockerfile writes it to .build-version). Without it (local
+ * development) clients and server both use "dev".
+ */
+export function imageBuildVersion(rootDir: string): string {
+  try {
+    const version = readFileSync(resolve(rootDir, ".build-version"), "utf8").trim();
+    return version === "" ? "dev" : version;
+  } catch {
+    return "dev";
+  }
+}
+
 /** Parse environment input once and resolve every file path from the repo root. */
 export function loadConfig(
   env: NodeJS.ProcessEnv = process.env,
@@ -135,7 +150,7 @@ export function loadConfig(
     nodeEnv: value.NODE_ENV,
     host: value.HOST,
     port: value.PORT,
-    buildVersion: value.BUILD_VERSION,
+    buildVersion: value.BUILD_VERSION ?? imageBuildVersion(rootDir),
     installationId: value.INSTALLATION_ID,
     roomId: value.ROOM_ID,
     showId: value.SHOW_ID,

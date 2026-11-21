@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import type { CurtainTreatment } from "@entertheblackbox/protocol";
 import type { PositionField } from "@entertheblackbox/shared";
 import type { ServerClock } from "../lib/serverClock.js";
@@ -6,7 +6,8 @@ import type { CursorField } from "../cursors/cursorField.js";
 import { CurtainRenderer } from "./curtainRenderer.js";
 import { CurtainScene } from "./curtainScene.js";
 import { stepTextSwap, type TextSwap } from "./textSwap.js";
-import { curtainVisibility, dimmedBaked } from "./visibility.js";
+import { curtainVisibility, dimmedBaked, easeLevel } from "./visibility.js";
+import type { ActiveLoopVideo } from "../components/LoopVideo.js";
 
 export { CURTAIN_LEAVE_MS } from "./visibility.js";
 const MAX_RENDER_WIDTH = 1920;
@@ -32,6 +33,12 @@ export type CurtainStageProps = {
   /** Local time the phase moved on; the curtain fades into the next scene. */
   leavingSince?: number | null;
   videoUrl: string | null;
+  /**
+   * The scene loop on screen. A vote lit over that loop (a plain fabric with the same src)
+   * draws this element's frames instead of playing its own copy, so it continues the loop
+   * on the show's clock rather than starting it again from its first frame.
+   */
+  sceneLoop?: RefObject<ActiveLoopVideo | null>;
   onUnavailable?: (error: unknown) => void;
   /** `baked` the fabric dims in from (default DIM_START_BAKED): a dimmed title's level. */
   dimFrom?: number;
@@ -92,8 +99,9 @@ function drawText(canvas: HTMLCanvasElement, question: string, scene: CurtainSce
 }
 
 /**
- * The lit curtain for a run of curtain-light votes: packed fabric video, answer
- * pools driven by the authoritative live counts, and one light per cursor.
+ * The lit curtain for a run of curtain-light votes: packed fabric video (or the
+ * scene's running loop), answer pools driven by the authoritative live counts,
+ * and one light per cursor.
  * A new question swaps the text and pools without rebuilding the renderer or
  * restarting the fabric video.
  * Everything time-dependent is read through refs so a 60 fps loop never
@@ -128,8 +136,16 @@ export function CurtainStage(props: CurtainStageProps) {
     video.playsInline = true;
     video.preload = "auto";
     let videoUrl: string | null = null;
+    // Drawing the scene loop's own element; once it has, a vanished loop (the scene moved on)
+    // leaves its last frame on the fabric for the fade-out instead of restarting a copy.
+    let onSceneLoop = false;
+    const sceneLoopFor = (p: CurtainStageProps): HTMLVideoElement | null => {
+      if (p.treatment.curtain.packed !== false) return null;
+      const loop = p.sceneLoop?.current ?? null;
+      return loop !== null && loop.src === p.treatment.curtain.src ? loop.element : null;
+    };
     const syncVideo = () => {
-      const url = live.current.videoUrl;
+      const url = onSceneLoop ? null : live.current.videoUrl;
       if (url === videoUrl) return;
       videoUrl = url;
       if (url === null) { video.removeAttribute("src"); video.load(); renderer.clearVideo(); return; }
@@ -171,6 +187,8 @@ export function CurtainStage(props: CurtainStageProps) {
       if (step.redraw) textDirty = true;
       const shown = swap.shown;
       const swapping = swap.startedAt !== null;
+      const sceneLoop = sceneLoopFor(p);
+      if (sceneLoop !== null) onSceneLoop = true;
       syncVideo();
       const scale = Math.min(window.devicePixelRatio || 1, 1.5);
       const width = Math.min(MAX_RENDER_WIDTH, Math.max(1, Math.round(canvas.clientWidth * scale)));
@@ -197,10 +215,16 @@ export function CurtainStage(props: CurtainStageProps) {
       const light = lit.lightMap();
       if (!content) light.fill(0);
       renderer.uploadPools(light, lit.pools.columns, lit.pools.rows);
-      renderer.uploadVideo(video);
+      if (sceneLoop !== null) renderer.uploadVideo(sceneLoop);
+      else if (!onSceneLoop) renderer.uploadVideo(video);
 
+      // Over the running scene loop the lit curtain draws the same frames, but Chrome composites a
+      // <video> a few percent differently from WebGL (levels, softness): it fades in over the loop
+      // across the dim-in second instead of replacing it on one frame.
+      const overLoop = onSceneLoop && p.treatment.curtain.packed === false;
+      const fadeIn = overLoop && upAt !== null ? easeLevel(0, 1, local - upAt) : 1;
       renderer.render({
-        opacity,
+        opacity: opacity * fadeIn,
         textOpacity: content ? step.textOpacity : 0,
         cursorOpacity: content ? lit.cursorOpacity(local) : 0,
         // A vote right after another keeps this stage, so only a fresh curtain dims in.

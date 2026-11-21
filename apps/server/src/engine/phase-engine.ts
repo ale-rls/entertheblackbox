@@ -21,7 +21,7 @@ import {
   curtainFieldCenter,
   curtainVoteField,
   DEFAULT_INSTALLATION_POLICY,
-  isTitleBackdrop,
+  isDimmedBackdrop,
   neutralEntryPoint,
   resolveAnswerColors,
   resolveCurtainSettings,
@@ -1026,7 +1026,7 @@ export class PhaseEngine {
         spotlightGrow: this.spotlightGrow,
         spotlightCurtainSrc: this.scenario.curtainLight?.src,
       } : {}),
-      ...(this.nextIsTitleBackdrop(phase) ? { nextTitleBackdrop: true as const } : {}),
+      ...(this.nextIsDimmedBackdrop(phase) ? { nextTitleBackdrop: true as const } : {}),
       ...(phase.kind === "video" && phase.operatorFields ? { operatorField: this.operatorFieldState } : {}),
       ...(this.loopStartedAt !== null && loopVideoSrcOf(phase) !== undefined ? { loopStartedAt: this.loopStartedAt } : {}),
       scenarioVersion: this.scenario.version,
@@ -1035,10 +1035,11 @@ export class PhaseEngine {
     };
   }
 
-  /** Whether a video or narration scene leads straight into a title over a background loop. */
-  private nextIsTitleBackdrop(phase: Phase): boolean {
+  /** Whether a video or narration scene leads straight into a title or an open-curtain vote over a background loop. */
+  private nextIsDimmedBackdrop(phase: Phase): boolean {
     if (phase.kind !== "video" && phase.kind !== "narration") return false;
-    return isTitleBackdrop(this.scenario.phases.find((candidate) => candidate.id === phase.next));
+    const next = this.scenario.phases.find((candidate) => candidate.id === phase.next);
+    return next !== undefined && isDimmedBackdrop(next, this.drawsAsCurtain(next));
   }
 
   getSnapshotMessage(now = this.now()): Extract<ServerToClientMessage, { t: "snapshot" }> {
@@ -1965,6 +1966,16 @@ export class PhaseEngine {
     return this.requirePhase(this.phaseId);
   }
 
+  /** Whether this vote is drawn as curtain light on the running timeline (see curtainFor). */
+  private drawsAsCurtain(phase: Phase): boolean {
+    if (phase.kind !== "position-question" && phase.kind !== "video-position-question") return false;
+    if (phase.kind === "position-question" && phase.spotlight) return false;
+    const groupId = this.path?.timelineId;
+    const groupCurtain = groupId !== undefined
+      && this.scenario.groups?.find((group) => group.id === groupId)?.voteTreatment === "curtain-light";
+    return groupCurtain || phase.curtainLightVote === true;
+  }
+
   /**
    * Curtain-light presentation for a vote marked `curtainLightVote` (on any
    * timeline) or on a curtain-light group's own timeline, or null. The
@@ -1973,11 +1984,7 @@ export class PhaseEngine {
    */
   private curtainFor(phase: Phase): { treatment: CurtainTreatment; field: PositionField } | null {
     if (phase.kind !== "position-question" && phase.kind !== "video-position-question") return null;
-    if (phase.kind === "position-question" && phase.spotlight) return null;
-    const groupId = this.path?.timelineId;
-    const groupCurtain = groupId !== undefined
-      && this.scenario.groups?.find((group) => group.id === groupId)?.voteTreatment === "curtain-light";
-    if (!groupCurtain && phase.curtainLightVote !== true) return null;
+    if (!this.drawsAsCurtain(phase)) return null;
     if (this.curtainCache?.phase === phase) return this.curtainCache;
     const resolved = resolveCurtainSettings(this.scenario.curtainLight);
     // "Nothing lights up yet": fields hold their base glow and a cursor's

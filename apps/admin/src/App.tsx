@@ -259,10 +259,30 @@ function sceneKindLabel(kind: FlowScene["kind"]): string {
           : "Media + vote";
 }
 
+/** The operator's main views, always visible; the rest sit under More. */
+export const PRIMARY_TABS = ["show", "cues", "devices", "instrument", "displays", "setup"];
+export const MORE_TABS = ["tasks", "wall", "script"];
+const ADMIN_TABS = [...PRIMARY_TABS, ...MORE_TABS];
+const tabLabel = (tab: string) => tab[0]!.toUpperCase() + tab.slice(1);
+
 export function App() {
   const [activeTab, setActiveTab] = useState(() => {
-    try { const saved = localStorage.getItem("admin-view"); return ["show", "cues", "devices", "displays", "setup", "script"].includes(saved ?? "") ? saved! : "show"; } catch { return "show"; }
+    try { const saved = localStorage.getItem("admin-view"); return ADMIN_TABS.includes(saved ?? "") ? saved! : "show"; } catch { return "show"; }
   });
+  const moreMenu = useRef<HTMLDetailsElement | null>(null);
+  // The More menu closes when the operator taps anywhere else.
+  useEffect(() => {
+    const close = (event: PointerEvent) => {
+      const menu = moreMenu.current;
+      if (menu?.open && !menu.contains(event.target as Node)) menu.removeAttribute("open");
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
+  // On phones the tabs are one sideways-scrolling row: keep the current one in view.
+  useEffect(() => {
+    document.querySelector<HTMLElement>(".admin-tabs > [aria-pressed=true], .admin-tabs-more > summary[aria-pressed=true]")?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }, [activeTab]);
   const selectTab = (tab: string) => { setActiveTab(tab); try { localStorage.setItem("admin-view", tab); } catch {} };
 
   const clock = useRef(new ServerClock()).current;
@@ -765,7 +785,13 @@ export function App() {
           <button className="sc-tool-button" onClick={() => selectTab("devices")}>{status.connectedParticipants} participants</button>
           <StatusLabel status={statusStale ? "warning" : status.ready ? "success" : "danger"}>{statusStale ? "Updates stale" : status.ready ? "Server connected" : "Server not ready"}</StatusLabel>
         </div>}
-        {!audioOnly && <nav className="admin-tabs" aria-label="Admin views">{["show", "cues", "tasks", "devices", "instrument", "wall", "displays", "script", "setup"].map(tab => <button key={tab} className="sc-tool-button" aria-pressed={activeTab === tab} onClick={() => selectTab(tab)}>{tab[0]!.toUpperCase() + tab.slice(1)}</button>)}</nav>}
+        {!audioOnly && <nav className="admin-tabs" aria-label="Admin views">
+          {PRIMARY_TABS.map(tab => <button key={tab} className="sc-tool-button" aria-pressed={activeTab === tab} onClick={() => selectTab(tab)}>{tabLabel(tab)}</button>)}
+          <details className="admin-tabs-more" ref={moreMenu}>
+            <summary className="sc-tool-button" aria-pressed={MORE_TABS.includes(activeTab)}>{MORE_TABS.includes(activeTab) ? `More · ${tabLabel(activeTab)}` : "More"}</summary>
+            <div className="admin-tabs-more-menu">{MORE_TABS.map(tab => <button key={tab} className="sc-tool-button" aria-pressed={activeTab === tab} onClick={() => { selectTab(tab); moreMenu.current?.removeAttribute("open"); }}>{tabLabel(tab)}</button>)}</div>
+          </details>
+        </nav>}
 
       </div>
 

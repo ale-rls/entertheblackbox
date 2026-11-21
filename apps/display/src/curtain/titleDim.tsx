@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { CURTAIN_DEFAULTS } from "@entertheblackbox/shared";
-import { DIM_START_BAKED, easeLevel } from "./visibility.js";
+import { CURVE_TOP, DIM_START_BAKED, easeLevel } from "./visibility.js";
 
 /**
  * A title over a background loop dims that loop to the lit curtain's level
@@ -9,8 +9,6 @@ import { DIM_START_BAKED, easeLevel } from "./visibility.js";
 export const TITLE_DIM_BAKED = CURTAIN_DEFAULTS.baked;
 export const TITLE_DIM_FILTER_ID = "title-dim";
 const TABLE_SIZE = 64;
-/** Brightest plain-video value the lit curtain's curve can reach at DIM_START_BAKED. */
-const CURVE_TOP = (0.9 * 0.999) ** (1 / 2.2);
 
 /**
  * What a pixel of the plain curtain video looks like when the lit curtain

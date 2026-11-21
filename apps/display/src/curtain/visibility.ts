@@ -43,6 +43,11 @@ export const DIM_IN_MS = 1_000;
  * title over the closed curtain into a vote doesn't jump in brightness.
  */
 export const DIM_START_BAKED = 1.8;
+/**
+ * Brightest value the lit curtain's curve can reach at DIM_START_BAKED: the shader's
+ * shoulder, c = (1 - exp(-1.15 base * baked)) * 0.9, shown = c^(1/2.2), tops out here.
+ */
+export const CURVE_TOP = (0.9 * 0.999) ** (1 / 2.2);
 
 /** Eases a level from `from` to `to` over DIM_IN_MS, the same way the lit curtain dims in. */
 export function easeLevel(from: number, to: number, elapsedMs: number): number {
