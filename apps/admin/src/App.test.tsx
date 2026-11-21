@@ -418,6 +418,50 @@ describe("Admin operations UI", () => {
     expect(document.body.textContent).not.toContain("Current phase");
   });
 
+  it("loads the cue sheet once the server is ready and reloads it after a restart", async () => {
+    localStorage.setItem("admin-token", "operator-secret");
+    let flowAvailable = false;
+    let status: Status = { ...activeStatus, uptimeMs: 3_723_000, serverTime: 10_000_000 };
+    let flow = sceneFlow;
+    const flowRequests: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/settings/display")) return jsonResponse({ configured: true, display: DEFAULT_DISPLAY_SETTINGS });
+      if (url.endsWith("/status")) return jsonResponse(status);
+      if (url.endsWith("/flow")) { flowRequests.push(url); return flowAvailable ? jsonResponse(flow) : jsonResponse({ error: "engine_unavailable" }, 503); }
+      return jsonResponse({ ok: true });
+    }));
+    const intervalSpy = vi.spyOn(window, "setInterval");
+    await renderApp();
+    await flush();
+    const poll = intervalSpy.mock.calls[0]?.[0];
+    if (typeof poll !== "function") throw new Error("Polling callback was not registered");
+    expect(document.body.textContent).not.toContain("Opening film");
+
+    // Connected while the engine was not ready: the next poll retries.
+    flowAvailable = true;
+    status = { ...status, uptimeMs: status.uptimeMs + 2_000, serverTime: status.serverTime! + 2_000 };
+    await act(async () => { poll(); });
+    await flush(); await flush();
+    expect(document.body.textContent).toContain("Opening film");
+    const loads = flowRequests.length;
+
+    // Same server run: no further requests.
+    status = { ...status, uptimeMs: status.uptimeMs + 2_000, serverTime: status.serverTime! + 2_000 };
+    await act(async () => { poll(); });
+    await flush(); await flush();
+    expect(flowRequests.length).toBe(loads);
+
+    // Publishing restarted the server with a new show: the cue sheet follows.
+    flow = { entryPhaseId: "welcome", scenes: [{ id: "welcome", kind: "video", title: "New show welcome", routes: [{ outcome: "next", target: "question-02" }] }, { id: "question-02", kind: "position-question", title: "New question", routes: [{ outcome: "next", target: "idle" }] }] };
+    status = { ...status, uptimeMs: 4_000, serverTime: status.serverTime! + 6_000 };
+    await act(async () => { poll(); });
+    await flush(); await flush();
+    expect(flowRequests.length).toBe(loads + 1);
+    expect(document.body.textContent).toContain("New show welcome");
+    expect(document.body.textContent).not.toContain("Opening film");
+  });
+
   it("marks cached status stale after a failed poll and clears staleness on recovery", async () => {
     localStorage.setItem("admin-token", "operator-secret");
     let failStatus = false;
