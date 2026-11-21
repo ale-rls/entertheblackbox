@@ -4,7 +4,7 @@ import { rehearsalId, runtimeWebSocket } from "@entertheblackbox/protocol";
 import { resolveSignageVideoUrl, resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
 import { currentInstallation } from "./lib/resolveInstallation.js";
 import { useDisplaySettings } from "./lib/useDisplaySettings.js";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
 import type { DisplayToServerMessage } from "@entertheblackbox/protocol";
 import { CursorField } from "./cursors/cursorField.js";
 import { SpotlightCurtain } from "./curtain/SpotlightCurtain.js";
@@ -508,7 +508,7 @@ export function App() {
   </main>;
 
   return (
-    <main className="display-root">
+    <main className="display-root" style={{ "--text-safe-x": `${displaySettings.textSafeArea * 100}vw` } as CSSProperties}>
       {clockOverlay}
       {/* Layer 1: video */}
       {titleDim.filter}
@@ -565,6 +565,7 @@ export function App() {
           sceneLoop={activeLoopVideo}
           dimFrom={curtainHold.dimFrom}
           onFabricShown={() => setCurtainShownKey(curtainHold.stage)}
+          textSafeArea={displaySettings.textSafeArea}
           onUnavailable={(error) => {
             console.warn("display: curtain-light renderer unavailable, using the standard field", error);
             setCurtainUnavailable(true);

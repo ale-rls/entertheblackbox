@@ -21,6 +21,8 @@ export const displaySettingsSchema = z.object({
   groupWaitingVideoUrls: z.record(z.string().min(1).max(160), waitingVideoUrlSchema).default({}),
   /** Background video for signage kiosks (e.g. a lobby entrance screen showing the join QR), keyed by a fixed signage spot id such as "lobby". */
   signageVideoUrls: z.record(z.string().min(1).max(160), waitingVideoUrlSchema).default({}),
+  /** Side safe area for vote and curtain text on the main and group displays: a fraction of the width kept clear on each side. */
+  textSafeArea: z.number().min(0).max(0.2).default(0.05),
 }).strict();
 export type DisplaySettings = z.infer<typeof displaySettingsSchema>;
 export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
@@ -33,6 +35,7 @@ export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   waitingVideoUrl: "",
   groupWaitingVideoUrls: {},
   signageVideoUrls: {},
+  textSafeArea: 0.05,
 };
 
 /** Missing group overrides inherit; an explicit empty override keeps that display black. */
