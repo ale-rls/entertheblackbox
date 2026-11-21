@@ -630,3 +630,34 @@ it("nests subgroup lanes and keeps completed paths disabled", async () => {
   expect(button("Child — finished").disabled).toBe(true);
   expect(button("Finish subgroups of Parent").disabled).toBe(false);
 });
+
+describe("Admin tabs", () => {
+  it("shows the six main views as tabs and the rest under More", async () => {
+    localStorage.setItem("admin-token", "operator-token");
+    createAdminFetch();
+    await renderApp();
+    const nav = document.querySelector(".admin-tabs")!;
+    const main = Array.from(nav.querySelectorAll(":scope > button")).map((tab) => tab.textContent);
+    expect(main).toEqual(["Show", "Cues", "Devices", "Instrument", "Displays", "Setup"]);
+    const more = nav.querySelector("details.admin-tabs-more")!;
+    expect(more.querySelector("summary")?.textContent).toBe("More");
+    expect(Array.from(more.querySelectorAll("button")).map((tab) => tab.textContent)).toEqual(["Tasks", "Wall", "Script"]);
+  });
+
+  it("names the open More view on the More button, closes the menu and restores it after a reload", async () => {
+    localStorage.setItem("admin-token", "operator-token");
+    createAdminFetch();
+    await renderApp();
+    const more = document.querySelector<HTMLDetailsElement>("details.admin-tabs-more")!;
+    more.open = true;
+    await act(async () => { button("Script").click(); });
+    expect(more.open).toBe(false);
+    expect(more.querySelector("summary")?.textContent).toBe("More · Script");
+    expect(more.querySelector("summary")?.getAttribute("aria-pressed")).toBe("true");
+    expect(localStorage.getItem("admin-view")).toBe("script");
+
+    await act(async () => root?.unmount());
+    await renderApp();
+    expect(document.querySelector("details.admin-tabs-more summary")?.textContent).toBe("More · Script");
+  });
+});
