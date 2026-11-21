@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
-import { activeMonitorCue, monitorMediaSources, type MonitorCue, type MonitorId } from "@entertheblackbox/scenario";
+import { activeMonitorCue, monitorBackground, monitorMediaSources, type MonitorCue, type MonitorId } from "@entertheblackbox/scenario";
 import { rehearsalId, runtimeWebSocket } from "@entertheblackbox/protocol";
 import type { ServerClock } from "@entertheblackbox/shared";
 import { DisplayConnection } from "../lib/connection.js";
@@ -90,7 +90,11 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
     {cue?.countdownShowsText && cueText && <div className="monitor-countdown-question">{withoutWidows(cueText)}</div>}
   </div>;
   const answerColor = monitorTextColor(cue, voteResult?.color ?? null, phase, monitorId);
-  const accent = answerColor ? { "--monitor-accent": answerColor } as CSSProperties : undefined;
+  const background = monitorBackground(cue, state.monitorBackgrounds[monitorId]);
+  const accent = answerColor || background ? {
+    ...(answerColor ? { "--monitor-accent": answerColor } : {}),
+    ...(background ? { background } : {}),
+  } as CSSProperties : undefined;
   return <main className="monitor-root" aria-label={`Monitor ${monitorId}`} style={accent}>
     {countdownText}
     {countdown === null && voteResult && <div className="monitor-text">{withoutWidows(voteResult.text)}</div>}

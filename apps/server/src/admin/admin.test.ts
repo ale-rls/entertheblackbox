@@ -647,3 +647,34 @@ describe("unified show publication", () => {
     } finally { await app.close(); }
   });
 });
+
+describe("POST /api/admin/monitor-backgrounds", () => {
+  it("validates the colours and hands them to the engine", async () => {
+    const app = Fastify();
+    let colors: Record<string, string> = {};
+    const engine = {
+      setMonitorBackgrounds: vi.fn((next: Record<string, string>) => { colors = next; return 4; }),
+      monitorBackgrounds: () => colors,
+    } as unknown as PhaseEngine;
+    registerAdminRoutes(app, { verifyToken: async (token) => token === "operator", engine: () => engine, ready: true, startedAt: 0 });
+    const headers = { authorization: "Bearer operator" };
+    try {
+      expect((await app.inject({ method: "POST", url: "/api/admin/monitor-backgrounds", payload: { colors: {} } })).statusCode).toBe(401);
+      for (const payload of [{}, { colors: { M5: "#ffffff" } }, { colors: { M1: "red" } }]) {
+        expect((await app.inject({ method: "POST", url: "/api/admin/monitor-backgrounds", headers, payload })).statusCode).toBe(400);
+      }
+      const response = await app.inject({ method: "POST", url: "/api/admin/monitor-backgrounds", headers, payload: { colors: { M2: "#3e63dd" } } });
+      expect(response.json()).toEqual({ ok: true, colors: { M2: "#3e63dd" }, delivered: 4 });
+      expect(engine.setMonitorBackgrounds).toHaveBeenCalledWith({ M2: "#3e63dd" });
+    } finally { await app.close(); }
+  });
+
+  it("answers 503 without a running show engine", async () => {
+    const app = Fastify();
+    registerAdminRoutes(app, { verifyToken: async () => true, engine: () => null, ready: true, startedAt: 0 });
+    try {
+      const response = await app.inject({ method: "POST", url: "/api/admin/monitor-backgrounds", headers: { authorization: "Bearer x" }, payload: { colors: {} } });
+      expect(response.statusCode).toBe(503);
+    } finally { await app.close(); }
+  });
+});
