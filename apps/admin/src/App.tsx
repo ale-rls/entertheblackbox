@@ -258,7 +258,7 @@ function sceneKindLabel(kind: FlowScene["kind"]): string {
 
 export function App() {
   const [activeTab, setActiveTab] = useState(() => {
-    try { const saved = localStorage.getItem("admin-view"); return ["show", "devices", "displays", "setup", "script"].includes(saved ?? "") ? saved! : "show"; } catch { return "show"; }
+    try { const saved = localStorage.getItem("admin-view"); return ["show", "cues", "devices", "displays", "setup", "script"].includes(saved ?? "") ? saved! : "show"; } catch { return "show"; }
   });
   const selectTab = (tab: string) => { setActiveTab(tab); try { localStorage.setItem("admin-view", tab); } catch {} };
 

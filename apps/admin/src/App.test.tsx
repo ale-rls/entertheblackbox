@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
 import { DEFAULT_DISPLAY_SETTINGS } from "@entertheblackbox/protocol";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -269,6 +270,27 @@ describe("Admin operations UI", () => {
     expect(headings).toContain("Ready to start");
     expect(document.querySelector<HTMLElement>(".admin-setup-content")?.hidden).toBe(true);
     expect(document.querySelector("#admin-lobby-heading")?.closest(".admin-setup-content")).not.toBeNull();
+  });
+
+  it("shows the cue sheet on the Cues tab with the Admin stylesheet applied", async () => {
+    // Component tests run without CSS; a leftover tab rule once hid the cue sheet on every tab.
+    const style = document.createElement("style");
+    style.textContent = readFileSync(`${process.cwd()}/src/admin.css`, "utf8");
+    document.head.append(style);
+    try {
+      localStorage.setItem("admin-token", "operator-secret");
+      localStorage.setItem("admin-view", "cues");
+      createAdminFetch();
+      await renderApp();
+      await flush();
+      const panel = document.querySelector<HTMLElement>(".admin-flow-panel");
+      expect(panel?.textContent).toContain("Opening film");
+      expect(getComputedStyle(panel!).display).not.toBe("none");
+      await act(async () => { button("Show").click(); });
+      expect(getComputedStyle(panel!).display).toBe("none");
+    } finally {
+      style.remove();
+    }
   });
 
   it("shows the published flow and confirms a direct jump to any other scene", async () => {
