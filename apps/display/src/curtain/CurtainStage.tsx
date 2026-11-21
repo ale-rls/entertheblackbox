@@ -8,8 +8,12 @@ import { CurtainScene } from "./curtainScene.js";
 
 const FADE_IN_MS = 700;
 const FADE_OUT_MS = 900;
-/** A question change on a curtain that stays: the old text fades out, then the new one fades in. */
-const TEXT_SWAP_MS = 300;
+/**
+ * A question change on a curtain that stays: the old text fades out exponentially
+ * (down to 1% at the end) and the new text appears at once.
+ */
+const TEXT_OUT_MS = 900;
+const TEXT_OUT_RATE = Math.log(100) / TEXT_OUT_MS;
 /** How long a finished curtain stays on screen, fading into the next scene. */
 export const CURTAIN_LEAVE_MS = 1_200;
 const MAX_RENDER_WIDTH = 1920;
@@ -149,11 +153,11 @@ export function CurtainStage(props: CurtainStageProps) {
       let textOpacity = 1;
       if (swapStartedAt !== null) {
         const t = local - swapStartedAt;
-        if (t < TEXT_SWAP_MS) textOpacity = 1 - t / TEXT_SWAP_MS;
+        if (t < TEXT_OUT_MS) textOpacity = Math.exp(-TEXT_OUT_RATE * t);
         else {
-          if (shown.scene !== scene || shown.question !== p.question) { shown = { scene, question: p.question }; textDirty = true; }
-          textOpacity = Math.min(1, (t - TEXT_SWAP_MS) / TEXT_SWAP_MS);
-          if (t >= 2 * TEXT_SWAP_MS) swapStartedAt = null;
+          shown = { scene, question: p.question };
+          textDirty = true;
+          swapStartedAt = null;
         }
       }
       syncVideo();
