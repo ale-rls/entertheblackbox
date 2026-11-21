@@ -2,8 +2,9 @@ import { anyMonitorCountdown } from '@entertheblackbox/scenario';
 import type { Snapshot } from './cues';
 
 /**
- * Audible monitor countdown: the app ticks once for every number the M1–M4
- * monitors count down and plays a distinct tone when the count reaches zero.
+ * Audible monitor countdown: the app ticks once for each of the last
+ * COUNTDOWN_TICK_SECONDS numbers the M1–M4 monitors count down and plays a
+ * distinct tone when the count reaches zero.
  * Pure parts live here; App samples the server clock and plays the sound.
  */
 export type CountdownSound = 'tick' | 'end';
@@ -20,12 +21,15 @@ export function countdownSeconds(s: Snapshot | null, now: number): number | null
   return countdownAudible(s) ? anyMonitorCountdown(s!.phase, now) : null;
 }
 
+/** Only the last numbers tick, so a minute-long countdown is not a minute of beeping. */
+export const COUNTDOWN_TICK_SECONDS = 5;
+
 /** A sample gap longer than this (app suspended, clock jump) never produces an end tone. */
 const END_GAP_MS = 1_500;
 
 /** Which sound a new sample calls for: a tick for each new number, the end tone when 1 runs out. */
 export function countdownSound(previous: CountdownSample | null, next: CountdownSample): CountdownSound | null {
-  if (next.seconds !== null) return next.seconds !== previous?.seconds ? 'tick' : null;
+  if (next.seconds !== null) return next.seconds !== previous?.seconds && next.seconds <= COUNTDOWN_TICK_SECONDS ? 'tick' : null;
   return previous?.seconds === 1 && next.at - previous.at < END_GAP_MS ? 'end' : null;
 }
 

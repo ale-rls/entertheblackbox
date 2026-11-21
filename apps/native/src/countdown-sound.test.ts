@@ -16,6 +16,14 @@ describe('audible monitor countdown', () => {
     expect(played).toEqual(['tick', 'tick', 'tick', 'end']);
   });
 
+  it('ticks only for the last five numbers of a long countdown', () => {
+    const played: string[] = [];
+    const ticker = new CountdownTicker(sound => played.push(sound));
+    for (let seconds = 60; seconds >= 1; seconds -= 1) ticker.sample((60 - seconds) * 1_000, seconds);
+    ticker.sample(60_100, null);
+    expect(played).toEqual(['tick', 'tick', 'tick', 'tick', 'tick', 'end']);
+  });
+
   it('plays no end tone after a long gap or when a count stops early', () => {
     expect(countdownSound({ at: 0, seconds: 1 }, { at: 5_000, seconds: null })).toBeNull();
     expect(countdownSound({ at: 0, seconds: 3 }, { at: 100, seconds: null })).toBeNull();

@@ -97,7 +97,8 @@ Before production, use installed builds on each supported iPhone/Android model. 
 ### Audible monitor countdown
 
 When the M1–M4 monitors show a countdown number, the app ticks once per
-second and plays a distinct tone when the count reaches zero, on its own
+second for the last five numbers only (a 60 s countdown stays silent until 5)
+and plays a distinct tone when the count reaches zero, on its own
 layer (`monitor-countdown`) so narration and music keep playing. It uses the
 monitors' own rules (`anyMonitorCountdown` in `packages/scenario`): authored
 per-cue countdowns at their full length, vote and scene countdowns only for

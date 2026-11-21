@@ -60,4 +60,21 @@ describe("VoteCloseCountdown", () => {
     await act(async () => root?.render(<VoteCloseCountdown clock={clock} deadlineAt={20_000} soundEnabled={false} durationSeconds={10} />));
     expect(document.querySelector(".vote-close-countdown")).toBeNull();
   });
+
+  it("shows a 60 s countdown the whole minute but pings only in its last 5 seconds", async () => {
+    vi.stubGlobal("Audio", FakeAudio);
+    let remaining = 42_300;
+    const clock = { remainingUntil: () => remaining } as unknown as ServerClock;
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+
+    await act(async () => root?.render(<VoteCloseCountdown clock={clock} deadlineAt={60_000} soundEnabled durationSeconds={60} />));
+    expect(document.querySelector(".vote-close-countdown")?.textContent).toBe("43");
+    expect(FakeAudio.created).toHaveLength(0);
+
+    remaining = 4_200;
+    await act(async () => root?.render(<VoteCloseCountdown clock={clock} deadlineAt={60_001} soundEnabled durationSeconds={60} />));
+    expect(document.querySelector(".vote-close-countdown")?.textContent).toBe("5");
+    expect(FakeAudio.created[0]?.play).toHaveBeenCalledOnce();
+  });
 });
