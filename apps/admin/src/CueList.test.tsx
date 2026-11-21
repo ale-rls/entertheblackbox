@@ -105,4 +105,18 @@ describe("cue list view", () => {
     expect(row.querySelector("small")?.textContent).toContain("Ending B1");
     expect(byLabel("Go B: T6.3.C – JA / HACK GELUNGEN")).not.toBeNull();
   });
+  it("lets the operator light a field and step the counter in a scene with operator fields", async () => {
+    const hack: SceneFlow = { ...flow, scenes: flow.scenes.map((scene) => scene.id === "wait" ? { ...scene, operatorFields: { zones: [{ id: "rot", label: "ROT", color: "#e5484d" }, { id: "blau", label: "BLAU" }], total: 12 } } : scene) };
+    const onOperatorField = vi.fn();
+    const element = document.createElement("div"); document.body.append(element); root = createRoot(element);
+    await act(() => root.render(<CueList flow={hack} status={{ ...status, operatorField: { target: "rot", count: 4 } }} busy={false} onJump={vi.fn()} onOperatorField={onOperatorField} />));
+    const panel = document.querySelector(".cue-operator-fields")!;
+    expect(panel.textContent).toContain("4 / 12");
+    const buttons = [...panel.querySelectorAll("button")];
+    expect(buttons.find((b) => b.textContent === "ROT")?.getAttribute("aria-pressed")).toBe("true");
+    await act(() => buttons.find((b) => b.textContent === "BLAU")!.click());
+    await act(() => buttons.find((b) => b.textContent === "+1")!.click());
+    expect(onOperatorField.mock.calls).toEqual([[{ target: "blau" }], [{ countDelta: 1 }]]);
+  });
 });
+

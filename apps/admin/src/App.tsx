@@ -60,6 +60,8 @@ export type Status = {
   lifecycle: string | null;
   phaseId: string | null;
   phaseEpoch: number | null;
+  /** The lit operator field and counter of the current scene, when it has operator fields. */
+  operatorField?: { target: string | null; count: number } | null;
   groupDestinations?: string[];
   pendingGroupAssignments?: string[];
   pendingDisconnectedGroupAssignments?: string[];
@@ -93,6 +95,8 @@ export type FlowScene = {
   title: string;
   /** Operator-only name from the script (e.g. "T6.2.1 – JA / START DES HACKS"). */
   cueName?: string;
+  /** Fields the operator lights one at a time in this scene, and the counter's total. */
+  operatorFields?: { zones: Array<{ id: string; label: string; color?: string }>; total?: number };
   routes: Array<{ outcome: string; target: string }>;
 };
 export type SceneFlow = { entryPhaseId: string; scenes: FlowScene[] };
@@ -560,6 +564,22 @@ export function App() {
       setWorkingAction(null);
     }
   };
+  const setOperatorField = async (change: { target?: string | null; countDelta?: number }) => {
+    setWorkingAction("operator-field");
+    setFeedback(null);
+    try {
+      await api("operator-field", connectedToken, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...change, expectedPhaseId: status?.phaseId }),
+      });
+      await refresh();
+    } catch (error) {
+      setFeedback({ status: "danger", message: error instanceof Error ? error.message : "The action failed." });
+    } finally {
+      setWorkingAction(null);
+    }
+  };
   const skipPhase = async (groupId?: string, groupLabel?: string) => {
     const workingKey = groupId ? `skip-${groupId}` : "skip";
     setWorkingAction(workingKey);
@@ -824,7 +844,7 @@ export function App() {
             <div><p className="sc-tool-eyebrow">Live show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Cue sheet</h2></div>
             <StatusLabel status={isActive && !status.groupPathsStarted ? "success" : "info"}>{status.groupPathsStarted ? "Groups running" : isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
           </div>
-          {flow?.scenes.length ? <CueList flow={flow} status={status} busy={busy} onJump={requestJump} /> : null}
+          {flow?.scenes.length ? <CueList flow={flow} status={status} busy={busy} onJump={requestJump} onOperatorField={setOperatorField} /> : null}
           <details><summary>Full graph &amp; jump</summary>
           {flow?.scenes.length ? <LiveGraph flow={flow} status={status} busy={busy} onJump={requestJump} onAssign={assignGroup} /> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}</details>
         </section>}

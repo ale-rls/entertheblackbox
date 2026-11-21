@@ -87,6 +87,8 @@ export const phaseSnapshotSchema = z.intersection(
     lastMonitorVotePhaseId: nonEmpty.optional(),
     /** The scene after this one is a title over a background loop, so the display dims into it before the cut. */
     nextTitleBackdrop: z.literal(true).optional(),
+    /** Operator fields (operatorFields): the field lit now and the counter, set from Admin. */
+    operatorField: z.object({ target: nonEmpty.nullable(), count: z.number().int().nonnegative() }).optional(),
   }),
 );
 

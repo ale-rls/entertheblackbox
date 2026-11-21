@@ -339,3 +339,7 @@
 .show-monitor summary { cursor: pointer; }
 
 .show-monitor-caption { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.cue-operator-fields { display: grid; gap: .5rem; }
+.cue-operator-buttons { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.cue-operator-buttons button[aria-pressed="true"] { outline: 3px solid currentColor; font-weight: 700; }

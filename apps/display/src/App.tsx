@@ -24,6 +24,7 @@ import { QuadrantOverlay, questionFieldCenter } from "./components/QuadrantOverl
 import { IdleAttract } from "./components/IdleAttract.js";
 import { LoopHandoff } from "./components/LoopVideo.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
+import { OperatorFields } from "./components/OperatorFields.js";
 import { PhaseVideoHandoff, type PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
 import { CrowdReactionSounds } from "./components/CrowdReactionSounds.js";
 import { VideoQuestionOverlay } from "./components/VideoQuestionOverlay.js";
@@ -552,6 +553,9 @@ export function App() {
       </section>}
 
       {/* Layer 2: UI */}
+      {phase?.kind === "video" && phase.operatorFields && <section className="layer layer-operator-fields">
+        <OperatorFields fields={phase.operatorFields} state={phase.operatorField} />
+      </section>}
       <section className="layer layer-ui">
         <div className="display-controls">
           {!soundEnabled && <button

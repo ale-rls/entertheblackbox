@@ -554,6 +554,28 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
         </>}
       </fieldset>;
     })()}
+    {phase.kind === "video" && (() => {
+      const sources = project.scenario.phases.flatMap((item) => (item.kind === "position-question" || item.kind === "video-position-question") && item.field.type === "polygon-zones" && item.field.zones.length >= 2 && item.field.zones.length <= 8 ? [item] : []);
+      const copyFrom = (sourceId: string) => {
+        const source = sources.find((item) => item.id === sourceId);
+        if (!source || source.field.type !== "polygon-zones") return;
+        const zones = source.field.zones.map((zone) => ({ ...zone, ...(source.answerColors?.[zone.id] ? { color: source.answerColors[zone.id] } : {}) }));
+        onChange({ ...phase, operatorFields: { zones, ...(phase.operatorFields?.total ? { total: phase.operatorFields.total } : {}) } });
+      };
+      const fields = phase.operatorFields;
+      return <fieldset><legend>Operator fields <small>operatorFields</small></legend>
+        <p className="sc-tool-copy field-hint">The operator lights one field at a time on the main display from Admin's cue sheet (e.g. the hack's target field), with an optional counter (e.g. nodes 3 / 12). Copy the fields from a vote with zones.</p>
+        <label className="sc-tool-label">Copy fields from<select className="sc-tool-select" value="" onChange={(event) => copyFrom(event.target.value)} disabled={!sources.length}>
+          <option value="">{sources.length ? "Choose a vote…" : "No vote with 2–8 zones"}</option>
+          {sources.map((item) => <option key={item.id} value={item.id}>{item.cueName ?? item.id}</option>)}
+        </select></label>
+        {fields && <>
+          <p className="sc-tool-copy">{fields.zones.map((zone) => zone.label).join(" · ")}</p>
+          <label className="sc-tool-label">Counter total (empty = no counter)<input className="sc-tool-field" type="number" min="1" max="99" step="1" value={fields.total ?? ""} onChange={(event) => { const value = Math.floor(Number(event.target.value)); onChange({ ...phase, operatorFields: { zones: fields.zones, ...(event.target.value !== "" && value >= 1 ? { total: Math.min(99, value) } : {}) } }); }} /></label>
+          <button type="button" className="sc-tool-button" onClick={() => { const { operatorFields: _old, ...rest } = phase; onChange(rest as Phase); }}>Remove operator fields</button>
+        </>}
+      </fieldset>;
+    })()}
     {(phase.kind === "narration" || phase.kind === "position-question"
       || ((phase.kind === "video" || phase.kind === "video-position-question") && phase.audioSrc !== undefined)) && <fieldset><legend>Main display loop</legend>
       <p className="sc-tool-copy field-hint">A muted video that loops behind this scene, e.g. the idle curtain. It covers the still image. Scenes in a row with the same loop continue without a jump.</p>
