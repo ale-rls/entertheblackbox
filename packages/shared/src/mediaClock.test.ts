@@ -57,3 +57,24 @@ it("throttles blocked autoplay retries and stops after disposal", async () => {
   stop(); await vi.advanceTimersByTimeAsync(2000);
   expect(blocked).toHaveBeenCalledTimes(1);
 });
+it("lets a cue that trails the clock play its last words to its own end", async () => {
+  const { media, ended, listeners, stop } = setup(9000 - 19_900);
+  media.paused = false; media.currentTime = 19.7;
+  await vi.advanceTimersByTimeAsync(300);
+  // The clock is past the 20 s duration, but the audio still plays out instead of being cut.
+  expect(media.pause).not.toHaveBeenCalled();
+  expect(ended).not.toHaveBeenCalled();
+  expect(media.currentTime).toBe(19.7);
+  listeners.get("ended")?.();
+  expect(ended).toHaveBeenCalledTimes(1);
+  stop();
+});
+it("still ends a stuck cue once the grace after its duration has passed", async () => {
+  const { media, ended, stop } = setup(9000 - 19_900);
+  media.paused = false; media.currentTime = 19.7;
+  await vi.advanceTimersByTimeAsync(1700);
+  expect(ended).toHaveBeenCalledTimes(1);
+  expect(media.currentTime).toBe(19.999);
+  stop();
+});
+
