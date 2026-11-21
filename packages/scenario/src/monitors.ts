@@ -12,6 +12,8 @@ const timing = {
   countdownFrom: z.number().int().positive().max(1_000_000_000_000).optional(),
   /** Keep the cue's text, smaller and centred, beneath the countdown. Text cues only. */
   countdownShowsText: z.boolean().optional(),
+  /** Background colour of the whole monitor while this cue shows (#rrggbb). Omit for black. */
+  background: z.string().regex(/^#[0-9a-f]{6}$/i, "colour must be #rrggbb").optional(),
 };
 const text = z.string().max(4000);
 /** Text colour for this cue. Omit to use the vote colour during a question, else white. */
@@ -47,6 +49,14 @@ export type MonitorCues = z.infer<typeof monitorCuesSchema>;
 
 export function monitorMediaSources(cues: MonitorCues | undefined): string[] {
   return [...new Set(Object.values(cues ?? {}).flatMap((items) => (items ?? []).flatMap((cue) => "src" in cue ? [cue.src] : [])))];
+}
+
+/**
+ * The monitor's background now: the operator's live colour from Admin wins,
+ * else the active cue's own background, else black (null).
+ */
+export function monitorBackground(cue: MonitorCue | null, liveColor?: string | null): string | null {
+  return liveColor ?? cue?.background ?? null;
 }
 
 /** Stateless selection: reconnects, jumps and repeated phases never restart a cue. */

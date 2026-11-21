@@ -22,7 +22,7 @@ export function MonitorEditor({ phase, onChange, onChooseMedia }: {
         {cues.map((cue, index) => <fieldset key={index}><legend>{id} cue {index + 1}</legend>
           <label className="sc-tool-label">Content<select className="sc-tool-select" value={cue.kind} onChange={(event) => {
             const kind = event.target.value as MonitorCue["kind"];
-            const timing = { startMs: cue.startMs, countdownSeconds: cue.countdownSeconds, countdownFrom: cue.countdownFrom, countdownShowsText: cue.countdownShowsText, ...(cue.durationMs === undefined ? {} : { durationMs: cue.durationMs }) };
+            const timing = { startMs: cue.startMs, countdownSeconds: cue.countdownSeconds, countdownFrom: cue.countdownFrom, countdownShowsText: cue.countdownShowsText, ...(cue.durationMs === undefined ? {} : { durationMs: cue.durationMs }), ...(cue.background === undefined ? {} : { background: cue.background }) };
             const colored = { ...timing, ...("color" in cue && cue.color !== undefined ? { color: cue.color } : {}) };
             update(index, kind === "video" ? { kind, src: "choose-video.mp4", loop: false, fit: "contain", ...timing }
               : kind === "image" ? { kind, src: "choose-image.png", fit: "contain", ...colored }
@@ -41,6 +41,7 @@ export function MonitorEditor({ phase, onChange, onChooseMedia }: {
           {(cue.kind === "text" || cue.kind === "placeholder" || cue.kind === "image") && <label className="sc-tool-label">{cue.kind === "image" ? "Caption (optional)" : "Text"}<textarea className="sc-tool-field" value={cue.text ?? ""} onChange={(event) => update(index, { ...cue, text: event.target.value })} /></label>}
           {(cue.kind === "text" || cue.kind === "placeholder" || cue.kind === "vote-result" || cue.kind === "image") &&
             <MonitorColorField value={cue.color} onChange={(color) => update(index, { ...cue, color })} />}
+          <MonitorColorField label="Background" autoLabel="Black" value={cue.background} onChange={(background) => update(index, { ...cue, background })} />
           {(cue.kind === "video" || cue.kind === "image") && <>
             <button className="sc-tool-button" type="button" onClick={(event) => onChooseMedia(phase.id, { monitorId: id, cueIndex: index }, cue.kind, event.currentTarget)}>Browse {cue.kind} library… {cue.src}</button>
             <label className="sc-tool-label">Fit<select className="sc-tool-select" value={cue.fit} onChange={(event) => update(index, { ...cue, fit: event.target.value as "contain" | "cover" })}><option value="contain">Fit whole frame</option><option value="cover">Fill screen (crop)</option></select></label>
@@ -54,19 +55,25 @@ export function MonitorEditor({ phase, onChange, onChooseMedia }: {
   </fieldset>;
 }
 
-/** Text colour for one cue: automatic (vote colour, else white), a show preset, or a custom hex. */
-export function MonitorColorField({ value, onChange }: { value: string | undefined; onChange: (color: string | undefined) => void }) {
+/** A colour for one cue (text or background): automatic, a show preset, or a custom hex. */
+export function MonitorColorField({ value, onChange, label = "Text colour", autoLabel = "Automatic (vote colour, else white)" }: {
+  value: string | undefined;
+  onChange: (color: string | undefined) => void;
+  label?: string;
+  /** What the monitor shows without a colour. */
+  autoLabel?: string;
+}) {
   const preset = MONITOR_TEXT_COLOR_PRESETS.find((item) => item.color === value?.toLowerCase());
   const choice = value === undefined ? "auto" : preset ? preset.color : "custom";
   return <div className="monitor-color-field">
-    <label className="sc-tool-label">Text colour<select className="sc-tool-select" value={choice} onChange={(event) => {
+    <label className="sc-tool-label">{label}<select className="sc-tool-select" value={choice} onChange={(event) => {
       const next = event.target.value;
       onChange(next === "auto" ? undefined : next === "custom" ? value ?? "#ffffff" : next);
     }}>
-      <option value="auto">Automatic (vote colour, else white)</option>
+      <option value="auto">{autoLabel}</option>
       {MONITOR_TEXT_COLOR_PRESETS.map((item) => <option key={item.color} value={item.color}>{item.name}</option>)}
       <option value="custom">Custom…</option>
     </select></label>
-    {value !== undefined && <input type="color" aria-label="Custom text colour" value={value.toLowerCase()} onChange={(event) => onChange(event.target.value)} />}
+    {value !== undefined && <input type="color" aria-label={`Custom ${label.toLowerCase()}`} value={value.toLowerCase()} onChange={(event) => onChange(event.target.value)} />}
   </div>;
 }

@@ -344,30 +344,8 @@
 .cue-operator-buttons { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .cue-operator-buttons button[aria-pressed="true"] { outline: 3px solid currentColor; font-weight: 700; }
 
-/* Six main views; the rest under More (a small popover menu). */
-.admin-tabs { align-items: center; }
-.admin-tabs-more { position: relative; }
-.admin-tabs-more > summary { list-style: none; cursor: pointer; opacity: .8; }
-.admin-tabs-more > summary::-webkit-details-marker { display: none; }
-.admin-tabs-more > summary::after { content: " ▾"; }
-.admin-tabs-more > summary[aria-pressed=true] { opacity: 1; background: var(--sc-tool-color-action); color: var(--sc-tool-color-text-on-cream); }
-.admin-tabs-more-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 30; display: grid; gap: 4px; min-width: 10rem; padding: 6px; border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-radius: var(--sc-tool-radius-2); background: var(--sc-tool-color-canvas); box-shadow: var(--sc-tool-shadow-2); }
-.admin-tabs-more-menu .sc-tool-button { width: 100%; justify-content: flex-start; }
-
-/* Phones: a compact sticky bar (one row of tabs that scrolls sideways), and wide tables scroll inside their panel instead of being cut off. */
-@media (max-width: 767px) {
-  .admin-topbar { padding-block-start: var(--sc-tool-space-3); }
-  .admin-header { padding-block-end: var(--sc-tool-space-3); }
-  .admin-header h1 { font-size: var(--sc-tool-font-size-3); }
-  .admin-status-bar { gap: var(--sc-tool-space-2) var(--sc-tool-space-4); padding-block: var(--sc-tool-space-2); font-size: var(--sc-tool-font-size-0); }
-  .admin-status-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; white-space: nowrap; }
-  .admin-status-bar > * { flex: 0 0 auto; }
-  .admin-app .admin-status-bar .sc-tool-button { min-height: 2rem; padding-block: 0; padding-inline: var(--sc-tool-space-3); }
-  .admin-tabs { flex-wrap: nowrap; gap: 6px; padding-block: var(--sc-tool-space-3); margin-inline: calc(-1 * var(--admin-gutter)); padding-inline: var(--admin-gutter); overflow-x: auto; scrollbar-width: none; }
-  .admin-tabs::-webkit-scrollbar { display: none; }
-  .admin-tabs > .sc-tool-button, .admin-tabs-more > summary { flex: 0 0 auto; min-height: 2.5rem; padding-inline: var(--sc-tool-space-4); white-space: nowrap; }
-  .admin-tabs-more { position: static; flex: 0 0 auto; }
-  .admin-tabs-more-menu { position: fixed; inset-inline: var(--admin-gutter); top: auto; }
-  .admin-app table { display: block; max-width: 100%; overflow-x: auto; }
-  .admin-app .sc-tool-panel { min-width: 0; padding-inline: var(--sc-tool-space-4); }
-}
+/* Live M1–M4 background colours (Instrument tab). */
+.monitor-backgrounds { margin-block-start: var(--sc-tool-space-6); }
+.monitor-background-rows { display: grid; gap: var(--sc-tool-space-4); margin-block-start: var(--sc-tool-space-5); }
+.monitor-background-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-4); }
+.monitor-background-id { display: inline-grid; place-items: center; width: 3.5rem; height: 2.5rem; border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-radius: var(--sc-tool-radius-1); background: var(--sc-tool-color-canvas); color: var(--sc-tool-color-text); }

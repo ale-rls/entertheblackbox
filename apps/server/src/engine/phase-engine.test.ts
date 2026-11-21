@@ -1929,6 +1929,25 @@ describe("authored stage monitor connections", () => {
     expect(last.phase.monitorVoteResults).toHaveProperty("question");
     engine.stop();
   });
+  it("sends the operator's live background colours to monitors, also to ones joining later, and clears them at idle", () => {
+    let now = 1000;
+    const { engine } = setup({ now: () => now });
+    const m1 = new MockSocket();
+    join(engine, m1, "M1");
+    expect(m1.sent.find(message => message.t === "monitor_backgrounds")).toEqual({ t: "monitor_backgrounds", v: 2, colors: {} });
+    expect(engine.setMonitorBackgrounds({ M1: "#30a46c", M3: "#f76b15" })).toBe(1);
+    expect(m1.sent.at(-1)).toEqual({ t: "monitor_backgrounds", v: 2, colors: { M1: "#30a46c", M3: "#f76b15" } });
+    const m3 = new MockSocket();
+    join(engine, m3, "M3");
+    expect(m3.sent.filter(message => message.t === "monitor_backgrounds").at(-1)?.colors).toEqual({ M1: "#30a46c", M3: "#f76b15" });
+    expect(engine.adminStart(now).ok).toBe(true);
+    expect(engine.monitorBackgrounds()).toEqual({ M1: "#30a46c", M3: "#f76b15" });
+    now += 100;
+    expect(engine.adminIdle(now).ok).toBe(true);
+    expect(engine.monitorBackgrounds()).toEqual({});
+    expect(m1.sent.filter(message => message.t === "monitor_backgrounds").at(-1)?.colors).toEqual({});
+    engine.stop();
+  });
   it("rejects invalid credentials and mixed display roles", () => {
     const { engine } = setup({ now: () => 0 });
     const socket = new MockSocket();

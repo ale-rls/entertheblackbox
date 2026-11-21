@@ -17,6 +17,7 @@ import { CueList } from "./CueList.js";
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import { AudioDiagnostics } from "./AudioDiagnostics";
 import { flowNeedsReload, serverBootAt } from "./flow-refresh";
+import { MonitorBackgrounds, type MonitorBackgroundColors } from "./MonitorBackgrounds.js";
 import PocketBase from "pocketbase";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 
@@ -42,6 +43,8 @@ export type Status = {
     reportedAt: number;
   } | null;
   connectedParticipants: number;
+  /** Operator's live M1–M4 background colours. */
+  monitorBackgrounds?: MonitorBackgroundColors;
   participants: Array<{
     clientId: string;
     name: string;
@@ -797,6 +800,7 @@ export function App() {
       {connectedToken && status?.admission && activeTab === 'tasks' && <AdmissionPrograms token={connectedToken} state={status.admission} participants={status.participants} groups={status.groups ?? []} />}
       {connectedToken && status?.tasks && activeTab === 'tasks' && <ParticipantTasks token={connectedToken} state={status.tasks} sessionId={status.sessionId ?? ''} phaseId={status.phaseId ?? ''} phaseEpoch={status.phaseEpoch ?? 0} participants={status.participants} refresh={tasks => setStatus(current => current ? { ...current, tasks } : current)} />}
       {connectedToken && status && activeTab === "instrument" && !audioOnly && <SurfaceInstrument token={connectedToken} participants={status.participants.filter((participant) => participant.client !== "web").map((participant) => ({ ...participant, name: participant.deviceLabel ?? participant.name }))} />}
+      {connectedToken && status && activeTab === "instrument" && !audioOnly && <MonitorBackgrounds token={connectedToken} colors={status.monitorBackgrounds ?? {}} onChange={(monitorBackgrounds) => setStatus(current => current ? { ...current, monitorBackgrounds } : current)} />}
       {connectedToken && activeTab === "wall" && !audioOnly && <VideoWall key={connectedToken} token={connectedToken} pocketbaseUrl={POCKETBASE_URL} />}
       {status && (activeTab === "devices" || audioOnly) && <ShowClockPanel clock={clock} status={status} stale={statusStale} receivedAt={statusReceivedAt} />}
 

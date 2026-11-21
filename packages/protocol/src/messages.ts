@@ -1,6 +1,6 @@
 import { admissionProgramSchema } from '@entertheblackbox/scenario';
 import { participantTaskSchema, taskRecipientSchema } from '@entertheblackbox/scenario';
-import { monitorIdSchema } from "@entertheblackbox/scenario";
+import { monitorIdSchema } from '@entertheblackbox/scenario';
 import { z } from "zod";
 import {
   audienceGroupSchema,
@@ -664,6 +664,18 @@ export const wallSchema = z.object({
   loop: z.boolean(),
 });
 
+/**
+ * Live background colours for the M1–M4 monitors, set by the operator in
+ * Admin. A colour here overrides the background of the monitor's cues until
+ * the operator clears it; monitors missing from `colors` use their cues'.
+ */
+export const monitorBackgroundColorsSchema = z.record(monitorIdSchema, z.string().regex(/^#[0-9a-fA-F]{6}$/));
+export const monitorBackgroundsSchema = z.object({
+  t: z.literal("monitor_backgrounds"),
+  v,
+  colors: monitorBackgroundColorsSchema,
+});
+
 /** Everything a client can receive from the server. */
 export const serverToClientSchema = z.union([
   staffMenuSchema,
@@ -690,11 +702,14 @@ export const serverToClientSchema = z.union([
   audioBridgeChangedSchema,
   surfaceSchema,
   wallSchema,
+  monitorBackgroundsSchema,
 ]);
 
 // ------------------------------------------------------------------------- types
 
 export type PhaseSnapshotMessage = z.infer<typeof phaseSnapshotSchema>;
+export type MonitorBackgroundsMessage = z.infer<typeof monitorBackgroundsSchema>;
+export type MonitorBackgroundColors = z.infer<typeof monitorBackgroundColorsSchema>;
 export type CurtainTreatment = z.infer<typeof curtainTreatmentSchema>;
 export type Cursor = z.infer<typeof cursorSchema>;
 export type QuadrantCounts = z.infer<typeof quadrantCountsSchema>;

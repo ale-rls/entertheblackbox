@@ -41,6 +41,8 @@ Video sound is always muted. Use native audio for participant narration.
 
 **Cue colour.** Text, placeholder, vote-result and image-caption cues can set their own text colour (`color`, `#rrggbb`), in any scene. It wins over the answer colour and the vote-result colour, and the countdown uses it too. Studio offers the show's colours as presets: white `#ffffff`, orange `#f76b15`, green `#30a46c`, blue `#3e63dd`, red `#e5484d`, yellow `#f5d90a`, plus a custom colour. **Automatic** (no `color`) keeps the behaviour above.
 
+**Background colour.** Any cue can set the whole monitor's background (`background`, `#rrggbb`; Studio: *Background*, default black) while it shows, e.g. a solid colour field per monitor in a decision scene. A `blank` cue with a background is a plain colour screen. The operator can also set each monitor's background live in Admin → Instrument → *Monitor backgrounds*: a live colour wins over the cue's until it is set back to *Scene* or *Clear all*, and is cleared when the show returns to idle. Monitors that join later receive the current live colours.
+
 **No widows.** Monitor text never ends with one word alone on its last line: in each authored line of three or more words, the display binds the last two words with a non-breaking space (unless that pair is longer than 20 characters and would no longer fit), and uses CSS `text-wrap: pretty` where the browser supports it. Applies to text, placeholder, vote-result, image captions and the small text under a countdown. Authored line breaks stay as written.
 
 Question-first/answers-second can be authored as two cues at different offsets.
