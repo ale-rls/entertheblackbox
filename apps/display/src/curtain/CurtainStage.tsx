@@ -85,12 +85,12 @@ function drawText(canvas: HTMLCanvasElement, question: string, scene: CurtainSce
   ctx.textBaseline = "top";
   const titleSize = fitFont(ctx, question, width * 0.042, width * 0.88);
   paint(ctx, question, width / 2, height * 0.05, titleSize);
-  // Answer words: 2.8% of width, centred on each pool, at most 24% wide.
+  // Answer words: 2.8% of width, centred on each pool, at most 24% wide. All answers share
+  // one size, the one the longest needs, so a long answer never looks quieter than a short one.
   ctx.textBaseline = "middle";
-  for (const label of scene.labels) {
-    const size = fitFont(ctx, label.text, width * 0.028, width * 0.24);
-    paint(ctx, label.text, label.x * width, label.y * height, size);
-  }
+  const labelSize = Math.min(width * 0.028, ...scene.labels.map((label) => fitFont(ctx, label.text, width * 0.028, width * 0.24)));
+  ctx.font = `700 ${labelSize}px ${FONT}`;
+  for (const label of scene.labels) paint(ctx, label.text, label.x * width, label.y * height, labelSize);
 }
 
 /**
