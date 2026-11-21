@@ -38,7 +38,7 @@ import { CURTAIN_LEAVE_MS, CurtainStage } from "./curtain/CurtainStage.js";
 import { useTitleDim } from "./curtain/titleDim.js";
 import { DIM_IN_MS } from "./curtain/visibility.js";
 import type { CurtainTreatment } from "@entertheblackbox/protocol";
-import { backdropDimPlan, type BackdropDimPlan, type PositionField } from "@entertheblackbox/shared";
+import { backdropDimPlan, isPictureOnlyClip, type BackdropDimPlan, type PositionField } from "@entertheblackbox/shared";
 
 type CurtainHold = {
   key: string;
@@ -69,6 +69,8 @@ declare const __REALTIME_WS_URL__: string | undefined;
 declare const __DISPLAY_TOKEN__: string | undefined;
 declare const __LOBBY_WIFI_NAME__: string | undefined;
 
+/** A background loop dissolves into a curtain opening over this long. */
+const LOOP_DISSOLVE_MS = 500;
 const searchParams = new URLSearchParams(location.search);
 // Two mutually exclusive optional query parameters: ?group=<id> is that
 // audience group's own dedicated kiosk; ?signage=<id> is a QR-only
@@ -422,12 +424,15 @@ export function App() {
   const loopHeldForHandoff = phaseLoopSrc === null
     && ((phaseMediaKey !== null && presentedVideoKey !== phaseMediaKey) || curtainWaiting);
   const loopPending = phaseLoopSrc !== null && loopUrl?.src !== phaseLoopSrc;
+  const loopAnchorAt = phase?.loopStartedAt;
   const loopTarget = useMemo(
     () => phaseLoopSrc !== null && loopUrl?.src === phaseLoopSrc && loopUrl.url !== null
-      ? { src: phaseLoopSrc, url: loopUrl.url }
+      ? { src: phaseLoopSrc, url: loopUrl.url, anchorAt: loopAnchorAt }
       : null,
-    [phaseLoopSrc, loopUrl],
+    [phaseLoopSrc, loopUrl, loopAnchorAt],
   );
+  // A loop handing over to a picture-only clip (a curtain opening) dissolves into it.
+  const loopFadeOutMs = phase !== null && phase !== undefined && isPictureOnlyClip(phase) ? LOOP_DISSOLVE_MS : 0;
   // Each layer waits for the other's incoming picture, so a cut changes both on one frame.
   const [foregroundReadyKey, setForegroundReadyKey] = useState<string | null>(null);
   const [loopReadyUrl, setLoopReadyUrl] = useState<string | null>(null);
@@ -516,6 +521,7 @@ export function App() {
           hold={loopHeldForHandoff}
           revealAllowed={foregroundReady}
           clock={connection.clock}
+          fadeOutMs={loopFadeOutMs}
           onReadyUrl={setLoopReadyUrl}
           onActiveSrc={pinShownLoop}
         />

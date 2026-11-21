@@ -2,7 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { ServerClock } from "@entertheblackbox/shared";
 import { monitorVideoTime } from "../monitors/playback.js";
 
-export type LoopTarget = { src: string; url: string };
+/** `anchorAt`: server time of the loop's first frame (its run of scenes began); without it the loop follows the absolute clock. */
+export type LoopTarget = { src: string; url: string; anchorAt?: number | undefined };
 type Slot = 0 | 1;
 
 /**
@@ -11,13 +12,16 @@ type Slot = 0 | 1;
  * the foreground is ready too, so the layers change on the same frame. With no
  * loop wanted it clears at once, unless `hold` keeps it until the foreground
  * has replaced it. `pending` means the wanted loop is still resolving.
+ * With `fadeOutMs`, a loop that leaves for no loop dissolves into the foreground
+ * underneath instead of cutting (a closed curtain into its opening).
  */
-export function LoopHandoff({ target, pending, hold, revealAllowed, clock, onReadyUrl, onActiveSrc }: {
+export function LoopHandoff({ target, pending, hold, revealAllowed, clock, fadeOutMs = 0, onReadyUrl, onActiveSrc }: {
   target: LoopTarget | null;
   pending: boolean;
   hold: boolean;
   revealAllowed: boolean;
   clock: ServerClock;
+  fadeOutMs?: number;
   /** The loop URL that could be on screen now: a framed incoming loop, else the current one. */
   onReadyUrl?: (url: string | null) => void;
   onActiveSrc?: (src: string | null) => void;
@@ -25,6 +29,7 @@ export function LoopHandoff({ target, pending, hold, revealAllowed, clock, onRea
   const [slots, setSlots] = useState<[LoopTarget | null, LoopTarget | null]>([null, null]);
   const [active, setActive] = useState<Slot | null>(null);
   const [framed, setFramed] = useState<[string | null, string | null]>([null, null]);
+  const [fading, setFading] = useState(false);
   const current = active === null ? null : slots[active];
   const other: Slot = active === 0 ? 1 : 0;
   // A slot's frame belongs to the element it was reported by: filling or emptying the slot
@@ -39,17 +44,22 @@ export function LoopHandoff({ target, pending, hold, revealAllowed, clock, onRea
     if (target === null) {
       if (slots[other] !== null) place(other, null);
       if (!hold && active !== null) {
+        if (fadeOutMs > 0) {
+          setFading(true);
+          return;
+        }
         setActive(null);
         place(0, null);
         place(1, null);
       }
       return;
     }
-    if (current?.url === target.url) {
+    if (fading) setFading(false);
+    if (current !== null && sameLoop(current, target)) {
       if (slots[other] !== null) place(other, null);
       return;
     }
-    if (slots[other]?.url !== target.url) {
+    if (slots[other] === null || !sameLoop(slots[other], target)) {
       place(other, target);
       return;
     }
@@ -57,7 +67,19 @@ export function LoopHandoff({ target, pending, hold, revealAllowed, clock, onRea
       setActive(other);
       if (active !== null) place(active, null);
     }
-  }, [target, pending, hold, revealAllowed, slots, active, current, other, framed, place]);
+  }, [target, pending, hold, revealAllowed, slots, active, current, other, framed, place, fadeOutMs, fading]);
+
+  // The dissolve's end: the faded loop leaves.
+  useEffect(() => {
+    if (!fading) return;
+    const timer = setTimeout(() => {
+      setFading(false);
+      setActive(null);
+      place(0, null);
+      place(1, null);
+    }, fadeOutMs);
+    return () => clearTimeout(timer);
+  }, [fading, fadeOutMs, place]);
 
   const incoming = slots[other];
   const readyUrl = incoming !== null && framed[other] === incoming.url ? incoming.url : current?.url ?? null;
@@ -79,14 +101,20 @@ export function LoopHandoff({ target, pending, hold, revealAllowed, clock, onRea
       const value = slots[slot];
       if (value === null) return null;
       return <LoopVideo
-        key={`${slot}:${value.url}`}
+        key={`${slot}:${value.url}:${value.anchorAt ?? ""}`}
         src={value.url}
         clock={clock}
+        anchorAt={value.anchorAt}
         active={active === slot}
+        fadeOutMs={fading && active === slot ? fadeOutMs : 0}
         onFirstFrame={() => markFramed(slot, value.url)}
       />;
     })}
   </>;
+}
+
+function sameLoop(a: LoopTarget, b: LoopTarget): boolean {
+  return a.url === b.url && a.anchorAt === b.anchorAt;
 }
 
 function withSlot<T>(slots: [T, T], slot: Slot, value: T): [T, T] {
@@ -97,13 +125,16 @@ function withSlot<T>(slots: [T, T], slot: Slot, value: T): [T, T] {
 
 /**
  * A scene's muted background loop (e.g. an idle curtain). Its position follows
- * the absolute server clock, not the scene start, so consecutive scenes sharing
- * the loop run on without a jump and every display shows the same frame.
+ * the server clock from `anchorAt`, where its run of scenes began (else from the
+ * absolute clock), so consecutive scenes sharing the loop run on without a jump
+ * and every display shows the same frame. `fadeOutMs` > 0 dissolves it away.
  */
-export function LoopVideo({ src, clock, active = true, onFirstFrame }: {
+export function LoopVideo({ src, clock, anchorAt, active = true, fadeOutMs = 0, onFirstFrame }: {
   src: string;
   clock: ServerClock;
+  anchorAt?: number | undefined;
   active?: boolean;
+  fadeOutMs?: number;
   onFirstFrame?: () => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -132,7 +163,7 @@ export function LoopVideo({ src, clock, active = true, onFirstFrame }: {
       // playing frame that is not mid-seek is enough to show it.
       if (video.readyState >= 2 && video.videoWidth > 0 && !video.seeking && !video.paused) reportFrame();
       if (video.readyState < 1 || !clock.ready) return;
-      const target = loopVideoTime(clock.now(), video.duration);
+      const target = loopVideoTime(clock.now(), video.duration, anchorAt);
       if (target === null) return;
       if (!video.seeking && Math.abs(video.currentTime - target) > 0.15) video.currentTime = target;
       if (video.paused && !pending && Date.now() >= retryAt) {
@@ -160,10 +191,11 @@ export function LoopVideo({ src, clock, active = true, onFirstFrame }: {
       video.removeEventListener("error", failed);
       video.pause();
     };
-  }, [src, clock]);
+  }, [src, clock, anchorAt]);
   return <video
     ref={ref}
     className={`phase-loop-video${active ? " phase-loop-video-active" : ""}`}
+    style={fadeOutMs > 0 ? { opacity: 0, transition: `opacity ${fadeOutMs}ms linear` } : undefined}
     src={src}
     muted
     loop
@@ -173,8 +205,11 @@ export function LoopVideo({ src, clock, active = true, onFirstFrame }: {
   />;
 }
 
-/** Position in seconds for a loop of `durationSeconds` at server time `nowMs`, or null when unknown. */
-export function loopVideoTime(nowMs: number, durationSeconds: number): number | null {
-  const target = monitorVideoTime(nowMs, durationSeconds, true);
+/**
+ * Position in seconds for a loop of `durationSeconds` at server time `nowMs`, or null when unknown.
+ * From `anchorAt` (its first frame) when given, else on the absolute clock.
+ */
+export function loopVideoTime(nowMs: number, durationSeconds: number, anchorAt?: number): number | null {
+  const target = monitorVideoTime(anchorAt === undefined ? nowMs : Math.max(0, nowMs - anchorAt), durationSeconds, true);
   return target.playing ? target.time : null;
 }
