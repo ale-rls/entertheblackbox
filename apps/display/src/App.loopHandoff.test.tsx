@@ -141,6 +141,24 @@ describe("projection loop handoffs", () => {
     expect(video("second-loop.webm")).toBeNull();
   });
 
+  it("waits for a fresh frame when a loop comes back after a film", async () => {
+    await phase(1, loop("curtain.mp4"));
+    await present(video("curtain.mp4"));
+    await phase(2, film("qr-close.mp4"));
+    const qrClose = video("qr-close.mp4");
+    await present(qrClose);
+    expect(activeLoop()).toBeNull();
+
+    // Same loop, same slot as before: the earlier element's frame must not count for the new one.
+    await phase(3, loop("curtain.mp4"));
+    const returning = video("curtain.mp4");
+    expect(activeLoop()).toBeNull();
+    expect(activeForeground()).toBe(qrClose);
+    await present(returning);
+    expect(activeLoop()).toBe(returning);
+    expect(activeForeground()).toBeNull();
+  });
+
   it("keeps a shared loop mounted across cues with a new still under it", async () => {
     await phase(1, loop("alpha.webm"));
     const overlay = video("alpha.webm");

@@ -27,30 +27,37 @@ export function LoopHandoff({ target, pending, hold, revealAllowed, clock, onRea
   const [framed, setFramed] = useState<[string | null, string | null]>([null, null]);
   const current = active === null ? null : slots[active];
   const other: Slot = active === 0 ? 1 : 0;
+  // A slot's frame belongs to the element it was reported by: filling or emptying the slot
+  // forgets it, so a loop that comes back to the same slot waits for its new element's frame.
+  const place = useCallback((slot: Slot, value: LoopTarget | null) => {
+    setSlots((previous) => withSlot(previous, slot, value));
+    setFramed((previous) => previous[slot] === null ? previous : withSlot(previous, slot, null));
+  }, []);
 
   useLayoutEffect(() => {
     if (pending) return;
     if (target === null) {
-      if (slots[other] !== null) setSlots((previous) => withSlot(previous, other, null));
+      if (slots[other] !== null) place(other, null);
       if (!hold && active !== null) {
         setActive(null);
-        setSlots([null, null]);
+        place(0, null);
+        place(1, null);
       }
       return;
     }
     if (current?.url === target.url) {
-      if (slots[other] !== null) setSlots((previous) => withSlot(previous, other, null));
+      if (slots[other] !== null) place(other, null);
       return;
     }
     if (slots[other]?.url !== target.url) {
-      setSlots((previous) => withSlot(previous, other, target));
+      place(other, target);
       return;
     }
     if (revealAllowed && framed[other] === target.url) {
       setActive(other);
-      if (active !== null) setSlots((previous) => withSlot(previous, active, null));
+      if (active !== null) place(active, null);
     }
-  }, [target, pending, hold, revealAllowed, slots, active, current, other, framed]);
+  }, [target, pending, hold, revealAllowed, slots, active, current, other, framed, place]);
 
   const incoming = slots[other];
   const readyUrl = incoming !== null && framed[other] === incoming.url ? incoming.url : current?.url ?? null;
