@@ -498,6 +498,51 @@ describe("App media-readiness gate", () => {
     }
   });
 
+  it("dims the open curtain under a vote and brightens after it", async () => {
+    harness.mediaStatus = { state: "ready" };
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance", "setTimeout", "clearTimeout", "Date"] });
+    vi.setSystemTime(0);
+    try {
+      await act(async () => root?.render(<App />));
+      const send = async (phaseEpoch: number, phase: Record<string, unknown>) => act(async () => {
+        harness.connectionOptions?.onMessage({
+          t: "snapshot", v: PROTOCOL_VERSION, sessionId: "session-1", phaseEpoch, serverTime: Date.now(),
+          phase: { scenarioVersion: "show-1", startedAt: Date.now(), deadlineAt: null, ...phase },
+        } as ServerToClientMessage);
+      });
+      const dimmed = () => document.querySelector<HTMLElement>(".layer-video")!.style.filter === "url(#title-dim)";
+      const advance = async (ms: number) => {
+        await act(async () => { vi.advanceTimersByTime(ms - 300); });
+        await act(async () => { vi.advanceTimersByTime(300); });
+      };
+      const open = { src: "open.png", loopVideoSrc: "open-loop.mp4" };
+      const vote = {
+        ...open, kind: "video-position-question", audioSrc: "vote.mp3", expectedDurationMs: 20_000, text: "Wer?",
+        field: { type: "four-quadrant", xAxis: { minLabel: "a", maxLabel: "b" }, yAxis: { minLabel: "c", maxLabel: "d" } },
+        showAtMs: 500, openAtMs: 500, closeAtMs: 18_000, hideAtMs: 20_000, connectionStaleAfterMs: 5_000,
+        showLiveCounts: false, curtainLightVote: false,
+      };
+
+      await send(1, { kind: "video", id: "before", audioSrc: "a.mp3", ...open, expectedDurationMs: 10_000, next: "vote", nextTitleBackdrop: true });
+      await advance(8_500);
+      expect(dimmed()).toBe(false);
+      await advance(1_000);
+      expect(dimmed()).toBe(true);
+
+      await send(2, { ...vote, id: "vote", next: { type: "fixed", target: "after" } });
+      await advance(15_000);
+      expect(dimmed()).toBe(true);
+
+      await send(3, { kind: "video", id: "after", audioSrc: "b.mp3", ...open, expectedDurationMs: 10_000, next: "idle" });
+      await advance(1_100);
+      expect(dimmed()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("ignores a loop video on a scene whose own video would cover it", async () => {
     harness.mediaStatus = { state: "ready" };
     document.body.innerHTML = '<div id="root"></div>';

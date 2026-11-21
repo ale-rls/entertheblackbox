@@ -28,7 +28,9 @@ type Slot = 0 | 1;
  * it replaces the outgoing picture. `revealAllowed` lets another layer (the
  * background loop) make the incoming picture wait so both change together, and
  * `holdOutgoing` keeps the last picture when no media is wanted until that
- * layer can cover it.
+ * layer can cover it. An incoming still + MP3 revealed while it is set (its
+ * sound must not wait) plays under the outgoing picture, which stays on top
+ * until the hold ends.
  */
 export function PhaseVideoHandoff({
   desiredKey,
@@ -62,6 +64,8 @@ export function PhaseVideoHandoff({
   ]);
   const [activeSlot, setActiveSlot] = useState<Slot | null>(null);
   const [framed, setFramed] = useState<[string | null, string | null]>([null, null]);
+  const [heldSlot, setHeldSlot] = useState<Slot | null>(null);
+  const holdOutgoingRef = useRef(holdOutgoing);
   const activeSlotRef = useRef<Slot | null>(null);
   const mediaRefs = useRef<[HTMLMediaElement | null, HTMLMediaElement | null]>([null, null]);
   const desiredKeyRef = useRef(desiredKey);
@@ -73,6 +77,7 @@ export function PhaseVideoHandoff({
     desiredKeyRef.current = desiredKey;
     slotsRef.current = slots;
     revealAllowedRef.current = revealAllowed;
+    holdOutgoingRef.current = holdOutgoing;
     const currentSlot = activeSlotRef.current;
     const current = currentSlot === null ? null : slots[currentSlot];
 
@@ -121,6 +126,7 @@ export function PhaseVideoHandoff({
     }
 
     const targetSlot: Slot = currentSlot === 0 ? 1 : 0;
+    if (heldSlot === targetSlot) setHeldSlot(null);
     setSlots((previous) => {
       if (
         previous[targetSlot]?.key === candidate.key
@@ -134,7 +140,14 @@ export function PhaseVideoHandoff({
       next[targetSlot] = candidate;
       return next;
     });
-  }, [candidate, desiredKey, holdOutgoing, onExtraAudioElement, onMediaElement, revealAllowed, slots]);
+  }, [candidate, desiredKey, heldSlot, holdOutgoing, onExtraAudioElement, onMediaElement, revealAllowed, slots]);
+
+  // The held outgoing picture leaves once the other layer covers it.
+  useLayoutEffect(() => {
+    if (holdOutgoing || heldSlot === null) return;
+    setHeldSlot(null);
+    if (heldSlot !== activeSlotRef.current) setSlots((previous) => withSlot(previous, heldSlot, null));
+  }, [heldSlot, holdOutgoing]);
 
   const reveal = useCallback((slot: Slot, candidate: PhaseVideoCandidate) => {
     const current = slotsRef.current[slot];
@@ -151,6 +164,11 @@ export function PhaseVideoHandoff({
     if (previousSlot !== null) {
       mediaRefs.current[previousSlot]?.pause();
       audioRefs.current[previousSlot]?.pause();
+      if (holdOutgoingRef.current && candidate.audioSrc !== undefined) {
+        // Paused, it keeps painting its last frame over the still until the hold ends.
+        setHeldSlot(previousSlot);
+        return;
+      }
       setSlots((previous) => {
         const next: [PhaseVideoCandidate | null, PhaseVideoCandidate | null] = [...previous];
         next[previousSlot] = null;
@@ -166,7 +184,7 @@ export function PhaseVideoHandoff({
     if (slot !== undefined && slot !== activeSlotRef.current) reveal(slot, slots[slot]!);
   }, [desiredKey, framed, reveal, revealAllowed, slots]);
 
-  const framedSlot = ([0, 1] as const).find((index) => index !== activeSlot
+  const framedSlot = ([0, 1] as const).find((index) => index !== activeSlot && index !== heldSlot
     && slots[index] !== null && framed[index] === slots[index]!.key);
   const readyKey = framedSlot !== undefined ? slots[framedSlot]!.key
     : activeSlot === null ? null : slots[activeSlot]?.key ?? null;
@@ -179,7 +197,8 @@ export function PhaseVideoHandoff({
       return (
         <div
           key={slot}
-          className={`phase-video-slot${activeSlot === slot ? " phase-video-slot-active" : ""}`}
+          className={`phase-video-slot${activeSlot === slot ? " phase-video-slot-active" : ""}${
+            heldSlot === slot ? " phase-video-slot-held" : ""}`}
           data-phase-key={value.key}
         >
           {value.audioSrc !== undefined ? <PhaseImageAudio
