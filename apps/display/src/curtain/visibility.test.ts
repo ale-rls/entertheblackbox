@@ -39,6 +39,6 @@ describe("dimmedBaked", () => {
   });
 
   it("never brightens a curtain set brighter than the start level", () => {
-    expect(dimmedBaked(1.5, 0)).toBe(1.5);
+    expect(dimmedBaked(2.5, 0)).toBe(2.5);
   });
 });

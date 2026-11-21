@@ -42,7 +42,7 @@ export const DIM_IN_MS = 1_000;
  * `baked` that roughly matches the plain curtain video, so the cut from a
  * title over the closed curtain into a vote doesn't jump in brightness.
  */
-export const DIM_START_BAKED = 1.1;
+export const DIM_START_BAKED = 1.8;
 
 /**
  * The `baked` level for a lit curtain that has been up for `upForMs`
