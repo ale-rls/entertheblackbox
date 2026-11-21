@@ -16,6 +16,7 @@ import { LiveGraph } from "./LiveGraph.js";
 import { CueList } from "./CueList.js";
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import { AudioDiagnostics } from "./AudioDiagnostics";
+import { flowNeedsReload, serverBootAt } from "./flow-refresh";
 import PocketBase from "pocketbase";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 
@@ -381,18 +382,35 @@ export function App() {
     }
   }, [connectedToken]);
 
-  const loadFlow = useCallback(async () => {
-    if (!connectedToken) return;
+  /** Server boot the cue sheet's scene graph was loaded from; null until a load succeeds. */
+  const flowBootAt = useRef<number | null>(null);
+  const flowLoading = useRef(false);
+  const loadFlow = useCallback(async (bootAt: number) => {
+    if (!connectedToken || flowLoading.current) return;
+    flowLoading.current = true;
     try {
       const response = await api("flow", connectedToken);
       const nextFlow = await response.json() as SceneFlow;
-      if (nextFlow && typeof nextFlow.entryPhaseId === "string" && Array.isArray(nextFlow.scenes)) setFlow(nextFlow);
+      if (nextFlow && typeof nextFlow.entryPhaseId === "string" && Array.isArray(nextFlow.scenes)) {
+        setFlow(nextFlow);
+        flowBootAt.current = bootAt;
+      }
     } catch {
-      // Main status polling owns connection error reporting. The active
-      // scenario is immutable for the lifetime of an engine, so this can
-      // retry on the next authenticated connection instead of polling.
+      // Main status polling owns connection error reporting; the next status poll retries.
+    } finally {
+      flowLoading.current = false;
     }
   }, [connectedToken]);
+
+  // The scene graph changes only when the server restarts (publishing restarts it with the new
+  // show), so reload it whenever it is missing or was loaded before the latest restart.
+  useEffect(() => {
+    if (!status || statusReceivedAt === null || audioOnly) return;
+    const bootAt = serverBootAt(status, statusReceivedAt);
+    if (flowNeedsReload(flowBootAt.current, bootAt)) void loadFlow(bootAt);
+  }, [status, statusReceivedAt, audioOnly, loadFlow]);
+
+  useEffect(() => { flowBootAt.current = null; }, [connectedToken]);
 
   useEffect(() => {
     if (!connectedToken) return;
@@ -401,7 +419,6 @@ export function App() {
       void loadShows();
       void loadGhosts();
       void loadLobby();
-      void loadFlow();
     }
     // shows/ghosts poll alongside status so these controls can't go stale
     // while this tab sits open -- selecting/typing a value that fell out
@@ -415,7 +432,7 @@ export function App() {
       }
     }, 2_000);
     return () => window.clearInterval(timer);
-  }, [connectedToken, refresh, loadShows, loadGhosts, loadLobby, loadFlow, audioOnly]);
+  }, [connectedToken, refresh, loadShows, loadGhosts, loadLobby, audioOnly]);
 
   const saveLobbyTimes = async (startTimes: number[], successMessage: string) => {
     setSavingLobby(true);
