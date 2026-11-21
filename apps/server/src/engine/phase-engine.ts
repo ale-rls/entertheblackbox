@@ -19,6 +19,7 @@ import {
   curtainFieldCenter,
   curtainVoteField,
   DEFAULT_INSTALLATION_POLICY,
+  isTitleBackdrop,
   neutralEntryPoint,
   resolveAnswerColors,
   resolveCurtainSettings,
@@ -973,10 +974,17 @@ export class PhaseEngine {
         spotlightGrow: this.spotlightGrow,
         spotlightCurtainSrc: this.scenario.curtainLight?.src,
       } : {}),
+      ...(this.nextIsTitleBackdrop(phase) ? { nextTitleBackdrop: true as const } : {}),
       scenarioVersion: this.scenario.version,
       startedAt: this.phaseStartedAt,
       deadlineAt: this.deadlineAt,
     };
+  }
+
+  /** Whether a video or narration scene leads straight into a title over a background loop. */
+  private nextIsTitleBackdrop(phase: Phase): boolean {
+    if (phase.kind !== "video" && phase.kind !== "narration") return false;
+    return isTitleBackdrop(this.scenario.phases.find((candidate) => candidate.id === phase.next));
   }
 
   getSnapshotMessage(now = this.now()): Extract<ServerToClientMessage, { t: "snapshot" }> {

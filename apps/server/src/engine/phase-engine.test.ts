@@ -386,6 +386,27 @@ describe("PhaseEngine lifecycle", () => {
     expect(lastQr()).toBe(allowLateJoin ? "qr_grant" : "qr_hidden");
   });
 
+  it("tells the display when the next scene is a title over a background loop", () => {
+    let now = 1_000;
+    const titleScenario = scenarioSchema.parse({
+      ...scenario,
+      phases: [
+        { kind: "idle", id: "idle" },
+        { kind: "video", id: "intro", src: "intro.mp4", expectedDurationMs: 100, next: "title" },
+        { kind: "narration", id: "title", text: "THEATERARBEIT", loopVideoSrc: "loop.mp4", durationMs: 100, next: "hold" },
+        { kind: "narration", id: "hold", text: " ", loopVideoSrc: "loop.mp4", durationMs: 100, next: "idle" },
+      ],
+    });
+    const { engine } = setup({ now: () => now, testScenario: titleScenario });
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    expect(engine.getSnapshot()).toMatchObject({ id: "intro", nextTitleBackdrop: true });
+    now += 150;
+    engine.adminSkip(now);
+    expect(engine.getSnapshot().id).toBe("title");
+    // A blank scene over the loop is not a title.
+    expect(engine.getSnapshot().nextTitleBackdrop).toBeUndefined();
+  });
+
   it("starts the lobby and show without a display", () => {
     let now = 1_000;
     const { engine, registry } = setup({ now: () => now });
