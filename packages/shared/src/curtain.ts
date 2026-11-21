@@ -21,20 +21,24 @@ import {
 /** Neutral band applied to two-way and four-quadrant curtain votes when the stage does not set one. */
 export const CURTAIN_DEFAULT_NEUTRAL_GAP = 0.06;
 
-/** Fabric and light defaults: Silver D / satin from the Curtain Light Lab. */
+/**
+ * Fabric and light for curtain-light votes: Silver B · lamé, tuned on the
+ * projector. These live in code, not in the show data; a show only picks the
+ * packed curtain video (curtainLight.src) and the neutral gap.
+ */
 export const CURTAIN_DEFAULTS = {
-  src: "curtain-silverD-satin-packed.mp4",
-  fabric: "Silver D · satin",
-  baked: 0.1,
-  folds: 1.1,
-  shine: 1,
-  shadow: 0.6,
+  src: "ETB_T1_1011_silverB-lame_packed.mp4",
+  fabric: "Silver B · lamé",
+  baked: 0.31,
+  folds: 0,
+  shine: 0,
+  shadow: 0,
   /** Pool brightness with no votes, and the extra brightness a full share adds. */
-  poolBase: 0.32,
-  poolGain: 0.95,
+  poolBase: 0,
+  poolGain: 0,
   /** Brightness of one cursor's flood outside / inside a counting area. */
-  cursorFlood: 0.35,
-  cursorFloodCounted: 0.7,
+  cursorFlood: 0,
+  cursorFloodCounted: 0,
 } as const;
 
 export type CurtainLighting = {
@@ -54,8 +58,6 @@ export type CurtainFabric = {
 
 export type CurtainSettings = CurtainFabric & CurtainLighting & { neutralGap: number };
 
-type Loose<T> = { [K in keyof T]?: T[K] | undefined };
-
 /** System answer colours, assigned in outcome order. Chosen to stay distinct on silver fabric. */
 export const CURTAIN_DEFAULT_COLORS = [
   "#ffb347",
@@ -71,26 +73,21 @@ export const CURTAIN_DEFAULT_COLORS = [
 const HEX = /^#[0-9a-f]{6}$/i;
 
 /**
- * Resolve the full curtain settings from the scenario-level shared curtain
- * and an optional per-stage tuning override. Unknown or missing values fall
- * back to CURTAIN_DEFAULTS.
+ * The full curtain settings for a show: its packed curtain video and neutral
+ * gap, with fabric and light from CURTAIN_DEFAULTS. Fabric and light values
+ * still found in older show data are ignored.
  */
-export function resolveCurtainSettings(
-  shared: Loose<CurtainSettings> | undefined,
-  stage?: Loose<CurtainLighting> | undefined,
-): CurtainSettings {
-  const pick = <K extends keyof CurtainSettings>(key: K, fallback: CurtainSettings[K]): CurtainSettings[K] =>
-    (stage as Loose<CurtainSettings> | undefined)?.[key] ?? shared?.[key] ?? fallback;
+export function resolveCurtainSettings(shared: { src?: string | undefined; neutralGap?: number | undefined } | undefined): CurtainSettings {
   return {
     src: shared?.src ?? CURTAIN_DEFAULTS.src,
-    baked: pick("baked", CURTAIN_DEFAULTS.baked),
-    folds: pick("folds", CURTAIN_DEFAULTS.folds),
-    shine: pick("shine", CURTAIN_DEFAULTS.shine),
-    shadow: pick("shadow", CURTAIN_DEFAULTS.shadow),
-    poolBase: pick("poolBase", CURTAIN_DEFAULTS.poolBase),
-    poolGain: pick("poolGain", CURTAIN_DEFAULTS.poolGain),
-    cursorFlood: pick("cursorFlood", CURTAIN_DEFAULTS.cursorFlood),
-    cursorFloodCounted: pick("cursorFloodCounted", CURTAIN_DEFAULTS.cursorFloodCounted),
+    baked: CURTAIN_DEFAULTS.baked,
+    folds: CURTAIN_DEFAULTS.folds,
+    shine: CURTAIN_DEFAULTS.shine,
+    shadow: CURTAIN_DEFAULTS.shadow,
+    poolBase: CURTAIN_DEFAULTS.poolBase,
+    poolGain: CURTAIN_DEFAULTS.poolGain,
+    cursorFlood: CURTAIN_DEFAULTS.cursorFlood,
+    cursorFloodCounted: CURTAIN_DEFAULTS.cursorFloodCounted,
     neutralGap: shared?.neutralGap ?? CURTAIN_DEFAULT_NEUTRAL_GAP,
   };
 }

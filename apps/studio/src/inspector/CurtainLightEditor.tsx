@@ -17,7 +17,7 @@ import {
   resolveCurtainSettings,
   type PositionField,
 } from "../../../../packages/shared/src/index.js";
-import type { CurtainLightConfig, CurtainLightingTuning, Scenario } from "../../../../packages/scenario/src/index.js";
+import type { CurtainLightConfig, Scenario } from "../../../../packages/scenario/src/index.js";
 import type { Phase } from "./model.js";
 
 type VotePhase = Extract<Phase, { kind: "position-question" | "video-position-question" }>;
@@ -44,13 +44,6 @@ function answerLabels(field: PositionField): Record<string, string> {
   };
 }
 
-const LIGHTING_FIELDS: Array<{ key: keyof CurtainLightingTuning; label: string; hint: string; max: number }> = [
-  { key: "poolBase", label: "Pool glow with no votes", hint: "poolBase", max: 3 },
-  { key: "poolGain", label: "Extra glow for a full share", hint: "poolGain", max: 4 },
-  { key: "cursorFlood", label: "Cursor light, neutral", hint: "cursorFlood", max: 2 },
-  { key: "cursorFloodCounted", label: "Cursor light, counting", hint: "cursorFloodCounted", max: 2 },
-];
-
 /**
  * The shared curtain, configured once for every curtain-light group. The
  * video comes from the media library and is published with the show.
@@ -61,8 +54,10 @@ export function CurtainSharedEditor({ config, mediaSources, onChange }: {
   onChange: (config: CurtainLightConfig | undefined) => void;
 }) {
   const settings = resolveCurtainSettings(config);
-  const set = (patch: Partial<CurtainLightConfig>) => {
-    const next = Object.fromEntries(Object.entries({ ...config, ...patch }).filter(([, value]) => value !== undefined)) as CurtainLightConfig;
+  // Only the video and the neutral gap belong to the show; fabric and light are set in code.
+  const set = (patch: Pick<CurtainLightConfig, "src" | "neutralGap">) => {
+    const merged = { src: config?.src, neutralGap: config?.neutralGap, ...patch };
+    const next = Object.fromEntries(Object.entries(merged).filter(([, value]) => value !== undefined)) as CurtainLightConfig;
     onChange(Object.keys(next).length === 0 ? undefined : next);
   };
   const videos = [...new Set([...mediaSources.filter((src) => /\.mp4$/i.test(src)), ...(config?.src ? [config.src] : [])])].sort();
@@ -73,16 +68,8 @@ export function CurtainSharedEditor({ config, mediaSources, onChange }: {
         {videos.map((src) => <option key={src} value={src}>{src}</option>)}
       </select>
     </label>
-    <p className="sc-tool-copy field-hint">Default fabric: {CURTAIN_DEFAULTS.fabric}. Upload the packed clip (colour, normal X, normal Y, depth) to the media library; it is published with the show and never stored in git.</p>
-    <details><summary>Fabric and light tuning</summary>
-      <Slider label="Original picture" hint="curtainLight.baked" value={settings.baked} min={0} max={1} step={0.01} onChange={(baked) => set({ baked })} />
-      <Slider label="Fold depth" hint="curtainLight.folds" value={settings.folds} min={0} max={3} step={0.05} onChange={(folds) => set({ folds })} />
-      <Slider label="Satin sheen" hint="curtainLight.shine" value={settings.shine} min={0} max={3} step={0.05} onChange={(shine) => set({ shine })} />
-      <Slider label="Fold shadows" hint="curtainLight.shadow" value={settings.shadow} min={0} max={1} step={0.01} onChange={(shadow) => set({ shadow })} />
-      <Slider label="Default neutral gap" hint="curtainLight.neutralGap" value={settings.neutralGap} min={0} max={0.4} step={0.005} onChange={(neutralGap) => set({ neutralGap })} />
-      {LIGHTING_FIELDS.map((item) => <Slider key={item.key} label={item.label} hint={`curtainLight.${item.hint}`} value={settings[item.key]} min={0} max={item.max} step={0.05} onChange={(value) => set({ [item.key]: value })} />)}
-      <button className="sc-tool-button" type="button" onClick={() => onChange(config?.src ? { src: config.src } : undefined)}>Reset tuning to defaults</button>
-    </details>
+    <p className="sc-tool-copy field-hint">Fabric and light: {CURTAIN_DEFAULTS.fabric}, set in code. Upload the packed clip (colour, normal X, normal Y, depth) to the media library; it is published with the show and never stored in git.</p>
+    <Slider label="Default neutral gap" hint="curtainLight.neutralGap" value={settings.neutralGap} min={0} max={0.4} step={0.005} onChange={(neutralGap) => set({ neutralGap })} />
   </fieldset>;
 }
 
@@ -92,7 +79,7 @@ export function CurtainStageEditor({ phase, scenario, onChange }: {
   scenario: Pick<Scenario, "curtainLight">;
   onChange: (phase: Phase) => void;
 }) {
-  const settings = resolveCurtainSettings(scenario.curtainLight, phase.lightTuning);
+  const settings = resolveCurtainSettings(scenario.curtainLight);
   // Stable identities keep the preview animation running across unrelated re-renders.
   const fieldKey = JSON.stringify([phase.field, settings.neutralGap]);
   const field = useMemo(() => curtainVoteField(phase.field, settings.neutralGap), [fieldKey]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -100,10 +87,6 @@ export function CurtainStageEditor({ phase, scenario, onChange }: {
   const colors = useMemo(() => resolveAnswerColors(field, phase.answerColors), [colorKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const labels = answerLabels(field);
   const setColor = (id: string, color: string) => onChange({ ...phase, answerColors: { ...phase.answerColors, [id]: color } } as Phase);
-  const setTuning = (patch: Partial<CurtainLightingTuning>) => {
-    const next = Object.fromEntries(Object.entries({ ...phase.lightTuning, ...patch }).filter(([, value]) => value !== undefined));
-    onChange({ ...phase, lightTuning: Object.keys(next).length === 0 ? undefined : next } as Phase);
-  };
   const gapField = phase.field.type === "polygon-zones" ? null : phase.field;
   return <fieldset className="curtain-stage"><legend>Curtain light</legend>
     <CurtainPreview field={field} question={phase.text}
@@ -116,13 +99,12 @@ export function CurtainStageEditor({ phase, scenario, onChange }: {
     </div>
     <button className="sc-tool-button" type="button" disabled={phase.answerColors === undefined} onClick={() => onChange({ ...phase, answerColors: undefined } as Phase)}>Reset colours to system defaults</button>
     <p className="sc-tool-copy field-hint">Answer colours tint M1–M4 and the phones. On the curtain, fields are neutral and divided by a thin cross; each participant's light shines in their own phone colour.</p>
-    <details><summary>Rehearsal tuning</summary>
+    <details><summary>Neutral gap</summary>
       {gapField && <Slider label="Neutral gap" hint="field.neutralGap" value={gapField.neutralGap ?? settings.neutralGap} min={0} max={0.4} step={0.005}
         onChange={(neutralGap) => onChange({ ...phase, field: { ...gapField, neutralGap } } as Phase)} />}
       {gapField === null && <p className="sc-tool-copy field-hint">Custom zones: the space between zones is the neutral gap.</p>}
-      {LIGHTING_FIELDS.map((item) => <Slider key={item.key} label={item.label} hint={`lightTuning.${item.hint}`} value={settings[item.key]} min={0} max={item.max} step={0.05} onChange={(value) => setTuning({ [item.key]: value })} />)}
       <button className="sc-tool-button" type="button" disabled={phase.lightTuning === undefined && gapField?.neutralGap === undefined}
-        onClick={() => onChange({ ...phase, lightTuning: undefined, ...(gapField ? { field: { ...gapField, neutralGap: undefined } } : {}) } as Phase)}>Use shared curtain settings</button>
+        onClick={() => onChange({ ...phase, lightTuning: undefined, ...(gapField ? { field: { ...gapField, neutralGap: undefined } } : {}) } as Phase)}>Use the shared neutral gap</button>
       <p className="sc-tool-copy field-hint">Default gap is {CURTAIN_DEFAULT_NEUTRAL_GAP} of the screen unless the shared curtain changes it.</p>
     </details>
   </fieldset>;

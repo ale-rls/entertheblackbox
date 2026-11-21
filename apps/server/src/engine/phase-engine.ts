@@ -1912,7 +1912,7 @@ export class PhaseEngine {
       && this.scenario.groups?.find((group) => group.id === groupId)?.voteTreatment === "curtain-light";
     if (!groupCurtain && phase.curtainLightVote !== true) return null;
     if (this.curtainCache?.phase === phase) return this.curtainCache;
-    const resolved = resolveCurtainSettings(this.scenario.curtainLight, phase.lightTuning);
+    const resolved = resolveCurtainSettings(this.scenario.curtainLight);
     // "Nothing lights up yet": fields hold their base glow and a cursor's
     // flood looks the same inside and outside a field. Votes still count.
     const curtain = phase.curtainFieldsStatic === true

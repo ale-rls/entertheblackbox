@@ -11,10 +11,15 @@ const treatment: CurtainTreatment = {
   answerColors: { min: "#ff0000", max: "#0000ff" },
   entry: { x: 0.5, y: 0.5 },
 };
+/** The show's built-in light values are all 0, so the brightness tests use their own lit values. */
+const lit: CurtainTreatment = {
+  ...treatment,
+  curtain: { ...treatment.curtain, poolBase: 0.3, poolGain: 1, cursorFlood: 0.35, cursorFloodCounted: 0.7 },
+};
 
 describe("CurtainScene", () => {
   it("brightens pools toward live shares and settles back without a winner spotlight", () => {
-    const scene = new CurtainScene(field, treatment);
+    const scene = new CurtainScene(field, lit);
     for (let t = 0; t < 40; t += 1) scene.step(100, { min: 3, max: 1 }, false, t * 100);
     const [min, max] = scene.currentIntensities;
     expect(min!).toBeGreaterThan(max!);
@@ -24,7 +29,7 @@ describe("CurtainScene", () => {
   });
 
   it("floods more strongly inside a counting area and pulses on touch", () => {
-    const scene = new CurtainScene(field, treatment);
+    const scene = new CurtainScene(field, lit);
     const [neutral, counted] = scene.cursorLights([
       { x: 0.5, y: 0.5, ghost: false, pulseAt: 1_000 },
       { x: 0.9, y: 0.5, ghost: false },

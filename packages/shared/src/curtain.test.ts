@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CURTAIN_DEFAULTS,
   buildPoolMasks,
   composeLightMap,
   curtainDivisionLines,
@@ -86,11 +87,14 @@ describe("curtain defaults", () => {
     expect(new Set(Object.values(resolveAnswerColors(four))).size).toBe(4);
   });
 
-  it("layers stage tuning over the shared curtain", () => {
-    const settings = resolveCurtainSettings({ src: "c.mp4", poolBase: 0.2 }, { poolBase: 0.4 });
+  it("takes the video and neutral gap from the show, fabric and light from code", () => {
+    const old = { src: "c.mp4", neutralGap: 0.1, baked: 0.9, poolBase: 0.2 } as { src: string; neutralGap: number };
+    const settings = resolveCurtainSettings(old);
     expect(settings.src).toBe("c.mp4");
-    expect(settings.poolBase).toBe(0.4);
-    expect(settings.shine).toBe(1);
+    expect(settings.neutralGap).toBe(0.1);
+    expect(settings.baked).toBe(CURTAIN_DEFAULTS.baked);
+    expect(settings.poolBase).toBe(CURTAIN_DEFAULTS.poolBase);
+    expect(resolveCurtainSettings(undefined).src).toBe(CURTAIN_DEFAULTS.src);
   });
 });
 
