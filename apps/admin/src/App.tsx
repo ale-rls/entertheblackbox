@@ -91,6 +91,8 @@ export type FlowScene = {
   id: string;
   kind: "video" | "narration" | "position-question" | "video-position-question" | "group-branch";
   title: string;
+  /** Operator-only name from the script (e.g. "T6.2.1 – JA / START DES HACKS"). */
+  cueName?: string;
   routes: Array<{ outcome: string; target: string }>;
 };
 export type SceneFlow = { entryPhaseId: string; scenes: FlowScene[] };
@@ -723,7 +725,7 @@ export function App() {
           <button className="sc-tool-button" onClick={() => selectTab("devices")}>{status.connectedParticipants} participants</button>
           <StatusLabel status={statusStale ? "warning" : status.ready ? "success" : "danger"}>{statusStale ? "Updates stale" : status.ready ? "Server connected" : "Server not ready"}</StatusLabel>
         </div>}
-        {!audioOnly && <nav className="admin-tabs" aria-label="Admin views">{["show", "tasks", "devices", "instrument", "wall", "displays", "script", "setup"].map(tab => <button key={tab} className="sc-tool-button" aria-pressed={activeTab === tab} onClick={() => selectTab(tab)}>{tab[0]!.toUpperCase() + tab.slice(1)}</button>)}</nav>}
+        {!audioOnly && <nav className="admin-tabs" aria-label="Admin views">{["show", "cues", "tasks", "devices", "instrument", "wall", "displays", "script", "setup"].map(tab => <button key={tab} className="sc-tool-button" aria-pressed={activeTab === tab} onClick={() => selectTab(tab)}>{tab[0]!.toUpperCase() + tab.slice(1)}</button>)}</nav>}
 
       </div>
 
@@ -816,9 +818,10 @@ export function App() {
           </ol> : <p className="sc-tool-copy">The lobby waits until an operator presses Start show.</p>}
           </section><RunOfShowPanel phoneJoinUrl={status.phoneJoinUrl} /></div>
 
-        {isActive && <section hidden={activeTab !== "show"} className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
+        {!isActive && <section hidden={activeTab !== "cues"} className="sc-tool-panel admin-empty-state"><h2>Cue sheet</h2><p className="sc-tool-copy">The cue sheet appears here once the show is running.</p></section>}
+        {isActive && <section hidden={activeTab !== "cues"} className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
           <div className="admin-section-heading">
-            <div><p className="sc-tool-eyebrow">Live show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Cue list</h2></div>
+            <div><p className="sc-tool-eyebrow">Live show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Cue sheet</h2></div>
             <StatusLabel status={isActive && !status.groupPathsStarted ? "success" : "info"}>{status.groupPathsStarted ? "Groups running" : isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
           </div>
           {flow?.scenes.length ? <CueList flow={flow} status={status} busy={busy} onJump={requestJump} /> : null}

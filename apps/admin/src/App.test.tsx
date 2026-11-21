@@ -276,7 +276,7 @@ describe("Admin operations UI", () => {
     const { requests } = createAdminFetch();
     await renderApp();
 
-    expect(document.body.textContent).toContain("Cue list");
+    expect(document.body.textContent).toContain("Cue sheet");
     expect(document.body.textContent).toContain("Opening film");
     expect(document.body.textContent).toContain("next → idle");
     const current = document.querySelector<HTMLButtonElement>('[aria-label="Inspect Choose a position"]')!;
