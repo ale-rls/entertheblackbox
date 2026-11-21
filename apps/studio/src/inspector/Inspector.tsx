@@ -130,6 +130,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
   return <aside className="inspector" aria-label="Properties inspector"><h2>Properties</h2>
     <label className="sc-tool-label">{label("Scene ID", "id")}<input className="sc-tool-field" aria-invalid={Boolean(idProblem)} value={idInput} onChange={(event) => setIdInput(event.target.value)} onBlur={() => { if (!idProblem && idInput !== phase.id) onRename(idInput); }} /></label>
     {idProblem && <p className="field-error" role="alert">{idProblem}</p>}
+    {phase.kind !== "idle" && <label className="sc-tool-label">{label("Cue name (operator only)", "cueName")}<input className="sc-tool-field" placeholder="e.g. T6.2.1 – JA / START DES HACKS" value={phase.cueName ?? ""} onChange={(event) => { const { cueName: _old, ...rest } = phase; onChange((event.target.value.trim() ? { ...rest, cueName: event.target.value } : rest) as Phase); }} /></label>}
     {phase.kind !== "idle" && <label className="sc-tool-label">{label("Component type", "kind + media")}<select className="sc-tool-select" value={componentTypeForPhase(phase)} onChange={(event) => onComponentTypeChange(event.target.value as AuthorableComponentType, event.currentTarget)}>
       <option value="video">Video</option>
       <option value="synchronized-video">Video + synchronized phone audio</option>

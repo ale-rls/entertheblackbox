@@ -94,4 +94,15 @@ describe("cue list view", () => {
     await act(() => unfold.click());
     expect(document.querySelector(".cue-track")?.textContent).toContain("Welcome");
   });
+  it("names cues and endings by their script cue names, keeping the title and ID visible", async () => {
+    const named: SceneFlow = { ...flow, scenes: flow.scenes.map((scene) => scene.id === "b1" ? { ...scene, cueName: "T6.3.C – JA / HACK GELUNGEN" } : scene) };
+    const element = document.createElement("div"); document.body.append(element); root = createRoot(element);
+    await act(() => root.render(<CueList flow={named} status={{ ...status, phaseId: "vote" }} busy={false} onJump={vi.fn()} />));
+    const ending = [...document.querySelectorAll(".cue-ending")].find((node) => node.textContent?.includes("HACK GELUNGEN"))!;
+    expect(ending.querySelector("header strong")?.textContent).toBe("B · T6.3.C – JA / HACK GELUNGEN");
+    const row = [...ending.querySelectorAll(".cue-row")].find((node) => node.textContent?.includes("b1"))!;
+    expect(row.querySelector("strong")?.textContent).toBe("T6.3.C – JA / HACK GELUNGEN");
+    expect(row.querySelector("small")?.textContent).toContain("Ending B1");
+    expect(byLabel("Go B: T6.3.C – JA / HACK GELUNGEN")).not.toBeNull();
+  });
 });

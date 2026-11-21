@@ -44,7 +44,10 @@ const phoneAudioByGroupSchema = z.record(groupIdSchema, phoneAudioFileSchema).op
 const loopVideoSrcSchema = z.string().min(1).regex(/^(?![\\/])(?!.*(?:^|[\\/])\.\.(?:[\\/]|$))[^:?#]+\.(?:mp4|webm)$/i, "Loop video must reference a local MP4 or WebM video").optional();
 export const votingMethodSchema = z.enum(["physical", "phone-cursor", "phone-buttons"]);
 const outgoingCueSchema = z.string().trim().min(1).max(120);
+/** Operator-only name of a scene, e.g. the script heading ("T6.2.1 – JA / START DES HACKS"). Never shown to the audience. */
+const cueNameSchema = z.string().trim().min(1).max(160).optional();
 const phoneAudioFields = {
+  cueName: cueNameSchema,
   /**
    * Muted video the main display loops behind this scene on the server clock (e.g. an idle
    * curtain). Replaces the still of a still + MP3 scene; consecutive scenes sharing it run on
@@ -621,6 +624,7 @@ export const groupBranchPhaseSchema = z.object({
   outgoingCues: z.array(outgoingCueSchema).max(32).optional(),
   id: phaseIdSchema,
   title: z.string().min(1).optional(),
+  cueName: cueNameSchema,
   sourceGroupIds: z.array(groupIdSchema).min(1).optional(),
   assignment: groupAssignmentSchema,
   branches: z.array(groupBranchSchema).min(2, "a group branch needs at least two outputs")

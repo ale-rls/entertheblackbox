@@ -183,6 +183,8 @@ export type AdminFlowScene = {
   id: string;
   kind: Exclude<Phase["kind"], "idle">;
   title: string;
+  /** Operator-only name from the script, when the scene has one. */
+  cueName?: string;
   routes: AdminFlowRoute[];
 };
 
@@ -565,6 +567,7 @@ export class PhaseEngine {
           id: phase.id,
           kind: phase.kind,
           title: phase.title ?? (phase.kind === "video" || phase.kind === "group-branch" ? phase.id : phase.text),
+          ...(phase.cueName ? { cueName: phase.cueName } : {}),
           routes: adminRoutesForPhase(phase),
         })),
     };

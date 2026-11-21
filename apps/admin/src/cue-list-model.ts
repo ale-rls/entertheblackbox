@@ -177,7 +177,7 @@ export function optionsAt(list: CueList, currentId: string): OperatorOption[] {
     const next = primaryTarget(here.scene);
     const upcoming = next !== null && next !== currentId ? byId.get(next) : undefined;
     for (const target of upcoming ? [here, upcoming] : [here]) {
-      for (const variant of target.variants) if (variant[0]) options.push({ reason: `Instead of ${target.scene.title}`, scene: variant[0].scene });
+      for (const variant of target.variants) if (variant[0]) options.push({ reason: `Instead of ${target.scene.cueName ?? target.scene.title}`, scene: variant[0].scene });
     }
     for (const branch of here.branches) if (branch.rows[0]) options.push({ reason: `Route “${branch.outcome}”`, scene: branch.rows[0].scene });
   }
