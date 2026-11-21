@@ -6,4 +6,5 @@ export {
   monitorCueCountdown,
   monitorCueShowsCountdown,
   shownMonitorCountdown,
+  shownMonitorCountdownText,
 } from "@entertheblackbox/scenario";

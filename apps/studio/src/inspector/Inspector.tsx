@@ -532,14 +532,14 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
     {(phase.kind === "video" || phase.kind === "narration") && (() => {
       const sceneMs = phase.kind === "video" ? phase.expectedDurationMs : phase.durationMs;
       const countdown = phase.countdown;
-      const setCountdown = (next: { startAtMs: number; endAtMs: number; pingSeconds?: number } | undefined) => onChange({ ...phase, countdown: next });
+      const setCountdown = (next: { startAtMs: number; endAtMs: number; pingSeconds?: number; countFrom?: number } | undefined) => onChange({ ...phase, countdown: next });
       const seconds = (ms: number) => Math.round(ms / 100) / 10;
       const startS = countdown ? seconds(countdown.startAtMs) : 0;
       const lengthS = countdown ? seconds(countdown.endAtMs - countdown.startAtMs) : 0;
       const update = (startSeconds: number, lengthSeconds: number, pingSeconds: number) => {
         const startAtMs = Math.max(0, Math.round(startSeconds * 1000));
         const endAtMs = Math.max(startAtMs + 1000, startAtMs + Math.round(lengthSeconds * 1000));
-        setCountdown({ startAtMs, endAtMs, ...(pingSeconds > 0 ? { pingSeconds: Math.min(60, Math.round(pingSeconds)) } : {}) });
+        setCountdown({ startAtMs, endAtMs, ...(pingSeconds > 0 ? { pingSeconds: Math.min(60, Math.round(pingSeconds)) } : {}), ...(countdown?.countFrom !== undefined ? { countFrom: countdown.countFrom } : {}) });
       };
       return <fieldset><legend>Countdown</legend>
         <p className="sc-tool-copy field-hint">A large countdown on the main display (beneath the text on narration scenes) and on M1–M4 with a visible cue, e.g. time to build a still image. The final seconds can ping.</p>
@@ -548,6 +548,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
           <label className="sc-tool-label">{label("Starts after (seconds)", "countdown.startAtMs")}<input className="sc-tool-field" type="number" min="0" step="0.1" value={startS} onChange={(event) => { if (event.target.value !== "") update(Number(event.target.value), lengthS, countdown.pingSeconds ?? 0); }} /></label>
           <label className="sc-tool-label">{label("Length (seconds)", "countdown.endAtMs")}<input className="sc-tool-field" type="number" min="1" step="1" value={lengthS} onChange={(event) => { if (event.target.value !== "") update(startS, Number(event.target.value), countdown.pingSeconds ?? 0); }} /></label>
           <label className="sc-tool-label">{label("Ping in the last (seconds, 0 = silent)", "countdown.pingSeconds")}<input className="sc-tool-field" type="number" min="0" max="60" step="1" value={countdown.pingSeconds ?? 0} onChange={(event) => { if (event.target.value !== "") update(startS, lengthS, Number(event.target.value)); }} /></label>
+          <label className="sc-tool-label">{label("Count down from (empty = seconds)", "countdown.countFrom")}<input className="sc-tool-field" type="number" min="1" step="1" placeholder="e.g. 2000000" value={countdown.countFrom ?? ""} onChange={(event) => { const value = Math.floor(Number(event.target.value)); setCountdown({ startAtMs: countdown.startAtMs, endAtMs: countdown.endAtMs, ...(countdown.pingSeconds !== undefined ? { pingSeconds: countdown.pingSeconds } : {}), ...(event.target.value !== "" && value >= 1 ? { countFrom: value } : {}) }); }} /></label>
           {countdown.endAtMs > sceneMs && <p className="field-error" role="alert">The countdown ends at {seconds(countdown.endAtMs)} s but the scene lasts {seconds(sceneMs)} s. Shorten it or lengthen the scene.</p>}
         </>}
       </fieldset>;

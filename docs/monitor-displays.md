@@ -50,7 +50,11 @@ voting window) or a scene countdown, the text of a text, vote-result or
 placeholder cue is replaced by a large centred countdown in the text's colour.
 There is no corner countdown. Image and video cues never count down: when a
 scale image runs on M1/M3, the question text on M2/M4 carries the countdown.
-A per-cue final countdown keeps its authored length. Tick **Keep text small under
+A per-cue final countdown keeps its authored length. **Count down from**
+(`countdownFrom`, with a per-cue countdown) shows an amount instead of
+seconds, mapped onto the countdown window and grouped with dots (60 s from
+2000000 shows 2.000.000 … 0); the scene countdown's `countFrom` does the same
+on the main display. Pings and the app's ticks stay on seconds. Tick **Keep text small under
 the countdown** on a cue (`countdownShowsText`) to keep its text, smaller and
 centred, beneath the number. The countdown disappears
 when the vote closes or resolves; untimed votes and blank screens have none. Axis routing remains authored. Ensure the main phase lasts long enough

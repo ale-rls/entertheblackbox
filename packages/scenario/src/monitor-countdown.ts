@@ -1,5 +1,5 @@
 import { activeMonitorCue, MONITOR_IDS, type MonitorCue, type MonitorCues } from "./monitors.js";
-import { sceneCountdownSeconds, type SceneCountdown } from "./scene-countdown.js";
+import { countdownAmount, formatCountdownAmount, sceneCountdownSeconds, type SceneCountdown } from "./scene-countdown.js";
 
 /**
  * What the M1–M4 monitors count down, shared by the monitor display and the
@@ -78,6 +78,21 @@ export function shownMonitorCountdown(cues: readonly MonitorCue[], phase: Monito
   if (!monitorCueShowsCountdown(cue)) return null;
   if (cue.countdownSeconds !== undefined) return monitorCueCountdown(cues, now - phase.startedAt);
   return resolved ? null : finalMonitorCountdown(monitorCountdown(phase, now));
+}
+
+/**
+ * What one monitor shows as its countdown: the seconds from shownMonitorCountdown,
+ * or, for a cue with countdownFrom, the amount counting down over its countdown window.
+ */
+export function shownMonitorCountdownText(cues: readonly MonitorCue[], phase: MonitorCountdownPhase | null, now: number, resolved = false): string | null {
+  const seconds = shownMonitorCountdown(cues, phase, now, resolved);
+  if (seconds === null || !phase) return null;
+  const elapsed = now - phase.startedAt;
+  const cue = activeMonitorCue(cues, elapsed);
+  if (!monitorCueShowsCountdown(cue) || cue.countdownSeconds === undefined || cue.countdownFrom === undefined) return String(seconds);
+  const next = cues.find((item) => item.startMs > cue.startMs);
+  const end = Math.min(cue.durationMs === undefined ? Infinity : cue.startMs + cue.durationMs, next?.startMs ?? Infinity);
+  return formatCountdownAmount(countdownAmount(cue.countdownFrom, end - elapsed, cue.countdownSeconds * 1000));
 }
 
 /** The highest number any of M1–M4 shows now, or null when no monitor counts down. */

@@ -9,7 +9,7 @@ import { useMedia } from "../media/useMedia.js";
 import { FullscreenControl } from "../components/FullscreenControl.js";
 import { performReload } from "../lib/kiosk.js";
 import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorCueReady, monitorVideoTime } from "./playback.js";
-import { shownMonitorCountdown } from "./countdown.js";
+import { shownMonitorCountdownText } from "./countdown.js";
 import { monitorTextColor } from "./answerColor.js";
 import { withoutWidows } from "./typography.js";
 import { monitorVoteResult } from "./voteResult.js";
@@ -81,12 +81,12 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
   // An authored per-cue countdown keeps its own length; vote and scene
   // countdowns only show their final seconds. Either replaces the cue's text.
   const countdown = cueReady && connection.clock.ready
-    ? shownMonitorCountdown(cues, phase, now, state.resolution !== null)
+    ? shownMonitorCountdownText(cues, phase, now, state.resolution !== null)
     : null;
   const voteResult = cue?.kind === "vote-result" ? monitorVoteResult(cue, phase) : null;
   const cueText = voteResult ? voteResult.text : cue?.kind === "text" || cue?.kind === "placeholder" ? cue.text : "";
   const countdownText = countdown !== null && <div className="monitor-text monitor-countdown-frame">
-    <div className="monitor-countdown" aria-label="Seconds remaining">{countdown}</div>
+    <div className={`monitor-countdown${countdown.length > 3 ? " monitor-countdown-amount" : ""}`} aria-label="Countdown">{countdown}</div>
     {cue?.countdownShowsText && cueText && <div className="monitor-countdown-question">{withoutWidows(cueText)}</div>}
   </div>;
   const answerColor = monitorTextColor(cue, voteResult?.color ?? null, phase, monitorId);

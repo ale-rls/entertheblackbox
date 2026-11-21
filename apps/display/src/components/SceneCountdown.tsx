@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { sceneCountdownPings, sceneCountdownSeconds, type SceneCountdown as SceneCountdownConfig } from "@entertheblackbox/scenario";
+import { sceneCountdownPings, sceneCountdownSeconds, sceneCountdownText, type SceneCountdown as SceneCountdownConfig } from "@entertheblackbox/scenario";
 import type { ServerClock } from "../lib/serverClock.js";
 import { VOTE_COUNTDOWN_SOUND_SRC } from "./VoteCloseCountdown.js";
 
@@ -54,7 +54,9 @@ export function SceneCountdown({
     ping.current = null;
   }, []);
 
-  if (secondsLeft === null) return null;
+  const shown = sceneCountdownText(countdown, elapsedMs);
+  if (secondsLeft === null || shown === null) return null;
+  const amount = countdown.countFrom !== undefined;
   // Keyed by the second so the CSS pulse-in animation restarts on every tick.
-  return <div key={secondsLeft} className={`vote-close-countdown scene-countdown${belowText ? " scene-countdown-below" : ""}`} aria-live="off">{secondsLeft}</div>;
+  return <div key={secondsLeft} className={`vote-close-countdown scene-countdown${amount ? " countdown-amount" : ""}${belowText ? " scene-countdown-below" : ""}`} aria-live="off">{shown}</div>;
 }
