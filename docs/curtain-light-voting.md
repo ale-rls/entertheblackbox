@@ -103,7 +103,12 @@ Ordinary position questions and video-timed position questions keep their
 authored timing. The curtain is up from the scene's first video frame, so a
 vote after a closed-curtain scene never dips to black. A freshly shown lit
 curtain starts at about the plain curtain video's brightness and dims to its
-own level over one second; a vote straight after another keeps it as it is. On video-timed
+own level over one second; a vote straight after another keeps it as it is.
+A title (a narration scene with text over a loop video) dims its loop to the
+vote's level the same way: it redraws each pixel with the lit curtain's own
+curve at `baked` 0.31, easing in over one second and back out into the next
+scene (`apps/display/src/curtain/titleDim.tsx`). A vote right after a title
+starts at the title's level, with no dim-in. On video-timed
 questions the question, labels, lit areas and cursors appear at once at
 `showAtMs`, and the curtain fades out by `hideAtMs`. When a vote closes the server stops accepting votes, the
 pools settle back to their base glow (no winner spotlight), cursor lights

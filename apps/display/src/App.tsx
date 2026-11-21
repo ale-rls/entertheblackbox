@@ -33,6 +33,7 @@ import { VideoTitle } from "./components/VideoTitle.js";
 import { FullscreenControl } from "./components/FullscreenControl.js";
 import { VoteDecisionSound } from "./components/VoteDecisionSound.js";
 import { CURTAIN_LEAVE_MS, CurtainStage } from "./curtain/CurtainStage.js";
+import { useTitleDim } from "./curtain/titleDim.js";
 import type { CurtainTreatment } from "@entertheblackbox/protocol";
 import type { PositionField } from "@entertheblackbox/shared";
 
@@ -46,6 +47,8 @@ type CurtainHold = {
   visibleFrom?: number;
   visibleUntil?: number;
   leavingSince: number | null;
+  /** `baked` the lit curtain starts from: the dimmed title's level when one came before. */
+  dimFrom: number;
 };
 
 /**
@@ -284,6 +287,13 @@ export function App() {
   const curtainKey = curtainPhase === null ? null : `${state.sessionId ?? "pending"}:${state.phaseEpoch}`;
   const [curtainHold, setCurtainHold] = useState<CurtainHold | null>(null);
   const [curtainUnavailable, setCurtainUnavailable] = useState(false);
+  // A title over a background loop dims that loop to the vote's level. A curtain vote straight
+  // after a title keeps it dimmed while the lit curtain comes up, and starts from that level.
+  const titleBackdrop = phase?.kind === "narration" && phase.loopVideoSrc !== undefined
+    && ((phase.text ?? "").trim() !== "" || (phase.title ?? "").trim() !== "");
+  const titleBeforeCurtain = useRef(false);
+  if (curtainPhase === null) titleBeforeCurtain.current = titleBackdrop;
+  const titleDim = useTitleDim(titleBackdrop || (curtainPhase !== null && !curtainUnavailable && titleBeforeCurtain.current));
   // The hold whose lit curtain has put its fabric on screen. Until then the previous scene's
   // background loop stays up, so a fresh curtain still loading its video never shows a black frame.
   const [curtainShownKey, setCurtainShownKey] = useState<string | null>(null);
@@ -308,6 +318,7 @@ export function App() {
       visibleFrom: previous !== null && previous.leavingSince === null && previous.visibleUntil === undefined ? previous.visibleFrom ?? shownFrom : shownFrom,
       ...(hidesEarly ? { visibleUntil: curtainPhase.startedAt + curtainPhase.hideAtMs } : {}),
       leavingSince: null,
+      dimFrom: previous?.dimFrom ?? titleDim.levelRef.current,
     }));
     // Only a new phase epoch starts a new lighting scene; repeated snapshots must not reset it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -445,7 +456,8 @@ export function App() {
     <main className="display-root">
       {clockOverlay}
       {/* Layer 1: video */}
-      <section className="layer layer-video">
+      {titleDim.filter}
+      <section className="layer layer-video" ref={titleDim.layerRef}>
         <IdleAttract
           key={waitingVideoUrl}
           {...(waitingVideoUrl ? { videoUrls: [waitingVideoUrl] } : {})}
@@ -491,6 +503,7 @@ export function App() {
           {...(curtainHold.visibleUntil === undefined ? {} : { visibleUntil: curtainHold.visibleUntil })}
           leavingSince={curtainHold.leavingSince}
           videoUrl={curtainUrl?.src === curtainHold.treatment.curtain.src ? curtainUrl.url : null}
+          dimFrom={curtainHold.dimFrom}
           onFabricShown={() => setCurtainShownKey(curtainHold.stage)}
           onUnavailable={(error) => {
             console.warn("display: curtain-light renderer unavailable, using the standard field", error);
