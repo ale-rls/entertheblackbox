@@ -262,8 +262,9 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
   transition: opacity 180ms ease;
 }
 .zone-label-dimmed { opacity: .35; }
-.zone-name { font-size: clamp(1.2rem, 3vw, 2.2rem); }
-.zone-label-winner .zone-name { font-weight: 700; }
+/* Bold with a dark halo, like the curtain votes' answers, so labels stay readable over bright fabric.
+   The winner is shown by the other answers dimming. */
+.zone-name { font-size: clamp(1.2rem, 3vw, 2.2rem); font-weight: 700; text-shadow: 0 0 .35em rgb(0 0 0 / 70%), 0 0 .12em rgb(0 0 0 / 70%); }
 
 .axis-cross, .axis-track, .axis-divider { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .axis-cross::before, .axis-cross::after, .axis-track::before, .axis-divider::before {

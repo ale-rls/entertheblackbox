@@ -161,6 +161,36 @@ describe("pool masks", () => {
 });
 
 describe("curtainDivisionLines", () => {
+  it("draws one line down the middle of each gap between custom zones, not each zone's outline", () => {
+    const quad = (x0: number, y0: number, x1: number, y1: number) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+    const grid: PolygonZonesField = {
+      type: "polygon-zones",
+      zones: [
+        { id: "tl", label: "TL", points: quad(0, 0, 0.47, 0.47) },
+        { id: "tr", label: "TR", points: quad(0.53, 0, 1, 0.47) },
+        { id: "bl", label: "BL", points: quad(0, 0.53, 0.47, 1) },
+        { id: "br", label: "BR", points: quad(0.53, 0.53, 1, 1) },
+      ],
+    };
+    const columns = 96, rows = 54;
+    const lines = curtainDivisionLines(grid, buildPoolMasks(grid, columns, rows));
+    expect(lines.length).toBeGreaterThan(0);
+    for (const [x1, y1, x2, y2] of lines) {
+      const onVertical = Math.abs(x1 - 0.5) < 1.5 / columns && Math.abs(x2 - 0.5) < 1.5 / columns;
+      const onHorizontal = Math.abs(y1 - 0.5) < 1.5 / rows && Math.abs(y2 - 0.5) < 1.5 / rows;
+      expect(onVertical || onHorizontal).toBe(true);
+    }
+    // The cross reaches every edge of the frame.
+    expect(Math.min(...lines.map((l) => Math.min(l[1], l[3])))).toBeLessThan(2 / rows);
+    expect(Math.max(...lines.map((l) => Math.max(l[1], l[3])))).toBeGreaterThan(1 - 2 / rows);
+    expect(Math.min(...lines.map((l) => Math.min(l[0], l[2])))).toBeLessThan(2 / columns);
+    expect(Math.max(...lines.map((l) => Math.max(l[0], l[2])))).toBeGreaterThan(1 - 2 / columns);
+  });
+  it("splits side-by-side zones with one line per gap", () => {
+    const columns = 96;
+    const xs = curtainDivisionLines(three, buildPoolMasks(three, columns, 54)).flatMap((l) => [l[0], l[2]]);
+    for (const x of xs) expect(Math.min(Math.abs(x - 0.325), Math.abs(x - 0.675))).toBeLessThan(1.5 / columns);
+  });
   it("divides a left/right split vote with one vertical line", () => {
     const [line, ...rest] = curtainDivisionLines(leftRight, buildPoolMasks(leftRight, 96, 54));
     expect(rest).toHaveLength(0);
