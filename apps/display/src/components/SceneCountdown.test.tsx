@@ -53,4 +53,16 @@ describe("SceneCountdown", () => {
     await render(4_000);
     expect(document.querySelector(".scene-countdown")).toBeNull();
   });
+
+  it("shows an amount counting down instead of seconds, pinging by seconds", async () => {
+    vi.stubGlobal("Audio", FakeAudio);
+    const clock = { now: () => 30_000 } as unknown as ServerClock;
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<SceneCountdown countdown={{ startAtMs: 0, endAtMs: 60_000, pingSeconds: 5, countFrom: 2_000_000 }} startedAt={0} clock={clock} soundEnabled />));
+    const shown = document.querySelector(".vote-close-countdown");
+    expect(shown?.textContent).toBe("1.000.000");
+    expect(shown?.classList.contains("countdown-amount")).toBe(true);
+    expect(FakeAudio.created).toHaveLength(0);
+  });
 });

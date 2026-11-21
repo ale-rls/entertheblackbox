@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { anyMonitorCountdown, shownMonitorCountdown, type MonitorCountdownPhase } from "./monitor-countdown.js";
+import { anyMonitorCountdown, shownMonitorCountdown, shownMonitorCountdownText, type MonitorCountdownPhase } from "./monitor-countdown.js";
 
 const text = (extra: object = {}) => ({ kind: "text" as const, startMs: 0, text: "Feld", ...extra });
 const vote = (monitorCues: MonitorCountdownPhase["monitorCues"]): MonitorCountdownPhase => ({
@@ -27,3 +27,13 @@ describe("what the monitors count down", () => {
     expect(anyMonitorCountdown(null, 0)).toBeNull();
   });
 });
+
+describe("monitor amount countdowns", () => {
+  it("shows a cue's countdownFrom amount over its countdown window", () => {
+    const cues = [{ kind: "text" as const, text: "HACK", startMs: 0, durationMs: 60_000, countdownSeconds: 60, countdownFrom: 2_000_000 }];
+    const phase = { kind: "video", startedAt: 1_000, monitorCues: { M1: cues } };
+    expect(shownMonitorCountdownText(cues, phase, 1_000 + 45_000)).toBe("500.000");
+    expect(shownMonitorCountdownText([{ ...cues[0]!, countdownFrom: undefined }], phase, 1_000 + 45_000)).toBe("15");
+  });
+});
+

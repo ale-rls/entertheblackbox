@@ -8,6 +8,8 @@ const timing = {
   durationMs: z.number().int().positive().optional(),
   /** Show only the final seconds of this cue; overrides the scene/vote countdown. */
   countdownSeconds: z.number().int().positive().optional(),
+  /** With countdownSeconds: show an amount counting down from this number to 0 instead of seconds. */
+  countdownFrom: z.number().int().positive().max(1_000_000_000_000).optional(),
   /** Keep the cue's text, smaller and centred, beneath the countdown. Text cues only. */
   countdownShowsText: z.boolean().optional(),
 };

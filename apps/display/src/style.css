@@ -170,6 +170,8 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
   animation: vote-close-tick 1s ease-out;
   pointer-events: none;
 }
+/* An amount (e.g. 2.000.000 tokens) needs more room than two digits. */
+.vote-close-countdown.countdown-amount { font-size: clamp(3rem, 11vw, 11rem); white-space: nowrap; }
 @keyframes vote-close-tick {
   from { opacity: 0; transform: translate(-50%, -50%) scale(1.3); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }

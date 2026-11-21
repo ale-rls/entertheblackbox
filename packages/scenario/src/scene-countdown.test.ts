@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { narrationPhaseSchema, videoPhaseSchema } from "./schema.js";
-import { sceneCountdownPings, sceneCountdownSeconds } from "./scene-countdown.js";
+import { countdownAmount, formatCountdownAmount, sceneCountdownPings, sceneCountdownSeconds, sceneCountdownText } from "./scene-countdown.js";
 
 const narration = { kind: "narration", id: "n", text: "Bauen", durationMs: 40_000, next: "end" };
 const video = { kind: "video", id: "v", src: "v.mp4", expectedDurationMs: 40_000, next: "end" };
@@ -33,3 +33,27 @@ describe("scene countdown", () => {
     expect(sceneCountdownPings(countdown, null)).toBe(false);
   });
 });
+
+describe("amount countdowns", () => {
+  it("maps the time left onto the amount and reaches 0 only at the end", () => {
+    expect(countdownAmount(2_000_000, 60_000, 60_000)).toBe(2_000_000);
+    expect(countdownAmount(2_000_000, 30_000, 60_000)).toBe(1_000_000);
+    expect(countdownAmount(2_000_000, 1, 60_000)).toBe(34);
+    expect(countdownAmount(2_000_000, 0, 60_000)).toBe(0);
+    expect(countdownAmount(2_000_000, 90_000, 60_000)).toBe(2_000_000);
+  });
+
+  it("groups thousands with dots", () => {
+    expect(formatCountdownAmount(2_000_000)).toBe("2.000.000");
+    expect(formatCountdownAmount(1_234)).toBe("1.234");
+    expect(formatCountdownAmount(999)).toBe("999");
+  });
+
+  it("shows seconds without countFrom and the amount with it", () => {
+    const window = { startAtMs: 0, endAtMs: 60_000 };
+    expect(sceneCountdownText(window, 15_000)).toBe("45");
+    expect(sceneCountdownText({ ...window, countFrom: 2_000_000 }, 15_000)).toBe("1.500.000");
+    expect(sceneCountdownText({ ...window, countFrom: 2_000_000 }, 60_000)).toBeNull();
+  });
+});
+
