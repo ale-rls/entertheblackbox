@@ -132,6 +132,16 @@ describe("curtain-light votes", () => {
     h.engine.stop();
   });
 
+  it("draws a vote over its scene's own loop video as an unpacked curtain", () => {
+    const value = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map((phase) => phase.id === "vote"
+      ? { ...phase, curtainOverSceneLoop: true, loopVideoSrc: "open-loop.mp4" } : phase) });
+    const h = setup(value);
+    const theaterDisplay = h.display("theater");
+    const one = h.phone("one"); h.engine.adminStart(); h.choose(one, "theater"); h.tick(100);
+    expect(theaterDisplay.snapshot.phase.voteTreatment.curtain).toMatchObject({ src: "open-loop.mp4", packed: false });
+    h.engine.stop();
+  });
+
   it("enters at the neutral point without voting, then steers relative to the cursor", () => {
     const h = setup();
     const display = h.display("theater");

@@ -432,6 +432,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
       {curtainStagePhaseIds(project.scenario).has(phase.id) && <>
         <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.curtainKeepCursors === true} onChange={(event) => onChange({ ...phase, curtainKeepCursors: event.target.checked ? true : undefined })} />{label("Keep cursors from the previous curtain vote", "curtainKeepCursors")}</label>
         <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.curtainFieldsStatic === true} onChange={(event) => onChange({ ...phase, curtainFieldsStatic: event.target.checked ? true : undefined })} />{label("Fields don't light up yet", "curtainFieldsStatic")}</label>
+        <label className="sc-tool-checkbox check"><input type="checkbox" checked={phase.curtainOverSceneLoop === true} disabled={phase.loopVideoSrc === undefined && phase.curtainOverSceneLoop !== true} onChange={(event) => onChange({ ...phase, curtainOverSceneLoop: event.target.checked ? true : undefined })} />{label("Draw the light over this scene's loop video (e.g. the open curtain)", "curtainOverSceneLoop")}</label>
         <CurtainStageEditor phase={phase} scenario={project.scenario} onChange={onChange} />
       </>}
       {phase.field.type === "two-quadrant" && phase.field.variant !== "split" &&

@@ -60,6 +60,8 @@ export const curtainTreatmentSchema = z.object({
     cursorFlood: z.number().finite(),
     cursorFloodCounted: z.number().finite(),
     neutralGap: z.number().finite(),
+    /** False when src is a plain video (a scene's own loop) rather than the packed colour/normal/depth clip. */
+    packed: z.boolean().optional(),
   }),
   /** Answer id → colour, defaults already resolved. */
   answerColors: z.record(z.string(), z.string()),

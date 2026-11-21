@@ -32,16 +32,18 @@ uniform sampler2D tex;      // packed curtain frame (2560x1408)
 uniform sampler2D pool;     // answer-pool light, sqrt-encoded linear RGB
 uniform sampler2D cursorLight; // accumulated cursor floods, linear RGB
 uniform sampler2D txt;      // text at output size: RGBA lettering and shadow
-uniform bool hasTex, spotlight;
+uniform bool hasTex, spotlight, packed;
 uniform vec4 crop;          // clip-space crop: xy offset, zw size (cover fit)
 uniform float baked, folds, shine, shadow, opacity, cursorScale, textOpacity;
 const float ASPECT = 1280. / 704.;
 const float RELIEF = .22;
 const vec2 HALF = vec2(.5 / 2560., .5 / 1408.);
 vec2 tile(vec2 q, vec2 off){ return clamp(q, HALF, .5 - HALF) + off; }
-vec3 colour(vec2 q){ return hasTex ? texture(tex, tile(q * .5, vec2(0.))).rgb : vec3(.2); }
-float depth(vec2 q){ return hasTex ? texture(tex, tile(q * .5, vec2(.5))).r : .5; }
+// A plain video (a scene's own loop) is all colour: flat, no depth, no relief.
+vec3 colour(vec2 q){ return !hasTex ? vec3(.2) : packed ? texture(tex, tile(q * .5, vec2(0.))).rgb : texture(tex, clamp(q, HALF * 2., 1. - HALF * 2.)).rgb; }
+float depth(vec2 q){ return hasTex && packed ? texture(tex, tile(q * .5, vec2(.5))).r : .5; }
 vec3 normal(vec2 q){
+  if (hasTex && !packed) return vec3(0., 0., 1.);
   if (!hasTex) {
     if (!spotlight) return vec3(0., 0., 1.);
     float fold = sin(q.x * 85. + .4 * sin(q.y * 6.));
@@ -51,7 +53,7 @@ vec3 normal(vec2 q){
   return normalize(vec3(n * folds, sqrt(max(.04, 1. - dot(n, n)))));
 }
 float occlusion(vec3 P, vec3 L){
-  if (!hasTex) return 1.;
+  if (!hasTex || !packed) return 1.;
   float hit = 0.;
   for (int i = 1; i <= 10; i++) {
     float t = float(i) * .012;
@@ -118,7 +120,7 @@ void main(){
   o = vec4(vTint.rgb * vTint.a * fall, 1.);
 }`;
 
-export type CurtainFabricParams = { baked: number; folds: number; shine: number; shadow: number };
+export type CurtainFabricParams = { baked: number; folds: number; shine: number; shadow: number; /** False for a plain (unpacked) video. Defaults to packed. */ packed?: boolean | undefined };
 
 /**
  * One cursor light: position, linear colours of the core (the participant's
@@ -389,6 +391,7 @@ export class CurtainRenderer {
     const u = (name: string) => gl.getUniformLocation(this.fabric, name);
     gl.uniform1i(u("spotlight"), frame.spotlightRadius === undefined ? 0 : 1);
     gl.uniform1i(u("hasTex"), this.hasVideo ? 1 : 0);
+    gl.uniform1i(u("packed"), frame.fabric.packed === false ? 0 : 1);
     gl.uniform4fv(u("crop"), coverCrop(this.canvas.width / Math.max(1, this.canvas.height)));
     gl.uniform1f(u("baked"), frame.fabric.baked);
     gl.uniform1f(u("folds"), frame.fabric.folds);
