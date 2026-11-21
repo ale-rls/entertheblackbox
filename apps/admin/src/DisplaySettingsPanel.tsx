@@ -60,8 +60,12 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check the settings."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
+      // The hack checkpoint amount is edited in Setup: keep the server's current one.
+      const latest = await fetch("/api/admin/settings/display", { headers: { Authorization: `Bearer ${token}` } })
+        .then(async (response) => response.ok ? displaySettingsSchema.safeParse((await response.json()).display) : null).catch(() => null);
+      const body = latest?.success ? { ...parsed.data, hackCheckpoints: latest.data.hackCheckpoints } : parsed.data;
       const response = await fetch("/api/admin/settings/display", {
-        method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(parsed.data),
+        method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       if (!response.ok) throw new Error(`Could not save display settings (${response.status}). Your edits are still here.`);
       setNotice("Saved to PocketBase. Open displays update within five seconds.");

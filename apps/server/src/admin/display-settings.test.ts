@@ -36,3 +36,15 @@ it("authenticates library listing and reports unavailable persistence", async ()
     expect((await app.inject({ url: "/api/admin/settings/waiting-videos", headers: { authorization: "Bearer operator" } })).statusCode).toBe(500);
   } finally { await app.close(); }
 });
+
+it("hands Admin Setup's hack checkpoint amount to the running engine when the settings are saved", async () => {
+  const app = Fastify();
+  const setOperatorFieldTotal = vi.fn();
+  registerAdminRoutes(app, { verifyToken: async () => true, engine: () => ({ setOperatorFieldTotal }) as never, ready: true, startedAt: 0,
+    displaySettings: { read: async () => DEFAULT_DISPLAY_SETTINGS, write: async (value) => value } });
+  try {
+    const response = await app.inject({ method: "PUT", url: "/api/admin/settings/display", headers: { authorization: "Bearer x" }, payload: { ...DEFAULT_DISPLAY_SETTINGS, hackCheckpoints: 8 } });
+    expect(response.statusCode).toBe(200);
+    expect(setOperatorFieldTotal).toHaveBeenCalledWith(8);
+  } finally { await app.close(); }
+});

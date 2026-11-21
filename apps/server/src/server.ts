@@ -263,6 +263,9 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
       }),
     });
     engine.start();
+    const started = engine;
+    // Admin Setup's hack checkpoint amount survives restarts.
+    if (options.pocketbase) void readDisplaySettings(options.pocketbase).then((settings) => started.setOperatorFieldTotal(settings.hackCheckpoints)).catch(() => { /* Scenes keep their own totals. */ });
   }
 
   app.get("/healthz", async () => ({ ok: true }));

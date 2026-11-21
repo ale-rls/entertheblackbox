@@ -102,8 +102,8 @@ export function CueList({ flow, status, busy, onJump, onOperatorField }: Props) 
             onClick={() => onOperatorField({ target: zone.id })}>{zone.label}</button>)}
           <button type="button" className="sc-tool-button" data-sc-tool-variant="secondary" disabled={busy || !status.operatorField?.target} onClick={() => onOperatorField({ target: null })}>None</button>
         </div>
-        {now.operatorFields.total !== undefined && <div className="cue-operator-buttons">
-          <strong>{status.operatorField?.count ?? 0} / {now.operatorFields.total}</strong>
+        {(status.operatorFieldTotal ?? now.operatorFields.total) != null && <div className="cue-operator-buttons">
+          <strong>{status.operatorField?.count ?? 0} / {status.operatorFieldTotal ?? now.operatorFields.total}</strong>
           <button type="button" className="sc-tool-button" data-sc-tool-variant="primary" disabled={busy} onClick={() => onOperatorField({ countDelta: 1 })}>+1</button>
           <button type="button" className="sc-tool-button" data-sc-tool-variant="secondary" disabled={busy || !status.operatorField?.count} onClick={() => onOperatorField({ countDelta: -1 })}>−1</button>
         </div>}

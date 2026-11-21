@@ -2,10 +2,15 @@ import type { OperatorFields as OperatorFieldsConfig } from "@entertheblackbox/s
 
 const LIT_DEFAULT = "#fff4e0";
 
+/** The hack's counter as the script writes it, on the main display and M1–M4. */
+export function checkpointText(count: number, total: number): string {
+  return `Checkpoints: ${count}/${total}`;
+}
+
 /**
  * Fields the operator lights one at a time (e.g. the hack's target field): the lit field glows in
  * its colour, the others stay faintly outlined so the four areas read as one layout. An optional
- * counter shows the operator's steps ("3 / 12").
+ * counter shows the operator's steps ("Checkpoints: 3/12").
  */
 export function OperatorFields({ fields, state }: { fields: OperatorFieldsConfig; state: { target: string | null; count: number } | undefined }) {
   const target = state?.target ?? null;
@@ -22,6 +27,6 @@ export function OperatorFields({ fields, state }: { fields: OperatorFieldsConfig
         </g>;
       })}
     </svg>
-    {fields.total !== undefined && <div className="operator-fields-count">{state?.count ?? 0} / {fields.total}</div>}
+    {fields.total !== undefined && <div className="operator-fields-count">{checkpointText(state?.count ?? 0, fields.total)}</div>}
   </div>;
 }

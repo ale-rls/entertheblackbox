@@ -17,6 +17,7 @@ import { CueList } from "./CueList.js";
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import { AudioDiagnostics } from "./AudioDiagnostics";
 import { flowNeedsReload, serverBootAt } from "./flow-refresh";
+import { HackCheckpoints } from "./HackCheckpoints.js";
 import { MonitorBackgrounds, type MonitorBackgroundColors } from "./MonitorBackgrounds.js";
 import PocketBase from "pocketbase";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
@@ -66,6 +67,8 @@ export type Status = {
   phaseEpoch: number | null;
   /** The lit operator field and counter of the current scene, when it has operator fields. */
   operatorField?: { target: string | null; count: number } | null;
+  /** Counter total of the running operator-field scene (Admin Setup's checkpoint amount, else the scene's). */
+  operatorFieldTotal?: number | null;
   groupDestinations?: string[];
   pendingGroupAssignments?: string[];
   pendingDisconnectedGroupAssignments?: string[];
@@ -917,6 +920,7 @@ export function App() {
         </section>
 
 
+        {connectedToken && activeTab === "setup" && <HackCheckpoints token={connectedToken} />}
         <div hidden={activeTab !== "setup"} className="admin-setup-content"><CollapsibleSection id="admin-show-heading" eyebrow="Which content is live" title="Active show" open={showSectionOpen} onToggle={setShowSectionOpen}>
           <dl className="admin-session-facts">
             <div><dt>Currently running</dt><dd className="sc-tool-mono">{showLabel(showsInfo?.active ?? null, showsInfo?.shows ?? [])}</dd></div>

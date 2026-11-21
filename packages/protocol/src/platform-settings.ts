@@ -21,6 +21,8 @@ export const displaySettingsSchema = z.object({
   groupWaitingVideoUrls: z.record(z.string().min(1).max(160), waitingVideoUrlSchema).default({}),
   /** Background video for signage kiosks (e.g. a lobby entrance screen showing the join QR), keyed by a fixed signage spot id such as "lobby". */
   signageVideoUrls: z.record(z.string().min(1).max(160), waitingVideoUrlSchema).default({}),
+  /** Hack checkpoints: replaces every operator-field scene's counter total (e.g. the hack's nodes); null keeps the scene's own. */
+  hackCheckpoints: z.number().int().min(1).max(99).nullable().default(null),
 }).strict();
 export type DisplaySettings = z.infer<typeof displaySettingsSchema>;
 export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
@@ -33,6 +35,7 @@ export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   waitingVideoUrl: "",
   groupWaitingVideoUrls: {},
   signageVideoUrls: {},
+  hackCheckpoints: null,
 };
 
 /** Missing group overrides inherit; an explicit empty override keeps that display black. */

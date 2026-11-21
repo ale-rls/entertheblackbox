@@ -286,6 +286,8 @@ export class PhaseEngine {
   private phaseEpoch = 0;
   /** Operator fields of the current scene: which field is lit and the counter. Belongs to one phase epoch. */
   private operatorField: { epoch: number; target: string | null; count: number } = { epoch: -1, target: null, count: 0 };
+  /** Admin Setup's checkpoint amount: replaces the counter total of operator-field scenes (null = the scene's own). */
+  private operatorFieldTotalOverride: number | null = null;
   // Closing group selection advances the routing epoch without emitting a cue phase.
   private cuePhaseEpoch: number | null = null;
   private phaseStartedAt: number;
@@ -583,7 +585,7 @@ export class PhaseEngine {
           kind: phase.kind,
           title: phase.title ?? (phase.kind === "video" || phase.kind === "group-branch" ? phase.id : phase.text),
           ...(phase.cueName ? { cueName: phase.cueName } : {}),
-          ...(phase.kind === "video" && phase.operatorFields ? { operatorFields: { zones: phase.operatorFields.zones.map(({ id, label, color }) => ({ id, label, ...(color ? { color } : {}) })), ...(phase.operatorFields.total ? { total: phase.operatorFields.total } : {}) } } : {}),
+          ...(phase.kind === "video" && phase.operatorFields ? { operatorFields: { zones: phase.operatorFields.zones.map(({ id, label, color }) => ({ id, label, ...(color ? { color } : {}) })), ...(this.operatorFieldTotal(phase.operatorFields) ? { total: this.operatorFieldTotal(phase.operatorFields)! } : {}) } } : {}),
           routes: adminRoutesForPhase(phase),
         })),
     };
@@ -724,6 +726,31 @@ export class PhaseEngine {
     return occupied ? phase.next : rule.target;
   }
 
+  /** The counter total an operator-field scene uses: Admin Setup's checkpoint amount, else the scene's own. */
+  private operatorFieldTotal(fields: { total?: number | undefined }): number | undefined {
+    return fields.total === undefined && this.operatorFieldTotalOverride === null ? undefined : this.operatorFieldTotalOverride ?? fields.total;
+  }
+
+  /** The counter total of the current operator-field scene, or null outside one. */
+  get currentOperatorFieldTotal(): number | null {
+    if (this.lifecycle !== "active") return null;
+    const phase = this.currentPhase();
+    return phase.kind === "video" && phase.operatorFields ? this.operatorFieldTotal(phase.operatorFields) ?? null : null;
+  }
+
+  /** Sets Admin Setup's checkpoint amount (null = each scene's own total) and updates a running scene. */
+  setOperatorFieldTotal(total: number | null): void {
+    if (total === this.operatorFieldTotalOverride) return;
+    this.operatorFieldTotalOverride = total;
+    if (this.lifecycle !== "active") return;
+    const phase = this.currentPhase();
+    if (phase.kind === "video" && phase.operatorFields) {
+      const max = this.operatorFieldTotal(phase.operatorFields) ?? 99;
+      if (this.operatorField.epoch === this.phaseEpoch) this.operatorField = { ...this.operatorField, count: Math.min(max, this.operatorField.count) };
+      this.broadcast({ ...this.getSnapshotMessage(), t: "phase" });
+    }
+  }
+
   /** The lit operator field and counter of the current scene (fresh for every phase epoch). */
   get operatorFieldState(): { target: string | null; count: number } {
     return this.operatorField.epoch === this.phaseEpoch ? { target: this.operatorField.target, count: this.operatorField.count } : { target: null, count: 0 };
@@ -740,7 +767,7 @@ export class PhaseEngine {
     if (phase.kind !== "video" || !phase.operatorFields) return { ok: false, reason: "wrong-phase" };
     if (change.target !== undefined && change.target !== null && !phase.operatorFields.zones.some((zone) => zone.id === change.target)) return { ok: false, reason: "invalid-target" };
     const state = this.operatorFieldState;
-    const max = phase.operatorFields.total ?? 99;
+    const max = this.operatorFieldTotal(phase.operatorFields) ?? 99;
     this.operatorField = {
       epoch: this.phaseEpoch,
       target: change.target === undefined ? state.target : change.target,
@@ -1027,7 +1054,10 @@ export class PhaseEngine {
         spotlightCurtainSrc: this.scenario.curtainLight?.src,
       } : {}),
       ...(this.nextIsDimmedBackdrop(phase) ? { nextTitleBackdrop: true as const } : {}),
-      ...(phase.kind === "video" && phase.operatorFields ? { operatorField: this.operatorFieldState } : {}),
+      ...(phase.kind === "video" && phase.operatorFields ? {
+        operatorField: this.operatorFieldState,
+        operatorFields: { ...phase.operatorFields, ...(this.operatorFieldTotal(phase.operatorFields) === undefined ? {} : { total: this.operatorFieldTotal(phase.operatorFields)! }) },
+      } : {}),
       ...(this.loopStartedAt !== null && loopVideoSrcOf(phase) !== undefined ? { loopStartedAt: this.loopStartedAt } : {}),
       scenarioVersion: this.scenario.version,
       startedAt: this.phaseStartedAt,

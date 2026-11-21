@@ -18,3 +18,6 @@
 .monitor-countdown.monitor-countdown-amount { font-size: clamp(36px, 11vw, 220px); white-space: nowrap; }
 /* Optional (countdownShowsText): the original text, smaller, centred beneath the number. */
 .monitor-countdown-question { margin-top: .6em; font-size: clamp(20px, 3.5vw, 64px); line-height: 1.15; max-width: 100%; }
+
+/* Hack counter (operator fields with a total), under the countdown on every monitor. */
+.monitor-checkpoints { position: absolute; left: 0; right: 0; bottom: 8%; text-align: center; font-size: clamp(24px, 5vw, 96px); font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; }
