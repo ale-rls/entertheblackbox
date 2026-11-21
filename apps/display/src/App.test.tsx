@@ -150,6 +150,8 @@ describe("App media-readiness gate", () => {
   });
   it("unmounts all media, QR, controls and cursors while group paths own the show, then resumes shared rendering", async () => {
     harness.mediaStatus = { state: "ready" };
+    // With a waiting video set, the main projection steps aside for it (without one it keeps its loop).
+    harness.waitingVideoUrl = "/media/lobby.mp4";
     document.body.innerHTML = '<div id="root"></div>';
     root = createRoot(document.querySelector("#root")!);
     await act(async () => root?.render(<App />));
@@ -160,7 +162,7 @@ describe("App media-readiness gate", () => {
         scenarioVersion: "test", startedAt: 0, deadlineAt: 1_000 },
     }));
     expect(document.querySelector('[aria-label="Display inactive"]')).not.toBeNull();
-    expect(document.querySelector(".display-root")!.children).toHaveLength(0);
+    expect([...document.querySelector(".display-root")!.children].map((child) => child.getAttribute("data-testid"))).toEqual(["idle-attract"]);
     expect(harness.showMedia).toHaveBeenLastCalledWith(null, null, null);
     await act(async () => harness.connectionOptions!.onMessage({
       t: "phase", v: PROTOCOL_VERSION, sessionId: "idle", phaseEpoch: 11, serverTime: 1_000,

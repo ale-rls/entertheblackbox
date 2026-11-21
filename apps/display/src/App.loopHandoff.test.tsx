@@ -141,6 +141,22 @@ describe("projection loop handoffs", () => {
     expect(video("second-loop.webm")).toBeNull();
   });
 
+  it("keeps the curtain loop up through a group scene when no waiting video is set", async () => {
+    await phase(1, loop("curtain.mp4"));
+    const curtain = video("curtain.mp4");
+    await present(curtain);
+    await phase(2, { ...timing, kind: "group-branch", id: "split", durationMs: 5_000,
+      assignment: { type: "self-select" }, branches: [{ groupId: "a", weight: 1 }], next: "monologue" });
+    expect(document.querySelector('[aria-label="Display inactive"]')).toBeNull();
+    expect(activeLoop()).toBe(curtain);
+
+    // The next scene's film replaces it only once it has a frame.
+    await phase(3, film("monologue.mp4"));
+    expect(activeLoop()).toBe(curtain);
+    await present(video("monologue.mp4"));
+    expect(activeForeground()).toBe(video("monologue.mp4"));
+  });
+
   it("waits for a fresh frame when a loop comes back after a film", async () => {
     await phase(1, loop("curtain.mp4"));
     await present(video("curtain.mp4"));
