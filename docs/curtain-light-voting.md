@@ -58,6 +58,15 @@ Both only apply to curtain votes; validation warns when they are set elsewhere.
 As with every video vote, a cursor that is carried over counts once its
 participant moves it while the window is open.
 
+### Cursors outside curtain votes
+
+Every other scene that shows cursors (`showCursors`, plain votes included)
+draws them in the same look as the curtain's cursor cores: a soft light in the
+participant's colour lifted towards white, swelling when the phone is touched,
+added onto whatever the scene shows (`mix-blend-mode: plus-lighter`). The
+scene's picture stays visible; only curtain votes replace it with the curtain.
+Code: `apps/display/src/cursors/glowCursor.ts`.
+
 ## What the audience sees
 
 | Layout | Treatment |
