@@ -91,4 +91,11 @@ describe("curtain-light stages", () => {
     expect(warnings).toMatch(/may not be readable/);
     expect(warnings).toMatch(/unknown answer "nope"/);
   });
+  it("needs a loop video to draw a vote over its scene's loop", () => {
+    const base = scenario();
+    const flag = (extra: object) => scenarioSchema.parse({ ...base, phases: base.phases.map((phase) => phase.id === "theater-vote" ? { ...phase, curtainOverSceneLoop: true, ...extra } : phase) });
+    expect(validateScenario(flag({}), manifest).errors.some((issue) => issue.phaseId === "theater-vote" && issue.message.includes("loopVideoSrc"))).toBe(true);
+    expect(validateScenario(flag({ loopVideoSrc: "curtain.mp4" }), manifest).errors.filter((issue) => issue.code === "curtain-light")).toEqual([]);
+  });
 });
+

@@ -68,10 +68,14 @@ export function curtainLightIssues(scenario: Scenario, mediaManifest?: MediaMani
   const stageIds = curtainStagePhaseIds(scenario);
   for (const phase of scenario.phases) {
     if (phase.kind !== "position-question" && phase.kind !== "video-position-question") continue;
-    if (stageIds.has(phase.id) || (phase.curtainKeepCursors !== true && phase.curtainFieldsStatic !== true)) continue;
+    if (phase.curtainOverSceneLoop === true && stageIds.has(phase.id) && phase.loopVideoSrc === undefined) issues.push({
+      severity: "error", code: "curtain-light", phaseId: phase.id,
+      message: `"${phase.id}": "draw over this scene's loop" needs a loop video (loopVideoSrc) on the scene`,
+    });
+    if (stageIds.has(phase.id) || (phase.curtainKeepCursors !== true && phase.curtainFieldsStatic !== true && phase.curtainOverSceneLoop !== true)) continue;
     issues.push({
       severity: "warning", code: "curtain-light", phaseId: phase.id,
-      message: `"${phase.id}": "keep cursors" and "fields don't light up yet" only apply to curtain-light votes and are ignored here`,
+      message: `"${phase.id}": "keep cursors", "fields don't light up yet" and "draw over this scene's loop" only apply to curtain-light votes and are ignored here`,
     });
   }
   const groups = (scenario.groups ?? []).filter((group) => group.voteTreatment === "curtain-light");

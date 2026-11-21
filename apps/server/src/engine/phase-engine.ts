@@ -1933,9 +1933,13 @@ export class PhaseEngine {
     const resolved = resolveCurtainSettings(this.scenario.curtainLight);
     // "Nothing lights up yet": fields hold their base glow and a cursor's
     // flood looks the same inside and outside a field. Votes still count.
-    const curtain = phase.curtainFieldsStatic === true
+    const lighting = phase.curtainFieldsStatic === true
       ? { ...resolved, poolGain: 0, cursorFloodCounted: resolved.cursorFlood }
       : resolved;
+    // Over the scene's own loop (e.g. the open curtain) the stage stays visible under the light.
+    const curtain = phase.curtainOverSceneLoop === true && phase.loopVideoSrc !== undefined
+      ? { ...lighting, src: phase.loopVideoSrc, packed: false }
+      : lighting;
     const field = curtainVoteField(phase.field, curtain.neutralGap);
     this.curtainCache = {
       phase,

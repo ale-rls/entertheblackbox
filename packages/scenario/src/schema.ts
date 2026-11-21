@@ -438,6 +438,11 @@ const curtainStageFields = {
    * brighten inside a field, so nothing lights up yet. Counting is unchanged.
    */
   curtainFieldsStatic: z.boolean().optional(),
+  /**
+   * Curtain stage only: draw the light over this scene's own loop video (loopVideoSrc, a plain
+   * video such as the open curtain) instead of the shared packed curtain, so the stage stays visible.
+   */
+  curtainOverSceneLoop: z.boolean().optional(),
   /** Answer id → colour. Missing answers use the system defaults. */
   answerColors: z.record(z.string().min(1), hexColorSchema).optional(),
   /** Ignored; kept so shows published before keep loading. */

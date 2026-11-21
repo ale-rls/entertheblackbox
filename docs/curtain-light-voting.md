@@ -39,6 +39,15 @@ without a group, gets the curtain entry and relative steering. Custom zones
 that tile the whole screen leave no neutral entry point and are rejected:
 leave an unlit gap between them.
 
+### Over the open curtain
+
+A curtain vote normally draws its light on the shared, closed curtain. When the
+video curtain is open (Teil 2, Act 2), tick **Draw the light over this scene's
+loop video** (`curtainOverSceneLoop: true`) on the vote: the light, labels and
+cursors are drawn over the scene's own `loopVideoSrc` (for example the open
+curtain loop), so the stage stays visible. That video is used as a plain
+picture (no folds or relief); the scene needs a loop video, or validation fails.
+
 ### Positioning before the choice
 
 Some cues ask people to move onto fields that should **not** light up yet: the
