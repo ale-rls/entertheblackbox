@@ -159,8 +159,9 @@ export default function App() {
       c.send({ t: 'ping', v: PROTOCOL_VERSION, clientTime: Date.now(), timing: {
         sessionId: s.sessionId, phaseId: s.phase.id, phaseEpoch: s.phaseEpoch, routingEpoch: s.routingEpoch ?? 0, timing } });
     }, 1000);
-    // Audible monitor countdown: sampled often so ticks land on the monitors' second boundaries.
-    const ticker = new CountdownTicker(sound => { void playCountdownSound(sound).catch(() => { /* A missed tick must not disturb the show. */ }); });
+    // Audible countdown (the display's ping seconds and the monitors'): sampled often so ticks land on the monitors' second boundaries.
+    // Only the ping, like the main display: no end tone.
+    const ticker = new CountdownTicker(sound => { if (sound === 'tick') void playCountdownSound(sound).catch(() => { /* A missed tick must not disturb the show. */ }); });
     const countdownTimer = setInterval(() => {
       const c = connection.current, p = player.current;
       if (!c || !c.clock.hasSamples || !p || p.isPaused()) { ticker.reset(); return; }
