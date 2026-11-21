@@ -33,6 +33,8 @@ export type CurtainStageProps = {
   leavingSince?: number | null;
   videoUrl: string | null;
   onUnavailable?: (error: unknown) => void;
+  /** Called once, on the first frame this stage's fabric is on screen. */
+  onFabricShown?: () => void;
 };
 
 /** Fit text into maxWidth by shrinking, never by wrapping. */
@@ -156,7 +158,10 @@ export function CurtainStage(props: CurtainStageProps) {
         videoReady: renderer.videoReady,
       });
 
-      if (opacity > 0 && upAt === null) upAt = local;
+      if (opacity > 0 && upAt === null) {
+        upAt = local;
+        p.onFabricShown?.();
+      }
       if (target.scene !== scene || target.question !== p.question) target = { scene, question: p.question };
       // Before the question is due there is no old text on screen to fade out.
       const step = stepTextSwap(swap, target, opacity > 0.01 && content, local);

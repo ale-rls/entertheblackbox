@@ -38,6 +38,8 @@ import type { PositionField } from "@entertheblackbox/shared";
 
 type CurtainHold = {
   key: string;
+  /** One mounted curtain stage: kept while votes follow each other, new after the curtain has gone. */
+  stage: string;
   treatment: CurtainTreatment;
   field: PositionField;
   question: string;
@@ -282,6 +284,9 @@ export function App() {
   const curtainKey = curtainPhase === null ? null : `${state.sessionId ?? "pending"}:${state.phaseEpoch}`;
   const [curtainHold, setCurtainHold] = useState<CurtainHold | null>(null);
   const [curtainUnavailable, setCurtainUnavailable] = useState(false);
+  // The hold whose lit curtain has put its fabric on screen. Until then the previous scene's
+  // background loop stays up, so a fresh curtain still loading its video never shows a black frame.
+  const [curtainShownKey, setCurtainShownKey] = useState<string | null>(null);
   const [curtainUrl, setCurtainUrl] = useState<{ src: string; url: string | null } | null>(null);
   useEffect(() => {
     if (curtainPhase === null || curtainKey === null) {
@@ -295,6 +300,7 @@ export function App() {
     const hidesEarly = curtainPhase.kind === "video-position-question" && curtainPhase.hideAtMs < curtainPhase.expectedDurationMs;
     setCurtainHold((previous) => ({
       key: curtainKey,
+      stage: previous?.stage ?? curtainKey,
       treatment: curtainPhase.voteTreatment!,
       field: curtainPhase.field,
       question: curtainPhase.text,
@@ -369,7 +375,10 @@ export function App() {
     });
     return () => { cancelled = true; };
   }, [phaseLoopSrc, media.store, mediaReady]);
-  const loopHeldForHandoff = phaseLoopSrc === null && phaseMediaKey !== null && presentedVideoKey !== phaseMediaKey;
+  const curtainWaiting = curtainHold !== null && !curtainUnavailable && curtainHold.leavingSince === null
+    && curtainShownKey !== curtainHold.stage;
+  const loopHeldForHandoff = phaseLoopSrc === null
+    && ((phaseMediaKey !== null && presentedVideoKey !== phaseMediaKey) || curtainWaiting);
   const loopPending = phaseLoopSrc !== null && loopUrl?.src !== phaseLoopSrc;
   const loopTarget = useMemo(
     () => phaseLoopSrc !== null && loopUrl?.src === phaseLoopSrc && loopUrl.url !== null
@@ -482,6 +491,7 @@ export function App() {
           {...(curtainHold.visibleUntil === undefined ? {} : { visibleUntil: curtainHold.visibleUntil })}
           leavingSince={curtainHold.leavingSince}
           videoUrl={curtainUrl?.src === curtainHold.treatment.curtain.src ? curtainUrl.url : null}
+          onFabricShown={() => setCurtainShownKey(curtainHold.stage)}
           onUnavailable={(error) => {
             console.warn("display: curtain-light renderer unavailable, using the standard field", error);
             setCurtainUnavailable(true);
