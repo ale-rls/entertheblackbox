@@ -44,15 +44,22 @@ export const DIM_IN_MS = 1_000;
  */
 export const DIM_START_BAKED = 1.8;
 
+/** Eases a level from `from` to `to` over DIM_IN_MS, the same way the lit curtain dims in. */
+export function easeLevel(from: number, to: number, elapsedMs: number): number {
+  const t = Math.min(1, Math.max(0, elapsedMs / DIM_IN_MS));
+  if (t >= 1) return to;
+  const eased = t * t * (3 - 2 * t);
+  return from + (to - from) * eased;
+}
+
 /**
  * The `baked` level for a lit curtain that has been up for `upForMs`
- * (null: not up yet). It starts at DIM_START_BAKED and eases down to the
- * show's own level over DIM_IN_MS. A curtain set brighter than the start
- * level shows at its own level from the first frame.
+ * (null: not up yet). It starts at `from` (DIM_START_BAKED, or the level a
+ * dimmed title background had reached) and eases down to the show's own
+ * level over DIM_IN_MS. A curtain set at or above the start level shows at
+ * its own level from the first frame.
  */
-export function dimmedBaked(target: number, upForMs: number | null): number {
-  if (target >= DIM_START_BAKED) return target;
-  const t = Math.min(1, Math.max(0, (upForMs ?? 0) / DIM_IN_MS));
-  const eased = t * t * (3 - 2 * t);
-  return DIM_START_BAKED + (target - DIM_START_BAKED) * eased;
+export function dimmedBaked(target: number, upForMs: number | null, from: number = DIM_START_BAKED): number {
+  if (target >= from) return target;
+  return easeLevel(from, target, upForMs ?? 0);
 }

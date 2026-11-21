@@ -33,6 +33,8 @@ export type CurtainStageProps = {
   leavingSince?: number | null;
   videoUrl: string | null;
   onUnavailable?: (error: unknown) => void;
+  /** `baked` the fabric dims in from (default DIM_START_BAKED): a dimmed title's level. */
+  dimFrom?: number;
   /** Called once, on the first frame this stage's fabric is on screen. */
   onFabricShown?: () => void;
 };
@@ -202,7 +204,7 @@ export function CurtainStage(props: CurtainStageProps) {
         textOpacity: content ? step.textOpacity : 0,
         cursorOpacity: content ? lit.cursorOpacity(local) : 0,
         // A vote right after another keeps this stage, so only a fresh curtain dims in.
-        fabric: { ...p.treatment.curtain, baked: dimmedBaked(p.treatment.curtain.baked, upAt === null ? null : local - upAt) },
+        fabric: { ...p.treatment.curtain, baked: dimmedBaked(p.treatment.curtain.baked, upAt === null ? null : local - upAt, p.dimFrom) },
         cursors: lit.cursorLights(p.cursorField.renderAt(local), local),
       });
       raf = requestAnimationFrame(frame);
