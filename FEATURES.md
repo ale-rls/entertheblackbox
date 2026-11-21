@@ -86,7 +86,8 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 
 - Operator authentication (30-day session) — **PocketBase** `operators` collection, `apps/server/src/persistence/operator-auth.ts`
 - Live operational status (server/display/playback/participants/session)
-- Active-show scene navigator / live show graph, jump-to-scene, participant dropdown and reassignment — `LiveGraph.tsx`
+- Active-show cue list: Now / Next, the operator's options right now (manual continuation after a loop, endings, variant scenes) with Go buttons, and the whole show in playback order with alternative endings side by side; derived from the published routes — `CueList.tsx`, `cue-list-model.ts`
+- Full scene graph behind "Full graph": live show graph, jump-to-scene, participant dropdown and reassignment — `LiveGraph.tsx`
 - Session controls: start/skip/restart/idle, group-path start, force-reunion
 - Lobby schedule management within the combined session controls panel
 - Active show selection (published/pending, queued-until-show-ends)

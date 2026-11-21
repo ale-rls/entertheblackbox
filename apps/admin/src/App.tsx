@@ -13,6 +13,7 @@ import { ShowClockPanel } from "./ShowClockPanel.js";
 import { DisplaySettingsPanel } from "./DisplaySettingsPanel.js";
 import { RunOfShowPanel } from "./RunOfShowPanel.js";
 import { LiveGraph } from "./LiveGraph.js";
+import { CueList } from "./CueList.js";
 import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import { AudioDiagnostics } from "./AudioDiagnostics";
 import PocketBase from "pocketbase";
@@ -817,10 +818,10 @@ export function App() {
 
         {isActive && <section hidden={activeTab !== "show"} className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
           <div className="admin-section-heading">
-            <div><p className="sc-tool-eyebrow">Live show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Scene navigator</h2></div>
+            <div><p className="sc-tool-eyebrow">Live show navigation</p><h2 ref={flowHeadingRef} id="admin-flow-heading" tabIndex={-1}>Cue list</h2></div>
             <StatusLabel status={isActive && !status.groupPathsStarted ? "success" : "info"}>{status.groupPathsStarted ? "Groups running" : isActive ? "Jump enabled" : "Available during show"}</StatusLabel>
           </div>
-          <ol className="admin-scene-list">{flow?.scenes.filter(scene => scene.id === status.phaseId || flow.scenes.find(current => current.id === status.phaseId)?.routes.some(route => route.target === scene.id)).map(scene => <li key={scene.id}><span>{scene.id === status.phaseId ? "Current" : "Next route"}</span><strong>{scene.title}</strong></li>)}</ol>
+          {flow?.scenes.length ? <CueList flow={flow} status={status} busy={busy} onJump={requestJump} /> : null}
           <details><summary>Full graph &amp; jump</summary>
           {flow?.scenes.length ? <LiveGraph flow={flow} status={status} busy={busy} onJump={requestJump} onAssign={assignGroup} /> : <p className="sc-tool-copy">No scene graph is available from the running show.</p>}</details>
         </section>}
