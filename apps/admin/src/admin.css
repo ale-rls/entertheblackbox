@@ -351,7 +351,7 @@
 .admin-tabs-more > summary::-webkit-details-marker { display: none; }
 .admin-tabs-more > summary::after { content: " ▾"; }
 .admin-tabs-more > summary[aria-pressed=true] { opacity: 1; background: var(--sc-tool-color-action); color: var(--sc-tool-color-text-on-cream); }
-.admin-tabs-more-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 30; display: grid; gap: 4px; min-width: 10rem; padding: 6px; border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-radius: var(--sc-tool-radius-2); background: var(--sc-tool-color-canvas); box-shadow: 0 8px 24px rgb(0 0 0 / .4); }
+.admin-tabs-more-menu { position: absolute; inset-inline-end: 0; top: calc(100% + 4px); z-index: 30; display: grid; gap: 4px; min-width: 10rem; padding: 6px; border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-radius: var(--sc-tool-radius-2); background: var(--sc-tool-color-canvas); box-shadow: var(--sc-tool-shadow-2); }
 .admin-tabs-more-menu .sc-tool-button { width: 100%; justify-content: flex-start; }
 
 /* Phones: a compact sticky bar (one row of tabs that scrolls sideways), and wide tables scroll inside their panel instead of being cut off. */
