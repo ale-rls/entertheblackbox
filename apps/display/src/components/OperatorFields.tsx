@@ -2,9 +2,9 @@ import type { OperatorFields as OperatorFieldsConfig } from "@entertheblackbox/s
 
 const LIT_DEFAULT = "#fff4e0";
 
-/** The hack's counter as the script writes it, on the main display and M1–M4. */
-export function checkpointText(count: number, total: number): string {
-  return `Checkpoints: ${count}/${total}`;
+/** The operator-field counter as the script writes it, on the main display and M1–M4. */
+export function checkpointText(count: number, total: number, label = "Checkpoints"): string {
+  return `${label}: ${count}/${total}`;
 }
 
 /**
@@ -27,6 +27,6 @@ export function OperatorFields({ fields, state }: { fields: OperatorFieldsConfig
         </g>;
       })}
     </svg>
-    {fields.total !== undefined && <div className="operator-fields-count">{checkpointText(state?.count ?? 0, fields.total)}</div>}
+    {fields.total !== undefined && <div className="operator-fields-count">{checkpointText(state?.count ?? 0, fields.total, fields.counterLabel)}</div>}
   </div>;
 }

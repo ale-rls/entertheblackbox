@@ -176,6 +176,8 @@ export const operatorFieldsSchema = z.object({
     .min(2, "operator fields need at least two zones").max(8)
     .refine((zones) => new Set(zones.map((zone) => zone.id)).size === zones.length, { message: "zone ids must be unique" }),
   total: z.number().int().positive().max(99).optional(),
+  /** Name of the counter on the main display and M1–M4 ("Checkpoints" when unset). */
+  counterLabel: z.string().trim().min(1).max(40).optional(),
 });
 export type OperatorFields = z.infer<typeof operatorFieldsSchema>;
 
