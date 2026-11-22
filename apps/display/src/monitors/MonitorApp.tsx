@@ -115,7 +115,7 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
       {state.connection !== "open" && <p>Waiting for server cues. The last received cue stays on its original clock.</p>}
       {(error || state.notice) && <p role="alert">{error || state.notice?.message}</p>}
     </aside>}
-    {phase?.kind === "video" && phase.operatorFields?.total !== undefined && <div className="monitor-checkpoints">{checkpointText(phase.operatorField?.count ?? 0, phase.operatorFields.total)}</div>}
+    {phase?.kind === "video" && phase.operatorFields?.total !== undefined && <div className="monitor-checkpoints">{checkpointText(phase.operatorField?.count ?? 0, phase.operatorFields.total, phase.operatorFields.counterLabel)}</div>}
     <div className="display-controls"><FullscreenControl /></div>
   </main>;
 }
