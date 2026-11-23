@@ -1,13 +1,11 @@
 import { monitorIdSchema } from "@entertheblackbox/scenario";
 import { createRoot } from "react-dom/client";
-import { applyDisplayFit, trackIntrinsicSize } from "./lib/displayFit.js";
+import { applyDisplayFit, trackDisplayFit } from "./lib/displayFit.js";
 import { resolveInstallationFromWindow } from "./lib/resolveInstallation.js";
 import "./style.css";
 
 async function bootstrap(): Promise<void> {
-  if (applyDisplayFit(document.documentElement, location.search) === "intrinsic") {
-    trackIntrinsicSize(document, document.documentElement, () => window.devicePixelRatio);
-  }
+  trackDisplayFit(applyDisplayFit(document.documentElement, location.search), document, document.documentElement, () => window.devicePixelRatio);
   // App.js is imported dynamically, after this resolves, so its
   // module-level config sees the resolved installation/room -- see
   // resolveInstallation.ts.

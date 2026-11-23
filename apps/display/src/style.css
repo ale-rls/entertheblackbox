@@ -56,6 +56,12 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 :root[data-fit="width"] .display-root { flex: none; width: 100vw; height: calc(100vw * 9 / 16); }
 /* `?fit=intrinsic`: the media's own pixel size (set from lib/displayFit.ts), centred and cropped by the window. */
 :root[data-fit="intrinsic"] .display-root { flex: none; width: var(--intrinsic-width, 1920px); height: var(--intrinsic-height, 1080px); }
+/* `?fit=adaptive`: the media's aspect ratio (--media-aspect, width / height, set from lib/displayFit.ts), scaled to cover the window. */
+:root[data-fit="adaptive"] .display-root {
+  flex: none;
+  width: max(100vw, calc(100vh * var(--media-aspect, 1.7778)));
+  height: max(100vh, calc(100vw / var(--media-aspect, 1.7778)));
+}
 .layer { position: absolute; inset: 0; }
 /* Its own stacking context: nothing in the video layer (e.g. a scene loop) can rise above the curtain, glow, UI or cursor layers. */
 .layer-video { z-index: 0; }
