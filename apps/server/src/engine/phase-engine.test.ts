@@ -394,7 +394,8 @@ describe("PhaseEngine lifecycle", () => {
         { kind: "idle", id: "idle" },
         { kind: "video", id: "intro", src: "intro.mp4", expectedDurationMs: 100, next: "title" },
         { kind: "narration", id: "title", text: "THEATERARBEIT", loopVideoSrc: "loop.mp4", durationMs: 100, next: "hold" },
-        { kind: "narration", id: "hold", text: " ", loopVideoSrc: "loop.mp4", durationMs: 100, next: "idle" },
+        { kind: "narration", id: "hold", text: " ", loopVideoSrc: "loop.mp4", showCursors: false, durationMs: 100, next: "cursors" },
+        { kind: "narration", id: "cursors", text: " ", loopVideoSrc: "loop.mp4", durationMs: 100, next: "idle" },
       ],
     });
     const { engine } = setup({ now: () => now, testScenario: titleScenario });
@@ -403,8 +404,13 @@ describe("PhaseEngine lifecycle", () => {
     now += 150;
     engine.adminSkip(now);
     expect(engine.getSnapshot().id).toBe("title");
-    // A blank scene over the loop is not a title.
+    // A blank scene over the loop without cursors is not a title.
     expect(engine.getSnapshot().nextTitleBackdrop).toBeUndefined();
+    now += 150;
+    engine.adminSkip(now);
+    expect(engine.getSnapshot().id).toBe("hold");
+    // Cursors over a loop dim it like a vote, so the scene before dims into it.
+    expect(engine.getSnapshot().nextTitleBackdrop).toBe(true);
   });
 
   it("tells the display when the next scene is a vote over the open curtain, not a curtain-light one", () => {
