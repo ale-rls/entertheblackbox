@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyDisplayFit, intrinsicFrameSize, mediaPixelSize, parseDisplayFit, trackIntrinsicSize } from "./displayFit.js";
+import { applyDisplayFit, intrinsicFrameSize, mediaPixelSize, parseDisplayFit, trackAdaptiveAspect, trackDisplayFit, trackIntrinsicSize } from "./displayFit.js";
 
 describe("display fit", () => {
   it("defaults to the media's own pixel size", () => {
@@ -8,7 +8,7 @@ describe("display fit", () => {
   });
 
   it("accepts each supported mode", () => {
-    for (const fit of ["contain", "height", "width", "intrinsic"]) expect(parseDisplayFit(`?group=a&fit=${fit}`)).toBe(fit);
+    for (const fit of ["contain", "height", "width", "intrinsic", "adaptive"]) expect(parseDisplayFit(`?group=a&fit=${fit}`)).toBe(fit);
   });
 
   it("marks the document root for the stylesheet", () => {
@@ -44,5 +44,39 @@ describe("display fit", () => {
     listeners.load!(media(true, { tagName: "IMG", naturalWidth: 1280, naturalHeight: 720 }));
     expect(vars).toEqual({ "--intrinsic-width": "1280px", "--intrinsic-height": "720px" });
     stop(); expect(listeners).toEqual({});
+  });
+
+  const fakeDoc = () => {
+    const listeners: Record<string, (event: Event) => void> = {};
+    const doc = { addEventListener: (type: string, fn: (event: Event) => void) => { listeners[type] = fn; }, removeEventListener: (type: string) => { delete listeners[type]; } };
+    return { doc, listeners };
+  };
+  const fakeRoot = () => {
+    const vars: Record<string, string> = {};
+    return { vars, root: { style: { setProperty: (name: string, value: string) => { vars[name] = value; } } } };
+  };
+  const inLayer = (extra: object) => ({ target: { closest: () => ({}), ...extra } }) as unknown as Event;
+
+  it("adaptive gives the frame the media's aspect ratio, starting at 16:9", () => {
+    const { doc, listeners } = fakeDoc();
+    const { vars, root } = fakeRoot();
+    const stop = trackAdaptiveAspect(doc as never, root as never);
+    expect(Number(vars["--media-aspect"])).toBeCloseTo(16 / 9);
+    listeners.playing!(inLayer({ tagName: "VIDEO", videoWidth: 1920, videoHeight: 1200 }));
+    expect(Number(vars["--media-aspect"])).toBeCloseTo(1.6);
+    listeners.load!(inLayer({ tagName: "IMG", naturalWidth: 640, naturalHeight: 360 }));
+    expect(Number(vars["--media-aspect"])).toBeCloseTo(16 / 9);
+    expect(vars["--intrinsic-width"]).toBeUndefined();
+    stop(); expect(listeners).toEqual({});
+  });
+
+  it("tracks media only for the fits that follow it", () => {
+    for (const [fit, tracked] of [["intrinsic", true], ["adaptive", true], ["contain", false], ["height", false], ["width", false]] as const) {
+      const { doc, listeners } = fakeDoc();
+      const { root } = fakeRoot();
+      const stop = trackDisplayFit(fit, doc as never, root as never, () => 1);
+      expect(Object.keys(listeners).length > 0).toBe(tracked);
+      stop(); expect(listeners).toEqual({});
+    }
   });
 });
