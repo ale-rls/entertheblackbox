@@ -803,7 +803,7 @@ export function App() {
       {connectedToken && status?.admission && activeTab === 'tasks' && <AdmissionPrograms token={connectedToken} state={status.admission} participants={status.participants} groups={status.groups ?? []} />}
       {connectedToken && status?.tasks && activeTab === 'tasks' && <ParticipantTasks token={connectedToken} state={status.tasks} sessionId={status.sessionId ?? ''} phaseId={status.phaseId ?? ''} phaseEpoch={status.phaseEpoch ?? 0} participants={status.participants} refresh={tasks => setStatus(current => current ? { ...current, tasks } : current)} />}
       {connectedToken && status && activeTab === "instrument" && !audioOnly && <SurfaceInstrument token={connectedToken} participants={status.participants.filter((participant) => participant.client !== "web").map((participant) => ({ ...participant, name: participant.deviceLabel ?? participant.name }))} />}
-      {connectedToken && status && activeTab === "instrument" && !audioOnly && <MonitorBackgrounds token={connectedToken} colors={status.monitorBackgrounds ?? {}} onChange={(monitorBackgrounds) => setStatus(current => current ? { ...current, monitorBackgrounds } : current)} />}
+      {connectedToken && activeTab === "instrument" && !audioOnly && <CursorSizes token={connectedToken} scenes={flow?.scenes ?? []} currentSceneId={status?.phaseId ?? null} />}
       {connectedToken && activeTab === "wall" && !audioOnly && <VideoWall key={connectedToken} token={connectedToken} pocketbaseUrl={POCKETBASE_URL} />}
       {status && (activeTab === "devices" || audioOnly) && <ShowClockPanel clock={clock} status={status} stale={statusStale} receivedAt={statusReceivedAt} />}
 

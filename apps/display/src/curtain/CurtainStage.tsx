@@ -44,7 +44,19 @@ export type CurtainStageProps = {
   dimFrom?: number;
   /** Called once, on the first frame this stage's fabric is on screen. */
   onFabricShown?: () => void;
+  /** Fraction of the width kept clear of text on each side (display settings). */
+  textSafeArea?: number;
 };
+
+/**
+ * Where a centred label of `textWidth` goes so it stays inside the side safe area:
+ * its pool's centre, moved inward just enough when the word would cross the edge.
+ */
+export function safeLabelX(x: number, textWidth: number, width: number, safe: number): number {
+  const left = width * safe + textWidth / 2;
+  const right = width * (1 - safe) - textWidth / 2;
+  return left > right ? width / 2 : Math.min(right, Math.max(left, x));
+}
 
 /** Fit text into maxWidth by shrinking, never by wrapping. */
 function fitFont(ctx: CanvasRenderingContext2D, text: string, size: number, maxWidth: number): number {
@@ -66,7 +78,7 @@ function paint(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
   ctx.shadowBlur = 0;
 }
 
-function drawText(canvas: HTMLCanvasElement, question: string, scene: CurtainScene): void {
+function drawText(canvas: HTMLCanvasElement, question: string, scene: CurtainScene, safe: number): void {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const { width, height } = canvas;
@@ -86,16 +98,17 @@ function drawText(canvas: HTMLCanvasElement, question: string, scene: CurtainSce
   ctx.stroke();
   ctx.restore();
   ctx.textAlign = "center";
-  // Title: centre top, 4.2% of width, top edge at 5% of height, at most 88% wide.
+  // Title: centre top, 4.2% of width, top edge at 5% of height, at most 88% wide and inside the safe area.
   ctx.textBaseline = "top";
-  const titleSize = fitFont(ctx, question, width * 0.042, width * 0.88);
+  const titleSize = fitFont(ctx, question, width * 0.042, Math.min(width * 0.88, width * (1 - 2 * safe)));
   paint(ctx, question, width / 2, height * 0.05, titleSize);
   // Answer words: 2.8% of width, centred on each pool, at most 24% wide. All answers share
   // one size, the one the longest needs, so a long answer never looks quieter than a short one.
   ctx.textBaseline = "middle";
   const labelSize = Math.min(width * 0.028, ...scene.labels.map((label) => fitFont(ctx, label.text, width * 0.028, width * 0.24)));
   ctx.font = `700 ${labelSize}px ${FONT}`;
-  for (const label of scene.labels) paint(ctx, label.text, label.x * width, label.y * height, labelSize);
+  // Labels near the left or right edge (the ends of a scale) move inward to stay inside the safe area.
+  for (const label of scene.labels) paint(ctx, label.text, safeLabelX(label.x * width, ctx.measureText(label.text).width, width, safe), label.y * height, labelSize);
 }
 
 /**
@@ -127,6 +140,7 @@ export function CurtainStage(props: CurtainStageProps) {
     }
     const text = document.createElement("canvas");
     let textDirty = true;
+    let drawnSafe = -1;
     const markText = () => { textDirty = true; };
     void document.fonts?.ready.then(markText);
 
@@ -199,8 +213,10 @@ export function CurtainStage(props: CurtainStageProps) {
         textDirty = true;
       }
       renderer.resize(width, height);
+      const safe = p.textSafeArea ?? 0;
+      if (safe !== drawnSafe) { drawnSafe = safe; textDirty = true; }
       if (textDirty) {
-        drawText(text, shown.question, shown.scene);
+        drawText(text, shown.question, shown.scene, safe);
         renderer.uploadText(text);
         textDirty = false;
       }
@@ -230,6 +246,7 @@ export function CurtainStage(props: CurtainStageProps) {
         // A vote right after another keeps this stage, so only a fresh curtain dims in.
         fabric: { ...p.treatment.curtain, baked: dimmedBaked(p.treatment.curtain.baked, upAt === null ? null : local - upAt, p.dimFrom) },
         cursors: lit.cursorLights(p.cursorField.renderAt(local), local),
+        cursorSize: p.cursorSize ?? 1,
       });
       raf = requestAnimationFrame(frame);
     };

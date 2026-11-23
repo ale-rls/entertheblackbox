@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, resolveSignageVideoUrl, resolveWaitingVideoUrl, waitingVideoUrlSchema } from "./platform-settings.js";
+import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, resolveCursorSize, resolveSignageVideoUrl, resolveWaitingVideoUrl, waitingVideoUrlSchema } from "./platform-settings.js";
 
 describe("waiting display settings", () => {
   it("loads existing saved text without requiring a migration", () => {
@@ -22,5 +22,13 @@ describe("waiting display settings", () => {
   it("accepts hosted videos but rejects unsafe or malformed URL schemes", () => {
     for (const url of ["", "/media/lobby.mp4", "https://example.org/lobby.webm"]) expect(waitingVideoUrlSchema.safeParse(url).success).toBe(true);
     for (const url of ["javascript:alert(1)", "file:///secret.mp4", "//example.org/video", "/\\example.org/video", " https://example.org/video", "relative.mp4"]) expect(waitingVideoUrlSchema.safeParse(url).success).toBe(false);
+  });
+});
+
+describe("text safe area", () => {
+  it("defaults older stored settings to 5% and rejects more than 20%", () => {
+    const { textSafeArea: _safe, ...older } = DEFAULT_DISPLAY_SETTINGS;
+    expect(displaySettingsSchema.parse(older).textSafeArea).toBe(0.05);
+    expect(displaySettingsSchema.safeParse({ ...older, textSafeArea: 0.3 }).success).toBe(false);
   });
 });

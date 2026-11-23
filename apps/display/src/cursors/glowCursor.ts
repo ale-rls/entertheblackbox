@@ -46,6 +46,8 @@ export function glowSprites(
   height: number,
   now: number,
   opacity: (cursor: GlowCursorInput) => number,
+  /** Admin cursor size (1 = normal). */
+  size = 1,
 ): GlowSprite[] {
   return cursors.flatMap((cursor) => {
     const fade = opacity(cursor);
@@ -54,7 +56,7 @@ export function glowSprites(
     return [{
       cx: cursor.x * width,
       cy: cursor.y * height,
-      radius: CORE_RADIUS * height * (1 + 1.2 * pulse),
+      radius: CORE_RADIUS * height * (1 + 1.2 * pulse) * size,
       tint: glowTint(cursor.color),
       amount: GLOW_CORE * (1 + 1.6 * pulse) * fade,
     }];

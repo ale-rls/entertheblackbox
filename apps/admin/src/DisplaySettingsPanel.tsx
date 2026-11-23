@@ -88,6 +88,8 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
         <p className="sc-tool-help">Use {"{wifi}"} for the configured Wi-Fi name, or write the network name directly. Leave blank to hide this line.</p>
         <label className="sc-tool-label">Joining instructions<textarea className="sc-tool-field" rows={3} value={value.joinInstructions} maxLength={600} onChange={(e) => edit({ joinInstructions: e.target.value })} /></label>
         <label className="sc-tool-checkbox"><input type="checkbox" checked={value.showJoinUrl} onChange={(e) => edit({ showJoinUrl: e.target.checked })} />Show the phone join URL</label>
+        <label className="sc-tool-label">Side safe area for vote text (% of width on each side)<input className="sc-tool-field" type="number" min="0" max="20" step="0.5" value={Math.round(value.textSafeArea * 1000) / 10} onChange={(e) => { const percent = Number(e.target.value); if (Number.isFinite(percent)) edit({ textSafeArea: Math.min(20, Math.max(0, percent)) / 100 }); }} /></label>
+        <p className="sc-tool-help">Curtain questions and answer labels, and scale end labels, stay this far from the left and right edge of the projection.</p>
         <h3>Lobby and waiting video</h3>
         <p className="sc-tool-help">Choose a video from the shared media library. It loops muted while a display waits in the lobby or between group paths. Add videos in Studio → Media library.</p>
         {libraryLoading && <p role="status">Loading media library…</p>}

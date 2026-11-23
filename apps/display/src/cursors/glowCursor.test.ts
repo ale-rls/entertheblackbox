@@ -54,3 +54,13 @@ describe("glow cursors", () => {
     expect(ctx.drawImage).toHaveBeenCalledWith(expect.anything(), 40, 30, 20, 20);
   });
 });
+
+describe("cursor size", () => {
+  it("scales the glow radius by the Admin cursor size", () => {
+    const cursor = { x: 0.5, y: 0.5, color: "#ffffff", ghost: false };
+    const [normal] = glowSprites([cursor], 1920, 1080, 0, () => 1);
+    const [large] = glowSprites([cursor], 1920, 1080, 0, () => 1, 2.5);
+    expect(large!.radius).toBeCloseTo(normal!.radius * 2.5);
+    expect(large!.amount).toBe(normal!.amount);
+  });
+});

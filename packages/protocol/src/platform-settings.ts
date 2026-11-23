@@ -10,6 +10,10 @@ export const waitingVideoUrlSchema = z.string().max(2048).refine((value) => {
 }, "Use an HTTP(S) video URL or a same-origin path starting with /.");
 
 /** Public display copy and waiting video settings. */
+export const CURSOR_SIZE_MIN = 0.5;
+export const CURSOR_SIZE_MAX = 4;
+const cursorSizeSchema = z.number().min(CURSOR_SIZE_MIN).max(CURSOR_SIZE_MAX);
+
 export const displaySettingsSchema = z.object({
   phoneSurfaceColor: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Use a six-digit hex color").default("#000000"),
   heading: z.string().max(160),
@@ -37,6 +41,13 @@ export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   signageVideoUrls: {},
   hackCheckpoints: null,
 };
+
+/** The cursor size for a scene: its own size from Admin, else the default. */
+export function resolveCursorSize(settings: Pick<DisplaySettings, "cursorSize" | "cursorSizeByScene">, phaseId: string | null | undefined): number {
+  return phaseId != null && Object.hasOwn(settings.cursorSizeByScene, phaseId)
+    ? settings.cursorSizeByScene[phaseId]!
+    : settings.cursorSize;
+}
 
 /** Missing group overrides inherit; an explicit empty override keeps that display black. */
 export function resolveWaitingVideoUrl(settings: DisplaySettings, groupId?: string): string {

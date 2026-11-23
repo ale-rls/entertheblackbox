@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { backdropDimPlan, isDimmedBackdrop, isPictureOnlyClip, isTitleBackdrop, isVoteBackdrop } from "./backdropDim.js";
+import { backdropDimPlan, isCursorBackdrop, isDimmedBackdrop, isPictureOnlyClip, isTitleBackdrop, isVoteBackdrop } from "./backdropDim.js";
 
 const title = { kind: "narration", text: "THEATERARBEIT", title: "3. Trainingsepoche", loopVideoSrc: "loop.mp4" };
-const scene = { kind: "video", audioSrc: "voice.mp3", loopVideoSrc: "loop.mp4" };
+const scene = { kind: "video", audioSrc: "voice.mp3", loopVideoSrc: "loop.mp4", showCursors: false };
 const closing = { kind: "video" };
 const openVote = { kind: "video-position-question", audioSrc: "voice.mp3", loopVideoSrc: "open-loop.mp4" };
 
@@ -66,5 +66,21 @@ describe("backdropDimPlan", () => {
   it("holds the dim through a curtain closing after a title and lifts it at the end", () => {
     expect(backdropDimPlan(closing, true, false)).toEqual({ start: true, end: false });
     expect(backdropDimPlan(closing, false, false)).toEqual({ start: false, end: false });
+  });
+});
+
+describe("isCursorBackdrop", () => {
+  const loop = "curtain-open-loop.mp4";
+  it("dims a scene that shows cursors over its loop, like a vote, so the glow looks the same", () => {
+    expect(isCursorBackdrop({ kind: "video", loopVideoSrc: loop })).toBe(true);
+    expect(isCursorBackdrop({ kind: "video", loopVideoSrc: loop, showCursors: true })).toBe(true);
+    expect(isCursorBackdrop({ kind: "narration", loopVideoSrc: loop })).toBe(true);
+    expect(backdropDimPlan({ kind: "video", loopVideoSrc: loop, audioSrc: "a.mp3" }, true, false)).toEqual({ start: true, end: true });
+  });
+  it("leaves scenes without cursors, without a loop, or opted out at full brightness", () => {
+    expect(isCursorBackdrop({ kind: "video", loopVideoSrc: loop, showCursors: false })).toBe(false);
+    expect(isCursorBackdrop({ kind: "video", loopVideoSrc: loop, keepLoopBright: true })).toBe(false);
+    expect(isCursorBackdrop({ kind: "video" })).toBe(false);
+    expect(isDimmedBackdrop({ kind: "video", loopVideoSrc: loop, keepLoopBright: true })).toBe(false);
   });
 });
