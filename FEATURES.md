@@ -78,7 +78,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Heartbeat / reconnect resilience (surfaced in Admin) — `lib/heartbeat.ts`, `lib/connection.ts`, `lib/backoff.ts`
 - Service-worker app shell (known stale-bundle gotcha — see README) — `apps/display` build
 - Kiosk mode / fullscreen control — `lib/kiosk.ts`, `FullscreenControl.tsx`
-- Screen fit for non-16:9 screens: the 16:9 frame letterboxes by default; `?fit=height` fills the height and crops the sides (e.g. a 4:3 rehearsal projector), `?fit=width` fills the width and crops top/bottom. Works on main, group and signage displays; M1–M4 monitors ignore it — `lib/displayFit.ts`, `style.css`
+- Screen fit for non-16:9 screens: the 16:9 frame letterboxes by default; `?fit=height` fills the height and crops the sides (e.g. a 4:3 rehearsal projector), `?fit=width` fills the width and crops top/bottom, `?fit=intrinsic` shows the media at its own pixel size (1 media pixel per device pixel, sized from the video playing or still loaded in the media layer), centred and cropped by the window. Works on main, group and signage displays; M1–M4 monitors ignore it — `lib/displayFit.ts`, `style.css`
 - Video playback diagnostics (stalled/error/autoplay-blocked → Admin) — `media/useVideoPlaybackDiagnostics.ts`
 - Vote decision sound / crowd reaction audio — `VoteDecisionSound.tsx`, `CrowdReactionSounds.tsx`
 - Configurable display text (join heading, countdown wording, instructions) — `lib/useDisplaySettings.ts`, stored in **PocketBase**, edited via `apps/admin/src/DisplaySettingsPanel.tsx`
