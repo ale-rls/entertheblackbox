@@ -600,6 +600,33 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
         <p className="sc-tool-copy field-hint">Without a group track, listeners use the default. Without either, they hear no scene audio.</p>
       </details>}
     </fieldset>}
+    {phase.kind !== "idle" && phase.kind !== "group-branch" && (() => {
+      const music = phase.phoneMusic;
+      const tracks = [...new Set([...project.manifest.files, ...localMedia].map((file) => file.src).filter((src) => /\.mp3$/i.test(src)))].sort();
+      const mode = !music ? "keep" : "stop" in music ? "stop" : "play";
+      const set = (next: typeof music) => { const { phoneMusic: _old, ...rest } = phase; onChange((next ? { ...rest, phoneMusic: next } : rest) as Phase); };
+      return <fieldset><legend>Tablet music <small>phoneMusic</small></legend>
+        <p className="sc-tool-copy field-hint">Looping music on the tablets from this scene on, under the headphone audio. Scenes set to “keep” leave it as it is. A show without any tablet music here keeps the show-wide background music instead.</p>
+        <label className="sc-tool-label">From this scene<select className="sc-tool-select" value={mode} onChange={(event) => {
+          const value = event.target.value;
+          set(value === "keep" ? undefined : value === "stop" ? { stop: true } : { src: tracks[0] ?? "" });
+        }}>
+          <option value="keep">Keep what plays</option>
+          <option value="play" disabled={!tracks.length}>Play a track</option>
+          <option value="stop">Stop the music</option>
+        </select></label>
+        {music && "src" in music && <>
+          <label className="sc-tool-label">Track<select className="sc-tool-select" value={music.src} onChange={(event) => set({ ...music, src: event.target.value })}>
+            {tracks.map((src) => <option key={src} value={src}>{src}</option>)}
+          </select></label>
+          <label className="sc-tool-label">Volume (empty = show default)<input className="sc-tool-field" type="number" min="0.05" max="1" step="0.05" value={music.volume ?? ""} onChange={(event) => {
+            const { volume: _volume, ...rest } = music; const value = Number(event.target.value);
+            set(event.target.value !== "" && value > 0 ? { ...rest, volume: Math.min(1, value) } : rest);
+          }} /></label>
+          {!localMedia.some((file) => file.src === music.src) && <p className="field-error" role="alert">This file is missing from the shared media library. Choose a replacement.</p>}
+        </>}
+      </fieldset>;
+    })()}
     {phase.kind !== "idle" && phase.kind !== "group-branch" && <TabletTextFields phase={phase} groups={project.scenario.groups ?? []} onChange={onChange} />}
     <MonitorEditor phase={phase} onChange={onChange} onChooseMedia={onChooseMedia} />
     <ScriptCueEditor phase={phase} script={project.scenario.actorScript} onChange={onChange} />

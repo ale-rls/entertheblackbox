@@ -385,6 +385,8 @@ export class PhaseEngine {
    * without a jump through the following scenes that share it.
    */
   private loopStartedAt: number | null = null;
+  /** Scene music the tablets play now (the last scene that set `phoneMusic`); null = silent. */
+  private phoneMusicNow: { src: string; volume?: number } | null = null;
 
   get lifecycleState(): EngineLifecycle {
     return this.lifecycle;
@@ -1813,6 +1815,9 @@ export class PhaseEngine {
     this.questionResolutionTarget = null;
     this.displayPlaybackIssue = null;
     this.phaseId = target;
+    if (reason === "session-start" || reason === "admin-restart" || reason === "rehearsal-start" || phase.kind === "idle") this.phoneMusicNow = null;
+    const music = "phoneMusic" in phase ? phase.phoneMusic : undefined;
+    if (music) this.phoneMusicNow = "stop" in music ? null : { src: music.src, ...(music.volume === undefined ? {} : { volume: music.volume }) };
     this.phaseStartedAt = now + (phase.kind === "video" && phase.phoneAudioMode === "synchronized" ? phase.syncLeadMs ?? 3000 : 0);
     const loopSrc = loopVideoSrcOf(phase);
     this.loopStartedAt = loopSrc === undefined ? null
@@ -2403,6 +2408,8 @@ export class PhaseEngine {
       child.sessionStartedAt = this.sessionStartedAt;
       // One session-wide record of vote winners: task audio after the reunion follows a vote cast inside a path.
       child.taskVoteWinners = this.taskVoteWinners;
+      // A group path starts with the music that plays now; its own scenes can change it.
+      child.phoneMusicNow = this.phoneMusicNow;
       child.monitorVoteResults = { ...inheritedMonitorVotes.monitorVoteResults };
       child.lastMonitorVotePhaseId = inheritedMonitorVotes.lastMonitorVotePhaseId;
       // Attach before entering: transition frames and votes go only to this roster.
@@ -2614,6 +2621,7 @@ export class PhaseEngine {
       const tabletScript = participantState === "unassigned" || participantState === "finished" || phase.kind === "idle" || phase.kind === "group-branch"
         ? null : this.tabletScriptFor(phase.id, phase.tabletScript, currentGroup?.id ?? null);
       socket.send(encodeMessage({ ...message, currentGroup, participantState, phoneAudioActive,
+        ...(usesPhoneMusic(this.scenario) ? { phoneMusic: this.phoneMusicNow } : {}),
         ...(tabletScript ? { tabletScript } : {}),
         routingEpoch: this.path?.routingEpochFor(id) ?? this.routingEpochs.get(id) ?? 0 }));
     } else socket.send(encodeMessage(message));
@@ -2622,6 +2630,14 @@ export class PhaseEngine {
   private close(socket: WebSocket, code: number, reason: string): void {
     if (isOpen(socket)) socket.close(code, reason);
   }
+}
+
+const phoneMusicShows = new WeakMap<object, boolean>();
+/** Whether any scene sets tablet music; otherwise apps keep the show-wide background loop. */
+function usesPhoneMusic(scenario: { phases: Phase[] }): boolean {
+  let uses = phoneMusicShows.get(scenario);
+  if (uses === undefined) { uses = scenario.phases.some((phase) => "phoneMusic" in phase && phase.phoneMusic !== undefined); phoneMusicShows.set(scenario, uses); }
+  return uses;
 }
 
 /** A scene's background loop, for the kinds that have one. */

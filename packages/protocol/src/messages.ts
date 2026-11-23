@@ -1,6 +1,7 @@
 import { admissionProgramSchema } from '@entertheblackbox/scenario';
 import { participantTaskSchema, taskRecipientSchema } from '@entertheblackbox/scenario';
 import { monitorIdSchema } from '@entertheblackbox/scenario';
+
 import { z } from "zod";
 import {
   audienceGroupSchema,
@@ -74,6 +75,9 @@ const tabletScriptExcerptSchema = z.object({
   paragraphs: z.array(z.string()).max(2_000),
   speaker: z.string().max(60).optional(),
 });
+
+/** Tablet music the participant's app should play now (scene music); null = silent. Absent when the show uses no scene music. */
+const phoneMusicNowSchema = z.object({ src: z.string().min(1), volume: z.number().positive().max(1).optional() }).nullable().optional();
 
 export const phaseSnapshotSchema = z.intersection(
   phaseSchema,
@@ -381,6 +385,7 @@ export const snapshotSchema = z.object({
   currentGroup: audienceGroupSchema.nullable().optional(),
   participantState: z.enum(["choosing", "unassigned", "active", "finished"]).optional(),
   phoneAudioActive: z.boolean().optional(),
+  phoneMusic: phoneMusicNowSchema,
   /** Actor script excerpt for this participant only; never sent to groups the scene does not name. */
   tabletScript: tabletScriptExcerptSchema.optional(),
   phaseEpoch: z.number().int().nonnegative(),
@@ -396,6 +401,7 @@ export const phaseMessageSchema = z.object({
   currentGroup: audienceGroupSchema.nullable().optional(),
   participantState: z.enum(["choosing", "unassigned", "active", "finished"]).optional(),
   phoneAudioActive: z.boolean().optional(),
+  phoneMusic: phoneMusicNowSchema,
   /** Actor script excerpt for this participant only; never sent to groups the scene does not name. */
   tabletScript: tabletScriptExcerptSchema.optional(),
   phaseEpoch: z.number().int().nonnegative(),

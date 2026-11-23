@@ -31,7 +31,8 @@ export async function prepareScenario(input: unknown, mediaDirectory: string, ba
   const sources = [...new Set([...admissionSources(scenario.admission), ...taskAudioSources(scenario.participantTasks),...(music ? [music.src] : []), ...scenario.phases.flatMap(phase => {
     if (phase.kind === 'idle') return [];
     if (phase.kind === 'group-branch') return phase.branches.flatMap(b => b.phoneAudioSrc ? [b.phoneAudioSrc] : []);
-    return [...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []), ...Object.values(phase.phoneAudioByGroup ?? {})];
+    return [...(phase.phoneAudioSrc ? [phase.phoneAudioSrc] : []), ...Object.values(phase.phoneAudioByGroup ?? {}),
+      ...(phase.phoneMusic && 'src' in phase.phoneMusic ? [phase.phoneMusic.src] : [])];
   })])].sort();
   const files: ShowManifest['files'] = [];
   // Immutable content-addressed files prevent an edited source corrupting an older show release.
