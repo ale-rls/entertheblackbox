@@ -99,7 +99,9 @@ export class ShowPlayer {
   startMusic() {
     // Admission/reconnection must not override an explicit participant pause; the native
     // scheduler keeps new layers paused until resume.
-    if (this.musicStarted || this.disposed || (!this.bedUri && !this.sceneMusicMode)) return;
+    // Start even without a show-wide bed: scene music usually arrives after the join, and it only
+    // plays once music has been started.
+    if (this.musicStarted || this.disposed) return;
     this.musicStarted = true;
     if (this.sceneMusicMode) this.applySceneMusic(); else this.applyMusic();
   }

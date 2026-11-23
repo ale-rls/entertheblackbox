@@ -203,6 +203,14 @@ describe('scene music', () => {
     expect(scheduler.setLayer).toHaveBeenLastCalledWith('bed:datsch.mp3', { uri: 'file://e.mp3', loop: true, volume: 0.9 });
     expect(scheduler.fadeOutLayer).toHaveBeenCalledOnce();
   });
+  it('plays scene music that arrives after joining a show without background music', async () => {
+    const p = sceneSetup(); p.startMusic(); await p.settled();
+    expect(scheduler.setLayer).not.toHaveBeenCalled();
+    p.setSceneMusic(null); await p.settled();
+    expect(scheduler.setLayer).not.toHaveBeenCalled();
+    p.setSceneMusic({ src: 'chords.mp3' }); await p.settled();
+    expect(scheduler.setLayer).toHaveBeenCalledWith('bed:chords.mp3', { uri: 'file://d.mp3', loop: true, volume: 0.7 });
+  });
   it('reports a scene track that is not downloaded instead of playing', async () => {
     const p = sceneSetup(); p.startMusic(); p.setSceneMusic({ src: 'missing.mp3' }); await p.settled();
     expect(scheduler.setLayer).not.toHaveBeenCalled();
