@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Snapshot } from './cues';
-import { countdownAudible, countdownSound, countdownWave, CountdownTicker } from './countdown-sound';
+import { countdownAudible, countdownSeconds, countdownSound, countdownWave, CountdownTicker, displayPingSeconds } from './countdown-sound';
 
 const snapshot = (extra: object = {}) => ({ t: 'snapshot', v: 2, sessionId: 's', phaseEpoch: 1, serverTime: 0,
   phase: { id: 'p', kind: 'narration', text: 'x', durationMs: 1000, next: 'end', scenarioVersion: 'v', startedAt: 0, deadlineAt: 1000 }, ...extra }) as Snapshot;
@@ -45,5 +45,30 @@ describe('audible monitor countdown', () => {
       expect(new DataView(wav.buffer).getUint32(40, true)).toBe(wav.length - 44);
     }
     expect(countdownWave('end').length).toBeGreaterThan(countdownWave('tick').length);
+  });
+});
+
+describe('the display ping seconds', () => {
+  const vote = { id: 'v', kind: 'video-position-question', scenarioVersion: 'v', startedAt: 0, showAtMs: 0, openAtMs: 0, closeAtMs: 30_000, hideAtMs: 33_000, expectedDurationMs: 33_000 };
+  it('counts the last five seconds of a vote even without monitor cues, like the display', () => {
+    expect(displayPingSeconds(vote as never, 20_000)).toBeNull();
+    expect(displayPingSeconds(vote as never, 26_500)).toBe(4);
+    expect(countdownSeconds(snapshot({ phase: vote }), 26_500)).toBe(4);
+    expect(countdownSeconds(snapshot({ phase: vote, currentGroup: { id: 'theater', label: 'Theater', votingMethod: 'phone-cursor' } }), 26_500)).toBeNull();
+  });
+  it('counts a scene countdown only when the display pings it', () => {
+    const scene = (pingSeconds?: number) => ({ id: 's', kind: 'video', src: 'a.mp4', expectedDurationMs: 60_000, scenarioVersion: 'v', startedAt: 0,
+      countdown: { startAtMs: 0, endAtMs: 60_000, ...(pingSeconds === undefined ? {} : { pingSeconds }) } });
+    expect(displayPingSeconds(scene() as never, 57_500)).toBeNull();
+    expect(displayPingSeconds(scene(5) as never, 57_500)).toBe(3);
+  });
+});
+
+describe('the embedded ping', () => {
+  it('decodes to the display’s MP3', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { decodeBase64, PING_MP3_BASE64 } = await import('./ping-sound');
+    const expected = readFileSync(`${process.cwd()}/../display/public/sfx/Ping4.mp3`);
+    expect(Buffer.from(decodeBase64(PING_MP3_BASE64)).equals(expected)).toBe(true);
   });
 });

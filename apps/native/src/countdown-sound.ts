@@ -1,4 +1,4 @@
-import { anyMonitorCountdown } from '@entertheblackbox/scenario';
+import { anyMonitorCountdown, finalMonitorCountdown, monitorCountdown, type MonitorCountdownPhase } from '@entertheblackbox/scenario';
 import type { Snapshot } from './cues';
 
 /**
@@ -16,9 +16,22 @@ export function countdownAudible(s: Snapshot | null): boolean {
   return s.currentGroup?.votingMethod !== 'phone-cursor';
 }
 
-/** The number the monitors show for this participant's scene, or null. */
+/**
+ * The display pings the last seconds of every vote countdown, and of scene countdowns with a ping
+ * (pingSeconds). The app pings the same seconds, plus whatever the M1–M4 monitors count down.
+ */
+export function displayPingSeconds(phase: (MonitorCountdownPhase & { countdown?: { pingSeconds?: number | undefined } | undefined }) | null, now: number): number | null {
+  if (!phase) return null;
+  if ((phase.kind === 'video' || phase.kind === 'narration') && !(phase.countdown?.pingSeconds ?? 0)) return null;
+  return finalMonitorCountdown(monitorCountdown(phase, now));
+}
+
+/** The number this participant's countdown is at: the display's ping countdown or the monitors', or null. */
 export function countdownSeconds(s: Snapshot | null, now: number): number | null {
-  return countdownAudible(s) ? anyMonitorCountdown(s!.phase, now) : null;
+  if (!countdownAudible(s)) return null;
+  const monitors = anyMonitorCountdown(s!.phase, now);
+  const display = displayPingSeconds(s!.phase, now);
+  return monitors === null ? display : display === null ? monitors : Math.max(monitors, display);
 }
 
 /** Only the last numbers tick, so a minute-long countdown is not a minute of beeping. */
