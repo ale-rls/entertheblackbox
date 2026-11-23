@@ -18,6 +18,7 @@ import { StatusIcon, type ToolStatus } from "@entertheblackbox/tool-ui";
 import { AudioDiagnostics } from "./AudioDiagnostics";
 import { flowNeedsReload, serverBootAt } from "./flow-refresh";
 import { HackCheckpoints } from "./HackCheckpoints.js";
+import { CursorSizes } from "./CursorSizes.js";
 import { MonitorBackgrounds, type MonitorBackgroundColors } from "./MonitorBackgrounds.js";
 import PocketBase from "pocketbase";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";

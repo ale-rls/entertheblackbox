@@ -32,3 +32,17 @@ describe("text safe area", () => {
     expect(displaySettingsSchema.safeParse({ ...older, textSafeArea: 0.3 }).success).toBe(false);
   });
 });
+
+describe("cursor size settings", () => {
+  it("defaults older stored settings to normal size and resolves per scene", () => {
+    const { cursorSize: _size, cursorSizeByScene: _byScene, ...older } = DEFAULT_DISPLAY_SETTINGS;
+    const settings = displaySettingsSchema.parse(older);
+    expect(settings.cursorSize).toBe(1);
+    expect(resolveCursorSize(settings, "any")).toBe(1);
+    const sized = displaySettingsSchema.parse({ ...older, cursorSize: 1.25, cursorSizeByScene: { "T5-5-2": 3 } });
+    expect(resolveCursorSize(sized, "T5-5-2")).toBe(3);
+    expect(resolveCursorSize(sized, "other")).toBe(1.25);
+    expect(resolveCursorSize(sized, null)).toBe(1.25);
+    expect(displaySettingsSchema.safeParse({ ...older, cursorSize: 10 }).success).toBe(false);
+  });
+});

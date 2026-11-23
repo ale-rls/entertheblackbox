@@ -44,6 +44,8 @@ export type CurtainStageProps = {
   dimFrom?: number;
   /** Called once, on the first frame this stage's fabric is on screen. */
   onFabricShown?: () => void;
+  /** Cursor size from Admin (1 = normal). */
+  cursorSize?: number;
   /** Fraction of the width kept clear of text on each side (display settings). */
   textSafeArea?: number;
 };

@@ -20,13 +20,13 @@ it("loads saved copy, saves edits and retains them when PocketBase fails", async
     const sent = request.mock.calls.find(([, init]) => init?.method === "PUT")![1]!;
     expect(JSON.parse(String(sent.body)).heading).toBe("New heading");
     expect(sent.headers).toMatchObject({ Authorization: "Bearer operator" });
-    // The checkpoint amount changed meanwhile in Setup survives this save.
-    request.mockResolvedValueOnce(Response.json({ configured: true, display: { ...DEFAULT_DISPLAY_SETTINGS, hackCheckpoints: 8 } }));
+    // Cursor sizes (Instrument) and the checkpoint amount (Setup) changed meanwhile survive this save.
+    request.mockResolvedValueOnce(Response.json({ configured: true, display: { ...DEFAULT_DISPLAY_SETTINGS, hackCheckpoints: 8, cursorSizeByScene: { "T5-5-2": 2 } } }));
     request.mockResolvedValueOnce(Response.json({ configured: true, display: { ...DEFAULT_DISPLAY_SETTINGS, heading: "New heading" } }));
     await act(async () => { host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
     expect(host.textContent).toContain("Saved to PocketBase");
     const saved = JSON.parse(String(request.mock.calls.filter(([, init]) => init?.method === "PUT").at(-1)![1]!.body));
-    expect(saved).toMatchObject({ heading: "New heading", hackCheckpoints: 8 });
+    expect(saved).toMatchObject({ heading: "New heading", hackCheckpoints: 8, cursorSizeByScene: { "T5-5-2": 2 } });
     expect(host.querySelector('[role="alert"]')).toBeNull();
   } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
 });

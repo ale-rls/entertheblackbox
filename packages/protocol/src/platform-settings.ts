@@ -25,6 +25,12 @@ export const displaySettingsSchema = z.object({
   groupWaitingVideoUrls: z.record(z.string().min(1).max(160), waitingVideoUrlSchema).default({}),
   /** Background video for signage kiosks (e.g. a lobby entrance screen showing the join QR), keyed by a fixed signage spot id such as "lobby". */
   signageVideoUrls: z.record(z.string().min(1).max(160), waitingVideoUrlSchema).default({}),
+  /** Cursor size on the main and group displays (1 = normal), for scenes without their own size. */
+  cursorSize: cursorSizeSchema.default(1),
+  /** Scenes (phase IDs) whose cursors are drawn at another size. Set in Admin → Instrument. */
+  cursorSizeByScene: z.record(z.string().min(1).max(160), cursorSizeSchema).default({}),
+  /** Side safe area for vote and curtain text on the main and group displays: a fraction of the width kept clear on each side. */
+  textSafeArea: z.number().min(0).max(0.2).default(0.05),
   /** Hack checkpoints: replaces every operator-field scene's counter total (e.g. the hack's nodes); null keeps the scene's own. */
   hackCheckpoints: z.number().int().min(1).max(99).nullable().default(null),
 }).strict();
@@ -39,6 +45,9 @@ export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   waitingVideoUrl: "",
   groupWaitingVideoUrls: {},
   signageVideoUrls: {},
+  cursorSize: 1,
+  cursorSizeByScene: {},
+  textSafeArea: 0.05,
   hackCheckpoints: null,
 };
 
