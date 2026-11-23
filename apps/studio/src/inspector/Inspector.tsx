@@ -561,7 +561,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
         const source = sources.find((item) => item.id === sourceId);
         if (!source || source.field.type !== "polygon-zones") return;
         const zones = source.field.zones.map((zone) => ({ ...zone, ...(source.answerColors?.[zone.id] ? { color: source.answerColors[zone.id] } : {}) }));
-        onChange({ ...phase, operatorFields: { zones, ...(phase.operatorFields?.total ? { total: phase.operatorFields.total } : {}) } });
+        onChange({ ...phase, operatorFields: { ...phase.operatorFields, zones } });
       };
       const fields = phase.operatorFields;
       return <fieldset><legend>Operator fields <small>operatorFields</small></legend>
@@ -572,7 +572,8 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
         </select></label>
         {fields && <>
           <p className="sc-tool-copy">{fields.zones.map((zone) => zone.label).join(" · ")}</p>
-          <label className="sc-tool-label">Counter total (empty = no counter)<input className="sc-tool-field" type="number" min="1" max="99" step="1" value={fields.total ?? ""} onChange={(event) => { const value = Math.floor(Number(event.target.value)); onChange({ ...phase, operatorFields: { zones: fields.zones, ...(event.target.value !== "" && value >= 1 ? { total: Math.min(99, value) } : {}) } }); }} /></label>
+          <label className="sc-tool-label">Counter total (empty = no counter)<input className="sc-tool-field" type="number" min="1" max="99" step="1" value={fields.total ?? ""} onChange={(event) => { const value = Math.floor(Number(event.target.value)); const { total: _total, ...rest } = fields; onChange({ ...phase, operatorFields: { ...rest, ...(event.target.value !== "" && value >= 1 ? { total: Math.min(99, value) } : {}) } }); }} /></label>
+          {fields.total !== undefined && <label className="sc-tool-label">Counter name (empty = Checkpoints)<input className="sc-tool-field" type="text" maxLength={40} placeholder="Checkpoints" value={fields.counterLabel ?? ""} onChange={(event) => { const { counterLabel: _label, ...rest } = fields; const value = event.target.value; onChange({ ...phase, operatorFields: { ...rest, ...(value.trim() ? { counterLabel: value } : {}) } }); }} /></label>}
           <button type="button" className="sc-tool-button" onClick={() => { const { operatorFields: _old, ...rest } = phase; onChange(rest as Phase); }}>Remove operator fields</button>
         </>}
       </fieldset>;

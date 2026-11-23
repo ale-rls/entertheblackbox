@@ -21,4 +21,11 @@ describe("OperatorFields", () => {
     expect(document.querySelector('[data-zone="ja"] polygon')?.getAttribute("fill")).toBe("#30a46c");
     expect(document.querySelector(".operator-fields-count")?.textContent).toBe("Checkpoints: 3/12");
   });
+
+  it("names the counter as the scene says", async () => {
+    document.body.innerHTML = '<div id="root"></div>';
+    root = createRoot(document.querySelector("#root")!);
+    await act(async () => root?.render(<OperatorFields fields={{ ...fields, counterLabel: "Spiegel-Server" }} state={{ target: null, count: 0 }} />));
+    expect(document.querySelector(".operator-fields-count")?.textContent).toBe("Spiegel-Server: 0/12");
+  });
 });
