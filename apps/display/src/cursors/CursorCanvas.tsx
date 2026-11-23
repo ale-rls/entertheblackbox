@@ -22,12 +22,15 @@ export function CursorCanvas({
   showCursors = true,
   blinkActiveVoters = false,
   hiddenUntil,
+  size = 1,
 }: {
   field: CursorField;
   showCursors?: boolean;
   blinkActiveVoters?: boolean;
   /** Cursors stay hidden while this returns true (e.g. the first seconds of a scene). */
   hiddenUntil?: (() => boolean) | undefined;
+  /** Admin cursor size for the current scene (1 = normal). */
+  size?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -54,7 +57,7 @@ export function CursorCanvas({
         const renderAt = performance.timeOrigin + performance.now();
         const frozen = field.isFrozen;
         const glows = glowSprites(field.renderAt(renderAt), width, height, renderAt,
-          (cursor) => cursorOpacity(cursor.ghost, blinkActiveVoters, frozen, renderAt));
+          (cursor) => cursorOpacity(cursor.ghost, blinkActiveVoters, frozen, renderAt), size);
         ctx.globalCompositeOperation = "lighter";
         for (const glow of glows) {
           const sprite = sprites.get(glow.tint);
@@ -71,7 +74,7 @@ export function CursorCanvas({
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
     };
-  }, [blinkActiveVoters, field, showCursors, hiddenUntil]);
+  }, [blinkActiveVoters, field, showCursors, hiddenUntil, size]);
 
   return <canvas ref={canvasRef} className="cursor-canvas" />;
 }

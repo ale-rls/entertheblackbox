@@ -1,7 +1,7 @@
 import { readDisplayTiming } from "./lib/displayTiming.js";
 import { ShowClockOverlay } from "./components/ShowClockOverlay.js";
 import { rehearsalId, runtimeWebSocket } from "@entertheblackbox/protocol";
-import { resolveSignageVideoUrl, resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
+import { resolveSignageVideoUrl, resolveCursorSize, resolveWaitingVideoUrl } from "@entertheblackbox/protocol";
 import { currentInstallation } from "./lib/resolveInstallation.js";
 import { useDisplaySettings } from "./lib/useDisplaySettings.js";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -565,6 +565,7 @@ export function App() {
           sceneLoop={activeLoopVideo}
           dimFrom={curtainHold.dimFrom}
           onFabricShown={() => setCurtainShownKey(curtainHold.stage)}
+          cursorSize={resolveCursorSize(displaySettings, phase?.id)}
           onUnavailable={(error) => {
             console.warn("display: curtain-light renderer unavailable, using the standard field", error);
             setCurtainUnavailable(true);
@@ -693,7 +694,7 @@ export function App() {
 
       {/* Layer 3: cursor canvas */}
       <section className="layer layer-cursors">
-        <CursorCanvas field={cursorField} showCursors={!curtainActive && (phase !== null && phase.kind !== "idle" ? (phase.showCursors ?? true) : true)} blinkActiveVoters={state.resolution !== null} hiddenUntil={cursorsHidden} />
+        <CursorCanvas field={cursorField} size={resolveCursorSize(displaySettings, phase?.id)} showCursors={!curtainActive && (phase !== null && phase.kind !== "idle" ? (phase.showCursors ?? true) : true)} blinkActiveVoters={state.resolution !== null} hiddenUntil={cursorsHidden} />
       </section>
     </main>
   );

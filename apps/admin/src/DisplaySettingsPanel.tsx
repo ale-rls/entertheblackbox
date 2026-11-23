@@ -60,8 +60,12 @@ export function DisplaySettingsPanel({ token }: { token: string }) {
     if (!parsed.success) { setError(parsed.error.issues[0]?.message ?? "Check the settings."); return; }
     setBusy(true); setError(""); setNotice("");
     try {
+      // Cursor sizes are edited in the Instrument tab: keep the server's current ones.
+      const latest = await fetch("/api/admin/settings/display", { headers: { Authorization: `Bearer ${token}` } })
+        .then(async (response) => response.ok ? displaySettingsSchema.safeParse((await response.json()).display) : null).catch(() => null);
+      const body = latest?.success ? { ...parsed.data, cursorSize: latest.data.cursorSize, cursorSizeByScene: latest.data.cursorSizeByScene } : parsed.data;
       const response = await fetch("/api/admin/settings/display", {
-        method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(parsed.data),
+        method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       if (!response.ok) throw new Error(`Could not save display settings (${response.status}). Your edits are still here.`);
       setNotice("Saved to PocketBase. Open displays update within five seconds.");
