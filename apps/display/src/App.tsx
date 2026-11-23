@@ -566,6 +566,7 @@ export function App() {
           dimFrom={curtainHold.dimFrom}
           onFabricShown={() => setCurtainShownKey(curtainHold.stage)}
           textSafeArea={displaySettings.textSafeArea}
+          cursorSize={resolveCursorSize(displaySettings, phase?.id)}
           onUnavailable={(error) => {
             console.warn("display: curtain-light renderer unavailable, using the standard field", error);
             setCurtainUnavailable(true);
