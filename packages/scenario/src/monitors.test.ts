@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeMonitorCue, MONITOR_TEXT_COLOR_PRESETS, monitorCuesSchema, monitorMediaSources } from "./monitors.js";
+import { activeMonitorCue, MONITOR_TEXT_COLOR_PRESETS, monitorBackground, monitorCueSchema, monitorCuesSchema, monitorMediaSources } from "./monitors.js";
 import { scenarioSchema } from "./schema.js";
 import { validateScenario } from "./validate.js";
 
@@ -54,4 +54,17 @@ it("accepts a hex text colour on text-bearing cues and offers the show presets",
   for (const color of ["orange", "#fff", "#12345g"]) expect(monitorCuesSchema.safeParse({ M1: [{ kind: "text", text: "A", color }] }).success).toBe(false);
   expect(MONITOR_TEXT_COLOR_PRESETS.map((item) => item.name)).toEqual(["White", "Orange", "Green", "Blue", "Red", "Yellow"]);
   for (const item of MONITOR_TEXT_COLOR_PRESETS) expect(monitorCuesSchema.safeParse({ M1: [{ kind: "text", text: "A", color: item.color }] }).success).toBe(true);
+});
+
+describe("monitorBackground", () => {
+  it("takes the operator's live colour first, then the cue's background, else black", () => {
+    const cue = monitorCueSchema.parse({ kind: "text", text: "JA", background: "#30a46c" });
+    expect(cue.kind === "text" && cue.background).toBe("#30a46c");
+    expect(monitorBackground(cue)).toBe("#30a46c");
+    expect(monitorBackground(cue, "#f76b15")).toBe("#f76b15");
+    expect(monitorBackground(monitorCueSchema.parse({ kind: "blank", background: "#3e63dd" }))).toBe("#3e63dd");
+    expect(monitorBackground(monitorCueSchema.parse({ kind: "text", text: "x" }))).toBeNull();
+    expect(monitorBackground(null)).toBeNull();
+    expect(() => monitorCueSchema.parse({ kind: "blank", background: "green" })).toThrow();
+  });
 });

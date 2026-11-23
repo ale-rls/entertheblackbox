@@ -4,6 +4,8 @@ import { monitorVideoTime } from "../monitors/playback.js";
 
 /** `anchorAt`: server time of the loop's first frame (its run of scenes began); without it the loop follows the absolute clock. */
 export type LoopTarget = { src: string; url: string; anchorAt?: number | undefined };
+/** The loop on screen and the element playing it, so a lit curtain can draw the very same frames. */
+export type ActiveLoopVideo = { src: string; element: HTMLVideoElement };
 type Slot = 0 | 1;
 
 /**
@@ -13,23 +15,33 @@ type Slot = 0 | 1;
  * loop wanted it clears at once, unless `hold` keeps it until the foreground
  * has replaced it. `pending` means the wanted loop is still resolving.
  * With `fadeOutMs`, a loop that leaves for no loop dissolves into the foreground
- * underneath instead of cutting (a closed curtain into its opening).
+ * underneath instead of cutting (a closed curtain into its opening). With
+ * `fadeInMs`, a loop that arrives where there was none dissolves in over the
+ * foreground's last picture (a curtain closing into the closed curtain).
+ * `onShown` fires once a loop that came in where there was none is fully up
+ * (after its fade), so the foreground can hold its picture until then.
  */
-export function LoopHandoff({ target, pending, hold, revealAllowed, clock, fadeOutMs = 0, onReadyUrl, onActiveSrc }: {
+export function LoopHandoff({ target, pending, hold, revealAllowed, clock, fadeOutMs = 0, fadeInMs = 0, onReadyUrl, onActiveSrc, onShown, onActiveVideo }: {
   target: LoopTarget | null;
   pending: boolean;
   hold: boolean;
   revealAllowed: boolean;
   clock: ServerClock;
   fadeOutMs?: number;
+  fadeInMs?: number;
   /** The loop URL that could be on screen now: a framed incoming loop, else the current one. */
   onReadyUrl?: (url: string | null) => void;
   onActiveSrc?: (src: string | null) => void;
+  onShown?: () => void;
+  onActiveVideo?: (video: ActiveLoopVideo | null) => void;
 }) {
   const [slots, setSlots] = useState<[LoopTarget | null, LoopTarget | null]>([null, null]);
   const [active, setActive] = useState<Slot | null>(null);
   const [framed, setFramed] = useState<[string | null, string | null]>([null, null]);
   const [fading, setFading] = useState(false);
+  /** The slot dissolving in, until its fade has run. */
+  const [fadingIn, setFadingIn] = useState<Slot | null>(null);
+  const elements = useRef<[HTMLVideoElement | null, HTMLVideoElement | null]>([null, null]);
   const current = active === null ? null : slots[active];
   const other: Slot = active === 0 ? 1 : 0;
   // A slot's frame belongs to the element it was reported by: filling or emptying the slot
@@ -64,10 +76,18 @@ export function LoopHandoff({ target, pending, hold, revealAllowed, clock, fadeO
       return;
     }
     if (revealAllowed && framed[other] === target.url) {
+      if (active === null && fadeInMs > 0) setFadingIn(other);
+      else if (active === null) onShown?.();
       setActive(other);
       if (active !== null) place(active, null);
     }
-  }, [target, pending, hold, revealAllowed, slots, active, current, other, framed, place, fadeOutMs, fading]);
+  }, [target, pending, hold, revealAllowed, slots, active, current, other, framed, place, fadeOutMs, fadeInMs, fading, onShown]);
+
+  useEffect(() => {
+    if (fadingIn === null) return;
+    const timer = setTimeout(() => { setFadingIn(null); onShown?.(); }, fadeInMs);
+    return () => clearTimeout(timer);
+  }, [fadingIn, fadeInMs, onShown]);
 
   // The dissolve's end: the faded loop leaves.
   useEffect(() => {
@@ -92,6 +112,11 @@ export function LoopHandoff({ target, pending, hold, revealAllowed, clock, fadeO
     onActiveSrc?.(activeSrc);
   }, [activeSrc, onActiveSrc]);
 
+  const activeElement = active === null ? null : elements.current[active];
+  useEffect(() => {
+    onActiveVideo?.(activeSrc === null || activeElement === null ? null : { src: activeSrc, element: activeElement });
+  }, [activeSrc, activeElement, onActiveVideo]);
+
   const markFramed = useCallback((slot: Slot, url: string) => {
     setFramed((previous) => previous[slot] === url ? previous : withSlot(previous, slot, url));
   }, []);
@@ -107,6 +132,8 @@ export function LoopHandoff({ target, pending, hold, revealAllowed, clock, fadeO
         anchorAt={value.anchorAt}
         active={active === slot}
         fadeOutMs={fading && active === slot ? fadeOutMs : 0}
+        fadeInMs={fadingIn === slot ? fadeInMs : 0}
+        onElement={(element) => { elements.current[slot] = element; }}
         onFirstFrame={() => markFramed(slot, value.url)}
       />;
     })}
@@ -129,15 +156,23 @@ function withSlot<T>(slots: [T, T], slot: Slot, value: T): [T, T] {
  * absolute clock), so consecutive scenes sharing the loop run on without a jump
  * and every display shows the same frame. `fadeOutMs` > 0 dissolves it away.
  */
-export function LoopVideo({ src, clock, anchorAt, active = true, fadeOutMs = 0, onFirstFrame }: {
+export function LoopVideo({ src, clock, anchorAt, active = true, fadeOutMs = 0, fadeInMs = 0, onFirstFrame, onElement }: {
   src: string;
   clock: ServerClock;
   anchorAt?: number | undefined;
   active?: boolean;
   fadeOutMs?: number;
+  fadeInMs?: number;
   onFirstFrame?: () => void;
+  onElement?: (element: HTMLVideoElement | null) => void;
 }) {
-  const ref = useRef<HTMLVideoElement>(null);
+  const ref = useRef<HTMLVideoElement | null>(null);
+  const elementCallback = useRef(onElement);
+  elementCallback.current = onElement;
+  const setRef = useCallback((element: HTMLVideoElement | null) => {
+    ref.current = element;
+    elementCallback.current?.(element);
+  }, []);
   const firstFrame = useRef(onFirstFrame);
   useLayoutEffect(() => { firstFrame.current = onFirstFrame; }, [onFirstFrame]);
   useEffect(() => {
@@ -193,9 +228,10 @@ export function LoopVideo({ src, clock, anchorAt, active = true, fadeOutMs = 0, 
     };
   }, [src, clock, anchorAt]);
   return <video
-    ref={ref}
+    ref={setRef}
     className={`phase-loop-video${active ? " phase-loop-video-active" : ""}`}
-    style={fadeOutMs > 0 ? { opacity: 0, transition: `opacity ${fadeOutMs}ms linear` } : undefined}
+    style={fadeOutMs > 0 ? { opacity: 0, transition: `opacity ${fadeOutMs}ms linear` }
+      : fadeInMs > 0 ? { animation: `phase-loop-fade-in ${fadeInMs}ms linear both` } : undefined}
     src={src}
     muted
     loop

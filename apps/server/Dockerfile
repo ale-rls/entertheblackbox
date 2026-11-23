@@ -41,14 +41,20 @@ ENV VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL
 
 # apps/display bakes BUILD_VERSION into its bundle as __BUILD_VERSION__
 # (apps/display/vite.config.ts) and sends it as clientVersion on every
-# display_join; the server rejects/reloads a display whose clientVersion
-# doesn't match its own runtime BUILD_VERSION (plan §7 reload-on-mismatch).
-# Coolify can inject SOURCE_COMMIT as a build ARG when "Include Source Commit
-# in Build" is enabled. Deriving BUILD_VERSION from it here -- and again in
-# the runtime stage below -- keeps both sides identical. Without that Coolify
-# option, both stages deliberately use the same `dev` fallback.
-ARG SOURCE_COMMIT=dev
-ENV BUILD_VERSION=$SOURCE_COMMIT
+# display_join; the server asks a display whose clientVersion doesn't match
+# its own build version to reload (plan §7 reload-on-mismatch). Every image
+# therefore needs its own version: Coolify's SOURCE_COMMIT build ARG when
+# "Include Source Commit in Build" is on, otherwise an id generated here.
+# It is written to /app/.build-version, which the vite builds below read and
+# the server reads at runtime (apps/server/src/config.ts), so both sides
+# always match. A fixed fallback such as `dev` would never trigger a reload,
+# and displays left open across a deploy would keep running the old bundle.
+ARG SOURCE_COMMIT=
+RUN case "$SOURCE_COMMIT" in \
+      ""|dev) echo "image-$(date -u +%Y%m%d%H%M%S)-$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')" ;; \
+      *) echo "$SOURCE_COMMIT" ;; \
+    esac > /app/.build-version \
+  && echo "BUILD_VERSION=$(cat /app/.build-version)"
 
 # apps/display and apps/phone both bake the cursor-relay URL in at build
 # time as __REALTIME_WS_URL__ (their vite.config.ts); unset, both fall
@@ -75,7 +81,8 @@ RUN test -n "$VITE_POCKETBASE_URL" \
   && case "$VITE_POCKETBASE_URL" in https://*) true ;; *) false ;; esac \
   && case "$REALTIME_WS_URL" in wss://*) true ;; *) false ;; esac
 
-RUN pnpm --filter @entertheblackbox/display build \
+RUN export BUILD_VERSION="$(cat /app/.build-version)" \
+  && pnpm --filter @entertheblackbox/display build \
   && pnpm --filter @entertheblackbox/phone build \
   && pnpm --filter @entertheblackbox/admin build \
   && pnpm --filter @entertheblackbox/studio build
@@ -92,11 +99,8 @@ RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 # resolution), and the four built client bundles.
 COPY --from=build /app /app
 
-# Must match the build stage's BUILD_VERSION (see comment there) --
-# otherwise the server's own runtime config disagrees with what it just
-# baked into the display bundle it serves.
-ARG SOURCE_COMMIT=dev
-ENV BUILD_VERSION=$SOURCE_COMMIT
+# The server reads its build version from /app/.build-version (written in the
+# build stage above), so it matches the bundles it serves.
 ENV NODE_ENV=production
 EXPOSE 3000
 

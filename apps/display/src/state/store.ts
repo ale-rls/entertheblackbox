@@ -1,4 +1,5 @@
 import type {
+  MonitorBackgroundColors,
   PhaseSnapshotMessage,
   QrGrantMessage,
   QuestionResolvedMessage,
@@ -26,6 +27,8 @@ export type DisplayState = {
   qrHidden: boolean;
   notice: { code: string; level: string; message: string } | null;
   reloadRequired: ReloadMessage | null;
+  /** Operator's live M1–M4 background colours (monitor pages only). */
+  monitorBackgrounds: MonitorBackgroundColors;
   /** Present only while the server sends showLiveCounts questions (plan §7). */
   liveCounts: NonNullable<QuestionStatusMessage["quadrantCounts"]> | null;
   /** Field discriminator paired with liveCounts by the protocol. */
@@ -46,6 +49,7 @@ export const initialDisplayState: DisplayState = {
   qrHidden: false,
   notice: null,
   reloadRequired: null,
+  monitorBackgrounds: {},
   liveCounts: null,
   liveField: null,
   resolution: null,
@@ -123,6 +127,8 @@ export function displayReducer(
       return { ...state, notice: { code: m.code, level: m.level, message: m.message } };
     case "reload":
       return { ...state, reloadRequired: m };
+    case "monitor_backgrounds":
+      return { ...state, monitorBackgrounds: m.colors };
     // Cursor batches go straight to the CursorField (never through
     // React state — 20–30 Hz would thrash the tree).
     case "cursors":

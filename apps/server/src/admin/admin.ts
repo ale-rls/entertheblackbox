@@ -1,6 +1,6 @@
 import { createScriptRoom, type ShowScriptOptions } from "./script-room.js";
 import { backgroundMusicSchema, type BackgroundMusic } from "@entertheblackbox/show-content";
-import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, type DisplaySettings } from "@entertheblackbox/protocol";
+import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, monitorBackgroundColorsSchema, type DisplaySettings } from "@entertheblackbox/protocol";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { SurfaceController } from "../surface/surface.js";
@@ -40,6 +40,8 @@ const surfaceEffectRequestSchema = z.discriminatedUnion("action", [
   }),
   z.object({ action: z.literal("stop") }),
 ]);
+
+const monitorBackgroundsRequestSchema = z.object({ colors: monitorBackgroundColorsSchema });
 
 const wallCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("load"), clip: z.string().min(1).max(100) }),
@@ -216,6 +218,16 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         : options.surface.play(target, { mode });
       return { ok: true, delivered };
     });
+    admin.post<{ Body: unknown }>("/monitor-backgrounds", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      const engine = options.engine();
+      if (!engine) return reply.code(503).send({ error: "show_unavailable" });
+      const parsed = monitorBackgroundsRequestSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_monitor_backgrounds", issues: parsed.error.issues });
+      const delivered = engine.setMonitorBackgrounds(parsed.data.colors);
+      options.data?.audit({ action: "set-monitor-backgrounds", at: new Date().toISOString(), detail: parsed.data.colors });
+      return { ok: true, colors: engine.monitorBackgrounds(), delivered };
+    });
     admin.get("/wall", async (_request, reply) => {
       reply.header("cache-control", "no-store");
       if (!options.wall) return reply.code(503).send({ error: "wall_unavailable" });
@@ -350,6 +362,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         phaseId: engine?.currentPhaseId ?? null,
         phaseEpoch: engine?.currentPhaseEpoch ?? null,
         operatorField: engine?.operatorFieldState ?? null,
+        monitorBackgrounds: engine?.monitorBackgrounds?.() ?? {},
         // Authoritative per-group progress while a group-branch phase runs --
         // the top-level phaseId/phaseEpoch above stay pinned to that shared
         // scene the whole time, so this is the only source of "who is where."

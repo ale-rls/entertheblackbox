@@ -11,11 +11,14 @@
  *     sprites into a quarter-resolution additive buffer in one draw call.
  *
  * The fabric pass shades the packed curtain video (colour | normal X /
- * normal Y | depth) once with the summed light, then cursor cores are drawn
+ * normal Y | depth), or a scene's plain loop (colour only, the same frames
+ * the loop layer shows), once with the summed light, then cursor cores are drawn
  * on top so each participant keeps a crisp bright centre. Text (question
  * and answer labels) is applied last and adapts to what is beneath it, so
  * it stays readable on lit and unlit fabric.
  */
+
+import { CURVE_TOP, DIM_START_BAKED } from "./visibility.js";
 
 const CLIP_ASPECT = 1280 / 704;
 /** Light map values are stored sqrt-encoded in RGBA8 over this range. */
@@ -52,6 +55,15 @@ vec3 normal(vec2 q){
   vec2 n = vec2(texture(tex, tile(q * .5, vec2(.5, 0.))).r, texture(tex, tile(q * .5, vec2(0., .5))).r) * 2. - 1.;
   return normalize(vec3(n * folds, sqrt(max(.04, 1. - dot(n, n)))));
 }
+// A plain video is the picture already on screen (the scene's loop), not fabric to light:
+// take it as the shoulder's output at START and invert, so at baked = START the curtain
+// shows the loop unchanged and lower levels match the title dim (titleDim.tsx dimmedPixel).
+const float START = ${DIM_START_BAKED.toFixed(4)};
+const float CURVE_TOP = ${CURVE_TOP.toFixed(6)};
+vec3 plainBase(vec3 v){
+  vec3 c = min(pow(min(v, vec3(CURVE_TOP)), vec3(2.2)) / .9, vec3(.999));
+  return -log(1. - c) / (1.15 * START);
+}
 float occlusion(vec3 P, vec3 L){
   if (!hasTex || !packed) return 1.;
   float hit = 0.;
@@ -66,7 +78,8 @@ float occlusion(vec3 P, vec3 L){
 vec3 lin(vec3 c){ return pow(c, vec3(2.2)); }
 void main(){
   vec2 q = crop.xy + uv * crop.zw;
-  vec3 base = lin(colour(q));
+  vec3 picture = colour(q);
+  vec3 base = hasTex && !packed ? plainBase(picture) : lin(picture);
   float luma = dot(base, vec3(.2126, .7152, .0722));
   vec3 N = normal(q);
   vec3 P = vec3(q.x * ASPECT, q.y, depth(q) * RELIEF);
@@ -89,6 +102,8 @@ void main(){
   // Soft shoulder, capped below white so labels keep contrast in a full pool.
   c = (1. - exp(-c * 1.15)) * .9;
   vec3 shown = pow(c, vec3(1. / 2.2));
+  // Whiter than the shoulder reaches: scale like the title dim does, so highlights match too.
+  if (hasTex && !packed) shown *= max(vec3(1.), picture / CURVE_TOP);
   vec4 t = texture(txt, uv);
   // Preserve white lettering and its dark halo from the CPU text canvas.
   o = vec4(mix(shown, t.rgb, t.a * textOpacity), opacity);

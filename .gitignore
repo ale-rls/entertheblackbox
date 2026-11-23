@@ -62,3 +62,4 @@ content/media/native-shows/
 midi-mapping.json
 # The show's lighting file for the Eos desk (looks and cue names are show content); see apps/eos-bridge/lighting.example.json
 lighting.json
+.build-version

@@ -11,6 +11,8 @@ import {
   type TimingMonitor,
   type DisplayPlaybackStatusMessage,
   type PhaseSnapshotMessage,
+  type MonitorBackgroundColors,
+  type MonitorBackgroundsMessage,
   type ServerToClientMessage,
 } from "@entertheblackbox/protocol";
 import type { Scenario, Phase, VotingMethod } from "@entertheblackbox/scenario";
@@ -19,7 +21,7 @@ import {
   curtainFieldCenter,
   curtainVoteField,
   DEFAULT_INSTALLATION_POLICY,
-  isTitleBackdrop,
+  isDimmedBackdrop,
   neutralEntryPoint,
   resolveAnswerColors,
   resolveCurtainSettings,
@@ -241,6 +243,8 @@ export class PhaseEngine {
   private readonly groupDisplays = new Map<string, WebSocket>();
   /** Main-clock monitors have independent slots and cannot replace the projection. */
   private readonly monitorDisplays = new Map<string, WebSocket>();
+  /** Operator's live M1–M4 background colours (Admin Instrument); cleared when the show returns to idle. */
+  private monitorBackgroundColors: MonitorBackgroundColors = {};
   private lastMonitorEpoch: number | undefined;
   /** Lobby signage receives QR grants. */
   private readonly signageDisplays = new Map<string, WebSocket>();
@@ -1022,7 +1026,7 @@ export class PhaseEngine {
         spotlightGrow: this.spotlightGrow,
         spotlightCurtainSrc: this.scenario.curtainLight?.src,
       } : {}),
-      ...(this.nextIsTitleBackdrop(phase) ? { nextTitleBackdrop: true as const } : {}),
+      ...(this.nextIsDimmedBackdrop(phase) ? { nextTitleBackdrop: true as const } : {}),
       ...(phase.kind === "video" && phase.operatorFields ? { operatorField: this.operatorFieldState } : {}),
       ...(this.loopStartedAt !== null && loopVideoSrcOf(phase) !== undefined ? { loopStartedAt: this.loopStartedAt } : {}),
       scenarioVersion: this.scenario.version,
@@ -1031,10 +1035,11 @@ export class PhaseEngine {
     };
   }
 
-  /** Whether a video or narration scene leads straight into a title over a background loop. */
-  private nextIsTitleBackdrop(phase: Phase): boolean {
+  /** Whether a video or narration scene leads straight into a title or an open-curtain vote over a background loop. */
+  private nextIsDimmedBackdrop(phase: Phase): boolean {
     if (phase.kind !== "video" && phase.kind !== "narration") return false;
-    return isTitleBackdrop(this.scenario.phases.find((candidate) => candidate.id === phase.next));
+    const next = this.scenario.phases.find((candidate) => candidate.id === phase.next);
+    return next !== undefined && isDimmedBackdrop(next, this.drawsAsCurtain(next));
   }
 
   getSnapshotMessage(now = this.now()): Extract<ServerToClientMessage, { t: "snapshot" }> {
@@ -1322,6 +1327,7 @@ export class PhaseEngine {
           }
           this.monitorDisplays.set(message.monitorId, socket);
           this.clients.add(socket);
+          this.send(socket, this.monitorBackgroundsMessage());
           this.send(socket, this.getSnapshotMessage());
         } else if (message.signageId !== undefined) {
           this.connectSignageDisplay(socket, message.signageId);
@@ -1793,6 +1799,7 @@ export class PhaseEngine {
     if (phase.kind === "narration" && phase.waitForGo) this.deadlineAt = null;
     this.deadlineNotified = false;
     if (phase.kind === "idle") {
+      if (Object.keys(this.monitorBackgroundColors).length > 0) this.setMonitorBackgrounds({});
       this.monitorVoteResults = {};
       this.lastMonitorVotePhaseId = undefined;
       this.admissionPrograms.reset();
@@ -1959,6 +1966,16 @@ export class PhaseEngine {
     return this.requirePhase(this.phaseId);
   }
 
+  /** Whether this vote is drawn as curtain light on the running timeline (see curtainFor). */
+  private drawsAsCurtain(phase: Phase): boolean {
+    if (phase.kind !== "position-question" && phase.kind !== "video-position-question") return false;
+    if (phase.kind === "position-question" && phase.spotlight) return false;
+    const groupId = this.path?.timelineId;
+    const groupCurtain = groupId !== undefined
+      && this.scenario.groups?.find((group) => group.id === groupId)?.voteTreatment === "curtain-light";
+    return groupCurtain || phase.curtainLightVote === true;
+  }
+
   /**
    * Curtain-light presentation for a vote marked `curtainLightVote` (on any
    * timeline) or on a curtain-light group's own timeline, or null. The
@@ -1967,11 +1984,7 @@ export class PhaseEngine {
    */
   private curtainFor(phase: Phase): { treatment: CurtainTreatment; field: PositionField } | null {
     if (phase.kind !== "position-question" && phase.kind !== "video-position-question") return null;
-    if (phase.kind === "position-question" && phase.spotlight) return null;
-    const groupId = this.path?.timelineId;
-    const groupCurtain = groupId !== undefined
-      && this.scenario.groups?.find((group) => group.id === groupId)?.voteTreatment === "curtain-light";
-    if (!groupCurtain && phase.curtainLightVote !== true) return null;
+    if (!this.drawsAsCurtain(phase)) return null;
     if (this.curtainCache?.phase === phase) return this.curtainCache;
     const resolved = resolveCurtainSettings(this.scenario.curtainLight);
     // "Nothing lights up yet": fields hold their base glow and a cursor's
@@ -2488,6 +2501,23 @@ export class PhaseEngine {
       question: phase.text,
       options: spotlight ? [] : votingOptions(phase),
     });
+  }
+
+  /** The operator's live monitor background colours. */
+  monitorBackgrounds(): MonitorBackgroundColors {
+    return { ...this.monitorBackgroundColors };
+  }
+
+  /** Replaces the live monitor background colours and sends them to every monitor; returns how many received them. */
+  setMonitorBackgrounds(colors: MonitorBackgroundColors): number {
+    this.monitorBackgroundColors = { ...colors };
+    const message = this.monitorBackgroundsMessage();
+    for (const socket of this.monitorDisplays.values()) this.send(socket, message);
+    return this.monitorDisplays.size;
+  }
+
+  private monitorBackgroundsMessage(): MonitorBackgroundsMessage {
+    return { t: "monitor_backgrounds", v: PROTOCOL_VERSION, colors: { ...this.monitorBackgroundColors } };
   }
 
   private recordMonitorVote(id: string, result: MonitorVoteResult): void {

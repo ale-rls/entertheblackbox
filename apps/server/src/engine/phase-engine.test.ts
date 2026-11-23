@@ -407,6 +407,31 @@ describe("PhaseEngine lifecycle", () => {
     expect(engine.getSnapshot().nextTitleBackdrop).toBeUndefined();
   });
 
+  it("tells the display when the next scene is a vote over the open curtain, not a curtain-light one", () => {
+    let now = 1_000;
+    const base = scenario.phases.find((phase) => phase.kind === "position-question")!;
+    const vote = (id: string, next: string, extra: object = {}) => ({
+      ...base, id, loopVideoSrc: "open-loop.mp4", next: { type: "fixed", target: next }, ...extra,
+    });
+    const voteScenario = scenarioSchema.parse({
+      ...scenario,
+      phases: [
+        { kind: "idle", id: "idle" },
+        { kind: "video", id: "intro", src: "a.mp4", expectedDurationMs: 100, next: "open-vote" },
+        vote("open-vote", "before-lit"),
+        { kind: "video", id: "before-lit", src: "b.mp4", expectedDurationMs: 100, next: "lit-vote" },
+        vote("lit-vote", "idle", { curtainLightVote: true }),
+      ],
+    });
+    const { engine } = setup({ now: () => now, testScenario: voteScenario });
+    expect(engine.adminStart(now)).toEqual({ ok: true });
+    expect(engine.getSnapshot()).toMatchObject({ id: "intro", nextTitleBackdrop: true });
+    now += 50;
+    expect(engine.adminJump("before-lit", now)).toEqual({ ok: true });
+    expect(engine.getSnapshot().id).toBe("before-lit");
+    expect(engine.getSnapshot().nextTitleBackdrop).toBeUndefined();
+  });
+
   it("starts a background loop where its run of scenes begins and keeps it through the run", () => {
     let now = 1_000;
     const loopScenario = scenarioSchema.parse({
@@ -1902,6 +1927,25 @@ describe("authored stage monitor connections", () => {
     const last = screen.sent.filter(message => message.t === "phase").at(-1);
     expect(last).toMatchObject({ phaseEpoch: epoch, phase: { id: "question", lastMonitorVotePhaseId: "question" } });
     expect(last.phase.monitorVoteResults).toHaveProperty("question");
+    engine.stop();
+  });
+  it("sends the operator's live background colours to monitors, also to ones joining later, and clears them at idle", () => {
+    let now = 1000;
+    const { engine } = setup({ now: () => now });
+    const m1 = new MockSocket();
+    join(engine, m1, "M1");
+    expect(m1.sent.find(message => message.t === "monitor_backgrounds")).toEqual({ t: "monitor_backgrounds", v: 2, colors: {} });
+    expect(engine.setMonitorBackgrounds({ M1: "#30a46c", M3: "#f76b15" })).toBe(1);
+    expect(m1.sent.at(-1)).toEqual({ t: "monitor_backgrounds", v: 2, colors: { M1: "#30a46c", M3: "#f76b15" } });
+    const m3 = new MockSocket();
+    join(engine, m3, "M3");
+    expect(m3.sent.filter(message => message.t === "monitor_backgrounds").at(-1)?.colors).toEqual({ M1: "#30a46c", M3: "#f76b15" });
+    expect(engine.adminStart(now).ok).toBe(true);
+    expect(engine.monitorBackgrounds()).toEqual({ M1: "#30a46c", M3: "#f76b15" });
+    now += 100;
+    expect(engine.adminIdle(now).ok).toBe(true);
+    expect(engine.monitorBackgrounds()).toEqual({});
+    expect(m1.sent.filter(message => message.t === "monitor_backgrounds").at(-1)?.colors).toEqual({});
     engine.stop();
   });
   it("rejects invalid credentials and mixed display roles", () => {

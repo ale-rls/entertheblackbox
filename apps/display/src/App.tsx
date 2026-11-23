@@ -23,7 +23,7 @@ import { Countdown } from "./components/Countdown.js";
 import { QrBadge } from "./components/QrBadge.js";
 import { QuadrantOverlay, questionFieldCenter } from "./components/QuadrantOverlay.js";
 import { IdleAttract } from "./components/IdleAttract.js";
-import { LoopHandoff } from "./components/LoopVideo.js";
+import { LoopHandoff, type ActiveLoopVideo } from "./components/LoopVideo.js";
 import { LobbyCountdown } from "./components/LobbyCountdown.js";
 import { OperatorFields } from "./components/OperatorFields.js";
 import { PhaseVideoHandoff, type PhaseVideoCandidate } from "./components/PhaseVideoHandoff.js";
@@ -69,7 +69,7 @@ declare const __REALTIME_WS_URL__: string | undefined;
 declare const __DISPLAY_TOKEN__: string | undefined;
 declare const __LOBBY_WIFI_NAME__: string | undefined;
 
-/** A background loop dissolves into a curtain opening over this long. */
+/** A background loop dissolves into a curtain opening, and a curtain closing into its loop, over this long. */
 const LOOP_DISSOLVE_MS = 500;
 const searchParams = new URLSearchParams(location.search);
 // Two mutually exclusive optional query parameters: ?group=<id> is that
@@ -435,8 +435,23 @@ export function App() {
       : null,
     [phaseLoopSrc, loopUrl, loopAnchorAt],
   );
-  // A loop handing over to a picture-only clip (a curtain opening) dissolves into it.
+  // A loop handing over to a picture-only clip (a curtain opening) dissolves into it,
+  // and a loop following one (a curtain closing into the closed curtain) dissolves in.
   const loopFadeOutMs = phase !== null && phase !== undefined && isPictureOnlyClip(phase) ? LOOP_DISSOLVE_MS : 0;
+  const phaseBefore = useRef<{ epoch: number; phase: typeof phase; previous: typeof phase }>({ epoch: state.phaseEpoch, phase, previous: null });
+  if (phaseBefore.current.epoch !== state.phaseEpoch) {
+    phaseBefore.current = { epoch: state.phaseEpoch, phase, previous: phaseBefore.current.phase };
+  } else phaseBefore.current.phase = phase;
+  const previousPhase = phaseBefore.current.previous;
+  const loopFadeInMs = phaseLoopSrc !== null && previousPhase !== null && previousPhase !== undefined
+    && isPictureOnlyClip(previousPhase) ? LOOP_DISSOLVE_MS : 0;
+  // The closing's last frame stays under a loop dissolving in until the loop is fully up.
+  const [loopShownEpoch, setLoopShownEpoch] = useState<number | null>(null);
+  const markLoopShown = useCallback(() => setLoopShownEpoch(stateRef.current.phaseEpoch), []);
+  const holdForLoopFade = loopFadeInMs > 0 && loopShownEpoch !== state.phaseEpoch;
+  // The loop on screen: a lit curtain over that same loop draws its frames, so the two never drift apart.
+  const activeLoopVideo = useRef<ActiveLoopVideo | null>(null);
+  const setActiveLoopVideo = useCallback((video: ActiveLoopVideo | null) => { activeLoopVideo.current = video; }, []);
   // Each layer waits for the other's incoming picture, so a cut changes both on one frame.
   const [foregroundReadyKey, setForegroundReadyKey] = useState<string | null>(null);
   const [loopReadyUrl, setLoopReadyUrl] = useState<string | null>(null);
@@ -512,7 +527,7 @@ export function App() {
           candidate={phaseVideoCandidate}
           soundEnabled={soundEnabled}
           revealAllowed={loopReady}
-          holdOutgoing={!loopReady}
+          holdOutgoing={!loopReady || holdForLoopFade}
           onMediaElement={setActiveMedia}
           onExtraAudioElement={setActiveExtraAudio}
           onActiveKey={setPresentedVideoKey}
@@ -526,8 +541,11 @@ export function App() {
           revealAllowed={foregroundReady}
           clock={connection.clock}
           fadeOutMs={loopFadeOutMs}
+          fadeInMs={loopFadeInMs}
           onReadyUrl={setLoopReadyUrl}
           onActiveSrc={pinShownLoop}
+          onShown={markLoopShown}
+          onActiveVideo={setActiveLoopVideo}
         />
       </section>
 
@@ -544,6 +562,7 @@ export function App() {
           {...(curtainHold.visibleUntil === undefined ? {} : { visibleUntil: curtainHold.visibleUntil })}
           leavingSince={curtainHold.leavingSince}
           videoUrl={curtainUrl?.src === curtainHold.treatment.curtain.src ? curtainUrl.url : null}
+          sceneLoop={activeLoopVideo}
           dimFrom={curtainHold.dimFrom}
           onFabricShown={() => setCurtainShownKey(curtainHold.stage)}
           cursorSize={resolveCursorSize(displaySettings, phase?.id)}
