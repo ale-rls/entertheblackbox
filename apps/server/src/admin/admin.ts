@@ -293,6 +293,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       if (!parsed.success) return reply.code(400).send({ error: "invalid_display_settings", issues: parsed.error.issues });
       const display = await options.displaySettings.write(parsed.data);
       options.surface?.setBase(display.phoneSurfaceColor);
+      options.engine()?.setOperatorFieldTotal?.(display.hackCheckpoints);
       options.data?.audit({ action: "set-display-settings", at: new Date().toISOString(), detail: { key: "display" } });
       return { configured: true, display };
     });
@@ -362,6 +363,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         phaseId: engine?.currentPhaseId ?? null,
         phaseEpoch: engine?.currentPhaseEpoch ?? null,
         operatorField: engine?.operatorFieldState ?? null,
+        operatorFieldTotal: engine?.currentOperatorFieldTotal ?? null,
         monitorBackgrounds: engine?.monitorBackgrounds?.() ?? {},
         // Authoritative per-group progress while a group-branch phase runs --
         // the top-level phaseId/phaseEpoch above stay pinned to that shared

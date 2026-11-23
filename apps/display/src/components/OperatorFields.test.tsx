@@ -19,6 +19,6 @@ describe("OperatorFields", () => {
     expect(document.querySelector('[data-zone="ja"]')?.getAttribute("data-lit")).toBe("true");
     expect(document.querySelector('[data-zone="nein"]')?.getAttribute("data-lit")).toBe("false");
     expect(document.querySelector('[data-zone="ja"] polygon')?.getAttribute("fill")).toBe("#30a46c");
-    expect(document.querySelector(".operator-fields-count")?.textContent).toBe("3 / 12");
+    expect(document.querySelector(".operator-fields-count")?.textContent).toBe("Checkpoints: 3/12");
   });
 });

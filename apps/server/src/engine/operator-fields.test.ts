@@ -64,4 +64,22 @@ describe("operator fields", () => {
     expect(h.display.snapshot.phase.operatorField).toBeUndefined();
     h.engine.stop();
   });
+
+  it("uses Admin Setup's checkpoint amount instead of the scene's total, live during the hack", () => {
+    const h = setup(); h.engine.adminStart(); h.tick(100);
+    expect(h.display.snapshot.phase.operatorFields.total).toBe(12);
+    h.engine.adminOperatorField({ countDelta: 10 });
+    h.engine.setOperatorFieldTotal(6);
+    expect(h.display.snapshot.phase.operatorFields.total).toBe(6);
+    expect(h.engine.operatorFieldState.count).toBe(6);
+    expect(h.engine.currentOperatorFieldTotal).toBe(6);
+    expect(h.engine.adminFlow.scenes.find((scene) => scene.id === "hack")?.operatorFields?.total).toBe(6);
+    h.engine.adminOperatorField({ countDelta: 5 });
+    expect(h.engine.operatorFieldState.count).toBe(6);
+    h.engine.setOperatorFieldTotal(null);
+    expect(h.display.snapshot.phase.operatorFields.total).toBe(12);
+    h.engine.adminSkip();
+    expect(h.engine.currentOperatorFieldTotal).toBeNull();
+    h.engine.stop();
+  });
 });

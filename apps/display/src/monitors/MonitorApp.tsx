@@ -12,6 +12,7 @@ import { isAdjacentMonitorVideoCut, MONITOR_CUT_HOLD_MS, monitorCueReady, monito
 import { shownMonitorCountdownText } from "./countdown.js";
 import { monitorTextColor } from "./answerColor.js";
 import { withoutWidows } from "./typography.js";
+import { checkpointText } from "../components/OperatorFields.js";
 import { monitorVoteResult } from "./voteResult.js";
 import "./monitors.css";
 
@@ -114,6 +115,7 @@ export function MonitorApp({ monitorId }: { monitorId: MonitorId }) {
       {state.connection !== "open" && <p>Waiting for server cues. The last received cue stays on its original clock.</p>}
       {(error || state.notice) && <p role="alert">{error || state.notice?.message}</p>}
     </aside>}
+    {phase?.kind === "video" && phase.operatorFields?.total !== undefined && <div className="monitor-checkpoints">{checkpointText(phase.operatorField?.count ?? 0, phase.operatorFields.total)}</div>}
     <div className="display-controls"><FullscreenControl /></div>
   </main>;
 }
