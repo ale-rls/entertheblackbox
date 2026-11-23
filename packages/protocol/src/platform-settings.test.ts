@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, resolveSignageVideoUrl, resolveWaitingVideoUrl, waitingVideoUrlSchema } from "./platform-settings.js";
+import { DEFAULT_DISPLAY_SETTINGS, displaySettingsSchema, resolveCursorSize, resolveSignageVideoUrl, resolveWaitingVideoUrl, waitingVideoUrlSchema } from "./platform-settings.js";
 
 describe("waiting display settings", () => {
   it("loads existing saved text without requiring a migration", () => {

@@ -1,5 +1,5 @@
 /**
- * Background dimming around titles and open-curtain votes. A title or a vote
+ * Background dimming around titles, open-curtain votes and cursor scenes. A title or a vote
  * over a background loop dims the projector's video layer to the curtain-vote
  * level (display: titleDim.tsx). These rules decide when that dim starts and
  * ends around them, so the picture doesn't jump bright between two of them or
@@ -15,6 +15,8 @@ export type BackdropDimPhase = {
   extraAudioSrc?: string | undefined;
   curtainLightVote?: boolean | undefined;
   spotlight?: unknown;
+  showCursors?: boolean | undefined;
+  keepLoopBright?: boolean | undefined;
 };
 
 /** A title (narration with words) over a background loop. */
@@ -33,9 +35,20 @@ export function isVoteBackdrop(phase: BackdropDimPhase | null | undefined, drawn
     && phase.loopVideoSrc !== undefined && phase.curtainLightVote !== true && !phase.spotlight && !drawnAsCurtain;
 }
 
-/** A scene that keeps the background dimmed throughout: a title or an open-curtain vote. */
+/**
+ * A scene that shows cursors over a background loop. Director decision 2026-11-21: cursors
+ * always look the same, and their glow only reads on the dimmed picture of a vote, so the loop
+ * dims to the vote level under them too. `keepLoopBright` opts a scene out (e.g. a QR code in
+ * the loop).
+ */
+export function isCursorBackdrop(phase: BackdropDimPhase | null | undefined): boolean {
+  return (phase?.kind === "video" || phase?.kind === "narration")
+    && phase.loopVideoSrc !== undefined && phase.showCursors !== false && phase.keepLoopBright !== true;
+}
+
+/** A scene that keeps the background dimmed throughout: a title, an open-curtain vote, or cursors over a loop. */
 export function isDimmedBackdrop(phase: BackdropDimPhase | null | undefined, drawnAsCurtain = false): boolean {
-  return isTitleBackdrop(phase) || isVoteBackdrop(phase, drawnAsCurtain);
+  return isTitleBackdrop(phase) || isVoteBackdrop(phase, drawnAsCurtain) || isCursorBackdrop(phase);
 }
 
 /** A picture-only clip, like a curtain opening or closing: a video scene with no sound and no loop of its own. */

@@ -344,8 +344,14 @@
 .cue-operator-buttons { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .cue-operator-buttons button[aria-pressed="true"] { outline: 3px solid currentColor; font-weight: 700; }
 
-/* Live M1–M4 background colours (Instrument tab). */
-.monitor-backgrounds { margin-block-start: var(--sc-tool-space-6); }
-.monitor-background-rows { display: grid; gap: var(--sc-tool-space-4); margin-block-start: var(--sc-tool-space-5); }
-.monitor-background-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-4); }
-.monitor-background-id { display: inline-grid; place-items: center; width: 3.5rem; height: 2.5rem; border: var(--sc-tool-border-hairline) solid var(--sc-tool-color-rule-strong); border-radius: var(--sc-tool-radius-1); background: var(--sc-tool-color-canvas); color: var(--sc-tool-color-text); }
+/* Cursor size per scene (Instrument tab). */
+.cursor-sizes { margin-block-start: var(--sc-tool-space-6); }
+.cursor-size-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sc-tool-space-4); }
+.cursor-size-row > span:first-child { display: grid; min-width: 12rem; flex: 1; }
+.cursor-size-row small { color: var(--sc-tool-color-text-muted); font-size: var(--sc-tool-font-size-0); }
+.cursor-size-row[aria-current="step"] strong { color: var(--sc-tool-color-action); }
+.cursor-size-input { display: inline-flex; align-items: center; gap: var(--sc-tool-space-3); }
+.cursor-size-input input { width: min(16rem, 60vw); }
+.cursor-size-input output { min-width: 3.5rem; font-variant-numeric: tabular-nums; }
+.cursor-size-scenes { display: grid; gap: var(--sc-tool-space-3); padding: 0; margin: var(--sc-tool-space-5) 0; list-style: none; }
+.cursor-size-add { display: flex; flex-wrap: wrap; gap: var(--sc-tool-space-3); }

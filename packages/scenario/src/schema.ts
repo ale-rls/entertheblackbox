@@ -56,6 +56,11 @@ const phoneAudioFields = {
    * without a jump. Not for scenes whose own src is a video.
    */
   loopVideoSrc: loopVideoSrcSchema,
+  /**
+   * Cursors over this scene's loop normally dim the loop to the vote level, so they glow the
+   * same as in a vote. True keeps the loop at full brightness (e.g. a QR code in the loop).
+   */
+  keepLoopBright: z.boolean().optional(),
   cancelParticipantTasks: z.boolean().optional(),
   monitorCues: monitorCuesSchema.optional(),
   /** Timed jumps of the shared actor script reader, relative to scene start. */

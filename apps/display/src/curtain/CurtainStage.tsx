@@ -246,6 +246,7 @@ export function CurtainStage(props: CurtainStageProps) {
         // A vote right after another keeps this stage, so only a fresh curtain dims in.
         fabric: { ...p.treatment.curtain, baked: dimmedBaked(p.treatment.curtain.baked, upAt === null ? null : local - upAt, p.dimFrom) },
         cursors: lit.cursorLights(p.cursorField.renderAt(local), local),
+        cursorSize: p.cursorSize ?? 1,
       });
       raf = requestAnimationFrame(frame);
     };
