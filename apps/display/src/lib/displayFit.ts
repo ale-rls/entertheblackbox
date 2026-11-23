@@ -2,11 +2,11 @@
  * How the fixed 16:9 display frame fits a screen of another aspect ratio,
  * chosen per machine with `?fit=` on /display/ (main, group and signage).
  *
- * - `contain` (default): the whole 16:9 frame is visible, with black bars.
+ * - `contain`: the whole 16:9 frame is visible, with black bars.
  * - `height`: the frame fills the screen height; the sides are cropped. For a
  *   4:3 projector this uses the full picture height.
  * - `width`: the frame fills the screen width; top and bottom are cropped.
- * - `intrinsic`: the frame has the pixel size of the video or still on screen,
+ * - `intrinsic` (default): the frame has the pixel size of the video or still on screen,
  *   one media pixel per device pixel, centred; the window crops what does not
  *   fit. A 1920×1200 video in a 1920×1200 window fills it exactly; a smaller
  *   window shows the centre. Before any media plays the frame is 1920×1080.
@@ -19,7 +19,7 @@ export type DisplayFit = (typeof DISPLAY_FITS)[number];
 
 export function parseDisplayFit(search: string): DisplayFit {
   const requested = new URLSearchParams(search).get("fit");
-  return (DISPLAY_FITS as readonly string[]).includes(requested ?? "") ? requested as DisplayFit : "contain";
+  return (DISPLAY_FITS as readonly string[]).includes(requested ?? "") ? requested as DisplayFit : "intrinsic";
 }
 
 export function applyDisplayFit(root: Pick<HTMLElement, "dataset">, search: string): DisplayFit {

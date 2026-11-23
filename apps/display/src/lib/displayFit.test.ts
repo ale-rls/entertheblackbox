@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { applyDisplayFit, intrinsicFrameSize, mediaPixelSize, parseDisplayFit, trackIntrinsicSize } from "./displayFit.js";
 
 describe("display fit", () => {
-  it("defaults to the letterboxed 16:9 frame", () => {
-    expect(parseDisplayFit("")).toBe("contain");
-    expect(parseDisplayFit("?fit=stretch")).toBe("contain");
+  it("defaults to the media's own pixel size", () => {
+    expect(parseDisplayFit("")).toBe("intrinsic");
+    expect(parseDisplayFit("?fit=stretch")).toBe("intrinsic");
   });
 
   it("accepts each supported mode", () => {
