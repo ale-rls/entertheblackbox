@@ -1142,3 +1142,43 @@ it("reports expected phone audio for per-group tracks and excludes unassigned la
   expect(h.engine.timingMonitors.find(r => r.id === "phone:late")?.mediaExpected).toBe(false);
   h.engine.stop();
 });
+
+it("tells phones the tablet music that plays now, keeps it across scenes without music, and only when the show uses scene music", () => {
+  const configured = scenarioSchema.parse({ ...scenario, phases: scenario.phases.map((phase) =>
+    phase.id === "film" ? { ...phase, phoneMusic: { src: "datsch.mp3", volume: 0.5 } }
+    : phase.id === "together" ? { ...phase, phoneMusic: { stop: true } } : phase) });
+  const h = setup(configured); h.display();
+  const a = h.phone("one"), b = h.phone("two"); h.engine.adminStart();
+  expect(a.snapshot).toMatchObject({ phase: { id: "split" }, phoneMusic: null });
+  h.choose(a, "a"); h.choose(b, "b"); h.tick(100);
+  // Each group path follows its own scenes.
+  expect(a.snapshot).toMatchObject({ phase: { id: "vote" }, phoneMusic: null });
+  expect(b.snapshot).toMatchObject({ phase: { id: "film" }, phoneMusic: { src: "datsch.mp3", volume: 0.5 } });
+  // A phone that reconnects gets the current music in its snapshot.
+  expect(h.phone("two").snapshot).toMatchObject({ phoneMusic: { src: "datsch.mp3", volume: 0.5 } });
+  h.engine.stop();
+
+  const plain = setup(); plain.display();
+  const c = plain.phone("one"); plain.engine.adminStart();
+  expect(c.snapshot).not.toHaveProperty("phoneMusic");
+  plain.engine.stop();
+});
+
+it("stops the tablet music at a stop scene and clears it when the show ends", () => {
+  const linear = scenarioSchema.parse({ version: "music", entryPhaseId: "a", cyclesAllowed: false, phases: [
+    { kind: "idle", id: "idle" },
+    { kind: "video", id: "a", src: "a.mp4", expectedDurationMs: 1_000, phoneMusic: { src: "chords.mp3" }, next: "b" },
+    { kind: "video", id: "b", src: "b.mp4", expectedDurationMs: 1_000, next: "c" },
+    { kind: "video", id: "c", src: "c.mp4", expectedDurationMs: 1_000, phoneMusic: { stop: true }, next: "idle" },
+  ] });
+  const h = setup(linear); h.display();
+  const p = h.phone("one"); h.engine.adminStart();
+  expect(p.snapshot).toMatchObject({ phase: { id: "a" }, phoneMusic: { src: "chords.mp3" } });
+  h.engine.adminSkip();
+  expect(p.snapshot).toMatchObject({ phase: { id: "b" }, phoneMusic: { src: "chords.mp3" } });
+  h.engine.adminSkip();
+  expect(p.snapshot).toMatchObject({ phase: { id: "c" }, phoneMusic: null });
+  h.engine.adminRestart();
+  expect(p.snapshot).toMatchObject({ phase: { id: "a" }, phoneMusic: { src: "chords.mp3" } });
+  h.engine.stop();
+});

@@ -237,6 +237,7 @@ export default function App() {
           latest.current = message; setServerNow(c.clock.now()); setSnapshot(message); setVoting(null); setGroups(null);
           if (message.phase.kind !== 'idle') { setAdmission(null); player.current?.setAdmission(null); }
           player.current?.setCue(cueForPlayback(message, taskRef.current, c.clock.now()));
+          if (message.phoneMusic !== undefined) player.current?.setSceneMusic(message.phoneMusic);
         }
         if ((message.t === 'voting_options' || message.t === 'group_selection_options') &&
           message.sessionId === latest.current?.sessionId && message.phaseEpoch === latest.current?.phaseEpoch) {

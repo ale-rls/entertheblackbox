@@ -23,6 +23,7 @@ export {
   polygonPointSchema,
   polygonZoneSchema,
   operatorFieldsSchema,
+  phoneMusicSchema,
   polygonZonesFieldSchema,
   polygonZonesPluralityNextSchema,
   positionQuestionNextSchema,
@@ -45,6 +46,7 @@ export {
 } from "./schema.js";
 export { DEFAULT_VOTE_COUNTDOWN_SECONDS, MAX_VOTE_COUNTDOWN_SECONDS, MIN_VOTE_COUNTDOWN_SECONDS, voteCountdownSeconds, withVoteCountdownSeconds } from "./vote-countdown.js";
 export { curtainGroupIds, curtainStagePhaseIds, curtainLightIssues, isCurtainLightVote } from "./curtain.js";
+export type { PhoneMusic } from "./schema.js";
 export type {
   OperatorFields,
   Arena,

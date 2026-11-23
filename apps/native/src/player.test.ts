@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ServerClock } from '@entertheblackbox/shared';
 const scheduler = vi.hoisted(() => ({
   listeners: [] as ((event: { paused: boolean; reason: string }) => void)[],
@@ -170,4 +170,41 @@ it('reports measured file length, and hides the old layer while a new cue is ins
   expect(p.timing().media[0]?.durationMs).toBe(7000);
   p.setCue(null);
   expect(p.timing().media).toEqual([]);
+});
+describe('scene music', () => {
+  const musicFiles = [...files, { src: 'chords.mp3', sha256: 'd'.repeat(64), bytes: 5 }, { src: 'datsch.mp3', sha256: 'e'.repeat(64), bytes: 5 }];
+  const sceneSetup = (withBed = false) => {
+    const clock = new ServerClock(); clock.addSample(5000, 5000, 5000);
+    const p = new ShowPlayer({ format: 1, revision: 'a'.repeat(64), scenarioVersion: 'one', ...(withBed ? { backgroundMusic: { src: 'bed.mp3', volume: 0.2 } } : {}), files: musicFiles }, clock, vi.fn());
+    players.push(p); return p;
+  };
+  it('starts the scene track after joining, crossfades on a change and fades out on stop', async () => {
+    const p = sceneSetup();
+    p.setSceneMusic({ src: 'chords.mp3' }); await p.settled();
+    expect(scheduler.setLayer).not.toHaveBeenCalled();
+    p.startMusic(); await p.settled();
+    expect(scheduler.setLayer).toHaveBeenCalledWith('bed:chords.mp3', { uri: 'file://d.mp3', loop: true, volume: 0.7 });
+    p.setSceneMusic({ src: 'chords.mp3' }); await p.settled();
+    expect(scheduler.setLayer).toHaveBeenCalledOnce();
+    p.setSceneMusic({ src: 'datsch.mp3', volume: 0.5 }); await p.settled();
+    expect(scheduler.fadeOutLayer).toHaveBeenCalledWith('bed:chords.mp3', 3000);
+    expect(scheduler.setLayer).toHaveBeenLastCalledWith('bed:datsch.mp3', { uri: 'file://e.mp3', loop: true, volume: 0.5 });
+    p.setSceneMusic(null); await p.settled();
+    expect(scheduler.fadeOutLayer).toHaveBeenLastCalledWith('bed:datsch.mp3', 3000);
+    expect(scheduler.setLayer).toHaveBeenCalledTimes(2);
+  });
+  it('retires the show-wide bed once scene music arrives and keeps the participant volume', async () => {
+    const p = sceneSetup(true); p.setMusicVolume(0.3); p.startMusic(); await p.settled();
+    expect(scheduler.setLayer).toHaveBeenCalledWith('bed', { uri: 'file://c.mp3', loop: true, volume: 0.3 });
+    p.setSceneMusic({ src: 'datsch.mp3', volume: 0.9 }); await p.settled();
+    expect(scheduler.fadeOutLayer).toHaveBeenCalledWith('bed', 3000);
+    expect(scheduler.setLayer).toHaveBeenLastCalledWith('bed:datsch.mp3', { uri: 'file://e.mp3', loop: true, volume: 0.3 });
+    p.setMusicVolume(null); await p.settled();
+    expect(scheduler.setLayer).toHaveBeenLastCalledWith('bed:datsch.mp3', { uri: 'file://e.mp3', loop: true, volume: 0.9 });
+    expect(scheduler.fadeOutLayer).toHaveBeenCalledOnce();
+  });
+  it('reports a scene track that is not downloaded instead of playing', async () => {
+    const p = sceneSetup(); p.startMusic(); p.setSceneMusic({ src: 'missing.mp3' }); await p.settled();
+    expect(scheduler.setLayer).not.toHaveBeenCalled();
+  });
 });

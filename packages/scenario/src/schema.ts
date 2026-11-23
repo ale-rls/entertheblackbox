@@ -46,6 +46,15 @@ export const votingMethodSchema = z.enum(["physical", "phone-cursor", "phone-but
 const outgoingCueSchema = z.string().trim().min(1).max(120);
 /** Operator-only name of a scene, e.g. the script heading ("T6.2.1 – JA / START DES HACKS"). Never shown to the audience. */
 const cueNameSchema = z.string().trim().min(1).max(160).optional();
+/**
+ * Tablet (native app) music from this scene on: a looping track, or stop. Scenes without it keep
+ * whatever plays. A show without any scene music keeps the show-wide background loop instead.
+ */
+export const phoneMusicSchema = z.union([
+  z.object({ src: phoneAudioFileSchema, volume: z.number().positive().max(1).optional() }).strict(),
+  z.object({ stop: z.literal(true) }).strict(),
+]);
+export type PhoneMusic = z.infer<typeof phoneMusicSchema>;
 const phoneAudioFields = {
   cueName: cueNameSchema,
   /** With showCursors: the main display shows cursors only from this time into the scene (e.g. after a 20 s hold). */
@@ -77,6 +86,7 @@ const phoneAudioFields = {
   phoneAudioSrc: phoneAudioSrcSchema,
   /** Per-group MP3 overrides, keyed by stable authored group id. */
   phoneAudioByGroup: phoneAudioByGroupSchema,
+  phoneMusic: phoneMusicSchema.optional(),
   /** Named one-shot cues emitted to external show-control receivers on phase entry. */
   outgoingCues: z.array(outgoingCueSchema).max(32).optional(),
   /** Text the native show screen shows for the whole scene, for everyone without a group text. */

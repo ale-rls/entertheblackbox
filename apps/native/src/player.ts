@@ -16,6 +16,11 @@ const BED = 'bed';
  */
 export const SKIP_FADE_MS = 3000;
 type MediaTiming = ClockTiming['media'][number];
+/** Scene music the server says plays now; null = silent. */
+export type SceneMusic = { src: string; volume?: number } | null;
+/** Volume of scene music when neither the scene nor the show sets one. */
+export const SCENE_MUSIC_VOLUME = 0.7;
+const isMusicLayer = (id: string) => id === BED || id.startsWith(`${BED}:`);
 
 /**
  * Maps show cues onto native scheduler layers. Native code starts, offsets and stops
@@ -50,6 +55,11 @@ export class ShowPlayer {
   }
   private bedUri: string | null = null;
   private musicStarted = false;
+  /** Set once the server sends scene music: the show-wide bed then stays off. */
+  private sceneMusicMode = false;
+  private sceneMusic: SceneMusic = null;
+  /** Layer id of the scene music now installed (one per track, so a change can crossfade). */
+  private sceneLayer: string | null = null;
   /** Participant's music volume (0–1); null follows the published show default. */
   private musicVolume: number | null = null;
   private cue: Cue | null = null;
@@ -89,16 +99,42 @@ export class ShowPlayer {
   startMusic() {
     // Admission/reconnection must not override an explicit participant pause; the native
     // scheduler keeps new layers paused until resume.
-    if (this.musicStarted || !this.bedUri || this.disposed) return;
+    if (this.musicStarted || this.disposed || (!this.bedUri && !this.sceneMusicMode)) return;
     this.musicStarted = true;
-    this.applyMusic();
+    if (this.sceneMusicMode) this.applySceneMusic(); else this.applyMusic();
+  }
+  /**
+   * Follows the show's scene music: a new track fades the old one out and starts looping, null
+   * fades the music out. The first call retires the show-wide bed for this show.
+   */
+  setSceneMusic(music: SceneMusic) {
+    const first = !this.sceneMusicMode;
+    if (!first && this.sceneMusic?.src === music?.src && this.sceneMusic?.volume === music?.volume) return;
+    this.sceneMusicMode = true;
+    this.sceneMusic = music;
+    if (first && this.musicStarted && this.bedUri) this.queue(() => AudioScheduler.fadeOutLayer(BED, SKIP_FADE_MS));
+    if (this.musicStarted) this.applySceneMusic();
+  }
+  private applySceneMusic() {
+    if (this.disposed) return;
+    const music = this.sceneMusic;
+    const id = music ? `${BED}:${music.src}` : null;
+    if (this.sceneLayer && this.sceneLayer !== id) { const old = this.sceneLayer; this.queue(() => AudioScheduler.fadeOutLayer(old, SKIP_FADE_MS)); }
+    this.sceneLayer = null;
+    if (!music || !id) return;
+    const file = this.manifest.files.find(f => f.src === music.src);
+    if (!file || !localAudio(file.sha256).exists) { this.report(`Missing downloaded music: ${music.src}`); return; }
+    this.sceneLayer = id;
+    const uri = localAudio(file.sha256).uri;
+    const volume = this.musicVolume ?? music.volume ?? this.manifest.backgroundMusic?.volume ?? SCENE_MUSIC_VOLUME;
+    this.queue(() => AudioScheduler.setLayer(id, { uri, loop: true, volume }));
   }
   /** Sets the participant's background-music volume (null = show default); applies live without restarting the loop. */
   setMusicVolume(volume: number | null) {
     const next = volume === null ? null : Math.min(1, Math.max(0, volume));
     if (next === this.musicVolume) return;
     this.musicVolume = next;
-    if (this.musicStarted) this.applyMusic();
+    if (this.musicStarted) { if (this.sceneMusicMode) this.applySceneMusic(); else this.applyMusic(); }
   }
   private applyMusic() {
     if (!this.bedUri || this.disposed) return;
@@ -172,7 +208,7 @@ export class ShowPlayer {
     return { calibrated: this.clock.hasSamples, offsetMs: this.clock.offset,
       roundTripMs: this.clock.roundTripMs, sampleAgeMs: this.clock.sampleAgeMs(),
       elapsedMs: this.cue ? this.clock.now() - this.cue.startedAt : 0, mode: 'synchronized',
-      media: [...media('main', this.installedCue ? layers.find(l => l.id === CUE) : undefined), ...media('extra', layers.find(l => l.id === BED))] };
+      media: [...media('main', this.installedCue ? layers.find(l => l.id === CUE) : undefined), ...media('extra', layers.find(l => isMusicLayer(l.id)))] };
   }
   settled() { return this.audioQueue; }
   dispose() {

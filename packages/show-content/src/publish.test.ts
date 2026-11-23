@@ -75,3 +75,13 @@ it('bundles every personal task recording including vote alternatives and fallba
  for(const name of ['intro.mp3','red.mp3','fallback.mp3'])await writeFile(join(root,name),name);
  await writeFile(path,JSON.stringify(scenario));const release=await publishShow(path,root,'rehearsal');expect(release.files.map(f=>f.src)).toEqual(expect.arrayContaining(['intro.mp3','red.mp3','fallback.mp3']));
 });
+
+it('downloads scene music to the apps, but not for a stop scene', async () => {
+  const root = await fixture(); const path = join(root, 'scenario.json'); const scenario = JSON.parse(await readFile(path, 'utf8'));
+  const voice = scenario.phases.find((phase: { id: string }) => phase.id === 'voice');
+  voice.phoneMusic = { src: 'chords.mp3', volume: 0.6 };
+  scenario.phases.push({ kind: 'narration', id: 'quiet', text: 'Quiet', durationMs: 1000, next: 'idle', phoneMusic: { stop: true } });
+  await writeFile(path, JSON.stringify(scenario)); await writeFile(join(root, 'chords.mp3'), 'chords');
+  const release = await publishShow(path, root, 'rehearsal');
+  expect(release.files.map(f => f.src)).toEqual(['chords.mp3', 'one.mp3', 'two.mp3']);
+});
