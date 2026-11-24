@@ -37,4 +37,18 @@ describe("surface effects", () => {
     expect(surfaceEffectColor(effect("chase", { brightness: 0.5 }), 0, 3, 0)).toBe("#800000");
     expect(surfaceEffectColor(effect("rainbow", { brightness: 0 }), 0, 3, 0)).toBe("#000000");
   });
+
+  it("flickers chaos in white only, irregularly, differently per device, and deterministically", () => {
+    const chaos = effect("chaos", { periodMs: 2_000 });
+    const frames = (i: number) => Array.from({ length: 1_200 }, (_, t) => surfaceEffectColor(chaos, i, 8, t * 50));
+    const all = [0, 1, 2, 3, 4, 5, 6, 7].map(frames);
+    expect(new Set(all.flat())).toEqual(new Set(["#000000", "#ffffff"]));
+    const lit = all.map((f) => f.filter((c) => c === "#ffffff").length / f.length);
+    // Each device flashes some of the time but is mostly dark, and devices differ.
+    for (const share of lit) { expect(share).toBeGreaterThan(0.02); expect(share).toBeLessThan(0.6); }
+    expect(new Set(all.map((f) => f.join())).size).toBe(8);
+    // Server and Admin preview draw the same frame.
+    expect(frames(3)).toEqual(all[3]);
+    expect(surfaceEffectColor({ ...chaos, brightness: 0.5 }, 0, 8, 0)).toMatch(/^#(000000|808080)$/);
+  });
 });

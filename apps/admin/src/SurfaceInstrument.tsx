@@ -33,6 +33,7 @@ export const EFFECT_LABELS: Record<SurfaceEffectKind, { name: string; help: stri
   wave: { name: "Wave", help: "A brightness wave travels across the tablets in label order." },
   gradient: { name: "Gradient wave", help: "A wave blending between the two colours travels across the tablets." },
   rainbow: { name: "Rainbow", help: "The full hue circle travels across the tablets." },
+  chaos: { name: "Chaos", help: "Every tablet flickers white in an irregular random pattern, with bursts and calm stretches; the cycle sets how long each mood lasts. Always white." },
 };
 
 /** Natural label order, so T2 sorts before T10. */
@@ -323,7 +324,7 @@ export function SurfaceInstrument({ token, participants }: { token: string; part
       <div className="surface-effect-kinds" role="group" aria-label="Effect">
         {SURFACE_EFFECT_KINDS.map((kind) => <button key={kind} type="button" className="sc-tool-button" aria-pressed={effectKind === kind} onClick={() => setEffectKind(kind)}>{EFFECT_LABELS[kind].name}</button>)}
       </div>
-      <p className="sc-tool-help">{EFFECT_LABELS[effectKind].help} Uses the selected colour and the dimmer; changes apply live.</p>
+      <p className="sc-tool-help">{EFFECT_LABELS[effectKind].help} {effectKind === "chaos" ? "Uses the dimmer" : "Uses the selected colour and the dimmer"}; changes apply live.</p>
       <div className="surface-effect-settings">
         <label className="surface-slider">Cycle <span className="sc-tool-mono">{(periodMs / 1000).toFixed(1)} s</span>
           <input type="range" min={300} max={10_000} step={100} value={periodMs} onChange={(event) => setPeriodMs(Number(event.target.value))} />
