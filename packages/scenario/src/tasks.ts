@@ -17,6 +17,11 @@ export const participantTaskSchema = z.object({
   id, title: z.string().trim().min(1).max(200), question: z.string().trim().min(1).max(2000),
   notificationBody: z.string().trim().min(1).max(200),
   groupIds: z.array(id).default([]),
+  /**
+   * Set only by the server on a group introduction (see groupIntroductionSchema): there is nothing to choose,
+   * the result arrives with it, and the tablet alerts until the introduction ends. Never authored.
+   */
+  introduction: z.boolean().optional(),
   // Show-scoped workflows survive scene changes, but are cancelled on show end/restart.
   persistAcrossPhases: z.boolean().optional(),
   audio: taskAudioSchema.optional(),
@@ -67,6 +72,42 @@ export const taskInstanceSchema = z.object({
   recipients: z.array(taskRecipientSchema),
 });
 export type TaskInstance = z.infer<typeof taskInstanceSchema>;
+
+/**
+ * Played to a participant whenever they are moved into the group: by the operator, Assign rest or a staff pick.
+ * Moving them again plays the new group's introduction; moving them to a group without one stops it.
+ */
+export const groupIntroductionSchema = z.object({
+  /** Lock-screen notification and "your turn" banner. */
+  notificationBody: z.string().trim().min(1).max(200),
+  /** Shown on the tablet while the introduction runs. */
+  text: z.string().trim().min(1).max(2000),
+  audio: taskAudioSchema.optional(),
+});
+export type GroupIntroduction = z.infer<typeof groupIntroductionSchema>;
+/** How long a tablet alerts and shows an introduction without a recording. */
+export const GROUP_INTRODUCTION_TEXT_MS = 15_000;
+/**
+ * Admin → Devices "Assign rest": draws everyone still in `fromGroupId` into the `fill` groups
+ * (in order, each held between min and max at about `share` of the drawn pool), the rest into `restGroupId`.
+ * `leadGroupIds` are the hand-picked parts; Admin warns while one is empty.
+ */
+export const assignRestSchema = z.object({
+  fromGroupId: id,
+  leadGroupIds: z.array(id).max(20).default([]),
+  fill: z.array(z.object({
+    groupId: id,
+    min: z.number().int().nonnegative().max(1000).default(0),
+    max: z.number().int().positive().max(1000),
+    share: z.number().positive().max(1),
+  }).refine(f => f.min <= f.max, { message: 'min must not exceed max', path: ['min'] })).max(10).default([]),
+  restGroupId: id,
+});
+export type AssignRest = z.infer<typeof assignRestSchema>;
+/** Introduction recordings belong in the native bundle like task recordings. */
+export function groupIntroductionAudioSources(groups: readonly { introduction?: GroupIntroduction | undefined }[] = []): string[] {
+  return [...new Set(groups.flatMap(g => g.introduction?.audio ? [g.introduction.audio.src] : []))];
+}
 
 export const participantRoleSchema = z.object({ id, label: z.string().trim().min(1).max(200), capacity: z.number().int().positive().max(10000).optional(), exclusiveSet: z.string().max(100).optional() });
 export type ParticipantRole = z.infer<typeof participantRoleSchema>;

@@ -355,3 +355,6 @@
 .cursor-size-input output { min-width: 3.5rem; font-variant-numeric: tabular-nums; }
 .cursor-size-scenes { display: grid; gap: var(--sc-tool-space-3); padding: 0; margin: var(--sc-tool-space-5) 0; list-style: none; }
 .cursor-size-add { display: flex; flex-wrap: wrap; gap: var(--sc-tool-space-3); }
+.admin-assign-rest { display: grid; gap: var(--sc-tool-space-2); justify-items: start; margin-block-start: var(--sc-tool-space-4); }
+.admin-assign-rest-list { margin: 0 0 var(--sc-tool-space-3); padding-inline-start: var(--sc-tool-space-5); }
+.admin-assign-rest .sc-tool-dialog h3 { margin: var(--sc-tool-space-3) 0 var(--sc-tool-space-1); font-size: var(--sc-tool-font-size-1); }

@@ -1,5 +1,5 @@
 import { admissionConfigSchema } from './admission.js';
-import { participantTaskSchema, participantRoleSchema, staffAssignmentSchema } from './tasks.js';
+import { assignRestSchema, groupIntroductionSchema, participantTaskSchema, participantRoleSchema, staffAssignmentSchema } from './tasks.js';
 import { monitorCuesSchema } from "./monitors.js";
 import { sceneCountdownSchema } from "./scene-countdown.js";
 import { actorScriptSchema, scriptCuesSchema, tabletScriptSchema } from "./actor-script.js";
@@ -634,6 +634,8 @@ export const audienceGroupSchema = z.object({
   votingMethod: votingMethodSchema.optional(),
   /** Presentation for this group's cursor votes. Omitted keeps the standard field overlay. */
   voteTreatment: z.literal("curtain-light").optional(),
+  /** Played to a participant whenever they are moved into this group. */
+  introduction: groupIntroductionSchema.optional(),
 });
 
 const groupBranchSchema = z.object({
@@ -748,6 +750,8 @@ const canonicalScenarioSchema = z.object({
    * initialGroupIds; manual splits keep it.
    */
   groupByClient: z.object({ native: groupIdSchema.optional(), web: groupIdSchema.optional() }).strict().optional(),
+  /** Admin → Devices "Assign rest": hand-picked leads, the rest drawn at random. */
+  assignRest: assignRestSchema.optional(),
   /** Phase the lobby transitions into when a session starts (plan §6). */
   entryPhaseId: phaseIdSchema,
   /**

@@ -1,4 +1,4 @@
-import { taskAudioSources } from './tasks.js';
+import { groupIntroductionAudioSources, taskAudioSources } from './tasks.js';
 import { admissionSources } from './admission.js';
 import { monitorMediaSources } from "./monitors.js";
 import { curtainLightIssues } from "./curtain.js";
@@ -29,7 +29,8 @@ export type ScenarioIssue = {
     | "script-cue"
     | "unused-rank-outcome"
     | "surface-cue"
-    | "spotlight";
+    | "spotlight"
+    | "invalid-assign-rest";
   phaseId?: string;
   message: string;
 };
@@ -217,6 +218,16 @@ export function validateScenario(
   for (const groupId of scenario.initialGroupIds ?? []) if (!groupIds.has(groupId)) errors.push({
     severity: "error", code: "unknown-group", message: `initialGroupIds references unknown group "${groupId}"`,
   });
+  if (scenario.assignRest) {
+    const rest = scenario.assignRest;
+    const named = [rest.fromGroupId, ...rest.leadGroupIds, ...rest.fill.map(f => f.groupId), rest.restGroupId];
+    for (const groupId of new Set(named)) if (!groupIds.has(groupId)) errors.push({
+      severity: "error", code: "unknown-group", message: `assignRest references unknown group "${groupId}"`,
+    });
+    if (named.length !== new Set(named).size) errors.push({
+      severity: "error", code: "invalid-assign-rest", message: "assignRest must name each group once (from, leads, fill and rest)",
+    });
+  }
 
   const spotlightPhases = scenario.phases.filter(phase => phase.kind === "position-question" && phase.spotlight);
   // Spotlight cues need the shared projection. A group path ends at its reunion.
@@ -374,6 +385,7 @@ export function validateScenario(
     if (pick.groupId && !scenario.groups?.some(g => g.id === pick.groupId)) errors.push({ severity: 'error', code: 'unknown-group', message: `Staff pick ${pick.id} references unknown group ${pick.groupId}` });
   }
   for (const phase of scenario.phases) if ((phase.kind === 'narration' || phase.kind === 'video') && phase.taskId && !scenario.participantTasks?.some(t => t.id === phase.taskId)) errors.push({ severity: 'error', code: 'broken-target', phaseId: phase.id, message: `Unknown task ${phase.taskId}` });
+  for (const src of groupIntroductionAudioSources(scenario.groups)) if (mediaManifest && !mediaManifest.files.some(f => f.src === src)) errors.push({ severity: 'error', code: 'missing-media', message: `Group introduction audio missing from manifest: ${src}` });
   for (const src of taskAudioSources(scenario.participantTasks)) if (mediaManifest && !mediaManifest.files.some(f => f.src === src)) errors.push({ severity: 'error', code: 'missing-media', message: `Task audio missing from manifest: ${src}` });
   return { ok: errors.length === 0, errors, warnings };
 }
