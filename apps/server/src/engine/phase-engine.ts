@@ -331,7 +331,7 @@ export class PhaseEngine {
     else {
       this.tasks.configureRoles(this.scenario.participantRoles ?? []);
       this.tasks.configureWorkflow(this.scenario.participantTasks ?? [], {
-        assignGroup: (id, group) => this.adminAssignGroup(id, group).ok,
+        assignGroup: (id, group) => this.adminAssignGroup(id, group, undefined, false).ok,
         winner: question => this.taskVoteWinners.get(question) ?? null,
       });
     }
@@ -457,12 +457,12 @@ export class PhaseEngine {
   private lastTaskState = '';
   get taskStatus() {
     const phase = this.currentPhase();
-    return { roles: this.scenario.participantRoles ?? [], assignments: this.tasks.roleAssignments(), templates: this.scenario.participantTasks ?? [], instances: this.tasks.all().filter(t => t.phaseId === null || t.template.persistAcrossPhases || t.phaseId === this.phaseId && t.phaseEpoch === this.phaseEpoch), error: this.taskError,
+    return { roles: this.scenario.participantRoles ?? [], assignments: this.tasks.roleAssignments(), templates: this.scenario.participantTasks ?? [], instances: this.tasks.all().filter(t => !t.template.introduction).filter(t => t.phaseId === null || t.template.persistAcrossPhases || t.phaseId === this.phaseId && t.phaseEpoch === this.phaseEpoch), error: this.taskError,
       waitingForGo: phase.kind === 'narration' && !!phase.waitForGo,
       paths: this.taskPaths().map(engine => ({ phaseId: engine.currentPhaseId, phaseEpoch: engine.currentPhaseEpoch, ...engine.taskStatusLocal() })) };
   }
   private taskPaths(): PhaseEngine[] { return [...this.paths.values()].flatMap(({engine}) => [engine, ...engine.taskPaths()]); }
-  private taskStatusLocal() { return { instances: this.tasks.all().filter(t => t.phaseId === null || t.template.persistAcrossPhases || t.phaseId === this.phaseId && t.phaseEpoch === this.phaseEpoch), error: this.taskError, waitingForGo: this.currentPhase().kind === 'narration' && !!(this.currentPhase() as { waitForGo?: boolean }).waitForGo }; }
+  private taskStatusLocal() { return { instances: this.tasks.all().filter(t => !t.template.introduction).filter(t => t.phaseId === null || t.template.persistAcrossPhases || t.phaseId === this.phaseId && t.phaseEpoch === this.phaseEpoch), error: this.taskError, waitingForGo: this.currentPhase().kind === 'narration' && !!(this.currentPhase() as { waitForGo?: boolean }).waitForGo }; }
   taskCommand(command: { action: 'open' | 'close' | 'cancel' | 'go' | 'assign-role' | 'withdraw-role'; roleId?: string | undefined; participantId?: string | undefined; templateId?: string | undefined; instanceId?: string | undefined; participantIds?: string[] | undefined; phaseId: string; phaseEpoch: number; sessionId: string }): void {
     if (command.sessionId !== this.sessionId) throw new Error('Stale session');
     if (command.phaseId !== this.phaseId || command.phaseEpoch !== this.phaseEpoch) {
@@ -540,7 +540,7 @@ export class PhaseEngine {
       catch (error) { return result(false, error instanceof Error ? error.message : 'Role unavailable'); }
     }
     if (pick.groupId) {
-      if (!this.assignParticipantGroup(participantId, pick.groupId, undefined, false, assignRole).ok) return result(false, 'Could not move this tablet into that group.');
+      if (!this.adminAssignGroup(participantId, pick.groupId, undefined, true, assignRole).ok) return result(false, 'Could not move this tablet into that group.');
     } else {
       assignRole?.();
     }
@@ -549,7 +549,7 @@ export class PhaseEngine {
   }
 
   private sendTask(socket: WebSocket): void {
-    if (!this.scenario.participantTasks?.length) return;
+    if (!this.scenario.participantTasks?.length && !this.scenario.groups?.some((group) => group.introduction)) return;
     const id = this.participantIds.get(socket);
     if (!id) return;
     const state = this.tasks.current(id, this.sessionId);
@@ -865,9 +865,69 @@ export class PhaseEngine {
     return child.adminJump(target, now, expectedPhaseId);
   }
 
-  /** Move membership and routing together; joining never restarts the destination clock. */
-  adminAssignGroup(participantId: string, groupId: string, expectedEpoch?: number): TransitionResult {
-    return this.assignParticipantGroup(participantId, groupId, expectedEpoch);
+  /**
+   * Move membership and routing together; joining never restarts the destination clock.
+   * A move into a different group plays that group's introduction (`introduce: false` for task outcomes, which bring their own recording).
+   */
+  adminAssignGroup(participantId: string, groupId: string, expectedEpoch?: number, introduce = true, onValidated?: () => void): TransitionResult {
+    const before = this.groupSelection?.current(participantId) ?? null;
+    const result = this.assignParticipantGroup(participantId, groupId, expectedEpoch, false, onValidated);
+    if (result.ok && introduce && before !== groupId && this.groupSelection?.current(participantId) === groupId) this.introduceGroup(participantId, groupId);
+    return result;
+  }
+
+  /** Plays the group's introduction, or stops an earlier one when this group has none. */
+  private introduceGroup(participantId: string, groupId: string): void {
+    const group = this.scenario.groups?.find((g) => g.id === groupId);
+    if (group?.introduction) this.tasks.introduce(this.sessionId, participantId, { id: group.id, label: group.label, introduction: group.introduction }, this.now());
+    else if (!this.tasks.stopIntroductions(this.sessionId, participantId)) return;
+    this.pushTasks(true);
+  }
+
+  /**
+   * Admin → Devices "Assign rest": a random draw of everyone connected who is still in `fromGroupId`.
+   * Each fill group is held between its min and max at about its share of the pool (those drawn now plus
+   * those already in a fill or the rest group); the others go to the rest group. Nothing moves until `applyAssignRest`.
+   */
+  get assignRestConfig() { return this.scenario.assignRest ?? null; }
+
+  planAssignRest(random: () => number = Math.random): { assignments: { participantId: string; groupId: string }[]; emptyLeadGroupIds: string[] } {
+    const config = this.scenario.assignRest;
+    if (!config) throw new Error("This show has no Assign rest setup");
+    const connected = this.participantPresence.filter((p) => p.connected).map((p) => p.clientId);
+    const groupOf = (id: string) => this.groupSelection?.current(id) ?? null;
+    const everyone = this.registry.values().map((p) => p.clientId);
+    const count = (groupId: string) => everyone.filter((id) => groupOf(id) === groupId).length;
+    const drawn = connected.filter((id) => groupOf(id) === config.fromGroupId);
+    for (let i = drawn.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [drawn[i], drawn[j]] = [drawn[j]!, drawn[i]!]; }
+    const pool = drawn.length + count(config.restGroupId) + config.fill.reduce((n, f) => n + count(f.groupId), 0);
+    const assignments: { participantId: string; groupId: string }[] = [];
+    let next = 0;
+    for (const fill of config.fill) {
+      const target = Math.min(fill.max, Math.max(fill.min, Math.round(pool * fill.share)));
+      const take = Math.min(drawn.length - next, Math.max(0, target - count(fill.groupId)));
+      for (const participantId of drawn.slice(next, next + take)) assignments.push({ participantId, groupId: fill.groupId });
+      next += take;
+    }
+    for (const participantId of drawn.slice(next)) assignments.push({ participantId, groupId: config.restGroupId });
+    return { assignments, emptyLeadGroupIds: config.leadGroupIds.filter((groupId) => count(groupId) === 0) };
+  }
+
+  /**
+   * Applies a previewed draw. Each entry must still be someone in `fromGroupId` going to one of the drawn groups;
+   * anyone moved by hand since the preview is skipped. Every move plays its introduction.
+   */
+  applyAssignRest(assignments: readonly { participantId: string; groupId: string }[]): { moved: number; skipped: string[] } {
+    const config = this.scenario.assignRest;
+    if (!config) throw new Error("This show has no Assign rest setup");
+    const targets = new Set([config.restGroupId, ...config.fill.map((f) => f.groupId)]);
+    let moved = 0;
+    const skipped: string[] = [];
+    for (const { participantId, groupId } of assignments) {
+      if (!targets.has(groupId) || this.groupSelection?.current(participantId) !== config.fromGroupId || !this.adminAssignGroup(participantId, groupId).ok) skipped.push(participantId);
+      else moved += 1;
+    }
+    return { moved, skipped };
   }
 
   private assignParticipantGroup(participantId: string, groupId: string, expectedEpoch?: number, parentOnly = false, onValidated?: () => void): TransitionResult {

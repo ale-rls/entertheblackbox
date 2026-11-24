@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { ParticipantRole, RoleAssignment, ParticipantTask, TaskInstance, TaskOutcome, TaskRecipient } from '@entertheblackbox/scenario';
+import { GROUP_INTRODUCTION_TEXT_MS, type GroupIntroduction, type ParticipantRole, type RoleAssignment, type ParticipantTask, type TaskInstance, type TaskOutcome, type TaskRecipient } from '@entertheblackbox/scenario';
 /** Serialized on the server event loop: a claim is committed before another response is processed. */
 export class TaskEngine {
   private instances: TaskInstance[] = [];
@@ -47,6 +47,36 @@ export class TaskEngine {
   clearRoles(): void { this.assignments = []; }
 
   all(): TaskInstance[] { return structuredClone(this.instances); }
+  /**
+   * Plays a group's introduction to one participant: a finished, one-recipient instance carrying its result, so the
+   * tablet shows the text and plays the recording without a choice. Any earlier introduction for them is cancelled first.
+   */
+  introduce(sessionId: string, participantId: string, group: { id: string; label: string; introduction: GroupIntroduction }, now: number): TaskInstance {
+    this.stopIntroductions(sessionId, participantId);
+    const { notificationBody, text, audio } = group.introduction;
+    const startedAt = now + 400;
+    const template: ParticipantTask = { id: `introduction-${group.id}`, title: group.label, question: text, notificationBody, groupIds: [], introduction: true,
+      durationMs: Math.max(1000, (audio ? audio.durationMs + 400 : GROUP_INTRODUCTION_TEXT_MS)), options: [{ id: group.id, label: group.label, message: '' }],
+      fullMessage: '' };
+    const task: TaskInstance = { id: randomUUID(), sessionId, template, phaseId: null, phaseEpoch: null, createdAt: now,
+      deadlineAt: now + template.durationMs, status: 'closed',
+      recipients: [{ participantId, optionId: group.id, sequence: ++this.sequence, status: 'answered', message: '', respondedAt: now,
+        ...(audio ? { audio: { ...audio, startedAt } } : {}) }] };
+    this.instances.push(task);
+    return structuredClone(task);
+  }
+  /** Cancels this participant's introductions: a playing recording stops and the card goes, so it never names a part they left. */
+  stopIntroductions(sessionId: string, participantId: string): boolean {
+    let stopped = false;
+    for (const t of this.instances) {
+      if (!t.template.introduction || t.sessionId !== sessionId) continue;
+      const r = t.recipients.find(r => r.participantId === participantId);
+      if (!r || r.status === 'cancelled') continue;
+      t.status = 'cancelled'; r.status = 'cancelled'; r.message = '';
+      stopped = true;
+    }
+    return stopped;
+  }
   open(template: ParticipantTask, sessionId: string, ids: string[], now: number, phase: { id: string; epoch: number } | null = null): TaskInstance {
     this.tick(now);
     if (!ids.length && phase === null) throw new Error('No eligible participants');

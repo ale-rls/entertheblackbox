@@ -1,6 +1,7 @@
 import { RoleEditor } from './RoleEditor.js';
 import { StaffPickEditor } from './StaffPickEditor.js';
 import { SurfaceCueEditor } from "./SurfaceCueEditor.js";
+import { AssignRestEditor, GroupIntroductionEditor } from "./GroupIntroductionEditor.js";
 import { AdmissionEditor } from './AdmissionEditor.js';
 import { TaskEditor } from './TaskEditor.js';
 import { MAX_VOTE_COUNTDOWN_SECONDS, MIN_VOTE_COUNTDOWN_SECONDS, voteCountdownSeconds, withVoteCountdownSeconds, type ParticipantTask } from '@entertheblackbox/scenario';
@@ -37,6 +38,7 @@ type Props = {
   onTargetAudienceSizeChange: (value: number) => void;
   onGroupsChange: (groups: NonNullable<StudioProject["scenario"]["groups"]>, initialGroupIds: string[]) => void;
   onGroupByClientChange?: (value: StudioProject["scenario"]["groupByClient"]) => void;
+  onAssignRestChange?: (value: StudioProject["scenario"]["assignRest"]) => void;
   onCurtainLightChange?: (config: CurtainLightConfig | undefined) => void;
   onActorScriptChange?: (script: StudioProject["scenario"]["actorScript"]) => void;
 };
@@ -46,7 +48,7 @@ const numberValue = (value: string, fallback: number) => {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
-export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksChange, onAdmissionChange, onTasksChange, project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onGroupByClientChange, onCurtainLightChange, onActorScriptChange }: Props) {
+export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksChange, onAdmissionChange, onTasksChange, project, selectedId, localMedia, onRename, onChange, onChooseMedia, onComponentTypeChange, onTransitionChange, onQuestionLayoutChange, onTargetAudienceSizeChange, onGroupsChange, onGroupByClientChange, onAssignRestChange, onCurtainLightChange, onActorScriptChange }: Props) {
   const phase = project.scenario.phases.find((item) => item.id === selectedId);
   const [idInput, setIdInput] = useState(phase?.id ?? "");
   const [copiedArena, setCopiedArena] = useState<Arena | null>(null);
@@ -90,6 +92,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
         <label className="sc-tool-checkbox"><input type="checkbox" checked={group.voteTreatment === "curtain-light"} onChange={(event) => onGroupsChange((project.scenario.groups ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, voteTreatment: event.target.checked ? "curtain-light" as const : undefined } : item), project.scenario.initialGroupIds ?? [])} /><span title="voteTreatment">Curtain-light cursor votes</span></label>
         <label className="sc-tool-checkbox"><input type="checkbox" checked={(project.scenario.initialGroupIds ?? []).includes(group.id)} onChange={(event) => { const current = project.scenario.initialGroupIds ?? []; onGroupsChange(project.scenario.groups ?? [], event.target.checked ? [...current, group.id] : current.filter((id) => id !== group.id)); }} />Assign members to this group at show start</label>
         <button className="sc-tool-button" type="button" disabled={(project.scenario.groups?.length ?? 0) <= 2} onClick={() => onGroupsChange((project.scenario.groups ?? []).filter((_, itemIndex) => itemIndex !== index), (project.scenario.initialGroupIds ?? []).filter((id) => id !== group.id))}>Remove group</button>
+        <GroupIntroductionEditor group={group} media={localMedia} onChange={(introduction) => onGroupsChange((project.scenario.groups ?? []).map((item, itemIndex) => { if (itemIndex !== index) return item; const { introduction: _, ...rest } = item; return introduction ? { ...rest, introduction } : rest; }), project.scenario.initialGroupIds ?? [])} />
       </div>)}
       <button className="sc-tool-button" type="button" onClick={() => { const groups = project.scenario.groups ?? []; if (groups.length === 0) { onGroupsChange([{ id: "group-1", label: "Group 1" }, { id: "group-2", label: "Group 2" }], []); return; } let suffix = groups.length + 1; while (groups.some((group) => group.id === `group-${suffix}`)) suffix += 1; onGroupsChange([...groups, { id: `group-${suffix}`, label: `Group ${suffix}` }], project.scenario.initialGroupIds ?? []); }}>{(project.scenario.groups?.length ?? 0) === 0 ? "Add groups" : "Add group"}</button>
       {((project.scenario.groups ?? []).some((group) => group.voteTreatment === "curtain-light") || project.scenario.phases.some(isCurtainLightVote)) && onCurtainLightChange &&
@@ -106,6 +109,7 @@ export function Inspector({ onHandoverTaskChange, onRolesChange, onStaffPicksCha
           </select></label>)}
         <p className="sc-tool-copy field-hint">Applied the moment someone joins, also mid-show, so late joiners get a group. Group scenes with manual assignment keep it.</p>
       </div>}
+      {onAssignRestChange && (project.scenario.groups?.length ?? 0) > 0 && <AssignRestEditor config={project.scenario.assignRest} groups={project.scenario.groups ?? []} onChange={onAssignRestChange} />}
       <p className="sc-tool-copy field-hint">A show has at least two labelled groups. Starting groups are assigned automatically in the lobby; a group scene can instead ask people to choose on their phones.</p>
     </fieldset>
     <Compiled project={project} /></aside>;

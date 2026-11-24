@@ -13,6 +13,17 @@ function state(status: NonNullable<ParticipantTaskState['task']>['recipient']['s
 }
 
 describe('participant task visibility', () => {
+  it('alerts and holds attention for a group introduction until it ends, and drops it when cancelled', () => {
+    const message = state('answered');
+    message.task!.status = 'closed';
+    message.task!.template = { ...message.task!.template, introduction: true, notificationBody: 'Du bist im Chor' };
+    expect(taskAlert(message, 2000)).toEqual({ key: 'task:show:casting', body: 'Du bist im Chor' });
+    expect(taskVisible(message, 2000)).toBe(true);
+    expect(taskAlert(message, 10000)).toBeNull();
+    expect(taskVisible(message, 10000)).toBe(false);
+    message.task!.status = 'cancelled';
+    expect(taskAlert(message, 2000)).toBeNull();
+  });
   it.each(['accepted', 'answered'] as const)('returns to neutral after a server-confirmed %s response without changing audio', status => {
     const message = state(status);
     const before = structuredClone(message);

@@ -1,5 +1,6 @@
 import { ScriptPanel } from "./ActorScript.js";
 import { AdmissionPrograms, type AdmissionStatus } from './AdmissionPrograms.js';
+import { AssignRest, type AssignRestConfig } from "./AssignRest.js";
 import { ParticipantTasks, type TaskStatus } from './ParticipantTasks.js';
 import { NativeAudioCoverage } from './NativeAudioCoverage.js';
 import { SurfaceInstrument } from "./SurfaceInstrument.js";
@@ -71,6 +72,7 @@ export type Status = {
   /** Counter total of the running operator-field scene (Admin Setup's checkpoint amount, else the scene's). */
   operatorFieldTotal?: number | null;
   groupDestinations?: string[];
+  assignRest?: AssignRestConfig | null;
   pendingGroupAssignments?: string[];
   pendingDisconnectedGroupAssignments?: string[];
   groupPathsStarted: boolean;
@@ -906,6 +908,8 @@ export function App() {
             <div><p className="sc-tool-eyebrow">Who has joined</p><h2 id="admin-participants-heading">Participants</h2></div>
             <span className="sc-tool-mono admin-section-count">{status.connectedParticipants} connected</span>
           </div>
+          {status.assignRest && connectedToken && <AssignRest token={connectedToken} config={status.assignRest} sessionId={status.sessionId} groups={status.groups ?? []} participants={status.participants}
+            disabled={busy || status.lifecycle !== "active"} onApplied={(message) => { setFeedback({ status: "success", message }); void refresh(); }} />}
           {status.participants.length === 0 ? <p className="sc-tool-copy">Nobody has joined this session yet.</p> : <ul className="admin-participant-list">
             {status.participants.map((participant) => <li key={participant.clientId}>
               <span className="admin-participant-color" style={{ backgroundColor: participant.color }} />

@@ -66,6 +66,28 @@ audio and shows task prompts.
   ID. Messages the socket had already queued for the old occupant are rejected:
   commands carry an `occupantId`. The app clears snapshot, task, vote, group
   and alert state when its identity changes.
+- **Group introductions** (Studio → Show properties → Audience groups →
+  Introduction on assignment). A group can carry a notification text, a tablet
+  text and a recording. Whenever someone is moved **into** that group (Admin's
+  group dropdown, Assign rest, or a staff pick), the server sends them a
+  finished, one-recipient task marked `introduction`. The tablet alerts with
+  the notification text and shows the text with no buttons. It plays the
+  recording from the start. Moving them into another part plays that part's
+  introduction. Moving them into a group without one (e.g. back to KI-Blackbox)
+  cancels the running introduction. Task outcomes that assign a group do not
+  trigger it, because they bring their own recording. Introductions stay out of
+  Admin's task list and appear in the task results export. Without a recording,
+  the text shows for 15 seconds. Older apps show the text with a disabled ✓
+  button and play the recording, but they don't alert.
+- **Assign rest** (Admin → Devices, when the show sets `assignRest`). The
+  operator puts the leads in their groups by hand. **Assign rest…** then
+  previews a random draw of everyone connected who is still in `fromGroupId`.
+  Each `fill` group gets about its `share` of the pool (those drawn plus those
+  already in a drawn group), kept between `min` and `max`; the rest go to
+  `restGroupId`. The preview warns when a lead group is empty. **Draw again**
+  reshuffles. **Apply** moves everyone and plays their introductions, skipping
+  anyone moved by hand since the preview. Pressing it again later places only
+  people who are still unassigned (late joiners).
 - **Task results** are audited per revision. They export as CSV from Admin
   ("Download task results CSV") and through
   `/api/admin/sessions/:id/export?format=tasks-csv`.

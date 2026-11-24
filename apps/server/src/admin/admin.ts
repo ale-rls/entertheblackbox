@@ -356,6 +356,7 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
         })),
         groups: options.groupControl?.catalogue ?? [],
         groupDestinations: engine?.groupDestinations ?? [],
+        assignRest: engine?.assignRestConfig ?? null,
         pendingGroupAssignments: engine?.pendingGroupAssignments ?? [],
         pendingDisconnectedGroupAssignments: engine?.pendingDisconnectedGroupAssignments ?? [],
         sessionId: engine?.currentSessionId ?? null,
@@ -441,6 +442,21 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       catch (error) { return reply.code(409).send({ error: error instanceof Error ? error.message : "assignment_failed" }); }
       options.data?.audit({ action: "assign-participant-group", at: new Date().toISOString(), detail: { participantId, groupId } });
       return { ok: true, participantId, groupId };
+    });
+    admin.post<{ Body: { sessionId?: unknown; apply?: unknown } }>("/groups/assign-rest", async (request, reply) => {
+      const engine = options.engine();
+      if (!options.groupControl || engine === null) return reply.code(503).send({ error: "groups_unavailable" });
+      const { sessionId, apply } = request.body ?? {};
+      if (sessionId !== undefined && sessionId !== engine.currentSessionId) return reply.code(409).send({ error: "stale" });
+      const entry = z.object({ participantId: z.string().min(1).max(200), groupId: z.string().min(1).max(100) });
+      const parsed = z.array(entry).max(1000).optional().safeParse(apply);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_request" });
+      try {
+        if (!parsed.data) return engine.planAssignRest();
+        const result = engine.applyAssignRest(parsed.data);
+        options.data?.audit({ action: "assign-rest", at: new Date().toISOString(), detail: { moved: result.moved, skipped: result.skipped.length } });
+        return { ok: true, ...result };
+      } catch (error) { return reply.code(409).send({ error: error instanceof Error ? error.message : "assign_rest_failed" }); }
     });
     admin.get("/flow", async (_request, reply) => {
       const engine = options.engine();

@@ -65,6 +65,11 @@ export function updateGroupCatalogue(scenario: Scenario, groups: Group[], initia
   const actorScript = scenario.actorScript && speakers !== undefined
     ? (({ speakersByGroup: _, ...rest }) => Object.keys(speakers).length ? { ...rest, speakersByGroup: speakers } : rest)(scenario.actorScript)
     : scenario.actorScript;
-  return { ...scenario, actorScript, monitorGroupId: monitorGroupId !== undefined && ids.has(monitorGroupId) ? monitorGroupId : undefined, groups, phases: phases as Scenario["phases"], initialGroupIds: initial.length ? initial : undefined,
+  const assignRest = scenario.assignRest && { ...scenario.assignRest, fromGroupId: remap(scenario.assignRest.fromGroupId), restGroupId: remap(scenario.assignRest.restGroupId),
+    leadGroupIds: scenario.assignRest.leadGroupIds.map(remap).filter((id) => ids.has(id)),
+    fill: scenario.assignRest.fill.map((fill) => ({ ...fill, groupId: remap(fill.groupId) })).filter((fill) => ids.has(fill.groupId)) };
+  const keepAssignRest = assignRest && ids.has(assignRest.fromGroupId) && ids.has(assignRest.restGroupId) ? assignRest : undefined;
+  const { assignRest: _assignRest, ...withoutAssignRest } = scenario;
+  return { ...withoutAssignRest, ...(keepAssignRest ? { assignRest: keepAssignRest } : {}), actorScript, monitorGroupId: monitorGroupId !== undefined && ids.has(monitorGroupId) ? monitorGroupId : undefined, groups, phases: phases as Scenario["phases"], initialGroupIds: initial.length ? initial : undefined,
     groupByClient: Object.keys(byClient).length ? byClient : undefined };
 }
