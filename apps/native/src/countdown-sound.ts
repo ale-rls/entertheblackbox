@@ -1,4 +1,4 @@
-import { anyMonitorCountdown, finalMonitorCountdown, monitorCountdown, type MonitorCountdownPhase } from '@entertheblackbox/scenario';
+import { anyMonitorCountdown, finalMonitorCountdown, monitorCountdown, monitorsCountThemselves, type MonitorCountdownPhase } from '@entertheblackbox/scenario';
 import type { Snapshot } from './cues';
 
 /**
@@ -26,10 +26,14 @@ export function displayPingSeconds(phase: (MonitorCountdownPhase & { countdown?:
   return finalMonitorCountdown(monitorCountdown(phase, now));
 }
 
-/** The number this participant's countdown is at: the display's ping countdown or the monitors', or null. */
+/**
+ * The number this participant's countdown is at, or null: the monitors' countdown,
+ * plus the display's ping countdown unless the monitors carry their own countdowns.
+ */
 export function countdownSeconds(s: Snapshot | null, now: number): number | null {
   if (!countdownAudible(s)) return null;
   const monitors = anyMonitorCountdown(s!.phase, now);
+  if (monitorsCountThemselves(s!.phase)) return monitors;
   const display = displayPingSeconds(s!.phase, now);
   return monitors === null ? display : display === null ? monitors : Math.max(monitors, display);
 }

@@ -37,3 +37,18 @@ describe("monitor amount countdowns", () => {
   });
 });
 
+
+describe("monitors with their own countdowns", () => {
+  // Teil 1: the theatre votes on the curtain (closes at 30 s) while M1–M4 time the KI question (ends at 20 s).
+  const vote = { kind: "video-position-question", startedAt: 0, showAtMs: 0, openAtMs: 0, closeAtMs: 30_000, hideAtMs: 33_000 };
+  const own: MonitorCountdownPhase = { ...vote, monitorCues: { M1: [{ kind: "text", startMs: 0, text: "Frage?", countdownSeconds: 5 }, { kind: "text", startMs: 20_000, text: "Nächste?" }] } };
+  it("count their own cue and never the parallel vote", () => {
+    expect(shownMonitorCountdown(own.monitorCues!.M1!, own, 17_500)).toBe(3);
+    expect(shownMonitorCountdown(own.monitorCues!.M1!, own, 26_500)).toBeNull();
+    expect(anyMonitorCountdown(own, 26_500)).toBeNull();
+  });
+  it("still show the vote's last seconds when no cue counts down", () => {
+    const plain: MonitorCountdownPhase = { ...vote, monitorCues: { M1: [{ kind: "text", startMs: 0, text: "Frage?" }] } };
+    expect(anyMonitorCountdown(plain, 26_500)).toBe(4);
+  });
+});

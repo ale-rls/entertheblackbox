@@ -77,7 +77,19 @@ export function shownMonitorCountdown(cues: readonly MonitorCue[], phase: Monito
   const cue = activeMonitorCue(cues, now - phase.startedAt);
   if (!monitorCueShowsCountdown(cue)) return null;
   if (cue.countdownSeconds !== undefined) return monitorCueCountdown(cues, now - phase.startedAt);
+  if (monitorsCountThemselves(phase)) return null;
   return resolved ? null : finalMonitorCountdown(monitorCountdown(phase, now));
+}
+
+/**
+ * True when any M1–M4 cue in the phase carries its own countdown. The monitors then
+ * time their own questions (e.g. the KI side in Teil 1 while the theatre votes on the
+ * curtain in parallel) and never show the phase's vote or scene countdown.
+ */
+export function monitorsCountThemselves(phase: Pick<MonitorCountdownPhase, "monitorCues"> | null): boolean {
+  const cues = phase?.monitorCues;
+  if (!cues) return false;
+  return MONITOR_IDS.some((id) => (cues[id] ?? []).some((cue) => cue.kind !== "blank" && cue.countdownSeconds !== undefined));
 }
 
 /**

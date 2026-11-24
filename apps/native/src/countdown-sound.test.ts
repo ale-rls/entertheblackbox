@@ -56,6 +56,16 @@ describe('the display ping seconds', () => {
     expect(countdownSeconds(snapshot({ phase: vote }), 26_500)).toBe(4);
     expect(countdownSeconds(snapshot({ phase: vote, currentGroup: { id: 'theater', label: 'Theater', votingMethod: 'phone-cursor' } }), 26_500)).toBeNull();
   });
+  it('follows only the monitors when their cues carry countdowns (theatre votes in parallel)', () => {
+    // KI question on the monitors ends at 20 s with its own 5 s countdown; the theatre vote closes at 30 s.
+    const monitorCues = { M1: [{ kind: 'text', startMs: 0, text: 'Frage?', countdownSeconds: 5 }, { kind: 'text', startMs: 20_000, text: 'Nächste?' }] };
+    const parallel = { ...vote, monitorCues };
+    expect(countdownSeconds(snapshot({ phase: parallel }), 17_500)).toBe(3);
+    expect(countdownSeconds(snapshot({ phase: parallel }), 26_500)).toBeNull();
+    // Without authored countdowns the vote still pings, as before.
+    const plain = { ...vote, monitorCues: { M1: [{ kind: 'text', startMs: 0, text: 'Frage?' }] } };
+    expect(countdownSeconds(snapshot({ phase: plain }), 26_500)).toBe(4);
+  });
   it('counts a scene countdown only when the display pings it', () => {
     const scene = (pingSeconds?: number) => ({ id: 's', kind: 'video', src: 'a.mp4', expectedDurationMs: 60_000, scenarioVersion: 'v', startedAt: 0,
       countdown: { startAtMs: 0, endAtMs: 60_000, ...(pingSeconds === undefined ? {} : { pingSeconds }) } });
