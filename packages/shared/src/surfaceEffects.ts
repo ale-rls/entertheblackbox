@@ -4,7 +4,7 @@
  * renders them for the tablets and Admin renders the same frames as a preview.
  */
 
-export const SURFACE_EFFECT_KINDS = ["chase", "breathe", "wave", "gradient", "rainbow"] as const;
+export const SURFACE_EFFECT_KINDS = ["chase", "breathe", "wave", "gradient", "rainbow", "chaos"] as const;
 export type SurfaceEffectKind = (typeof SURFACE_EFFECT_KINDS)[number];
 
 export type SurfaceEffect = {
@@ -13,7 +13,7 @@ export type SurfaceEffect = {
   color: string;
   /** Second colour (gradient end). */
   color2: string;
-  /** One full cycle: chase across every device, one breath, one wave pass. */
+  /** One full cycle: chase across every device, one breath, one wave pass, one chaos mood. */
   periodMs: number;
   /** Master dimmer, 0–1. */
   brightness: number;
@@ -55,6 +55,34 @@ export function hueColor(hue: number): string {
   return rgbToHex([r * 255, g * 255, b * 255]);
 }
 
+/** Deterministic hash of integers to [0, 1), so server and Admin preview draw the same chaos. */
+export function noise(...values: number[]): number {
+  let h = 0x811c9dc5;
+  for (const value of values) {
+    h = Math.imul(h ^ (value | 0), 0x01000193);
+    h ^= h >>> 13; h = Math.imul(h, 0x5bd1e995); h ^= h >>> 15;
+  }
+  return (h >>> 0) / 4_294_967_296;
+}
+
+/** Shortest chaos flash; matches the server frame interval. */
+export const CHAOS_TICK_MS = 50;
+
+/**
+ * Chaos: each device flickers white at random. Every device drifts through its
+ * own calm and frantic stretches (one cycle long, offset per device) with its
+ * own flash length, and now and then every device strikes at once.
+ */
+function chaosLevel(index: number, period: number, elapsed: number): number {
+  const baseTick = Math.floor(elapsed / CHAOS_TICK_MS);
+  if (noise(-1, baseTick, 7) < 0.015) return 1;
+  const mood = Math.floor((elapsed + noise(index, 1) * period) / period);
+  const activity = noise(index, mood, 2) ** 2;
+  const tickMs = CHAOS_TICK_MS * (1 + Math.floor(noise(index, mood, 4) * 3));
+  const tick = Math.floor(elapsed / tickMs);
+  return noise(index, tick, mood, 3) < 0.04 + 0.55 * activity ? 1 : 0;
+}
+
 /** 0 → 1 → 0 over one cycle, starting dark. */
 const pulse = (phase: number) => 0.5 - 0.5 * Math.cos(2 * Math.PI * phase);
 
@@ -85,6 +113,9 @@ export function surfaceEffectColor(effect: SurfaceEffect, index: number, count: 
       break;
     case "rainbow":
       color = hueColor(cycle - offset);
+      break;
+    case "chaos":
+      color = dimColor("#ffffff", chaosLevel(index, period, Math.max(0, elapsedMs)));
       break;
   }
   return dimColor(color, effect.brightness);

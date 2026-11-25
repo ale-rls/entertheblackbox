@@ -1,7 +1,7 @@
 import { surfaceCueEffectSchema, surfaceCuesSchema, type SurfaceCue, type SurfaceCueEffect } from "@entertheblackbox/scenario";
 
 const KINDS = surfaceCueEffectSchema.shape.kind.options;
-const KIND_LABEL: Record<SurfaceCueEffect["kind"], string> = { chase: "Chase", breathe: "Breathe", wave: "Wave", gradient: "Gradient wave", rainbow: "Rainbow" };
+const KIND_LABEL: Record<SurfaceCueEffect["kind"], string> = { chase: "Chase", breathe: "Breathe", wave: "Wave", gradient: "Gradient wave", rainbow: "Rainbow", chaos: "Chaos" };
 const NEW_EFFECT: SurfaceCueEffect = { kind: "breathe", color: "#ffffff", periodMs: 2000 };
 const seconds = (ms: number) => Math.round(ms / 100) / 10;
 

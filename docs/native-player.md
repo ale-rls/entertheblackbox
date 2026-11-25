@@ -230,7 +230,7 @@ Each gesture is a `POST /api/admin/surface`, scheduled on the shared clock like 
 - **Gradient wave** — a wave blending between the colour and a second colour.
 - **Rainbow** — the hue circle travels across the tablets.
 
-Colour, second colour, dimmer, cycle time (0.3–10 s) and the tablet list update the running effect live without restarting its phase. The tiles in Admin preview the effect. Playing a tile during an effect is not exclusive: the effect repaints that tablet on its next colour change (at once for breathe/wave/rainbow, within a second at most). Stop the effect to play tiles on their own. Stopping returns every tablet to the resting colour. The effect math lives in `packages/shared/src/surfaceEffects.ts`.
+Colour, second colour, dimmer, cycle time (0.3–10 s) and the tablet list update the running effect live without restarting its phase. The tiles in Admin preview the effect. Playing a tile during an effect is not exclusive: the effect repaints that tablet on its next colour change (at once for breathe/wave/rainbow/chaos, within a second at most). **Chaos** ignores the colour: every tablet flickers white at random, drifting per tablet between calm and frantic stretches about one cycle long, with occasional strikes on every tablet at once. Stop the effect to play tiles on their own. Stopping returns every tablet to the resting colour. The effect math lives in `packages/shared/src/surfaceEffects.ts`.
 
 ### Identifying 40 tablets
 
