@@ -48,8 +48,12 @@ The files persist across redeploys; only deleting the volume removes them.
 
 - **Native app:** EAS Update (`pnpm update:production`) exports the bundle
   locally, so it includes Optik when the files are present here. EAS cloud
-  *builds* upload a gitignored-filtered copy of the project and therefore ship
-  the fallback until the next update.
+  *builds* upload the project filtered by the root `.easignore` (which EAS uses
+  instead of `.gitignore`); it keeps `fonts/optik/*.ttf`, so a build started
+  from a machine with the files embeds Optik too. Without the files, or in a
+  build made before `.easignore` existed, tablets running the build's own
+  bundle show the system font until they install an update. Keep `.easignore`
+  in step when you change a `.gitignore`.
 - **Credits:** run `pnpm --filter @entertheblackbox/credits render` where the
   files are present.
 

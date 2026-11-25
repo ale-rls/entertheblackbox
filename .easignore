@@ -1,0 +1,95 @@
+# EAS Build uploads the project filtered by this file INSTEAD of every
+# .gitignore. It exists for one reason: to ship the licensed Optik font
+# (fonts/optik/, gitignored because this repo is public) inside cloud builds,
+# so tablets running a build's embedded bundle do not fall back to the system
+# font. The upload goes to EAS's private build workers only.
+#
+# Keep it in step with the .gitignore files (root, apps/native,
+# packages/expo-audio-scheduler, services/*) minus /fonts/optik/.
+
+# --- local-only working state (untracked, never uploaded) ---
+.git/
+.worktrees/
+.pnpm-store/
+.planning/
+
+# --- root .gitignore ---
+node_modules/
+dist/
+dist-proof/
+.watchdog/
+.steps.lock/
+.env
+.env.*
+!deploy/coolify/.env.example
+*.log
+.DS_Store
+content/media/*
+!content/media/intro.mp4
+!content/media/*.mp3
+!content/media/*.png
+!content/media/*.jpg
+*Ablauf*.txt
+/script/
+/scripts-draft/
+apps/display/src/assets/*.mp4
+apps/display/src/assets/*.mp3
+apps/display/src/assets/*.webm
+apps/display/src/assets/*.mov
+test-results/
+pocketbase/bin/
+pocketbase/pb_data/
+pocketbase/pb_logs/
+pocketbase/.e2e-data/
+apps/native/.expo/
+apps/native/android/
+apps/native/ios/
+*.ipa
+*.apk
+*.aab
+content/media/native-shows/
+midi-mapping.json
+lighting.json
+.build-version
+# NOT ignored here: /fonts/optik/ (the point of this file)
+# Web .woff2 copies are not needed by the native build.
+/fonts/optik/*.woff2
+
+# --- packages/expo-audio-scheduler/.gitignore ---
+packages/expo-audio-scheduler/android/build/
+packages/expo-audio-scheduler/android/.cxx/
+packages/expo-audio-scheduler/ios/build/
+
+# --- services/*/.gitignore ---
+services/audio-janus/.env
+services/audio-janus/.env.*
+!services/audio-janus/.env.example
+services/audio/.env
+services/audio/.venv/
+services/audio/audio/
+services/audio/beds/
+services/trackingbox/.venv/
+services/trackingbox/venv/
+services/trackingbox/config.json
+services/trackingbox/build/
+services/trackingbox/weights/
+services/trackingbox/logs/
+services/trackingbox/outputs/
+services/trackingbox/benchmarks/*.json
+services/trackingbox/**/*.mp4
+services/trackingbox/**/*.avi
+!services/trackingbox/tests/fixtures/*.mp4
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.pt
+*.pth
+*.onnx
+.idea/
+.vscode/
