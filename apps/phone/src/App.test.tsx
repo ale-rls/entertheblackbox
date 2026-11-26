@@ -100,6 +100,35 @@ it("shows its own cursor where the server says it is during curtain-light votes"
   expect(dot()).toBeNull();
 });
 
+it("continues from the server's cursor position after a curtain-light vote", async () => {
+  await receive({ t: "identity", v: 2, clientId: "visitor", color: "#ff595e", sessionId: "show", participantLease: "lease", leaseExpiresAt: 1e12 });
+  await receive({ t: "phase", v: 2, sessionId: "show", phaseEpoch: 3, serverTime: 1000,
+    phase: { id: "vote", kind: "video", src: "video.mp4", startedAt: 1000, expectedDurationMs: 10000,
+      scenarioVersion: "v1", deadlineAt: 11000, next: "end",
+      voteTreatment: { type: "curtain-light", answerColors: {}, entry: null,
+        curtain: { src: "curtain.png", baked: 0, folds: 1, shine: 1, shadow: 1, poolBase: 1, poolGain: 1, cursorFlood: 1, cursorFloodCounted: 1, neutralGap: 0 } } } });
+  const pad = () => host.querySelector(".trackpad")! as HTMLDivElement;
+  // The last finger sample is in the middle of the phone; the server steered the cursor to (0.2, 0.3).
+  vi.spyOn(pad(), "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, width: 200, height: 200 } as DOMRect);
+  await drag();
+  await receive({ t: "own_cursor", v: 2, sessionId: "show", phaseEpoch: 3, x: 0.2, y: 0.3 });
+  await receive({ t: "phase", v: 2, sessionId: "show", phaseEpoch: 4, serverTime: 12000,
+    phase: { id: "after", kind: "video", src: "video.mp4", startedAt: 12000, expectedDurationMs: 10000, scenarioVersion: "v1", deadlineAt: 22000, next: "end" } });
+  const surface = Math.min(window.innerWidth, window.innerHeight);
+  expect(host.querySelector<HTMLSpanElement>(".live-cursor-dot")!.style.transform)
+    .toBe(`translate3d(${0.2 * surface}px, ${0.3 * surface}px, 0) translate3d(-50%, -50%, 0)`);
+  // The next swipe moves on from there.
+  mock.send.mockClear();
+  await drag();
+  const moves = mock.send.mock.calls.map(([message]) => message).filter((message) => message.t === "input");
+  expect(moves.length).toBeGreaterThan(0);
+  expect(moves[0].phaseEpoch).toBe(4);
+  expect(moves[0].x).toBeGreaterThan(0.2);
+  expect(moves[0].x).toBeLessThan(0.35);
+  expect(moves[0].y).toBeGreaterThan(0.3);
+  expect(moves[0].y).toBeLessThan(0.4);
+});
+
 it("answers tasks, handles full outcomes, and disables responses on disconnect and expiry", async () => {
   await receive({ t: "identity", v: 2, clientId: "visitor", color: "#ffffff", sessionId: "show", participantLease: "lease", leaseExpiresAt: 1e12 });
   const task: Extract<ServerToClientMessage, { t: "participant_task" }> = {
