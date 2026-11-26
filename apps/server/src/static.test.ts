@@ -131,6 +131,15 @@ describe("media cache policy", () => {
     expect(partial.headers["content-range"]).toBe("bytes 0-2/6");
   });
 
+  it("serves operator announcements as WAV audio", async () => {
+    const { app, root } = await mediaApp();
+    await mkdir(join(root, "announcements"), { recursive: true });
+    await writeFile(join(root, "announcements", "abc123.wav"), "RIFF");
+    const response = await app.inject({ url: "/media/announcements/abc123.wav" });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toBe("audio/wav");
+  });
+
   const digest = "a".repeat(64);
   it.each([
     ["channels", "rehearsal.json", "no-store"],

@@ -44,6 +44,9 @@ const envSchema = z.object({
   PHONE_DIST_DIR: z.string().min(1).optional(),
   ADMIN_DIST_DIR: z.string().min(1).optional(),
   STUDIO_DIST_DIR: z.string().min(1).optional(),
+  /** Enables Admin's voice announcements (text → the show's AI voice). Unset: saved clips still play. */
+  ELEVENLABS_API_KEY: z.preprocess((input) => input === "" ? undefined : input, z.string().min(1).optional()),
+  ELEVENLABS_VOICE_ID: z.preprocess((input) => input === "" ? undefined : input, z.string().regex(/^[A-Za-z0-9]{8,64}$/).optional()),
   POCKETBASE_URL: z.string().url().default("http://127.0.0.1:8090"),
   POCKETBASE_ADMIN_EMAIL: z.string().email().default("dev@entertheblackbox.local"),
   POCKETBASE_ADMIN_PASSWORD: z.string().min(8).default(DEVELOPMENT_POCKETBASE_ADMIN_PASSWORD),
@@ -90,6 +93,8 @@ export type ServerConfig = {
     adminEmail: string;
     adminPassword: string;
   };
+  /** Voice for Admin announcements; absent without ELEVENLABS_API_KEY. */
+  elevenLabs?: { apiKey: string; voiceId?: string | undefined } | undefined;
 };
 
 export class ConfigError extends Error {
@@ -188,5 +193,6 @@ export function loadConfig(
       adminEmail: value.POCKETBASE_ADMIN_EMAIL,
       adminPassword: value.POCKETBASE_ADMIN_PASSWORD,
     },
+    ...(value.ELEVENLABS_API_KEY === undefined ? {} : { elevenLabs: { apiKey: value.ELEVENLABS_API_KEY, voiceId: value.ELEVENLABS_VOICE_ID } }),
   };
 }

@@ -7,6 +7,7 @@ import type { SurfaceController } from "../surface/surface.js";
 import type { VideoWallController, WallClip } from "../wall/wall.js";
 import { wallLayoutSchema } from "@entertheblackbox/protocol";
 import type { SurfaceEffectRunner } from "../surface/effects.js";
+import { ANNOUNCEMENT_TEXT_MAX, type AnnouncementStore, type GeneratedVoice } from "../announcements/announcements.js";
 import { SURFACE_EFFECT_KINDS, SURFACE_EFFECT_MAX_PERIOD_MS, SURFACE_EFFECT_MIN_PERIOD_MS } from "@entertheblackbox/shared";
 import { InMemoryIpRateLimiter, requestIp } from "../admission/rate-limit.js";
 import type { PhaseCheckpoint, PhaseEngine, TransitionResult } from "../engine/phase-engine.js";
@@ -83,6 +84,12 @@ export type RegisterAdminOptions = {
     controller: Pick<VideoWallController, "snapshot" | "setLayout" | "load" | "play" | "cue" | "stop" | "setLoop">;
     clips: () => Promise<WallClip[]>;
     saveLayout: (layout: z.infer<typeof wallLayoutSchema>) => Promise<z.infer<typeof wallLayoutSchema>>;
+  };
+  /** Operator voice announcements on the main display (Admin → Show → Announcements). */
+  announcements?: {
+    store: AnnouncementStore;
+    /** Absent when no ElevenLabs key is configured: saved clips still play. */
+    generate?: (text: string) => Promise<GeneratedVoice>;
   };
   /** Programmed instrument effects (chase, breathe, waves). */
   surfaceEffects?: Pick<SurfaceEffectRunner, "start" | "stop" | "state">;
@@ -205,6 +212,53 @@ export function registerAdminRoutes(app: FastifyInstance, options: RegisterAdmin
       reply.header("cache-control", "no-store");
       if (!options.nativeAudioCoverage) return reply.code(503).send({ error: "show_unavailable" });
       return options.nativeAudioCoverage();
+    });
+
+    admin.get("/announcements", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.announcements) return reply.code(503).send({ error: "announcements_unavailable" });
+      const clips = await options.announcements.store.list();
+      return { clips, canGenerate: Boolean(options.announcements.generate), playing: options.engine()?.announcement() ?? null, serverNow: now() };
+    });
+    admin.post<{ Body: unknown }>("/announcements", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      const announcements = options.announcements;
+      if (!announcements) return reply.code(503).send({ error: "announcements_unavailable" });
+      if (!announcements.generate) return reply.code(503).send({ error: "voice_unavailable" });
+      const parsed = z.object({ text: z.string().trim().min(1).max(ANNOUNCEMENT_TEXT_MAX) }).safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_announcement" });
+      let voice: GeneratedVoice;
+      try { voice = await announcements.generate(parsed.data.text); }
+      catch (error) { request.log.error({ err: error }, "announcement voice generation failed"); return reply.code(502).send({ error: "voice_failed", message: error instanceof Error ? error.message : String(error) }); }
+      const clip = await announcements.store.create(parsed.data.text, voice);
+      options.data?.audit({ action: "create-announcement", at: new Date().toISOString(), detail: { id: clip.id, durationMs: clip.durationMs } });
+      return { ok: true, clip };
+    });
+    admin.post<{ Params: { id: string } }>("/announcements/:id/play", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      const engine = options.engine();
+      if (!options.announcements || !engine) return reply.code(503).send({ error: "announcements_unavailable" });
+      let local: Awaited<ReturnType<AnnouncementStore["ensureLocal"]>>;
+      try { local = await options.announcements.store.ensureLocal(request.params.id); }
+      catch { return reply.code(404).send({ error: "announcement_not_found" }); }
+      const delivered = engine.playAnnouncement({ id: local.announcement.id, url: local.url, durationMs: local.announcement.durationMs });
+      options.data?.audit({ action: "play-announcement", at: new Date().toISOString(), detail: { id: local.announcement.id, delivered } });
+      return { ok: true, delivered, playing: engine.announcement(), serverNow: now() };
+    });
+    admin.post("/announcements/stop", async (_request, reply) => {
+      reply.header("cache-control", "no-store");
+      const engine = options.engine();
+      if (!engine) return reply.code(503).send({ error: "show_unavailable" });
+      return { ok: true, delivered: engine.stopAnnouncement() };
+    });
+    admin.delete<{ Params: { id: string } }>("/announcements/:id", async (request, reply) => {
+      reply.header("cache-control", "no-store");
+      if (!options.announcements) return reply.code(503).send({ error: "announcements_unavailable" });
+      try { await options.announcements.store.remove(request.params.id); }
+      catch { return reply.code(404).send({ error: "announcement_not_found" }); }
+      if (options.engine()?.announcement()?.id === request.params.id) options.engine()?.stopAnnouncement();
+      options.data?.audit({ action: "delete-announcement", at: new Date().toISOString(), detail: { id: request.params.id } });
+      return { ok: true };
     });
 
     admin.post<{ Body: unknown }>("/surface", async (request, reply) => {

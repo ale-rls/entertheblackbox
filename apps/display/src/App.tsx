@@ -37,6 +37,7 @@ import { VoteDecisionSound } from "./components/VoteDecisionSound.js";
 import { CURTAIN_LEAVE_MS, CurtainStage } from "./curtain/CurtainStage.js";
 import { useTitleDim } from "./curtain/titleDim.js";
 import { DIM_IN_MS } from "./curtain/visibility.js";
+import { useAnnouncementVoice, type PlayingAnnouncement } from "./components/AnnouncementVoice.js";
 import type { CurtainTreatment } from "@entertheblackbox/protocol";
 import { backdropDimPlan, isPictureOnlyClip, type BackdropDimPlan, type PositionField } from "@entertheblackbox/shared";
 
@@ -99,6 +100,7 @@ export function App() {
   const displaySettings = useDisplaySettings();
   const [state, dispatch] = useReducer(displayReducer, initialDisplayState);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [announcement, setAnnouncement] = useState<PlayingAnnouncement | null>(null);
   const [presentedVideoKey, setPresentedVideoKey] = useState<string | null>(null);
   const stateRef = useRef(state);
   const activeMediaRef = useRef<HTMLMediaElement | null>(null);
@@ -117,6 +119,11 @@ export function App() {
           // else flows through the reducer.
           if (message.t === "cursors") {
             cursorField.ingest(message, Date.now());
+            return;
+          }
+          if (message.t === "announcement") {
+            if (message.action === "play") setAnnouncement({ id: message.id, url: message.url, startedAt: message.startedAt, durationMs: message.durationMs });
+            else setAnnouncement((current) => message.id === undefined || current?.id === message.id ? null : current);
             return;
           }
           if (message.t === "snapshot" || message.t === "phase") {
@@ -254,6 +261,8 @@ export function App() {
     connection.start();
     return () => connection.stop();
   }, [connection, canConnect]);
+
+  useAnnouncementVoice(announcement, connection.clock, soundEnabled, useCallback(() => setAnnouncement(null), []));
 
   const sendDisplayMessage = useCallback(
     (message: DisplayToServerMessage) => connection.send(message),

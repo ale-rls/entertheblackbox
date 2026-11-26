@@ -1954,6 +1954,33 @@ describe("authored stage monitor connections", () => {
     expect(m1.sent.filter(message => message.t === "monitor_backgrounds").at(-1)?.colors).toEqual({});
     engine.stop();
   });
+  it("plays an operator announcement on the main display only, and resends it to a main display that reconnects mid-clip", () => {
+    let now = 1000;
+    const { engine } = setup({ now: () => now });
+    const joinMain = (socket: MockSocket) => engine.handleClientMessage({ t: "display_join", v: 2, clientVersion: "test", installationId: "inst-1", roomId: "room-1", displayToken: "display-secret" }, socket as unknown as WebSocket);
+    const main = new MockSocket();
+    const monitor = new MockSocket();
+    joinMain(main);
+    join(engine, monitor, "M1");
+    expect(engine.playAnnouncement({ id: "a1", url: "/media/announcements/a1.wav", durationMs: 5_000 })).toBe(true);
+    const play = { t: "announcement", v: 2, action: "play", id: "a1", url: "/media/announcements/a1.wav", startedAt: 1_300, durationMs: 5_000 };
+    expect(main.sent.at(-1)).toEqual(play);
+    expect(monitor.sent.some(message => message.t === "announcement")).toBe(false);
+    now = 3_000;
+    const replacement = new MockSocket();
+    joinMain(replacement);
+    expect(replacement.sent.filter(message => message.t === "announcement")).toEqual([play]);
+    expect(engine.stopAnnouncement()).toBe(true);
+    expect(replacement.sent.at(-1)).toEqual({ t: "announcement", v: 2, action: "stop", id: "a1" });
+    expect(engine.announcement()).toBeNull();
+    engine.playAnnouncement({ id: "a2", url: "/media/announcements/a2.wav", durationMs: 1_000 });
+    now = 5_000;
+    expect(engine.announcement()).toBeNull();
+    const late = new MockSocket();
+    joinMain(late);
+    expect(late.sent.some(message => message.t === "announcement")).toBe(false);
+    engine.stop();
+  });
   it("rejects invalid credentials and mixed display roles", () => {
     const { engine } = setup({ now: () => 0 });
     const socket = new MockSocket();

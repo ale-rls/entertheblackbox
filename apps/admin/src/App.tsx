@@ -4,6 +4,7 @@ import { AssignRest, type AssignRestConfig } from "./AssignRest.js";
 import { ParticipantTasks, type TaskStatus } from './ParticipantTasks.js';
 import { NativeAudioCoverage } from './NativeAudioCoverage.js';
 import { SurfaceInstrument } from "./SurfaceInstrument.js";
+import { Announcements } from "./Announcements.js";
 import { VideoWall } from "./VideoWall.js";
 import { SceneTiming } from "./SceneTiming.js";
 import { ShowMonitor } from "./ShowMonitor.js";
@@ -891,6 +892,7 @@ export function App() {
           </ol> : <p className="sc-tool-copy">The lobby waits until an operator presses Start show.</p>}
           </section><RunOfShowPanel phoneJoinUrl={status.phoneJoinUrl} /></div>
 
+        {activeTab === "show" && connectedToken && !audioOnly && <Announcements token={connectedToken} />}
         {!isActive && <section hidden={activeTab !== "cues"} className="sc-tool-panel admin-empty-state"><h2>Cue sheet</h2><p className="sc-tool-copy">The cue sheet appears here once the show is running.</p></section>}
         {isActive && <section hidden={activeTab !== "cues"} className="sc-tool-panel admin-flow-panel" aria-labelledby="admin-flow-heading">
           <div className="admin-section-heading">

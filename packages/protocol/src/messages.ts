@@ -682,6 +682,17 @@ export const monitorBackgroundsSchema = z.object({
   colors: monitorBackgroundColorsSchema,
 });
 
+/**
+ * An operator voice announcement (Admin → Announcements) for the main
+ * display's room speakers. `play` starts the clip at `startedAt` (server
+ * clock; a display joining late seeks into it); scene audio is ducked while
+ * it plays. `stop` cuts it.
+ */
+export const announcementSchema = z.discriminatedUnion("action", [
+  z.object({ t: z.literal("announcement"), v, action: z.literal("play"), id: nonEmpty, url: nonEmpty, startedAt: timestamp, durationMs: z.number().int().positive() }),
+  z.object({ t: z.literal("announcement"), v, action: z.literal("stop"), id: z.string().optional() }),
+]);
+
 /** Everything a client can receive from the server. */
 export const serverToClientSchema = z.union([
   staffMenuSchema,
@@ -709,12 +720,14 @@ export const serverToClientSchema = z.union([
   surfaceSchema,
   wallSchema,
   monitorBackgroundsSchema,
+  announcementSchema,
 ]);
 
 // ------------------------------------------------------------------------- types
 
 export type PhaseSnapshotMessage = z.infer<typeof phaseSnapshotSchema>;
 export type MonitorBackgroundsMessage = z.infer<typeof monitorBackgroundsSchema>;
+export type AnnouncementMessage = z.infer<typeof announcementSchema>;
 export type MonitorBackgroundColors = z.infer<typeof monitorBackgroundColorsSchema>;
 export type CurtainTreatment = z.infer<typeof curtainTreatmentSchema>;
 export type Cursor = z.infer<typeof cursorSchema>;

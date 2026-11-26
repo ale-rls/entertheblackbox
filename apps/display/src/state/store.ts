@@ -141,6 +141,7 @@ export function displayReducer(
     case "audio_bridge_changed":
     case "surface":
     case "wall":
+    case "announcement":
       return state;
   }
 }
