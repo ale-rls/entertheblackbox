@@ -87,6 +87,13 @@ export function App() {
   const ownCursor = useRef<TrackpadState | null>(null);
   const curtainLight = useRef(false);
   curtainLight.current = state.curtainLight;
+  // After a curtain-light vote the local trackpad takes over again. It must
+  // continue from where the server steered the cursor, not from the last
+  // finger sample, or the dot and the display cursor jump on the next swipe.
+  if (!state.curtainLight && ownCursor.current !== null) {
+    position.current = ownCursor.current;
+    ownCursor.current = null;
+  }
   const paintCursor = useRef<() => void>(() => {});
   const cursorSurfaceSize = useRef(trackpadSurfaceSize(window.innerWidth, window.innerHeight));
   const cursorMarker = useRef<HTMLSpanElement | null>(null);
