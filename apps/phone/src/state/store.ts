@@ -28,7 +28,7 @@ export type PhoneState = {
   synchronizedPhase: Extract<PhaseSnapshotMessage, { kind: "video" }> | null;
   /** Advances on an operator transfer even when the destination scene epoch is older. */
   routingEpoch: number;
-  /** Cursor input is accepted in the lobby, videos, and position questions. */
+  /** Cursor input is accepted in the lobby, videos, title (narration) scenes and position questions. */
   inputOpen: boolean;
   curtainLight: boolean;
   /**
@@ -153,7 +153,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         curtainLight: m.phase.voteTreatment?.type === "curtain-light",
         ownCursorVisible: m.sessionId === state.sessionId && m.phaseEpoch === state.phaseEpoch && state.ownCursorVisible,
         inputOpen: m.phase.kind === "idle" ||
-          ((m.phase.kind === "video" || m.phase.kind === "position-question" || m.phase.kind === "video-position-question") && m.phase.showCursors !== false),
+          ((m.phase.kind === "video" || m.phase.kind === "narration" || m.phase.kind === "position-question" || m.phase.kind === "video-position-question") && m.phase.showCursors !== false),
         phaseTiming,
         voting: null,
         groupSelection: null,
