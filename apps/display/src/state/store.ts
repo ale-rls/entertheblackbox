@@ -132,6 +132,7 @@ export function displayReducer(
     // Cursor batches go straight to the CursorField (never through
     // React state — 20–30 Hz would thrash the tree).
     case "cursors":
+    case "own_cursor":
     case "identity":
     case "join_rejected":
     case "group_selection_options":

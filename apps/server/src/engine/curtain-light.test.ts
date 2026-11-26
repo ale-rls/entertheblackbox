@@ -224,6 +224,50 @@ describe("curtain-light votes", () => {
     }
   });
 
+  it("tells each phone where its own cursor is, since only the server knows", () => {
+    const h = setup(sharedScenario);
+    const one = h.phone("one"); const two = h.phone("two");
+    h.engine.adminStart(); h.tick(10);
+    const own = (socket: Socket) => socket.sent.filter((m) => m.t === "own_cursor");
+    const entry = one.snapshot.phase.voteTreatment.entry;
+
+    // The first touch reveals the cursor at the neutral entry point.
+    h.setNow(100); h.touch(one, 0.9, 0.9, true);
+    expect(own(one).at(-1)).toMatchObject({ sessionId: "visit", phaseEpoch: one.snapshot.phaseEpoch, x: entry.x, y: entry.y });
+    // Steering reports the server-computed position, not the finger sample.
+    h.setNow(200); h.touch(one, 0.9, 0.9, true);
+    h.setNow(220); h.touch(one, 0.6, 0.9);
+    expect(own(one).at(-1).x).toBeCloseTo(entry.x - 0.3);
+    expect(own(one).at(-1).y).toBeCloseTo(entry.y);
+    // Nobody else learns this phone's position.
+    expect(own(two)).toHaveLength(0);
+    h.engine.stop();
+  });
+
+  it("sends kept cursors to their phones when the next curtain vote starts", () => {
+    for (const keep of [true, false]) {
+      const h = setup(chainedScenario(keep ? { curtainKeepCursors: true } : {}));
+      const one = h.phone("one"); const idle = h.phone("idle");
+      h.engine.adminStart(); h.tick(10);
+      h.setNow(100); h.touch(one, 0.5, 0.5, true);
+      h.setNow(200); h.touch(one, 0.5, 0.5, true);
+      h.setNow(220); h.touch(one, 0.2, 0.2);
+      h.tick(1_100);
+      expect(one.snapshot.phase.id).toBe("plain-vote");
+      const sent = one.sent.filter((m) => m.t === "own_cursor" && m.phaseEpoch === one.snapshot.phaseEpoch);
+      if (keep) {
+        expect(sent).toHaveLength(1);
+        expect(sent[0].x).toBeCloseTo(0.2);
+        expect(sent[0].y).toBeCloseTo(0.2);
+      } else {
+        expect(sent).toHaveLength(0);
+      }
+      // A phone that never entered has no cursor on screen, so nothing to show.
+      expect(idle.sent.filter((m) => m.t === "own_cursor")).toHaveLength(0);
+      h.engine.stop();
+    }
+  });
+
   it("holds the fields at their base glow when they should not light up yet", () => {
     const h = setup(chainedScenario({ curtainFieldsStatic: true }));
     const main = h.display();

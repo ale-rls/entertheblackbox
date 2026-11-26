@@ -31,6 +31,12 @@ export type PhoneState = {
   /** Cursor input is accepted in the lobby, videos, and position questions. */
   inputOpen: boolean;
   curtainLight: boolean;
+  /**
+   * Curtain-light votes: the server has told this phone where its cursor is
+   * in the current scene (`own_cursor`). The position itself lives outside
+   * the reducer so the dot moves without re-rendering.
+   */
+  ownCursorVisible: boolean;
   currentGroup: NonNullable<Extract<ServerToClientMessage, { t: "snapshot" }>["currentGroup"]> | null;
   phoneAudioActive: boolean;
   participantState: "choosing" | "unassigned" | "active" | "finished";
@@ -61,6 +67,7 @@ export const initialPhoneState: PhoneState = {
   routingEpoch: 0,
   inputOpen: false,
   curtainLight: false,
+  ownCursorVisible: false,
   currentGroup: null,
   phoneAudioActive: false,
   participantState: "active",
@@ -144,6 +151,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         participantState: m.participantState ?? "active",
         synchronizedPhase: m.phase.kind === "video" && m.phase.phoneAudioMode === "synchronized" ? m.phase : null,
         curtainLight: m.phase.voteTreatment?.type === "curtain-light",
+        ownCursorVisible: m.sessionId === state.sessionId && m.phaseEpoch === state.phaseEpoch && state.ownCursorVisible,
         inputOpen: m.phase.kind === "idle" ||
           ((m.phase.kind === "video" || m.phase.kind === "position-question" || m.phase.kind === "video-position-question") && m.phase.showCursors !== false),
         phaseTiming,
@@ -160,6 +168,9 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
     case "voting_options":
       if (m.sessionId !== state.sessionId || m.phaseEpoch !== state.phaseEpoch) return state;
       return { ...state, voting: m, inputOpen: state.inputOpen && !m.closed && m.method === "phone-cursor" };
+    case "own_cursor":
+      if (m.sessionId !== state.sessionId || m.phaseEpoch !== state.phaseEpoch || state.ownCursorVisible) return state;
+      return { ...state, ownCursorVisible: true };
     case "status":
       return { ...state, statusMessage: m.message };
     case "reload":

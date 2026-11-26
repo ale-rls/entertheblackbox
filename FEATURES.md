@@ -123,7 +123,7 @@ Defined in `packages/scenario/src/schema.ts`, enforced in `apps/server`, authore
 - Reaction rating engine (applause/boo) — `votes/rating-engine.ts`
 - Group-membership voting — `groups/voting.ts`
 - Neutral gaps in two-way/four-quadrant fields (uncounted bands; shared by counting and rendering) — `packages/shared/src/index.ts` (`quadrantOfField`, `fieldSplitOffsets`)
-- Curtain-light entry: cursors hidden until first touch per stage (a stage with `curtainKeepCursors` continues the previous curtain stage's cursors instead), enter at a neutral point, relative steering, touch pulses — `apps/server/src/cursors/cursor-pipeline.ts`, `cursors/relative-trackpad.ts`, `engine/phase-engine.ts` (`curtainFor`, `curtainInput`); browser `touch: "start"` flag in `apps/phone/src/App.tsx`
+- Curtain-light entry: cursors hidden until first touch per stage (a stage with `curtainKeepCursors` continues the previous curtain stage's cursors instead), enter at a neutral point, relative steering, touch pulses — `apps/server/src/cursors/cursor-pipeline.ts`, `cursors/relative-trackpad.ts`, `engine/phase-engine.ts` (`curtainFor`, `curtainInput`); browser `touch: "start"` flag in `apps/phone/src/App.tsx`. The server tells each browser phone where its own cursor is (`own_cursor`, on every steer and for kept cursors at stage start), so the phone shows its own dot in its own colour during curtain votes too — `engine/phase-engine.ts` (`sendOwnCursor`), `apps/phone/src/App.tsx`, `apps/phone/src/state/store.ts` (`ownCursorVisible`)
 - Final vote snapshot persistence — `persistence/admin-data.ts`
 
 ## Group branching

@@ -46,6 +46,13 @@ const CONSENT_TIMEOUT_MS = 60_000;
 const cursorTransform = (value: TrackpadState, surfaceSizePx: number): string =>
   `translate3d(${value.x * surfaceSizePx}px, ${value.y * surfaceSizePx}px, 0) translate3d(-50%, -50%, 0)`;
 
+/**
+ * Where the phone's own dot goes. Normal trackpad input moves it locally; in
+ * curtain-light votes the finger only steers and the server owns the cursor.
+ */
+const markerPosition = (curtain: boolean, local: TrackpadState, server: TrackpadState | null): TrackpadState =>
+  curtain ? server ?? local : local;
+
 function loadParticipantName(): string {
   try { return localStorage.getItem("participant-name") ?? ""; }
   catch { return ""; }
@@ -76,6 +83,11 @@ export function App() {
   // tap would be dropped without a trace, so the buttons wait instead.
   const online = state.join.kind === "accepted";
   const position = useRef<TrackpadState>({ ...TRACKPAD_CENTER });
+  /** Curtain-light votes: the cursor position the server reported (`own_cursor`). */
+  const ownCursor = useRef<TrackpadState | null>(null);
+  const curtainLight = useRef(false);
+  curtainLight.current = state.curtainLight;
+  const paintCursor = useRef<() => void>(() => {});
   const cursorSurfaceSize = useRef(trackpadSurfaceSize(window.innerWidth, window.innerHeight));
   const cursorMarker = useRef<HTMLSpanElement | null>(null);
   const cursorPaintFrame = useRef<number | null>(null);
@@ -111,6 +123,10 @@ export function App() {
           // This server response requests native-only workflows, not a new web bundle.
           // The following update_required rejection explains how to join.
           if (message.t === "reload" && message.minVersion.startsWith("Update the native app")) return;
+          if (message.t === "own_cursor") {
+            ownCursor.current = { x: message.x, y: message.y };
+            paintCursor.current();
+          }
           dispatch({ type: "server-message", message, receivedAtMs: Date.now() });
         },
         onSocketOpen: () => dispatch({ type: "socket-open" }),
@@ -282,9 +298,10 @@ export function App() {
       cursorPaintFrame.current = null;
       const marker = cursorMarker.current;
       if (marker === null) return;
-      marker.style.transform = cursorTransform(position.current, cursorSurfaceSize.current);
+      marker.style.transform = cursorTransform(markerPosition(curtainLight.current, position.current, ownCursor.current), cursorSurfaceSize.current);
     });
   };
+  paintCursor.current = scheduleCursorPaint;
 
   const fingerPosition = (e: React.PointerEvent<HTMLDivElement>): TrackpadState => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -432,12 +449,12 @@ export function App() {
           {state.participantState === "finished" && <p className="phone-phase-text" role="status">Deine Gruppe ist fertig. Die anderen Gruppen machen noch weiter.</p>}
           {state.participantState === "unassigned" && !state.groupSelection && <p className="phone-phase-text" role="status">Du bist noch keiner Gruppe zugeteilt. Bitte melde dich beim Team.</p>}
           {state.participantState !== "finished" && state.participantState !== "unassigned" && state.phoneDisplayText !== null && <p className="phone-phase-text" aria-live="polite">{state.phoneDisplayText}</p>}
-          {identity && state.inputOpen && !state.curtainLight && <div className="live-cursor-field" aria-hidden="true"><span
+          {identity && (state.curtainLight ? state.ownCursorVisible : state.inputOpen) && <div className="live-cursor-field" aria-hidden="true"><span
               ref={cursorMarker}
               className="live-cursor-dot"
               style={{
                 backgroundColor: identity.color,
-                transform: cursorTransform(position.current, cursorSurfaceSize.current),
+                transform: cursorTransform(markerPosition(state.curtainLight, position.current, ownCursor.current), cursorSurfaceSize.current),
               }}
             /></div>}
           {!state.inputOpen && !state.groupSelection && !state.phoneDisplayText && (
