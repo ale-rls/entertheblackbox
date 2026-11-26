@@ -24,6 +24,7 @@ import { z } from "zod";
 import { AdmissionController, InMemoryIpRateLimiter, phoneJoinUrl } from "./admission/index.js";
 import { verifyParticipantLease } from "./admission/tokens.js";
 import { registerAdminRoutes, type AdminDataSource } from "./admin/index.js";
+import { elevenLabsVoice, PocketbaseAnnouncementStore } from "./announcements/announcements.js";
 import { loadConfig, type ServerConfig } from "./config.js";
 import { PhaseEngine } from "./engine/phase-engine.js";
 import type { GhostPool } from "./ghosts/index.js";
@@ -475,6 +476,10 @@ export async function buildServer(options: BuildServerOptions = {}): Promise<Ser
     ...(adminData === undefined ? {} : { data: adminData }),
     ...(options.pocketbase === undefined ? {} : {
       waitingVideos: () => listWaitingVideos(options.pocketbase!, config.mediaDir),
+      announcements: {
+        store: new PocketbaseAnnouncementStore(options.pocketbase, config.mediaDir),
+        ...(config.elevenLabs ? { generate: elevenLabsVoice(config.elevenLabs.apiKey, config.elevenLabs.voiceId) } : {}),
+      },
       displaySettings: {
         read: () => readDisplaySettings(options.pocketbase!),
         write: (value) => writeDisplaySettings(options.pocketbase!, value),

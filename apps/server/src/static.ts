@@ -15,6 +15,7 @@ const contentTypes: Record<string, string> = {
   ".jpeg": "image/jpeg",
   ".svg": "image/svg+xml",
   ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
   ".mp4": "video/mp4",
   ".webm": "video/webm",
   ".webp": "image/webp",

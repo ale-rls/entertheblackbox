@@ -245,6 +245,7 @@ export class PhaseEngine {
   private readonly monitorDisplays = new Map<string, WebSocket>();
   /** Operator's live M1–M4 background colours (Admin Instrument); cleared when the show returns to idle. */
   private monitorBackgroundColors: MonitorBackgroundColors = {};
+  private playingAnnouncement: { id: string; url: string; startedAt: number; durationMs: number } | null = null;
   private lastMonitorEpoch: number | undefined;
   /** Lobby signage receives QR grants. */
   private readonly signageDisplays = new Map<string, WebSocket>();
@@ -1737,6 +1738,9 @@ export class PhaseEngine {
     const joinedPhase = this.currentPhase();
     if (joinedPhase.kind === "position-question" && joinedPhase.spotlight) this.cursors.tick();
     this.send(socket, { t: "presence", v: PROTOCOL_VERSION, count: this.registry.connectedCount });
+    // A main display that reconnects mid-announcement seeks back into it.
+    const announcement = this.announcement();
+    if (announcement) this.send(socket, { t: "announcement", v: PROTOCOL_VERSION, action: "play", ...announcement });
     // A display that (re)joins after a vote closed still shows its result. Resend
     // the frame the other displays got -- same counts, same freeze end -- rather
     // than resolving again, which would also repeat the cue feed's result event.
@@ -2598,6 +2602,29 @@ export class PhaseEngine {
       question: phase.text,
       options: spotlight ? [] : votingOptions(phase),
     });
+  }
+
+  /** The operator voice announcement playing on the main display, if any. */
+  announcement(now = this.now()): { id: string; url: string; startedAt: number; durationMs: number } | null {
+    const playing = this.playingAnnouncement;
+    return playing && now < playing.startedAt + playing.durationMs ? { ...playing } : null;
+  }
+
+  /** Plays an operator voice clip on the main display (scene audio ducks there); returns whether a main display received it. */
+  playAnnouncement(clip: { id: string; url: string; durationMs: number }, now = this.now()): boolean {
+    // A short lead so the display can load the clip before its first word.
+    this.playingAnnouncement = { ...clip, startedAt: now + 300 };
+    const delivered = this.displaySocket !== undefined;
+    this.sendToDisplay({ t: "announcement", v: PROTOCOL_VERSION, action: "play", ...this.playingAnnouncement });
+    return delivered;
+  }
+
+  /** Cuts the playing operator voice clip. */
+  stopAnnouncement(): boolean {
+    const id = this.playingAnnouncement?.id;
+    this.playingAnnouncement = null;
+    this.sendToDisplay({ t: "announcement", v: PROTOCOL_VERSION, action: "stop", ...(id === undefined ? {} : { id }) });
+    return this.displaySocket !== undefined;
   }
 
   /** The operator's live monitor background colours. */
