@@ -1923,6 +1923,12 @@ export class PhaseEngine {
     }
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
+    // Kept cursors stay on screen, so their phones show them before the next touch.
+    if (keepCursors) {
+      for (const [socket, participantId] of this.participantIds) {
+        if (this.participantSockets.has(socket)) this.sendOwnCursor(participantId, socket);
+      }
+    }
     if (spotlightDeadline !== null) this.cursors.tick();
     this.path?.onPhase(phase, this.phaseStartedAt);
     if ((phase.kind === 'narration' || phase.kind === 'video') && phase.taskId) {
@@ -2129,6 +2135,7 @@ export class PhaseEngine {
       this.cursors.enter(participantId, entry.x, entry.y);
       this.trackpad.anchor(participantId, fingerX, fingerY, entry, now);
       this.movement.recordSample(participantId, entry.x, entry.y, now);
+      this.sendOwnCursor(participantId);
       return;
     }
     const current = this.cursors.position(participantId);
@@ -2138,6 +2145,7 @@ export class PhaseEngine {
     const point = this.trackpad.move(participantId, fingerX, fingerY, current, now, touchStart);
     this.cursors.place(participantId, point.x, point.y);
     this.movement.recordSample(participantId, point.x, point.y, now);
+    this.sendOwnCursor(participantId);
     const phase = this.currentPhase();
     const open = phase.kind === "position-question"
       || (phase.kind === "video-position-question"
@@ -2146,6 +2154,32 @@ export class PhaseEngine {
     if (open && acceptsVotingInput(this.groupSelection?.method?.(participantId), "phone-cursor")) {
       this.recordInput(now, participantId, point.x, point.y);
     }
+  }
+
+  /**
+   * Tell a phone where its own cursor is. In curtain-light votes the phone
+   * sends finger samples and the server steers the cursor, so the phone can
+   * only draw its own dot from this.
+   */
+  private sendOwnCursor(participantId: string, socket?: WebSocket): void {
+    if (!this.cursors.isEntered(participantId)) return;
+    const position = this.cursors.position(participantId);
+    if (position === null) return;
+    const target = socket ?? this.participantSocket(participantId);
+    if (target === undefined) return;
+    this.send(target, {
+      t: "own_cursor",
+      v: PROTOCOL_VERSION,
+      sessionId: this.sessionId,
+      phaseEpoch: this.phaseEpoch,
+      x: position.x,
+      y: position.y,
+    });
+  }
+
+  private participantSocket(participantId: string): WebSocket | undefined {
+    for (const [socket, id] of this.participantIds) if (id === participantId && this.participantSockets.has(socket)) return socket;
+    return undefined;
   }
 
   private normalizeStartTimes(startTimes: readonly number[]): number[] {

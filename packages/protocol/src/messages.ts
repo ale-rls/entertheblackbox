@@ -438,6 +438,20 @@ export const cursorsSchema = z.object({
   cursors: z.array(cursorSchema),
 });
 
+/**
+ * Server → participant phone: where this phone's own cursor is during a
+ * curtain-light vote. Curtain-light input is relative and only the server
+ * knows the cursor position, so the phone draws its own dot from this.
+ */
+export const ownCursorSchema = z.object({
+  t: z.literal("own_cursor"),
+  v,
+  sessionId: nonEmpty,
+  phaseEpoch: z.number().int().nonnegative(),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+});
+
 const questionStatusBaseSchema = z.object({
   t: z.literal("question_status"),
   v,
@@ -704,6 +718,7 @@ export const serverToClientSchema = z.union([
   presenceSchema,
   reloadSchema,
   cursorsSchema,
+  ownCursorSchema,
   questionStatusSchema,
   questionResolvedSchema,
   ratingStatusSchema,
@@ -765,6 +780,7 @@ export type PhaseMessage = z.infer<typeof phaseMessageSchema>;
 export type PresenceMessage = z.infer<typeof presenceSchema>;
 export type ReloadMessage = z.infer<typeof reloadSchema>;
 export type CursorsMessage = z.infer<typeof cursorsSchema>;
+export type OwnCursorMessage = z.infer<typeof ownCursorSchema>;
 export type QuestionStatusMessage = z.infer<typeof questionStatusSchema>;
 export type QuestionResolvedMessage = z.infer<typeof questionResolvedSchema>;
 export type RatingStatusMessage = z.infer<typeof ratingStatusSchema>;

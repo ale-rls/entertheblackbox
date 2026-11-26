@@ -66,6 +66,40 @@ it("sends fresh finger anchors for every curtain-light touch", async () => {
   expect(starts[1]).toMatchObject({ x: .5, y: .5, phaseEpoch: 2 });
 });
 
+it("shows its own cursor where the server says it is during curtain-light votes", async () => {
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal("requestAnimationFrame", (paint: FrameRequestCallback) => frames.push(paint));
+  const paint = () => { for (const frame of frames.splice(0)) frame(0); };
+  await receive({ t: "identity", v: 2, clientId: "visitor", color: "#ff595e", sessionId: "show", participantLease: "lease", leaseExpiresAt: 1e12 });
+  const curtainVote = (phaseEpoch: number): ServerToClientMessage => ({ t: "phase", v: 2, sessionId: "show", phaseEpoch, serverTime: 1000,
+    phase: { id: `vote-${phaseEpoch}`, kind: "video", src: "video.mp4", startedAt: 1000, expectedDurationMs: 10000,
+      scenarioVersion: "v1", deadlineAt: 11000, next: "end",
+      voteTreatment: { type: "curtain-light", answerColors: {}, entry: null,
+        curtain: { src: "curtain.png", baked: 0, folds: 1, shine: 1, shadow: 1, poolBase: 1, poolGain: 1, cursorFlood: 1, cursorFloodCounted: 1, neutralGap: 0 } } } });
+  const dot = () => host.querySelector<HTMLSpanElement>(".live-cursor-dot");
+  const surface = Math.min(window.innerWidth, window.innerHeight);
+  const at = (x: number, y: number) => `translate3d(${x * surface}px, ${y * surface}px, 0) translate3d(-50%, -50%, 0)`;
+
+  await receive(curtainVote(3));
+  // Not on screen until the first touch has entered the cursor.
+  expect(dot()).toBeNull();
+  await receive({ t: "own_cursor", v: 2, sessionId: "show", phaseEpoch: 2, x: 0.1, y: 0.1 });
+  expect(dot()).toBeNull();
+  await receive({ t: "own_cursor", v: 2, sessionId: "show", phaseEpoch: 3, x: 0.5, y: 0.4 });
+  expect(dot()!.style.backgroundColor).toBe("rgb(255, 89, 94)");
+  expect(dot()!.style.transform).toBe(at(0.5, 0.4));
+  // Finger samples steer, they do not move the dot; the server's answer does.
+  const pad = host.querySelector(".trackpad")!;
+  vi.spyOn(pad, "getBoundingClientRect").mockReturnValue({ left: 0, top: 0, width: 200, height: 200 } as DOMRect);
+  await drag(); paint();
+  expect(dot()!.style.transform).toBe(at(0.5, 0.4));
+  await receive({ t: "own_cursor", v: 2, sessionId: "show", phaseEpoch: 3, x: 0.2, y: 0.4 }); paint();
+  expect(dot()!.style.transform).toBe(at(0.2, 0.4));
+  // The next vote starts hidden again unless the server reports a kept cursor.
+  await receive(curtainVote(4));
+  expect(dot()).toBeNull();
+});
+
 it("answers tasks, handles full outcomes, and disables responses on disconnect and expiry", async () => {
   await receive({ t: "identity", v: 2, clientId: "visitor", color: "#ffffff", sessionId: "show", participantLease: "lease", leaseExpiresAt: 1e12 });
   const task: Extract<ServerToClientMessage, { t: "participant_task" }> = {
