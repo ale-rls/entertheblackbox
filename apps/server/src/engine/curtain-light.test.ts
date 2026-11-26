@@ -193,7 +193,7 @@ describe("curtain-light votes", () => {
     h.engine.stop();
   });
 
-  it("keeps cursors from the previous curtain vote when the next vote asks for it", () => {
+  it("carries moved cursors into the next curtain vote, with or without the keep flag", () => {
     for (const keep of [true, false]) {
       const h = setup(chainedScenario(keep ? { curtainKeepCursors: true } : {}));
       const one = h.phone("one");
@@ -204,22 +204,13 @@ describe("curtain-light votes", () => {
       h.setNow(220); h.touch(one, 0.2, 0.2);
       h.tick(1_100);
       expect(h.votes.at(-1)!.questionId).toBe("shared-vote");
-      // On the second vote one touch-and-drag: a kept cursor moves on from where
-      // it was and votes; a reset cursor only appears at the neutral entry point.
+      // On the second vote one touch-and-drag moves the cursor on from where it was.
       h.setNow(1_300); h.touch(one, 0.5, 0.5, true);
       h.setNow(1_320); h.touch(one, 0.5, 0.49);
       h.tick(2_200);
-      const second = h.votes.find((snapshot) => snapshot.questionId === "plain-vote")!;
-      const vote = second.votes[0]!;
-      if (keep) {
-        // Still in the top-left field it was steered into on the first vote.
-        expect(vote.x).toBeCloseTo(0.2);
-        expect(vote.y).toBeCloseTo(0.19);
-      } else {
-        // Back at the neutral entry point, in the unlit gap between fields.
-        expect(vote.x).toBeCloseTo(0.5);
-        expect(vote.y).toBeCloseTo(0.49);
-      }
+      const vote = h.votes.find((snapshot) => snapshot.questionId === "plain-vote")!.votes[0]!;
+      expect(vote.x).toBeCloseTo(0.2);
+      expect(vote.y).toBeCloseTo(0.19);
       h.engine.stop();
     }
   });
@@ -244,28 +235,60 @@ describe("curtain-light votes", () => {
     h.engine.stop();
   });
 
-  it("sends kept cursors to their phones when the next curtain vote starts", () => {
-    for (const keep of [true, false]) {
-      const h = setup(chainedScenario(keep ? { curtainKeepCursors: true } : {}));
-      const one = h.phone("one"); const idle = h.phone("idle");
-      h.engine.adminStart(); h.tick(10);
-      h.setNow(100); h.touch(one, 0.5, 0.5, true);
-      h.setNow(200); h.touch(one, 0.5, 0.5, true);
-      h.setNow(220); h.touch(one, 0.2, 0.2);
-      h.tick(1_100);
-      expect(one.snapshot.phase.id).toBe("plain-vote");
-      const sent = one.sent.filter((m) => m.t === "own_cursor" && m.phaseEpoch === one.snapshot.phaseEpoch);
-      if (keep) {
-        expect(sent).toHaveLength(1);
-        expect(sent[0].x).toBeCloseTo(0.2);
-        expect(sent[0].y).toBeCloseTo(0.2);
-      } else {
-        expect(sent).toHaveLength(0);
-      }
-      // A phone that never entered has no cursor on screen, so nothing to show.
-      expect(idle.sent.filter((m) => m.t === "own_cursor")).toHaveLength(0);
-      h.engine.stop();
-    }
+  it("sends carried cursors to their phones when the next curtain vote starts", () => {
+    const h = setup(chainedScenario({}));
+    const one = h.phone("one"); const idle = h.phone("idle");
+    h.engine.adminStart(); h.tick(10);
+    h.setNow(100); h.touch(one, 0.5, 0.5, true);
+    h.setNow(200); h.touch(one, 0.5, 0.5, true);
+    h.setNow(220); h.touch(one, 0.2, 0.2);
+    h.tick(1_100);
+    expect(one.snapshot.phase.id).toBe("plain-vote");
+    const sent = one.sent.filter((m) => m.t === "own_cursor" && m.phaseEpoch === one.snapshot.phaseEpoch);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].x).toBeCloseTo(0.2);
+    expect(sent[0].y).toBeCloseTo(0.2);
+    // A phone that never moved has no cursor on screen, so nothing to show.
+    expect(idle.sent.filter((m) => m.t === "own_cursor")).toHaveLength(0);
+    h.engine.stop();
+  });
+
+  it("keeps cursors moved in a title scene visible into the curtain vote, until the show goes idle", () => {
+    const value = scenarioSchema.parse({
+      ...sharedScenario, version: "curtain-after-title", entryPhaseId: "title",
+      phases: [
+        ...sharedScenario.phases.map((phase) => phase.id === "plain-vote" ? { ...phase, next: { type: "fixed", target: "idle" } } : phase),
+        { kind: "narration", id: "title", text: "Teil 1", durationMs: 1_000, next: "shared-vote" },
+      ],
+    });
+    const h = setup(value);
+    const display = h.display();
+    const cursors = () => {
+      (h.engine as unknown as { cursors: { tick(): void } }).cursors.tick();
+      return display.sent.filter((m) => m.t === "cursors").at(-1).cursors.map((c: { clientId: string; x: number; y: number }) => c);
+    };
+    const one = h.phone("one"); const still = h.phone("still");
+    h.engine.adminStart(); h.tick(10);
+    expect(one.snapshot.phase.id).toBe("title");
+    // Absolute input outside curtain votes: the cursor sits at (0.2, 0.2).
+    h.setNow(100); h.touch(one, 0.2, 0.2);
+    h.tick(1_010);
+    expect(one.snapshot.phase.id).toBe("shared-vote");
+    // Still on screen where it was, without a new touch; the unmoved cursor waits for one.
+    expect(cursors()).toEqual([expect.objectContaining({ clientId: "one", x: 0.2, y: 0.2 })]);
+    expect(one.sent.filter((m) => m.t === "own_cursor").at(-1)).toMatchObject({ phaseEpoch: one.snapshot.phaseEpoch, x: 0.2, y: 0.2 });
+    // A touch steers on from there instead of jumping to the entry point.
+    h.setNow(1_100); h.touch(one, 0.5, 0.5, true);
+    h.setNow(1_120); h.touch(one, 0.55, 0.5);
+    expect(one.sent.filter((m) => m.t === "own_cursor").at(-1).x).toBeCloseTo(0.25);
+
+    // After the show goes idle, the next audience starts hidden again.
+    h.tick(2_100); h.tick(3_100);
+    expect(one.snapshot.phase.id).toBe("idle");
+    h.engine.adminStart(); h.tick(3_200); h.tick(4_300);
+    expect(one.snapshot.phase.id).toBe("shared-vote");
+    expect(cursors()).toEqual([]);
+    h.engine.stop();
   });
 
   it("holds the fields at their base glow when they should not light up yet", () => {

@@ -29,6 +29,12 @@ export class CursorPipeline {
    */
   private entryStage = false;
   private readonly entered = new Set<string>();
+  /**
+   * Participants who have moved their cursor since the show went idle. Their
+   * cursors stay visible into the next curtain stage at their last position
+   * instead of hiding until the next touch (director note 25.11., #633).
+   */
+  private readonly moved = new Set<string>();
   /** Last position of an entered participant who disconnected mid-stage. */
   private readonly parked = new Map<string, { x: number; y: number }>();
   private readonly pulses = new Map<string, number>();
@@ -72,7 +78,10 @@ export class CursorPipeline {
     cursor.lastSeq = seq;
     const nextX = clamp(x);
     const nextY = clamp(y);
-    if (cursor.x !== nextX || cursor.y !== nextY) this.dirty = true;
+    if (cursor.x !== nextX || cursor.y !== nextY) {
+      this.dirty = true;
+      this.moved.add(clientId);
+    }
     cursor.x = nextX;
     cursor.y = nextY;
     return true;
@@ -97,18 +106,28 @@ export class CursorPipeline {
     if (!cursor || !Number.isFinite(x) || !Number.isFinite(y)) return;
     const nextX = clamp(x);
     const nextY = clamp(y);
+    this.moved.add(clientId);
     if (cursor.x !== nextX || cursor.y !== nextY) this.dirty = true;
     cursor.x = nextX;
     cursor.y = nextY;
   }
 
-  /** Start (true) or end (false) a stage where cursors appear only after first interaction. */
+  /**
+   * Start (true) or end (false) a stage where cursors appear only after first
+   * interaction. Cursors already moved in this show stay entered where they are.
+   */
   setEntryStage(active: boolean): void {
     this.entryStage = active;
     this.entered.clear();
+    if (active) for (const clientId of this.moved) if (this.cursors.has(clientId)) this.entered.add(clientId);
     this.parked.clear();
     this.pulses.clear();
     this.dirty = true;
+  }
+
+  /** The show went idle: the next audience starts with hidden curtain cursors again. */
+  forgetMoves(): void {
+    this.moved.clear();
   }
 
   get inEntryStage(): boolean {

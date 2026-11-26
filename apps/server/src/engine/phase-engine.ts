@@ -1902,6 +1902,7 @@ export class PhaseEngine {
       this.monitorVoteResults = {};
       this.lastMonitorVotePhaseId = undefined;
       this.admissionPrograms.reset();
+      this.cursors.forgetMoves();
       this.lifecycle = "idle";
       this.sessionId = "idle";
       this.sessionStartedAt = null;
@@ -1923,8 +1924,8 @@ export class PhaseEngine {
     }
     this.ghosts.onPhaseChanged(now);
     this.transition(reason, endedSessionId === null ? undefined : { reason, sessionId: endedSessionId, endedAt: now });
-    // Kept cursors stay on screen, so their phones show them before the next touch.
-    if (keepCursors) {
+    // Kept and carried-over cursors stay on screen, so their phones show them before the next touch.
+    if (curtainStage) {
       for (const [socket, participantId] of this.participantIds) {
         if (this.participantSockets.has(socket)) this.sendOwnCursor(participantId, socket);
       }

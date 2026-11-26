@@ -344,6 +344,19 @@ describe("phoneReducer", () => {
     expect(s.inputOpen).toBe(true);
   });
 
+  it("keeps cursor input open in title (narration) scenes unless the scene hides cursors", () => {
+    const narration = (epoch: number, showCursors?: boolean): ServerToClientMessage => ({
+      t: "phase", v: PROTOCOL_VERSION, sessionId: "s1", phaseEpoch: epoch, serverTime: 0,
+      phase: { kind: "narration", id: "title", text: "Teil 1", durationMs: 1000, next: "v", scenarioVersion: "dev", startedAt: 0, deadlineAt: 1000,
+        ...(showCursors === undefined ? {} : { showCursors }) },
+    } as ServerToClientMessage);
+    let s = apply(initialPhoneState, phase("video", 1));
+    s = apply(s, narration(2));
+    expect(s.inputOpen).toBe(true);
+    s = apply(s, narration(3, false));
+    expect(s.inputOpen).toBe(false);
+  });
+
   it("guards against stale epochs within a session", () => {
     let s = apply(initialPhoneState, phase("position-question", 5));
     s = apply(s, phase("video", 3));
