@@ -45,7 +45,7 @@ export function Announcements({ token }: { token: string }) {
     setListing(body);
   }, [request]);
 
-  // Not urgent: the rest of the Show tab works without announcements.
+  // Not urgent: the rest of the Instrument tab works without announcements.
   useEffect(() => { load().catch((error: unknown) => setMessage({ status: "warning", text: error instanceof Error ? error.message : "Loading announcements failed." })); }, [load]);
 
   const playing = listing?.playing ?? null;

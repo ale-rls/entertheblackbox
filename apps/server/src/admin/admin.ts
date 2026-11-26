@@ -85,7 +85,7 @@ export type RegisterAdminOptions = {
     clips: () => Promise<WallClip[]>;
     saveLayout: (layout: z.infer<typeof wallLayoutSchema>) => Promise<z.infer<typeof wallLayoutSchema>>;
   };
-  /** Operator voice announcements on the main display (Admin → Show → Announcements). */
+  /** Operator voice announcements on the main display (Admin → Instrument → Voice announcements). */
   announcements?: {
     store: AnnouncementStore;
     /** Absent when no ElevenLabs key is configured: saved clips still play. */
