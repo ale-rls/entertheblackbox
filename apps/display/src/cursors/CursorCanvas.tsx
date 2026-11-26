@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { CursorField } from "./cursorField.js";
-import { GlowSpriteCache, drawGlow, glowSprites } from "./glowCursor.js";
+import { GlowSpriteCache, drawGlows, glowSprites } from "./glowCursor.js";
 
 export function cursorOpacity(ghost: boolean, blinkActiveVoters: boolean, frozen: boolean, at: number): number {
   if (ghost) return 0.5;
@@ -10,7 +10,8 @@ export function cursorOpacity(ghost: boolean, blinkActiveVoters: boolean, frozen
 
 /**
  * Canvas cursor layer: draws one glow per interpolated cursor, in the look of
- * the curtain-light cursors (see glowCursor.ts), added onto the scene below
+ * the curtain-light cursors (see glowCursor.ts; overlapping glows don't add
+ * up, see drawGlows), added onto the scene below
  * (`mix-blend-mode: plus-lighter` on `.layer-cursors`). When
  * `showCursors` is false, the canvas is cleared and nothing is drawn each
  * frame, but the RAF loop keeps running underneath (CursorField keeps
@@ -58,13 +59,7 @@ export function CursorCanvas({
         const frozen = field.isFrozen;
         const glows = glowSprites(field.renderAt(renderAt), width, height, renderAt,
           (cursor) => cursorOpacity(cursor.ghost, blinkActiveVoters, frozen, renderAt), size);
-        ctx.globalCompositeOperation = "lighter";
-        for (const glow of glows) {
-          const sprite = sprites.get(glow.tint);
-          if (sprite) drawGlow(ctx, sprite, glow);
-        }
-        ctx.globalCompositeOperation = "source-over";
-        ctx.globalAlpha = 1;
+        drawGlows(ctx, (glow) => sprites.get(glow.tint), glows);
       }
       raf = requestAnimationFrame(draw);
     };

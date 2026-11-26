@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { CORE_RADIUS } from "../curtain/curtainRenderer.js";
 import { PULSE_DECAY_MS } from "../curtain/curtainScene.js";
-import { GLOW_CORE, drawGlow, glowFalloff, glowPulse, glowSprites, glowTint } from "./glowCursor.js";
+import { GLOW_CORE, drawGlow, drawGlows, glowFalloff, glowPulse, glowSprites, glowTint } from "./glowCursor.js";
 
 const full = () => 1;
 
@@ -52,6 +52,26 @@ describe("glow cursors", () => {
     expect(ctx.drawImage).toHaveBeenCalledTimes(3);
     expect(ctx.globalAlpha * 3).toBeCloseTo(2.08);
     expect(ctx.drawImage).toHaveBeenCalledWith(expect.anything(), 40, 30, 20, 20);
+  });
+});
+
+describe("overlapping glows", () => {
+  it("combines glows by their brightest light and adds only the pulse above it", () => {
+    const calls: { op: string; alpha: number; cx: number }[] = [];
+    const ctx = {
+      globalAlpha: 1, globalCompositeOperation: "source-over",
+      drawImage: (_image: CanvasImageSource, x: number) => { calls.push({ op: ctx.globalCompositeOperation, alpha: ctx.globalAlpha, cx: x + 10 }); },
+    } as unknown as CanvasRenderingContext2D;
+    const glow = (cx: number, amount: number) => ({ cx, cy: 0, radius: 10, tint: [1, 1, 1] as [number, number, number], amount });
+    drawGlows(ctx, () => ({}) as CanvasImageSource, [glow(1, GLOW_CORE), glow(2, GLOW_CORE), glow(3, 2.08)]);
+    // Every cursor's light up to 1 goes through "lighten", so a pile is no brighter than one cursor.
+    expect(calls.filter((c) => c.op === "lighten").map((c) => [c.cx, c.alpha])).toEqual([[1, GLOW_CORE], [2, GLOW_CORE], [3, 1]]);
+    // Only the pulsing cursor's light above 1 is added, so its flare keeps its full strength.
+    const added = calls.filter((c) => c.op === "lighter");
+    expect(added.every((c) => c.cx === 3)).toBe(true);
+    expect(added.reduce((sum, c) => sum + c.alpha, 0)).toBeCloseTo(1.08);
+    expect(ctx.globalCompositeOperation).toBe("source-over");
+    expect(ctx.globalAlpha).toBe(1);
   });
 });
 

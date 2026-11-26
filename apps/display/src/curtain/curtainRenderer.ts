@@ -13,7 +13,9 @@
  * The fabric pass shades the packed curtain video (colour | normal X /
  * normal Y | depth), or a scene's plain loop (colour only, the same frames
  * the loop layer shows), once with the summed light, then cursor cores are drawn
- * on top so each participant keeps a crisp bright centre. Text (question
+ * on top so each participant keeps a crisp bright centre. Cores are combined
+ * by their brightest value before they are added, so overlapping cursors
+ * don't stack into white. Text (question
  * and answer labels) is applied last and adapts to what is beneath it, so
  * it stays readable on lit and unlit fabric.
  */
@@ -135,6 +137,24 @@ void main(){
   o = vec4(vTint.rgb * vTint.a * fall, 1.);
 }`;
 
+/**
+ * Adds the cursor-core buffer onto the screen. Cores are first combined in
+ * that buffer by their brightest value (MAX), so a pile of cursors is no
+ * brighter than one; the buffer has the canvas's own size and row order.
+ */
+const CORE_COMPOSITE_VS = `#version 300 es
+void main(){
+  vec2 p = vec2(gl_VertexID == 1 ? 3. : -1., gl_VertexID == 2 ? 3. : -1.);
+  gl_Position = vec4(p, 0., 1.);
+}`;
+
+const CORE_COMPOSITE_FS = `#version 300 es
+precision highp float;
+out vec4 o;
+uniform sampler2D cores;
+uniform float scale;
+void main(){ o = vec4(texelFetch(cores, ivec2(gl_FragCoord.xy), 0).rgb * scale, 1.); }`;
+
 export type CurtainFabricParams = { baked: number; folds: number; shine: number; shadow: number; /** False for a plain (unpacked) video. Defaults to packed. */ packed?: boolean | undefined };
 
 /**
@@ -227,6 +247,7 @@ export class CurtainRenderer {
   private readonly gl: WebGL2RenderingContext;
   private readonly fabric: WebGLProgram;
   private readonly sprite: WebGLProgram;
+  private readonly coreComposite: WebGLProgram;
   private readonly quad: WebGLVertexArrayObject;
   private readonly spriteVao: WebGLVertexArrayObject;
   private readonly instanceBuffer: WebGLBuffer;
@@ -235,6 +256,8 @@ export class CurtainRenderer {
   private readonly textTexture: WebGLTexture;
   private readonly lightTexture: WebGLTexture;
   private readonly lightBuffer: WebGLFramebuffer;
+  private readonly coreTexture: WebGLTexture;
+  private readonly coreBuffer: WebGLFramebuffer;
   private readonly floatLight: boolean;
   private lightSize = { width: 0, height: 0 };
   private instances = new Float32Array(0);
@@ -250,6 +273,7 @@ export class CurtainRenderer {
     this.floatLight = gl.getExtension("EXT_color_buffer_float") !== null;
     this.fabric = link(gl, FULLSCREEN_VS, FABRIC_FS);
     this.sprite = link(gl, SPRITE_VS, SPRITE_FS);
+    this.coreComposite = link(gl, CORE_COMPOSITE_VS, CORE_COMPOSITE_FS);
 
     this.quad = gl.createVertexArray()!;
     gl.bindVertexArray(this.quad);
@@ -287,9 +311,11 @@ export class CurtainRenderer {
     this.textTexture = makeTexture(gl);
     this.lightTexture = makeTexture(gl);
     this.lightBuffer = gl.createFramebuffer()!;
+    this.coreTexture = makeTexture(gl);
+    this.coreBuffer = gl.createFramebuffer()!;
   }
 
-  /** Resize the drawing buffer; the light buffer follows at quarter resolution. */
+  /** Resize the drawing buffer; the light buffer follows at quarter resolution, the core buffer at full. */
   resize(width: number, height: number): void {
     const gl = this.gl;
     if (this.canvas.width === width && this.canvas.height === height && this.lightSize.width > 0) return;
@@ -303,6 +329,11 @@ export class CurtainRenderer {
     else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, lightWidth, lightHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.lightBuffer);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.lightTexture, 0);
+    gl.bindTexture(gl.TEXTURE_2D, this.coreTexture);
+    if (this.floatLight) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.coreBuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.coreTexture, 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
@@ -422,21 +453,40 @@ export class CurtainRenderer {
     gl.bindVertexArray(null);
 
     // Pass 3: bright cursor centres on top, so every participant stays identifiable.
-    const cores = this.writeInstances(frame.cursors, true, frame.cursorOpacity * frame.opacity, FLOOD_RADIUS, frame.cursorSize ?? 1);
+    // Cores are combined by their brightest value first, so overlapping cursors
+    // don't add up to a white blob (director note 26.11.); a pulse is a higher
+    // value and still flares. The result is then added onto the fabric.
+    const cores = this.writeInstances(frame.cursors, true, frame.cursorOpacity * frame.opacity * storeScale, FLOOD_RADIUS, frame.cursorSize ?? 1);
     if (cores > 0) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.coreBuffer);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
       gl.enable(gl.BLEND);
-      gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE);
+      gl.blendEquation(gl.MAX);
       this.drawSprites(cores, 3.5);
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.blendFuncSeparate(gl.ONE, gl.ONE, gl.ZERO, gl.ONE);
+      gl.useProgram(this.coreComposite);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.coreTexture);
+      gl.uniform1i(gl.getUniformLocation(this.coreComposite, "cores"), 0);
+      gl.uniform1f(gl.getUniformLocation(this.coreComposite, "scale"), 1 / storeScale);
+      gl.bindVertexArray(this.quad);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindVertexArray(null);
       gl.disable(gl.BLEND);
     }
   }
 
   dispose(): void {
     const gl = this.gl;
-    for (const texture of [this.videoTexture, this.poolTexture, this.textTexture, this.lightTexture]) gl.deleteTexture(texture);
+    for (const texture of [this.videoTexture, this.poolTexture, this.textTexture, this.lightTexture, this.coreTexture]) gl.deleteTexture(texture);
     gl.deleteFramebuffer(this.lightBuffer);
+    gl.deleteFramebuffer(this.coreBuffer);
     gl.deleteBuffer(this.instanceBuffer);
     gl.deleteProgram(this.fabric);
     gl.deleteProgram(this.sprite);
+    gl.deleteProgram(this.coreComposite);
   }
 }
