@@ -116,3 +116,31 @@ export function drawGlow(ctx: CanvasRenderingContext2D, sprite: CanvasImageSourc
     ctx.drawImage(sprite, glow.cx - glow.radius, glow.cy - glow.radius, size, size);
   }
 }
+
+/**
+ * Draws every glow so that overlapping cursors are no brighter than the
+ * brightest of them (director note 26.11.: 70 cursors on one spot turned
+ * into a white blob). Each glow's light up to 1 is combined with
+ * "lighten", which never goes past the glow's own tint; only a touch pulse's
+ * extra light above 1 is added on top, so pulses still flare. A single cursor
+ * on an empty canvas comes out exactly as with plain additive drawing.
+ */
+export function drawGlows(
+  ctx: CanvasRenderingContext2D,
+  sprite: (glow: GlowSprite) => CanvasImageSource | null,
+  glows: readonly GlowSprite[],
+): void {
+  ctx.globalCompositeOperation = "lighten";
+  for (const glow of glows) {
+    const image = sprite(glow);
+    if (image) drawGlow(ctx, image, { ...glow, amount: Math.min(1, glow.amount) });
+  }
+  ctx.globalCompositeOperation = "lighter";
+  for (const glow of glows) {
+    if (glow.amount <= 1) continue;
+    const image = sprite(glow);
+    if (image) drawGlow(ctx, image, { ...glow, amount: glow.amount - 1 });
+  }
+  ctx.globalCompositeOperation = "source-over";
+  ctx.globalAlpha = 1;
+}
