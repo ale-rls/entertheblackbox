@@ -10,10 +10,12 @@ Output: {"legend": [...], "paragraphs": [...], "scenes": [...]}
 - paragraphs: every paragraph in reading order with row/column of the table
   cell it sits in (column 0 = left, column 1 = right), and its runs. Each run
   has text, raw `color`/`bg` hex and the mapped `status` (text colour) and
-  `cue` (highlight) from the tables below.
+  `cue` (highlight) from the tables below. Struck-through text has `struck: true`: the script
+  cuts a scene by striking it through.
 - scenes: paragraphs grouped under scene headings such as "K0.1.v2 ..." or
   "T1.2 — ...", with the heading's version number and the set of statuses and
-  cues found inside.
+  cues found inside. `struck` is true when the whole heading is struck through (the scene is
+  cut); `struckParagraphs` counts the scene's paragraphs that are struck through entirely.
 - fieldGrids: the 2×2 tables inside the script table, in reading order. Each cell is a stage
   field: monitor Mn, lit by lamp Ln. The legend's grid (a top-level 2×2 whose cells are labelled
   M3/L3 …) says which field sits where (`fieldLayout`). Per grid: `scene`, `paragraph`, `before`
@@ -169,6 +171,8 @@ class Parser(HTMLParser):
         color = st.get("color")
         bg = st.get("background-color")
         run = {"text": data}
+        if "line-through" in st.get("text-decoration", ""):
+            run["struck"] = True
         if color:
             run["color"] = color
             if color in TEXT_STATUS:
@@ -182,11 +186,17 @@ class Parser(HTMLParser):
         self.para["runs"].append(run)
 
 
+def is_struck(para):
+    """True when every visible run of the paragraph is struck through."""
+    runs = [r for r in para["runs"] if r["text"].strip()]
+    return bool(runs) and all(r.get("struck") for r in runs)
+
+
 def merge_runs(runs):
     merged = []
     for r in runs:
-        key = (r.get("color"), r.get("bg"))
-        if merged and (merged[-1].get("color"), merged[-1].get("bg")) == key:
+        key = (r.get("color"), r.get("bg"), r.get("struck", False))
+        if merged and (merged[-1].get("color"), merged[-1].get("bg"), merged[-1].get("struck", False)) == key:
             merged[-1]["text"] += r["text"]
         else:
             merged.append(dict(r))
@@ -509,6 +519,9 @@ def docx_html(path):
                 bg = "#" + shade.get(w + "fill").lower()
             if bg:
                 css.append(f"background-color:{bg}")
+            strike = [r.find(f"{w}rPr/{w}{tag}") for tag in ("strike", "dstrike")]
+            if any(e is not None and e.get(w + "val", "true") not in ("0", "false") for e in strike):
+                css.append("text-decoration:line-through")
             text = []
             for child in r:
                 if child.tag == w + "t":
@@ -561,10 +574,11 @@ def main():
         if m and len(para["text"]) < 160:
             current = {"id": m.group(1), "version": m.group(2), "heading": para["text"],
                        "row": para["row"], "col": para["col"], "paragraphs": [],
-                       "statuses": set(), "cues": set()}
+                       "statuses": set(), "cues": set(), "struck": is_struck(para), "struckParagraphs": 0}
             scenes.append(current)
         if current and (para["row"], para["col"]) == (current["row"], current["col"]):
             current["paragraphs"].append(i)
+            current["struckParagraphs"] += is_struck(para)
             for r in para["runs"]:
                 if "status" in r:
                     current["statuses"].add(r["status"])
@@ -588,7 +602,8 @@ def main():
         for m in line_re.finditer(para["text"]):
             st = sorted({r["status"] for r in para["runs"] if "status" in r})
             versioned.setdefault((m.group(1), m.group(2)), {"id": m.group(1), "version": m.group(2),
-                                                            "paragraph": para["index"], "statuses": st})
+                                                            "paragraph": para["index"], "statuses": st,
+                                                            "struck": is_struck(para)})
 
     problems = []
     colours, colour_tables = colour_table(p.paragraphs)
@@ -621,12 +636,14 @@ def main():
                "versionedIds": list(versioned.values()),
                "fieldLayout": [[layout.get((r, c)) for c in (0, 1)] for r in (0, 1)],
                "fieldGrids": fields, "instructionGrids": instructions,
+               "struckScenes": [s["id"] for s in scenes if s["struck"]],
                "lightCues": cues, "lightColours": colours, "problems": problems,
                "unmappedColours": [list(u) for u in unknown]},
               open(dst, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
     print(f"{len(p.paragraphs)} paragraphs, {len(scenes)} scenes, {len(fields)} field grids, "
           f"{len(cues)} light cues, {len(colours)} light colours, {len(problems)} problems, "
-          f"{len(unknown)} unmapped colour pairs -> {dst}")
+          f"{len(unknown)} unmapped colour pairs, "
+          f"{sum(s['struck'] for s in scenes)} struck-through scenes -> {dst}")
 
 
 if __name__ == "__main__":
