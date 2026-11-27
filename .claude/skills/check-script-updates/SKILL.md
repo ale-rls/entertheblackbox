@@ -66,6 +66,9 @@ Use it as the default media folder: list files newer than the baseline draft
    `fieldGrids` holds every 2×2 field grid: per field M1–M4 its monitor text,
    lamp and colour (step 4, monitors). `problems` lists grid labels that
    contradict the legend and colours not in the colour table: report them.
+   Struck-through text is tagged `struck: true` on its runs; `struckScenes`
+   lists scenes whose heading is struck through, and each scene has
+   `struck` and `struckParagraphs`. Struck text is **cut** (step 5).
 
 **Check the legend first.** The legend is at the top of the doc, before the first
 table. If it no longer matches the mapping in `parse_script.py`, or
@@ -78,6 +81,7 @@ runs by hand. The mapping as of 2026-11:
 | red | content not revised yet — not ready for the show |
 | purple | approved change; needs a new recording, and its version number goes up |
 | light-green highlight on a heading | the section can go to voice production |
+| ~~struck through~~ (any colour) | cut from the show; wins over the colour |
 
 | Highlight | Cue type |
 | :- | :- |
@@ -302,6 +306,11 @@ ID first. Otherwise use the media file name, which carries the scene ID and
   the old and new wording side by side (scratchpad report only).
 - **Light-green heading**: ready to be recorded. List as recordings to produce.
 - **Red text**: not final. Report it, but don't put it in the show.
+- **Struck-through text** (`struckScenes`, runs with `struck`): cut. A struck
+  scene that the show still plays must be **removed** from the draft (its
+  audio, text or phase), never re-recorded. Struck lines inside a scene that
+  stays mean the recording needs a new version without them. Struck text in
+  the archive section after the running order doesn't count.
 - **Black text that differs from the draft**: the draft or its recording is
   out of date. Check the media file version against the heading's `.vN`.
 - **Version mismatch**: the script says `.v3`, the draft plays `.v2`.
